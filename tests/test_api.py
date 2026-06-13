@@ -40,6 +40,21 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert review_bundle["schema"] == "business-card-watchdog.review-bundle.v1"
     assert review_bundle["entries"][0]["job_id"] == job_id
     assert review_bundle["entries"][0]["next_action"]["action"] == "review_contact"
+    review_import = client.post(
+        f"/runs/{run_id}/review-decisions",
+        json={
+            "reviewer": "api-batch",
+            "decisions": [
+                {
+                    "job_id": job_id,
+                    "action": "approve_for_routing",
+                    "field_corrections": {"full_name": "API Batch"},
+                }
+            ],
+        },
+    ).json()
+    assert review_import["import"]["schema"] == "business-card-watchdog.review-decisions-import.v1"
+    assert review_import["results"][0]["job_state"] == "ready_to_route"
     assert client.post("/enrichment/check", json={"mode": "api", "run_id": run_id}).json()["checks"][0]["status"] == "blocked"
     lookup = client.post(f"/jobs/{job_id}/sink-lookup-plan", params={"run_id": run_id}).json()
     assert lookup["lookup_plan"]["schema"] == "business-card-watchdog.sink-lookup-plan.v1"

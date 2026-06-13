@@ -788,6 +788,33 @@ Remaining:
 - Contact-point mapping into future live adapters remains dry-run/request-contract only.
 - Odollo helper reuse remains planned for further normalization/contact-point hardening.
 
+### Slice 0004-AG | 2026-06-13 | Batch Review Decision Import
+
+Implemented:
+
+- Added run-scoped `review_decisions_import.json` artifacts for batch review decision imports.
+- Batch imports call the existing `submit_review` path for each decision, preserving field validation, state transitions, reviewed-contact writes, duplicate resolution handling, and route refresh behavior.
+- Added service `apply_review_decisions`.
+- Added CLI `bcw reviews apply-decisions` with `--decisions-json` and `--decisions-file`.
+- Added API `POST /runs/{run_id}/review-decisions`.
+- Added MCP tool `business_card_watchdog_apply_review_decisions`.
+- Import artifacts record `writes_attempted = 0` and `network_calls_made = 0`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 66 tests.
+- `.venv/bin/python -m pytest -q` passed with 135 tests.
+- `PYTHONPATH=src pytest -q` passed with 130 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+Remaining:
+
+- Spreadsheet/workbook import remains follow-on work.
+- Batch imports are run-scoped; cross-run review imports should be split by run.
+- Live sink writes remain explicit and blocked behind apply gates.
+
 ## Next High-Level Plan
 
 The next execution block should turn the current artifact-first scaffolding into an operator-usable review and routing system while preserving the current safety boundaries: no paid enrichment unless explicitly requested, no live sink writes without an approved pilot, and no secret values in repo artifacts or logs.

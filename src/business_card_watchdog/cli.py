@@ -86,6 +86,12 @@ def build_parser() -> argparse.ArgumentParser:
     reviews_bundle.add_argument("--state", default="all")
     reviews_bundle.add_argument("--no-write", action="store_true")
     reviews_bundle.add_argument("--json", action="store_true")
+    reviews_apply = reviews_sub.add_parser("apply-decisions")
+    reviews_apply.add_argument("--run-id", required=True)
+    reviews_apply.add_argument("--reviewer", default="operator")
+    reviews_apply.add_argument("--decisions-json", default="[]")
+    reviews_apply.add_argument("--decisions-file", type=Path, default=None)
+    reviews_apply.add_argument("--json", action="store_true")
 
     actions = sub.add_parser("actions")
     actions_sub = actions.add_subparsers(dest="actions_command", required=True)
@@ -242,6 +248,17 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "reviews":
         if args.reviews_command == "bundle":
             payload = service.review_bundle(run_id=args.run_id, state=args.state, write=not args.no_write)
+        elif args.reviews_command == "apply-decisions":
+            decisions_body = (
+                args.decisions_file.read_text(encoding="utf-8")
+                if args.decisions_file is not None
+                else args.decisions_json
+            )
+            payload = service.apply_review_decisions(
+                run_id=args.run_id,
+                reviewer=args.reviewer,
+                decisions=json.loads(decisions_body),
+            )
         else:
             payload = service.review_queue(run_id=args.run_id, state=args.state)
         print(json.dumps(payload, indent=2) if args.json else payload)

@@ -109,6 +109,19 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_apply_review_decisions",
+                "description": "Apply a batch of run-scoped review decisions through the shared review submission path.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "reviewer": {"type": "string", "default": "operator"},
+                        "decisions": {"type": "array", "items": {"type": "object"}},
+                    },
+                    "required": ["run_id", "decisions"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_job_show",
                 "description": "Show one job and its artifact records.",
                 "input_schema": {
@@ -397,6 +410,12 @@ def call_tool(
             run_id=str(args["run_id"]),
             state=str(args.get("state") or "all"),
             write=bool(args.get("write", True)),
+        )
+    if tool_name == "business_card_watchdog_apply_review_decisions":
+        return service.apply_review_decisions(
+            run_id=str(args["run_id"]),
+            reviewer=str(args.get("reviewer") or "operator"),
+            decisions=list(args.get("decisions") or []),
         )
     if tool_name == "business_card_watchdog_job_show":
         return service.get_job(

@@ -779,3 +779,26 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed with the index up to date.
 - `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+## Turn 45 | 2026-06-13
+
+Continued Plan 0004 execution with batch review decision import.
+
+Implemented:
+
+- Added run-scoped `review_decisions_import.json` artifacts for batch review decision imports.
+- Batch imports call the existing `submit_review` path for each decision, preserving field validation, state transitions, reviewed-contact writes, duplicate resolution handling, and route refresh behavior.
+- Added service `apply_review_decisions`.
+- Added CLI `bcw reviews apply-decisions` with `--decisions-json` and `--decisions-file`.
+- Added API `POST /runs/{run_id}/review-decisions`.
+- Added MCP tool `business_card_watchdog_apply_review_decisions`.
+- Import artifacts record zero network calls and zero sink writes.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 66 tests.
+- `.venv/bin/python -m pytest -q` passed with 135 tests.
+- `PYTHONPATH=src pytest -q` passed with 130 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.

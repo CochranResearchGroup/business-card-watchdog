@@ -65,6 +65,28 @@ def test_cli_runs_and_jobs_use_recorded_runtime_state(
             [
                 "--config",
                 str(config_path),
+                "reviews",
+                "apply-decisions",
+                "--run-id",
+                run_id,
+                "--reviewer",
+                "cli-batch",
+                "--decisions-json",
+                f'[{{"job_id":"{job_id}","action":"approve_for_routing","field_corrections":{{"full_name":"CLI Batch"}}}}]',
+                "--json",
+            ]
+        )
+        == 0
+    )
+    imported = json.loads(capsys.readouterr().out)
+    assert imported["import"]["schema"] == "business-card-watchdog.review-decisions-import.v1"
+    assert imported["results"][0]["job_state"] == "ready_to_route"
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
                 "mcp-call",
                 "business_card_watchdog_next_actions",
                 "--arguments-json",
@@ -74,7 +96,7 @@ def test_cli_runs_and_jobs_use_recorded_runtime_state(
         == 0
     )
     next_actions = json.loads(capsys.readouterr().out)
-    assert next_actions["actions"][0]["action"] == "review_contact"
+    assert next_actions["actions"][0]["action"] == "plan_sink_lookup"
 
 
 def test_cli_jobs_review_records_submission(tmp_path: Path, capsys) -> None:

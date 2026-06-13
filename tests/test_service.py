@@ -195,6 +195,39 @@ def test_service_submit_review_records_artifact_and_advances_job(tmp_path: Path)
     assert any(event["event_type"] == "review_submitted" for event in events)
 
 
+def test_service_apply_review_decisions_records_run_import_artifact(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+
+    payload = service.apply_review_decisions(
+        run_id=run_id,
+        reviewer="batch-reviewer",
+        decisions=[
+            {
+                "job_id": job_id,
+                "action": "approve_for_routing",
+                "field_corrections": {"full_name": "Batch Fixture", "email": "batch@example.test"},
+                "notes": "batch import",
+            }
+        ],
+    )
+    job = service.get_job(job_id, run_id=run_id)
+    artifacts = service.list_artifacts(run_id)
+    events = [
+        json.loads(line)
+        for line in (config.runs_dir / run_id / "events.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+
+    assert payload["import"]["schema"] == "business-card-watchdog.review-decisions-import.v1"
+    assert payload["import"]["applied_count"] == 1
+    assert payload["results"][0]["action"] == "approve_for_routing"
+    assert payload["results"][0]["job_state"] == "ready_to_route"
+    assert job["state"] == "ready_to_route"
+    assert any(artifact["kind"] == "review_decisions_import" for artifact in artifacts)
+    assert any(event["event_type"] == "review_decisions_imported" for event in events)
+
+
 def test_service_plan_sinks_for_job_writes_dry_run_plan(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",

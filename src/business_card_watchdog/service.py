@@ -623,6 +623,71 @@ class BusinessCardService:
             response["route_refresh_path"] = route_refresh["route_refresh_path"]
         return response
 
+    def apply_review_decisions(
+        self,
+        *,
+        run_id: str,
+        decisions: list[dict[str, Any]],
+        reviewer: str = "operator",
+    ) -> dict[str, Any]:
+        applied: list[dict[str, Any]] = []
+        for index, decision in enumerate(decisions):
+            job_id = str(decision.get("job_id") or "").strip()
+            if not job_id:
+                raise ValueError(f"review decision at index {index} is missing job_id")
+            result = self.submit_review(
+                job_id=job_id,
+                run_id=str(decision.get("run_id") or run_id),
+                reviewer=str(decision.get("reviewer") or reviewer),
+                action=str(decision.get("action") or "keep_needs_review"),
+                field_corrections=dict(decision.get("field_corrections") or {}),
+                crop_selection=dict(decision.get("crop_selection") or {}),
+                approved_enrichment_fields=list(decision.get("approved_enrichment_fields") or []),
+                duplicate_resolution=dict(decision.get("duplicate_resolution") or {}),
+                notes=str(decision.get("notes") or ""),
+            )
+            applied.append(
+                {
+                    "index": index,
+                    "job_id": job_id,
+                    "action": result["submission"]["action"],
+                    "job_state": result["job"]["state"],
+                    "submission_path": result["submission_path"],
+                    "route_refresh_path": result.get("route_refresh_path"),
+                }
+            )
+        payload = {
+            "schema": "business-card-watchdog.review-decisions-import.v1",
+            "run_id": run_id,
+            "reviewer": reviewer,
+            "decision_count": len(decisions),
+            "applied_count": len(applied),
+            "applied": applied,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+        import_path = self.config.runs_dir / run_id / "review_decisions_import.json"
+        import_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        ledger.record_artifact(job_id="__run__", kind="review_decisions_import", path=import_path)
+        ledger.record_event(
+            "review_decisions_imported",
+            {
+                "run_id": run_id,
+                "reviewer": reviewer,
+                "decision_count": len(decisions),
+                "applied_count": len(applied),
+                "import_path": str(import_path),
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        return {
+            "import_path": str(import_path),
+            "import": payload,
+            "results": applied,
+        }
+
     def list_artifacts(self, run_id: str) -> list[dict[str, Any]]:
         artifacts_path = self.config.runs_dir / run_id / "artifacts.jsonl"
         if not artifacts_path.exists():

@@ -26,6 +26,10 @@ def create_app(config_path: Path | None = None):
         duplicate_resolution: dict[str, object] = Field(default_factory=dict)
         notes: str = ""
 
+    class ReviewDecisionsRequest(BaseModel):
+        reviewer: str = "operator"
+        decisions: list[dict[str, object]] = Field(default_factory=list)
+
     class EnrichmentRequest(BaseModel):
         run_id: str
         mode: str = "public_web"
@@ -107,6 +111,14 @@ def create_app(config_path: Path | None = None):
     @app.post("/runs/{run_id}/review-bundle")
     def create_review_bundle(run_id: str, state: str = "all", write: bool = True) -> dict[str, object]:
         return service().review_bundle(run_id=run_id, state=state, write=write)
+
+    @app.post("/runs/{run_id}/review-decisions")
+    def apply_review_decisions(run_id: str, request: ReviewDecisionsRequest = Body(...)) -> dict[str, object]:
+        return service().apply_review_decisions(
+            run_id=run_id,
+            reviewer=request.reviewer,
+            decisions=[dict(decision) for decision in request.decisions],
+        )
 
     @app.post("/actions/run-next")
     def run_next_actions(request: RunNextActionsRequest = Body(default=RunNextActionsRequest())) -> dict[str, object]:
