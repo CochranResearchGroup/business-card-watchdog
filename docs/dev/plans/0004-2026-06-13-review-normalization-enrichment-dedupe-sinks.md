@@ -407,6 +407,26 @@ Remaining:
 - Live sink-backed duplicate lookup execution remains follow-on work.
 - Non-simulated live apply remains blocked until adapters are implemented and explicitly approved.
 
+### Slice 0004-P | 2026-06-13 | Adapter Request Agent Next Actions
+
+Implemented:
+
+- Updated deterministic `next_actions` sequencing to include adapter request phases.
+- Ready jobs now request `sinks adapter-request --phase lookup` after sink lookup planning.
+- Sink-planned jobs now request `sinks adapter-request --phase write` before apply preflight.
+- Jobs with sink apply results now request `sinks adapter-request --phase readback`.
+- Jobs with completed readback adapter requests no longer keep repeating the live apply approval action.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_mcp.py -q` passed with 48 tests.
+
+Remaining:
+
+- Live Google Contacts and Odoo/Odollo lookup/write/readback adapters remain blocked.
+- Live sink-backed duplicate lookup execution remains follow-on work.
+- Non-simulated live apply remains blocked until adapters are implemented and explicitly approved.
+
 ## `/goal` Objective
 
 Use this as the high-level `/goal` objective:

@@ -388,7 +388,7 @@ def test_service_next_actions_recommends_sink_lookup_for_ready_job(tmp_path: Pat
     assert payload["actions"][0]["command"] == "sinks lookup-plan"
 
 
-def test_service_next_actions_recommends_sink_plan_after_lookup_plan(tmp_path: Path) -> None:
+def test_service_next_actions_recommends_lookup_adapter_request_after_lookup_plan(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, job_id = make_recorded_run(config)
     service = BusinessCardService(config)
@@ -403,10 +403,30 @@ def test_service_next_actions_recommends_sink_plan_after_lookup_plan(tmp_path: P
 
     payload = service.next_actions(run_id=run_id)
 
+    assert payload["actions"][0]["action"] == "prepare_sink_lookup_adapter"
+    assert payload["actions"][0]["command"] == "sinks adapter-request --phase lookup"
+
+
+def test_service_next_actions_recommends_sink_plan_after_lookup_adapter_request(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+        field_corrections={"full_name": "Reviewed Fixture", "email": "fixture@example.test"},
+    )
+    service.plan_sink_lookup_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
+
+    payload = service.next_actions(run_id=run_id)
+
     assert payload["actions"][0]["action"] == "plan_sinks"
 
 
-def test_service_next_actions_recommends_apply_preflight_after_sink_plan(tmp_path: Path) -> None:
+def test_service_next_actions_recommends_write_adapter_request_after_sink_plan(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",
         data_dir=tmp_path / "data",
@@ -422,7 +442,34 @@ def test_service_next_actions_recommends_apply_preflight_after_sink_plan(tmp_pat
         field_corrections={"full_name": "Reviewed Fixture", "email": "fixture@example.test"},
     )
     service.plan_sink_lookup_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
     service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+
+    payload = service.next_actions(run_id=run_id)
+
+    assert payload["actions"][0]["action"] == "prepare_sink_write_adapter"
+    assert payload["actions"][0]["command"] == "sinks adapter-request --phase write"
+
+
+def test_service_next_actions_recommends_apply_preflight_after_write_adapter_request(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+        field_corrections={"full_name": "Reviewed Fixture", "email": "fixture@example.test"},
+    )
+    service.plan_sink_lookup_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
+    service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="write")
 
     payload = service.next_actions(run_id=run_id)
 
@@ -446,7 +493,9 @@ def test_service_next_actions_recommends_apply_decision_after_preflight(tmp_path
         field_corrections={"full_name": "Reviewed Fixture", "email": "fixture@example.test"},
     )
     service.plan_sink_lookup_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
     service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="write")
     service.preflight_sink_apply(job_id=job_id, run_id=run_id)
 
     payload = service.next_actions(run_id=run_id)
@@ -471,7 +520,9 @@ def test_service_next_actions_recommends_live_apply_after_decision(tmp_path: Pat
         field_corrections={"full_name": "Reviewed Fixture", "email": "fixture@example.test"},
     )
     service.plan_sink_lookup_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
     service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="write")
     service.preflight_sink_apply(job_id=job_id, run_id=run_id)
     service.decide_sink_apply(job_id=job_id, run_id=run_id, decision="approve", reviewer="tester")
 
@@ -479,6 +530,35 @@ def test_service_next_actions_recommends_live_apply_after_decision(tmp_path: Pat
 
     assert payload["actions"][0]["action"] == "await_apply_approval"
     assert payload["actions"][0]["command"] == "sinks apply --apply"
+
+
+def test_service_next_actions_recommends_readback_adapter_request_after_apply_result(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+        field_corrections={"full_name": "Reviewed Fixture", "email": "fixture@example.test"},
+    )
+    service.plan_sink_lookup_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
+    service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="write")
+    service.preflight_sink_apply(job_id=job_id, run_id=run_id)
+    service.decide_sink_apply(job_id=job_id, run_id=run_id, decision="approve", reviewer="tester")
+    service.apply_sinks_for_job(job_id=job_id, run_id=run_id, apply=True, simulate=True)
+
+    payload = service.next_actions(run_id=run_id)
+
+    assert payload["actions"][0]["action"] == "prepare_sink_readback_adapter"
+    assert payload["actions"][0]["command"] == "sinks adapter-request --phase readback"
 
 
 def test_service_submit_review_rejects_unknown_fields(tmp_path: Path) -> None:

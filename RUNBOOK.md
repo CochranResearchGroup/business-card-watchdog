@@ -454,3 +454,18 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 59 tests.
+
+## Turn 27 | 2026-06-13
+
+Continued Plan 0004 execution with adapter-request next-action sequencing.
+
+Implemented:
+
+- `BusinessCardService.next_actions` now recommends lookup adapter requests after sink lookup planning.
+- Next actions now recommend write adapter requests after sink planning and before apply preflight.
+- Next actions now recommend readback adapter requests after sink apply result artifacts exist.
+- Jobs with readback adapter requests do not continue repeating the apply approval action.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_mcp.py -q` passed with 48 tests.

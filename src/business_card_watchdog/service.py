@@ -767,11 +767,23 @@ class BusinessCardService:
                     "reason": "reviewed/normalized job is ready for downstream duplicate lookup planning",
                     "command": "sinks lookup-plan",
                 }
+            if "sink_adapter_request_lookup" not in artifact_kinds:
+                return {
+                    "action": "prepare_sink_lookup_adapter",
+                    "reason": "sink lookup plan exists; prepare blocked live lookup adapter request",
+                    "command": "sinks adapter-request --phase lookup",
+                }
             if "sink_plan" not in artifact_kinds:
                 return {
                     "action": "plan_sinks",
                     "reason": "reviewed/normalized job is ready for dry-run sink planning",
                     "command": "sinks plan",
+                }
+            if "sink_adapter_request_write" not in artifact_kinds:
+                return {
+                    "action": "prepare_sink_write_adapter",
+                    "reason": "sink plan exists; prepare blocked live write adapter request",
+                    "command": "sinks adapter-request --phase write",
                 }
             if "sink_apply_preflight" not in artifact_kinds:
                 return {
@@ -785,6 +797,14 @@ class BusinessCardService:
                     "reason": "sink apply preflight exists; approve, reject, or mark no-op",
                     "command": "sinks apply-decision",
                 }
+            if "sink_apply_result" in artifact_kinds:
+                if "sink_adapter_request_readback" not in artifact_kinds:
+                    return {
+                        "action": "prepare_sink_readback_adapter",
+                        "reason": "sink apply result exists; prepare blocked live readback adapter request",
+                        "command": "sinks adapter-request --phase readback",
+                    }
+                return None
             return {
                 "action": "await_apply_approval",
                 "reason": "sink apply decision exists; live apply remains explicit and gated",
