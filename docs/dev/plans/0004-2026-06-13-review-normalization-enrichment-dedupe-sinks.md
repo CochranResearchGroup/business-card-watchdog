@@ -1890,3 +1890,26 @@ Validation:
 Remaining:
 
 - The review bundle summarizes pilot state only; explicit write/readback pilots and paid/provider-backed enrichment remain separate operator-approved actions.
+
+### Slice 0004-BC | 2026-06-13 | Run Summary Sink Pilot Progress
+
+Implemented:
+
+- Added `sink_pilot_summary` to run summaries for batch-level sink pilot progress readback.
+- The summary reuses the same per-job sink pilot status vocabulary as review bundles.
+- Summary counts now include jobs by sink pilot state, write-pilot count, readback-pilot count, pilot-report count, complete-report count, safe auto-continue count, explicit-operator-action count, write counters, network counters, and compact per-job status rows.
+- CLI/API/MCP run-summary consumers receive the new progress object through the existing shared service method.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_review_bundle_includes_sink_pilot_status tests/test_service.py::test_service_run_summary_and_review_queue -q` passed with 2 tests.
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 83 tests.
+- `.venv/bin/python -m pytest -q` passed with 172 tests.
+- `PYTHONPATH=src pytest -q` passed with 165 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+Remaining:
+
+- Run summaries still report existing artifacts only; explicit write/readback pilots and paid/provider-backed enrichment remain separate operator-approved actions.

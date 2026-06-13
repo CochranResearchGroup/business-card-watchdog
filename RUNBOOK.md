@@ -1258,3 +1258,24 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed with the index up to date.
 - `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+## Turn 68 | 2026-06-13
+
+Continued Plan 0004 execution with run-summary sink pilot progress.
+
+Implemented:
+
+- Added `sink_pilot_summary` to run summaries.
+- Reused the same per-job sink pilot status vocabulary used by review bundles.
+- Added batch counts for sink pilot state, write pilots, readback pilots, pilot reports, complete reports, safe auto-continue actions, explicit operator actions, writes attempted, and network calls made.
+- Kept CLI/API/MCP run-summary consumers on the shared service method.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_review_bundle_includes_sink_pilot_status tests/test_service.py::test_service_run_summary_and_review_queue -q` passed with 2 tests.
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 83 tests.
+- `.venv/bin/python -m pytest -q` passed with 172 tests.
+- `PYTHONPATH=src pytest -q` passed with 165 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.

@@ -809,6 +809,8 @@ def test_service_review_bundle_includes_sink_pilot_status(tmp_path: Path) -> Non
 
     bundle = service.review_bundle(run_id=run_id)
     status = bundle["entries"][0]["sink_pilot_status"]
+    summary = service.run_summary(run_id)
+    pilot_summary = summary["sink_pilot_summary"]
     html = service.review_html(run_id=run_id)
 
     assert status["schema"] == "business-card-watchdog.sink-pilot-status.v1"
@@ -821,6 +823,14 @@ def test_service_review_bundle_includes_sink_pilot_status(tmp_path: Path) -> Non
     assert status["safe_to_auto_continue"] is False
     assert status["requires_explicit_operator_action"] is False
     assert bundle["groups"]["by_sink_pilot_state"]["pilot_report_complete"]["job_ids"] == [job_id]
+    assert pilot_summary["schema"] == "business-card-watchdog.sink-pilot-summary.v1"
+    assert pilot_summary["by_state"]["pilot_report_complete"] == 1
+    assert pilot_summary["write_pilot_count"] == 1
+    assert pilot_summary["readback_pilot_count"] == 1
+    assert pilot_summary["pilot_report_count"] == 1
+    assert pilot_summary["complete_report_count"] == 1
+    assert pilot_summary["jobs"][0]["job_id"] == job_id
+    assert pilot_summary["jobs"][0]["state"] == "pilot_report_complete"
     assert "By Sink Pilot State" in html["html"]
     assert "pilot_report_complete" in html["html"]
 

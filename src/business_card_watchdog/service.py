@@ -271,6 +271,7 @@ class BusinessCardService:
             kind = str(artifact.get("kind") or "unknown")
             artifact_counts[kind] = artifact_counts.get(kind, 0) + 1
         enrichment_budget = self._summarize_enrichment_budget(artifacts)
+        sink_pilot_summary = self._summarize_sink_pilot_progress(jobs=jobs, artifacts=artifacts)
         return {
             "run_id": run_id,
             "state": run["state"],
@@ -278,6 +279,7 @@ class BusinessCardService:
             "state_counts": state_counts,
             "artifact_counts": artifact_counts,
             "enrichment_budget": enrichment_budget,
+            "sink_pilot_summary": sink_pilot_summary,
             "needs_review_count": state_counts.get("needs_review", 0),
             "ready_to_route_count": state_counts.get("ready_to_route", 0),
             "failed_count": state_counts.get("failed", 0),
@@ -352,6 +354,64 @@ class BusinessCardService:
             "public_web": public_web,
             "paid_provider": paid_provider,
             "unreadable_artifact_count": unreadable_artifact_count,
+        }
+
+    def _summarize_sink_pilot_progress(
+        self,
+        *,
+        jobs: list[dict[str, Any]],
+        artifacts: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        artifacts_by_job: dict[str, dict[str, dict[str, Any]]] = {}
+        for artifact in artifacts:
+            job_id = str(artifact.get("job_id") or "")
+            kind = str(artifact.get("kind") or "")
+            if kind in _REVIEW_BUNDLE_ARTIFACT_KINDS:
+                artifacts_by_job.setdefault(job_id, {})[kind] = artifact
+
+        by_state: dict[str, int] = {}
+        job_statuses: list[dict[str, Any]] = []
+        total_writes_attempted = 0
+        total_network_calls_made = 0
+        for job in jobs:
+            job_id = str(job.get("job_id") or "")
+            by_kind = artifacts_by_job.get(job_id, {})
+            next_action = self._next_action_for_job(job, set(by_kind))
+            status = self._sink_pilot_status(by_kind=by_kind, next_action=next_action)
+            state = str(status.get("state") or "not_started")
+            by_state[state] = by_state.get(state, 0) + 1
+            total_writes_attempted += _int(status.get("writes_attempted"))
+            total_network_calls_made += _int(status.get("network_calls_made"))
+            job_statuses.append(
+                {
+                    "job_id": job_id,
+                    "state": state,
+                    "latest_artifact_kind": status.get("latest_artifact_kind"),
+                    "has_write_pilot": status.get("has_write_pilot"),
+                    "has_readback_pilot": status.get("has_readback_pilot"),
+                    "has_pilot_report": status.get("has_pilot_report"),
+                    "report_complete": status.get("report_complete"),
+                    "next_action": status.get("next_action"),
+                    "safe_to_auto_continue": status.get("safe_to_auto_continue"),
+                    "requires_explicit_operator_action": status.get("requires_explicit_operator_action"),
+                }
+            )
+
+        return {
+            "schema": "business-card-watchdog.sink-pilot-summary.v1",
+            "job_count": len(jobs),
+            "by_state": dict(sorted(by_state.items())),
+            "write_pilot_count": sum(1 for status in job_statuses if status["has_write_pilot"]),
+            "readback_pilot_count": sum(1 for status in job_statuses if status["has_readback_pilot"]),
+            "pilot_report_count": sum(1 for status in job_statuses if status["has_pilot_report"]),
+            "complete_report_count": sum(1 for status in job_statuses if status["report_complete"]),
+            "safe_to_auto_continue_count": sum(1 for status in job_statuses if status["safe_to_auto_continue"]),
+            "explicit_operator_action_count": sum(
+                1 for status in job_statuses if status["requires_explicit_operator_action"]
+            ),
+            "writes_attempted": total_writes_attempted,
+            "network_calls_made": total_network_calls_made,
+            "jobs": job_statuses,
         }
 
     def _enforce_run_enrichment_budget(self, *, run_id: str, mode: str) -> None:
