@@ -1450,6 +1450,7 @@ class BusinessCardService:
         artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
         preflight_path = artifact_dir / "sink_apply_preflight.json"
         decision_path = artifact_dir / "sink_apply_decision.json"
+        readiness_path = artifact_dir / "sink_apply_pilot_readiness.json"
         if preflight_path.exists():
             preflight = json.loads(preflight_path.read_text(encoding="utf-8"))
         else:
@@ -1464,6 +1465,16 @@ class BusinessCardService:
                 "job_id": job_id,
                 "run_id": run_id,
             }
+        if apply and simulate:
+            readiness = (
+                json.loads(readiness_path.read_text(encoding="utf-8"))
+                if readiness_path.exists()
+                else self.build_sink_apply_pilot_readiness_for_job(job_id=job_id, run_id=run_id)["readiness"]
+            )
+            if not readiness.get("can_mock_apply_pilot"):
+                raise ValueError(
+                    "simulated sink apply requires ready sink_apply_pilot_readiness.json"
+                )
         result = build_sink_apply_result(preflight=preflight, decision=decision, apply=apply, simulate=simulate)
         result_path = artifact_dir / "sink_apply_result.json"
         result_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -1520,6 +1531,11 @@ class BusinessCardService:
                 "detail": str(write_adapter_path),
             },
             {
+                "name": "mock_readback_available",
+                "ok": True,
+                "detail": "simulated apply can produce local readback evidence without a live adapter",
+            },
+            {
                 "name": "live_sink_readiness_ready",
                 "ok": all(check.get("status") == "ready" for check in readiness["sinks"]),
                 "detail": "all configured sink readiness checks must be ready",
@@ -1530,14 +1546,32 @@ class BusinessCardService:
                 "detail": str(readback_adapter_path),
             },
         ]
+        mock_requirements = {"preflight_exists", "apply_decision_approved", "mock_readback_available"}
+        live_requirements = {
+            "preflight_exists",
+            "apply_decision_approved",
+            "write_adapter_request_exists",
+            "live_sink_readiness_ready",
+            "readback_adapter_available_after_apply",
+        }
+        requirement_by_name = {str(item["name"]): bool(item["ok"]) for item in requirements}
+        can_mock_apply_pilot = all(requirement_by_name[name] for name in mock_requirements)
+        can_live_apply_pilot = all(requirement_by_name[name] for name in live_requirements)
+        missing_requirements = [item["name"] for item in requirements if not item["ok"]]
         payload = {
             "schema": "business-card-watchdog.sink-apply-pilot-readiness.v1",
-            "state": "blocked",
-            "status": "blocked",
-            "reason": "live apply pilot remains blocked until all readiness checks pass and a live adapter is explicitly implemented",
+            "state": "ready_for_mock_apply" if can_mock_apply_pilot else "blocked",
+            "status": "ready_for_mock_apply" if can_mock_apply_pilot else "blocked",
+            "reason": (
+                "mock apply pilot is ready; live apply remains blocked until live readiness and readback adapter checks pass"
+                if can_mock_apply_pilot
+                else "apply pilot remains blocked until required review, preflight, and adapter request artifacts exist"
+            ),
             "job_id": job_id,
             "run_id": run_id,
-            "can_apply_pilot": False,
+            "can_apply_pilot": can_mock_apply_pilot,
+            "can_mock_apply_pilot": can_mock_apply_pilot,
+            "can_live_apply_pilot": can_live_apply_pilot,
             "writes_attempted": 0,
             "network_calls_made": 0,
             "preflight_state": preflight.get("state") if preflight else "missing",
@@ -1545,10 +1579,17 @@ class BusinessCardService:
             "decision": decision.get("decision") if decision else "",
             "sink_readiness": readiness,
             "requirements": requirements,
-            "missing_requirements": [item["name"] for item in requirements if not item["ok"]],
+            "missing_requirements": missing_requirements,
+            "mock_missing_requirements": [
+                name for name in sorted(mock_requirements) if not requirement_by_name[name]
+            ],
+            "live_missing_requirements": [
+                name for name in sorted(live_requirements) if not requirement_by_name[name]
+            ],
             "commands": {
                 "prepare": "sinks apply-pilot-readiness",
-                "manual_apply": "sinks apply --apply",
+                "mock_apply": "sinks apply --apply --simulate",
+                "manual_apply": "sinks apply --apply --no-simulate",
                 "readback": "sinks adapter-request --phase readback",
             },
         }

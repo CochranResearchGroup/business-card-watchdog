@@ -1734,3 +1734,27 @@ External-call validation:
 - Which Odollo tenant should be the first live pilot target?
 - Should reviewed contacts be routed to Google Contacts first, Odollo first, or both only after dedupe confidence is high?
 - What is the minimum acceptable review surface for first use: CLI JSON, generated workbook, local web UI, or MCP-driven agent review?
+
+## Execution Log
+
+### Slice 0004-AW | 2026-06-13 | Mock Apply Pilot Readiness Gate
+
+Implemented:
+
+- `sink_apply_pilot_readiness.json` now distinguishes mock-apply readiness from live-apply readiness.
+- Simulated apply now requires or creates a ready pilot-readiness artifact before emitting the local mock apply result.
+- Mock apply readiness is gated by local preflight, explicit apply approval, and local mock readback availability.
+- Live apply remains blocked behind live sink readiness plus write/readback adapter evidence.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_sinks.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 93 tests.
+- `.venv/bin/python -m pytest -q` passed with 156 tests.
+- `PYTHONPATH=src pytest -q` passed with 150 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+Remaining:
+
+- Live write/readback adapters remain follow-on work; this slice only makes the mock pilot readiness gate meaningful.

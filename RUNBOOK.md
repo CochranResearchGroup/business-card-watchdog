@@ -1110,3 +1110,23 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed with the index up to date.
 - `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+## Turn 61 | 2026-06-13
+
+Continued Plan 0004 execution with a mock apply pilot readiness gate.
+
+Implemented:
+
+- Split `sink_apply_pilot_readiness.json` into mock-apply and live-apply readiness signals.
+- Simulated apply now requires or creates ready pilot-readiness evidence before producing a mock apply result.
+- Mock apply readiness requires local preflight, explicit apply approval, and local mock readback availability.
+- Live apply remains blocked until live sink readiness plus write/readback adapter requirements pass.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_sinks.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 93 tests.
+- `.venv/bin/python -m pytest -q` passed with 156 tests.
+- `PYTHONPATH=src pytest -q` passed with 150 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.

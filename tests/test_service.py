@@ -897,6 +897,7 @@ def test_service_next_actions_recommends_write_adapter_request_after_sink_plan(t
     config = AppConfig(
         config_path=tmp_path / "config.toml",
         data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
         routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
     )
     run_id, job_id = make_recorded_run(config)
@@ -1267,10 +1268,15 @@ def test_service_next_actions_recommends_live_apply_after_decision(tmp_path: Pat
     next_payload = service.next_actions(run_id=run_id)
 
     assert readiness["readiness"]["schema"] == "business-card-watchdog.sink-apply-pilot-readiness.v1"
-    assert readiness["readiness"]["can_apply_pilot"] is False
+    assert readiness["readiness"]["can_apply_pilot"] is True
+    assert readiness["readiness"]["can_mock_apply_pilot"] is True
+    assert readiness["readiness"]["can_live_apply_pilot"] is False
+    assert readiness["readiness"]["state"] == "ready_for_mock_apply"
     assert readiness["readiness"]["writes_attempted"] == 0
     assert readiness["readiness"]["network_calls_made"] == 0
     assert "readback_adapter_available_after_apply" in readiness["readiness"]["missing_requirements"]
+    assert readiness["readiness"]["mock_missing_requirements"] == []
+    assert "readback_adapter_available_after_apply" in readiness["readiness"]["live_missing_requirements"]
     assert next_payload["actions"][0]["action"] == "await_apply_approval"
     assert next_payload["actions"][0]["command"] == "sinks apply --apply"
 
@@ -1304,6 +1310,41 @@ def test_service_next_actions_recommends_readback_adapter_request_after_apply_re
 
     assert payload["actions"][0]["action"] == "prepare_sink_readback_adapter"
     assert payload["actions"][0]["command"] == "sinks adapter-request --phase readback"
+
+
+def test_service_simulated_apply_requires_ready_pilot_readiness(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+        field_corrections={"full_name": "Reviewed Fixture", "email": "fixture@example.test"},
+    )
+    service.plan_sink_lookup_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
+    service.record_sink_lookup_result_for_job(job_id=job_id, run_id=run_id)
+    service.assess_downstream_duplicates_for_job(job_id=job_id, run_id=run_id)
+    service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="write")
+    service.preflight_sink_apply(job_id=job_id, run_id=run_id)
+    service.decide_sink_apply(job_id=job_id, run_id=run_id, decision="approve", reviewer="tester")
+
+    result = service.apply_sinks_for_job(job_id=job_id, run_id=run_id, apply=True, simulate=True)
+    readiness_path = config.runs_dir / run_id / "artifacts" / job_id / "sink_apply_pilot_readiness.json"
+
+    assert readiness_path.exists()
+    assert result["result"]["state"] == "mock_applied"
+    assert result["result"]["simulated"] is True
+    assert result["result"]["writes_attempted"] == 0
+    assert result["result"]["readback"][0]["simulated"] is True
 
 
 def test_service_submit_review_rejects_unknown_fields(tmp_path: Path) -> None:
