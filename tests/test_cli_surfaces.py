@@ -86,6 +86,24 @@ def test_cli_sinks_check_is_dry_run_and_non_mutating(tmp_path: Path, capsys) -> 
     assert {sink["status"] for sink in payload["sinks"]} == {"ready"}
 
 
+def test_cli_sinks_plan_writes_artifact(tmp_path: Path, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    config_path.write_text(
+        f'data_dir = "{data_dir}"\n'
+        "[watch]\ninputs = []\n"
+        "[sink]\ndry_run = true\ngoogle_contacts = true\nodoo = true\n"
+        "[routing]\nrules = [{ match = \"email_domain\", value = \"*\", sinks = [\"google_contacts\"] }]\n",
+        encoding="utf-8",
+    )
+    run_id, job_id = make_recorded_run(AppConfig(config_path=config_path, data_dir=data_dir))
+
+    assert main(["--config", str(config_path), "sinks", "plan", job_id, "--run-id", run_id, "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["plan"]["schema"] == "business-card-watchdog.sink-plan.v1"
+    assert payload["plan"]["state"] == "dry_run"
+
+
 def test_cli_enrichment_check_blocks_when_not_enabled(tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.toml"
     write_config(config_path, tmp_path / "data")

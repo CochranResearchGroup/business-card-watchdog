@@ -1,4 +1,5 @@
 from business_card_watchdog.sinks import (
+    build_sink_plan,
     build_sink_payloads,
     canonical_contact_fingerprint,
     check_sink_readiness,
@@ -51,6 +52,20 @@ def test_build_sink_payloads_include_match_keys_and_readiness() -> None:
     assert all(payload.match_keys["email"] == "ada@example.test" for payload in payloads)
     assert payloads[0].fingerprint == payloads[1].fingerprint
     assert payloads[0].serialization_key == "email:ada@example.test"
+
+
+def test_build_sink_plan_is_dry_run_and_action_oriented() -> None:
+    plan = build_sink_plan(
+        sinks=["google_contacts", "odoo"],
+        spec={"full_name": "Ada Lovelace", "email": "ada@example.test"},
+        dry_run=True,
+        reason="matched email_domain=*",
+    )
+
+    assert plan["schema"] == "business-card-watchdog.sink-plan.v1"
+    assert plan["state"] == "dry_run"
+    assert [action["sink"] for action in plan["actions"]] == ["google_contacts", "odoo"]
+    assert all(action["action"] == "plan_upsert" for action in plan["actions"])
 
 
 def test_contact_serialization_key_prefers_email_then_phone_then_name() -> None:

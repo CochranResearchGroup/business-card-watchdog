@@ -104,6 +104,10 @@ def create_app(config_path: Path | None = None):
     def sink_check() -> dict[str, object]:
         return service().sink_readiness()
 
+    @app.post("/jobs/{job_id}/sink-plan")
+    def create_sink_plan(job_id: str, run_id: str, dry_run: bool = True) -> dict[str, object]:
+        return service().plan_sinks_for_job(job_id=job_id, run_id=run_id, dry_run=dry_run)
+
     @app.post("/enrichment/check")
     def enrichment_check(request: EnrichmentRequest = Body(default=EnrichmentRequest(run_id=""))) -> dict[str, object]:
         return service().enrichment_readiness(

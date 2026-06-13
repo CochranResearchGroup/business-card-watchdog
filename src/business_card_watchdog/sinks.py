@@ -10,6 +10,7 @@ from typing import Any, Literal
 
 SinkName = Literal["google_contacts", "odoo"]
 ReadinessStatus = Literal["ready", "blocked"]
+SINK_PLAN_SCHEMA = "business-card-watchdog.sink-plan.v1"
 
 
 FINGERPRINT_FIELDS = (
@@ -97,6 +98,34 @@ def write_sink_payloads(path: Path, payloads: list[SinkPayload]) -> Path:
         encoding="utf-8",
     )
     return path
+
+
+def build_sink_plan(
+    *,
+    sinks: list[str],
+    spec: dict[str, Any],
+    dry_run: bool,
+    reason: str,
+) -> dict[str, Any]:
+    payloads = build_sink_payloads(sinks=sinks, spec=spec, dry_run=dry_run)
+    return {
+        "schema": SINK_PLAN_SCHEMA,
+        "state": "dry_run" if dry_run else ("ready" if all(payload.readiness.ready for payload in payloads) else "blocked"),
+        "reason": reason,
+        "dry_run": dry_run,
+        "payloads": [payload.to_dict() for payload in payloads],
+        "actions": [
+            {
+                "sink": payload.sink,
+                "action": "plan_upsert",
+                "state": payload.state,
+                "match_keys": payload.match_keys,
+                "serialization_key": payload.serialization_key,
+                "readiness": payload.readiness.to_dict(),
+            }
+            for payload in payloads
+        ],
+    }
 
 
 def check_sink_readiness(sink: str, *, dry_run: bool) -> SinkReadiness:

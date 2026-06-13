@@ -251,3 +251,19 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_enrichment.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 14 tests.
 - `PYTHONPATH=src pytest tests/test_enrichment.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 13 tests and 1 skipped optional API-extra test.
+
+## Turn 15 | 2026-06-13
+
+Continued Plan 0004 execution with dry-run sink plan artifacts.
+
+Implemented:
+
+- `sink_plan.json` artifacts for selected jobs.
+- Sink plans prefer reviewed contact artifacts, then normalized contact candidates, then legacy specs.
+- Sink plans record routing decision, dry-run payloads, readiness, match keys, serialization keys, and planned upsert actions.
+- Service, CLI, API, and MCP-manifest surfaces for sink planning.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 25 tests.
+- `PYTHONPATH=src pytest tests/test_sinks.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 24 tests and 1 skipped optional API-extra test.

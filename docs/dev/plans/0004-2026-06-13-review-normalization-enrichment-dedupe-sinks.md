@@ -138,6 +138,29 @@ Remaining:
 - Apollo adapter integration remains behind the paid API gate.
 - Enrichment request review/merge approval is still separate follow-on work.
 
+### Slice 0004-D | 2026-06-13 | Dry-Run Sink Plan Artifacts
+
+Implemented:
+
+- `sink_plan.json` artifact generation for selected jobs.
+- Sink plans prefer `reviewed_contact.json`, then `contact_candidate.json`, then legacy `spec.json`.
+- Sink plans include routing decision, dry-run payloads, readiness, match keys, serialization keys, and planned upsert actions.
+- Service `plan_sinks_for_job` method.
+- CLI `bcw sinks plan`.
+- API `POST /jobs/{job_id}/sink-plan`.
+- MCP manifest entry for sink planning.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 25 tests.
+- `PYTHONPATH=src pytest tests/test_sinks.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 24 tests and 1 skipped optional API-extra test.
+
+Remaining:
+
+- Downstream Google Contacts/Odoo lookup is not implemented.
+- Live apply/readback remains blocked.
+- Approved reviewed-contact jobs still need automatic rerouting/plan refresh.
+
 ## `/goal` Objective
 
 Use this as the high-level `/goal` objective:

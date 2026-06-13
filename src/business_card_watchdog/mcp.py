@@ -107,6 +107,19 @@ def tool_manifest() -> dict[str, object]:
                 "input_schema": {"type": "object", "properties": {}},
             },
             {
+                "name": "business_card_watchdog_sink_plan",
+                "description": "Create a dry-run sink plan artifact for one reviewed or normalized job.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "job_id": {"type": "string"},
+                        "run_id": {"type": "string"},
+                        "dry_run": {"type": "boolean", "default": True},
+                    },
+                    "required": ["job_id", "run_id"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_enrichment_check",
                 "description": "Report enrichment readiness and paid-provider gates without making provider calls.",
                 "input_schema": {

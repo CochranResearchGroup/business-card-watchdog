@@ -5,13 +5,14 @@ from pathlib import Path
 from typing import Any
 
 from .config import AppConfig, ensure_runtime_dirs
-from .contact import apply_review_corrections, build_contact_candidate
+from .contact import apply_review_corrections, build_contact_candidate, contact_candidate_to_spec
 from .enrichment import build_enrichment_request, check_enrichment_readiness, score_public_web_results
 from .ledger import RunLedger
 from .models import CardJob
 from .orchestrator import BatchOrchestrator
 from .review import build_review_submission, write_review_submission
-from .sinks import check_sink_readiness
+from .routing import decide_sinks
+from .sinks import build_sink_plan, check_sink_readiness
 from .skill_adapter import BusinessCardSkillAdapter
 from .watcher import PollingWatcher
 
@@ -305,6 +306,36 @@ class BusinessCardService:
             "result": result_payload,
         }
 
+    def plan_sinks_for_job(self, *, job_id: str, run_id: str, dry_run: bool = True) -> dict[str, Any]:
+        job = self.get_job(job_id, run_id=run_id)
+        artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
+        spec = self._contact_spec_for_artifact_dir(artifact_dir)
+        decision = decide_sinks(self.config, spec)
+        plan = build_sink_plan(
+            sinks=decision.sinks,
+            spec=spec,
+            dry_run=dry_run or decision.dry_run,
+            reason=decision.reason,
+        )
+        plan["job_id"] = job_id
+        plan["run_id"] = run_id
+        plan["decision"] = decision.to_dict()
+        plan_path = artifact_dir / "sink_plan.json"
+        plan_path.write_text(json.dumps(plan, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        ledger.record_artifact(job_id=job_id, kind="sink_plan", path=plan_path)
+        ledger.record_event(
+            "sink_plan_created",
+            {
+                "job_id": job_id,
+                "run_id": run_id,
+                "plan_path": str(plan_path),
+                "state": plan["state"],
+                "sinks": decision.sinks,
+            },
+        )
+        return {"plan_path": str(plan_path), "plan": plan}
+
     def doctor(self) -> dict[str, Any]:
         status = self.status()
         checks = [
@@ -332,6 +363,20 @@ class BusinessCardService:
     def watch_reset(self) -> dict[str, Any]:
         PollingWatcher(self.config).reset()
         return {"reset": True, "watch_dir": str(self.config.watch_dir)}
+
+    def _contact_spec_for_artifact_dir(self, artifact_dir: Path) -> dict[str, Any]:
+        reviewed_path = artifact_dir / "reviewed_contact.json"
+        candidate_path = artifact_dir / "contact_candidate.json"
+        spec_path = artifact_dir / "spec.json"
+        if reviewed_path.exists():
+            reviewed = json.loads(reviewed_path.read_text(encoding="utf-8"))
+            return contact_candidate_to_spec(reviewed)
+        if candidate_path.exists():
+            candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+            return contact_candidate_to_spec(candidate)
+        if spec_path.exists():
+            return json.loads(spec_path.read_text(encoding="utf-8"))
+        raise FileNotFoundError(f"no contact artifact found in {artifact_dir}")
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:

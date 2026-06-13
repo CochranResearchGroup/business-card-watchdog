@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from business_card_watchdog.config import AppConfig
+from business_card_watchdog.config import AppConfig, SinkConfig
+from business_card_watchdog.contact import build_contact_candidate
 from business_card_watchdog.ledger import RunLedger
 from business_card_watchdog.models import CardJob
 from business_card_watchdog.service import BusinessCardService
@@ -126,6 +127,28 @@ def test_service_submit_review_records_artifact_and_advances_job(tmp_path: Path)
     assert job["state"] == "ready_to_route"
     assert any(artifact["kind"] == "review_submission" for artifact in job["artifacts"])
     assert any(event["event_type"] == "review_submitted" for event in events)
+
+
+def test_service_plan_sinks_for_job_writes_dry_run_plan(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, odoo=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "example.test", "sinks": ["google_contacts", "odoo"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+    candidate = build_contact_candidate({"full_name": "Ada Lovelace", "email": "ADA@EXAMPLE.TEST"})
+    (artifact_dir / "contact_candidate.json").write_text(json.dumps(candidate, indent=2), encoding="utf-8")
+
+    result = BusinessCardService(config).plan_sinks_for_job(job_id=job_id, run_id=run_id)
+    job = BusinessCardService(config).get_job(job_id, run_id=run_id)
+
+    assert result["plan"]["schema"] == "business-card-watchdog.sink-plan.v1"
+    assert result["plan"]["state"] == "dry_run"
+    assert [action["sink"] for action in result["plan"]["actions"]] == ["google_contacts", "odoo"]
+    assert result["plan"]["actions"][0]["match_keys"]["email"] == "ada@example.test"
+    assert any(artifact["kind"] == "sink_plan" for artifact in job["artifacts"])
 
 
 def test_service_submit_review_rejects_unknown_fields(tmp_path: Path) -> None:
