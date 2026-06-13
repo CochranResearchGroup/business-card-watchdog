@@ -340,6 +340,7 @@ def test_cli_sinks_apply_decision_writes_zero_write_artifact(tmp_path: Path, cap
                 "--run-id",
                 run_id,
                 "--apply",
+                "--simulate",
                 "--json",
             ]
         )
@@ -347,8 +348,9 @@ def test_cli_sinks_apply_decision_writes_zero_write_artifact(tmp_path: Path, cap
     )
     result = json.loads(capsys.readouterr().out)
     assert result["result"]["schema"] == "business-card-watchdog.sink-apply-result.v1"
-    assert result["result"]["state"] == "blocked"
+    assert result["result"]["state"] == "mock_applied"
     assert result["result"]["writes_attempted"] == 0
+    assert result["result"]["readback"][0]["simulated"] is True
 
 
 def test_cli_enrichment_check_blocks_when_not_enabled(tmp_path: Path, capsys) -> None:

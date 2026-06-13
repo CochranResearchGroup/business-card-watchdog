@@ -167,6 +167,7 @@ def tool_manifest() -> dict[str, object]:
                         "job_id": {"type": "string"},
                         "run_id": {"type": "string"},
                         "apply": {"type": "boolean", "default": False},
+                        "simulate": {"type": "boolean", "default": False},
                     },
                     "required": ["job_id", "run_id"],
                 },
@@ -336,6 +337,7 @@ def call_tool(
             job_id=str(args["job_id"]),
             run_id=str(args["run_id"]),
             apply=bool(args.get("apply", False)),
+            simulate=bool(args.get("simulate", False)),
         )
     if tool_name == "business_card_watchdog_enrichment_check":
         return service.enrichment_readiness(

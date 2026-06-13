@@ -104,6 +104,7 @@ def build_parser() -> argparse.ArgumentParser:
     sinks_apply.add_argument("job_id")
     sinks_apply.add_argument("--run-id", required=True)
     sinks_apply.add_argument("--apply", action=argparse.BooleanOptionalAction, default=False)
+    sinks_apply.add_argument("--simulate", action=argparse.BooleanOptionalAction, default=False)
     sinks_apply.add_argument("--json", action="store_true")
     sinks_apply_decision = sinks_sub.add_parser("apply-decision")
     sinks_apply_decision.add_argument("job_id")
@@ -258,6 +259,7 @@ def main(argv: list[str] | None = None) -> int:
                 job_id=args.job_id,
                 run_id=args.run_id,
                 apply=args.apply,
+                simulate=args.simulate,
             )
         print(json.dumps(payload, indent=2) if args.json else payload)
         return 0

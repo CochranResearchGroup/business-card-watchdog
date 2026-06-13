@@ -49,8 +49,12 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     ).json()
     assert apply_decision["decision"]["schema"] == "business-card-watchdog.sink-apply-decision.v1"
     assert apply_decision["decision"]["network_calls_made"] == 0
-    apply_result = client.post(f"/jobs/{job_id}/sink-apply", json={"run_id": run_id, "apply": True}).json()
+    apply_result = client.post(
+        f"/jobs/{job_id}/sink-apply",
+        json={"run_id": run_id, "apply": True, "simulate": True},
+    ).json()
     assert apply_result["result"]["schema"] == "business-card-watchdog.sink-apply-result.v1"
+    assert apply_result["result"]["state"] == "mock_applied"
     assert apply_result["result"]["writes_attempted"] == 0
     artifact_dir = data_dir / "runs" / run_id / "artifacts" / job_id
     (artifact_dir / "enrichment_result.json").write_text(

@@ -592,7 +592,14 @@ class BusinessCardService:
             "decision": decision_payload,
         }
 
-    def apply_sinks_for_job(self, *, job_id: str, run_id: str, apply: bool = False) -> dict[str, Any]:
+    def apply_sinks_for_job(
+        self,
+        *,
+        job_id: str,
+        run_id: str,
+        apply: bool = False,
+        simulate: bool = False,
+    ) -> dict[str, Any]:
         job = self.get_job(job_id, run_id=run_id)
         artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
         preflight_path = artifact_dir / "sink_apply_preflight.json"
@@ -611,7 +618,7 @@ class BusinessCardService:
                 "job_id": job_id,
                 "run_id": run_id,
             }
-        result = build_sink_apply_result(preflight=preflight, decision=decision, apply=apply)
+        result = build_sink_apply_result(preflight=preflight, decision=decision, apply=apply, simulate=simulate)
         result_path = artifact_dir / "sink_apply_result.json"
         result_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         ledger = RunLedger(self.config.runs_dir / run_id)
@@ -622,6 +629,7 @@ class BusinessCardService:
                 "job_id": job_id,
                 "run_id": run_id,
                 "apply_requested": apply,
+                "simulated": result["simulated"],
                 "state": result["state"],
                 "result_path": str(result_path),
                 "writes_attempted": 0,

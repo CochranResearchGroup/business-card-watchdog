@@ -262,6 +262,7 @@ def build_sink_apply_result(
     preflight: dict[str, Any],
     decision: dict[str, Any],
     apply: bool,
+    simulate: bool = False,
 ) -> dict[str, Any]:
     decision_value = str(decision.get("decision") or "")
     reasons: list[str] = []
@@ -271,13 +272,30 @@ def build_sink_apply_result(
     elif decision_value != "approve":
         state = "blocked"
         reasons.append("sink apply requires an approved sink apply decision")
+    elif simulate:
+        state = "mock_applied"
+        reasons.append("mock sink adapter produced readback evidence; no live write attempted")
     else:
         state = "blocked"
         reasons.append("live sink write/readback adapters are not implemented yet")
+    actions = [
+        {
+            "sink": action.get("sink"),
+            "state": state,
+            "decision": decision_value,
+            "planned_action": action.get("planned_action"),
+            "serialization_key": action.get("serialization_key"),
+            "write_attempted": False,
+            "readback_attempted": False,
+            "simulated": bool(simulate and state == "mock_applied"),
+        }
+        for action in list(preflight.get("actions") or [])
+    ]
     return {
         "schema": SINK_APPLY_RESULT_SCHEMA,
         "state": state,
         "apply_requested": apply,
+        "simulated": bool(simulate and state == "mock_applied"),
         "decision": decision_value,
         "writes_attempted": 0,
         "network_calls_made": 0,
@@ -288,19 +306,8 @@ def build_sink_apply_result(
         "decision_state": decision.get("state"),
         "job_id": preflight.get("job_id") or decision.get("job_id"),
         "run_id": preflight.get("run_id") or decision.get("run_id"),
-        "readback": [],
-        "actions": [
-            {
-                "sink": action.get("sink"),
-                "state": state,
-                "decision": decision_value,
-                "planned_action": action.get("planned_action"),
-                "serialization_key": action.get("serialization_key"),
-                "write_attempted": False,
-                "readback_attempted": False,
-            }
-            for action in list(preflight.get("actions") or [])
-        ],
+        "readback": _mock_readback(actions) if simulate and state == "mock_applied" else [],
+        "actions": actions,
     }
 
 
@@ -431,6 +438,19 @@ def _lookup_queries_for_sink(sink: str, match_keys: dict[str, str]) -> list[dict
         }
         for field, value in match_keys.items()
         if field in {"email", "phone", "full_name", "fingerprint"}
+    ]
+
+
+def _mock_readback(actions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "sink": str(action.get("sink") or ""),
+            "resource_id": f"mock:{action.get('sink')}:{action.get('serialization_key') or 'unknown'}",
+            "serialization_key": action.get("serialization_key"),
+            "matched": True,
+            "simulated": True,
+        }
+        for action in actions
     ]
 
 

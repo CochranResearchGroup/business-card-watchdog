@@ -315,6 +315,31 @@ def test_service_apply_sinks_for_job_writes_blocked_zero_write_result(tmp_path: 
     assert any(event["event_type"] == "sink_apply_attempted" for event in events)
 
 
+def test_service_apply_sinks_for_job_can_emit_mock_readback(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+    service.preflight_sink_apply(job_id=job_id, run_id=run_id)
+    service.decide_sink_apply(job_id=job_id, run_id=run_id, decision="approve", reviewer="tester")
+
+    result = service.apply_sinks_for_job(job_id=job_id, run_id=run_id, apply=True, simulate=True)
+    events = [
+        json.loads(line)
+        for line in (config.runs_dir / run_id / "events.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+
+    assert result["result"]["state"] == "mock_applied"
+    assert result["result"]["simulated"] is True
+    assert result["result"]["readback"][0]["resource_id"].startswith("mock:google_contacts:")
+    assert any(event["payload"]["simulated"] is True for event in events if event["event_type"] == "sink_apply_attempted")
+
+
 def test_service_next_actions_recommends_sink_lookup_for_ready_job(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, job_id = make_recorded_run(config)

@@ -36,6 +36,7 @@ def create_app(config_path: Path | None = None):
     class SinkApplyPreflightRequest(BaseModel):
         run_id: str
         apply: bool = False
+        simulate: bool = False
 
     class SinkApplyDecisionRequest(BaseModel):
         run_id: str
@@ -148,7 +149,12 @@ def create_app(config_path: Path | None = None):
 
     @app.post("/jobs/{job_id}/sink-apply")
     def apply_sinks(job_id: str, request: SinkApplyPreflightRequest = Body(...)) -> dict[str, object]:
-        return service().apply_sinks_for_job(job_id=job_id, run_id=request.run_id, apply=request.apply)
+        return service().apply_sinks_for_job(
+            job_id=job_id,
+            run_id=request.run_id,
+            apply=request.apply,
+            simulate=request.simulate,
+        )
 
     @app.post("/enrichment/check")
     def enrichment_check(request: EnrichmentRequest = Body(default=EnrichmentRequest(run_id=""))) -> dict[str, object]:

@@ -165,6 +165,26 @@ def test_build_sink_apply_result_blocks_live_write_after_approval() -> None:
     assert result["readback"] == []
 
 
+def test_build_sink_apply_result_can_emit_mock_readback() -> None:
+    plan = build_sink_plan(
+        sinks=["google_contacts"],
+        spec={"full_name": "Ada Lovelace", "email": "ada@example.test"},
+        dry_run=True,
+        reason="matched email_domain=*",
+    )
+    preflight = build_sink_apply_preflight(plan=plan, apply=False)
+    decision = build_sink_apply_decision(preflight=preflight, decision="approve", reviewer="operator")
+
+    result = build_sink_apply_result(preflight=preflight, decision=decision, apply=True, simulate=True)
+
+    assert result["state"] == "mock_applied"
+    assert result["simulated"] is True
+    assert result["writes_attempted"] == 0
+    assert result["network_calls_made"] == 0
+    assert result["readback"][0]["simulated"] is True
+    assert result["readback"][0]["resource_id"].startswith("mock:google_contacts:")
+
+
 def test_contact_serialization_key_prefers_email_then_phone_then_name() -> None:
     assert contact_serialization_key({"phone": "+1 555 0100"}) == "phone:+1 555 0100"
     assert contact_serialization_key({"full_name": "Ada Lovelace"}).startswith("full_name:")

@@ -419,3 +419,21 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_config.py tests/test_sinks.py tests/test_service.py -q` passed with 40 tests.
+
+## Turn 25 | 2026-06-13
+
+Continued Plan 0004 execution with simulated sink apply/readback.
+
+Implemented:
+
+- Added explicit `simulate` flag for gated sink apply attempts.
+- Added mock sink apply/readback result state `mock_applied`.
+- Simulated readback entries use stable mock resource IDs derived from sink and serialization key.
+- CLI `bcw sinks apply --apply --simulate`.
+- API and MCP apply surfaces accept `simulate`.
+- Simulated apply keeps `writes_attempted = 0` and `network_calls_made = 0`.
+- `sink_apply_attempted` events record whether the attempt was simulated.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 56 tests.

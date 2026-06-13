@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from business_card_watchdog.config import AppConfig
+from business_card_watchdog.config import AppConfig, SinkConfig
 from business_card_watchdog.mcp import call_tool, tool_manifest
 
 from test_service import make_recorded_run
@@ -35,7 +35,12 @@ def test_manifest_has_process_tool() -> None:
 
 
 def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
-    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
     run_id, job_id = make_recorded_run(config)
     artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
     (artifact_dir / "enrichment_result.json").write_text(
@@ -78,7 +83,7 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     )
     apply_result = call_tool(
         "business_card_watchdog_sink_apply",
-        {"job_id": job_id, "run_id": run_id, "apply": True},
+        {"job_id": job_id, "run_id": run_id, "apply": True, "simulate": True},
         config=config,
     )
     merge = call_tool(
@@ -110,8 +115,9 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert preflight["preflight"]["writes_attempted"] == 0
     assert apply_decision["decision"]["state"] == "approved_for_apply"
     assert apply_decision["decision"]["network_calls_made"] == 0
-    assert apply_result["result"]["state"] == "blocked"
+    assert apply_result["result"]["state"] == "mock_applied"
     assert apply_result["result"]["writes_attempted"] == 0
+    assert apply_result["result"]["readback"][0]["simulated"] is True
     assert merge["submission"]["approved_enrichment_fields"] == ["notes"]
     assert duplicate["submission"]["duplicate_resolution"]["decision"] == "create_new"
 

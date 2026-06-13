@@ -363,6 +363,28 @@ Remaining:
 - Live sink-backed duplicate lookup execution remains follow-on work.
 - Live apply result remains blocked until adapters are implemented and explicitly approved.
 
+### Slice 0004-N | 2026-06-13 | Simulated Sink Apply Readback
+
+Implemented:
+
+- Explicit `simulate` flag for gated sink apply attempts.
+- Mock sink apply/readback result state `mock_applied`.
+- Simulated readback entries with stable mock resource IDs derived from sink and serialization key.
+- CLI `bcw sinks apply --apply --simulate`.
+- API and MCP apply surfaces accept `simulate`.
+- Simulated apply keeps `writes_attempted = 0` and `network_calls_made = 0`.
+- `sink_apply_attempted` events record whether the attempt was simulated.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 56 tests.
+
+Remaining:
+
+- Live Google Contacts and Odoo/Odollo lookup/write/readback adapters remain blocked.
+- Live sink-backed duplicate lookup execution remains follow-on work.
+- Non-simulated live apply remains blocked until adapters are implemented and explicitly approved.
+
 ## `/goal` Objective
 
 Use this as the high-level `/goal` objective:
