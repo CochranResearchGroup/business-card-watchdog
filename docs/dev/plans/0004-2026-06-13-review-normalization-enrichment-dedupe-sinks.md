@@ -536,6 +536,28 @@ Remaining:
 - Live Google Contacts and Odoo/Odollo lookup/write/readback adapters remain blocked.
 - Non-simulated live apply remains blocked until adapters are implemented and explicitly approved.
 
+### Slice 0004-V | 2026-06-13 | Provider-Specific Sink Adapter Request Contracts
+
+Implemented:
+
+- Expanded blocked `sink_adapter_request_*.json` artifacts with concrete Google People API request contracts.
+- Google Contacts lookup requests now include profile placeholders, query body, read mask, match strategy, and expected response keys.
+- Google Contacts write requests now include create/update method intent, People API request body, idempotency policy, and expected response keys.
+- Google Contacts readback requests now include `people.get` request fields for resource verification.
+- Expanded blocked Odollo/Odoo requests with tenant placeholders, `res.partner` lookup/write/readback contracts, Odoo domains, contact-point plans, and expected response keys.
+- Odollo write requests keep contact-point plans additive and set `overwrite_canonical_slots = false`.
+- Adapter request artifacts still record `network_calls_made = 0`, `writes_attempted = 0`, and `requires_live_adapter = true`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sinks.py -q` passed with 14 tests.
+
+Remaining:
+
+- Live Google Contacts and Odoo/Odollo lookup/write/readback adapters remain blocked.
+- Live tenant/profile readiness still needs concrete config reconciliation with GWS/Odollo runtimes.
+- Non-simulated live apply remains blocked until adapters are implemented and explicitly approved.
+
 ## `/goal` Objective
 
 Use this as the high-level `/goal` objective:

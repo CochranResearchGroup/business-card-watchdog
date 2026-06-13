@@ -527,23 +527,25 @@ def _lookup_queries_for_sink(sink: str, match_keys: dict[str, str]) -> list[dict
 def _lookup_adapter_request(lookup: dict[str, Any]) -> dict[str, Any]:
     sink = str(lookup.get("sink") or "")
     request = _adapter_base(sink=sink, phase="lookup")
+    match_keys = lookup.get("match_keys", {})
     request.update(
         {
             "operation": "lookup_contact",
-            "match_keys": lookup.get("match_keys", {}),
+            "match_keys": match_keys,
             "queries": list(lookup.get("queries") or []),
         }
     )
     if sink == "odoo":
-        request.update({"adapter": "odollo.odoo", "model": "res.partner", "method": "search_read"})
+        request.update(_odollo_lookup_contract(match_keys=match_keys))
     else:
-        request.update({"adapter": "gws.people", "method": "people.searchContacts"})
+        request.update(_gws_lookup_contract(match_keys=match_keys))
     return request
 
 
 def _write_adapter_request(action: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
     sink = str(action.get("sink") or "")
     request = _adapter_base(sink=sink, phase="write")
+    values = dict(payload.get("payload", {}).get("values") or {})
     request.update(
         {
             "operation": "upsert_contact",
@@ -554,27 +556,28 @@ def _write_adapter_request(action: dict[str, Any], payload: dict[str, Any]) -> d
         }
     )
     if sink == "odoo":
-        request.update({"adapter": "odollo.odoo", "model": "res.partner", "method": "upsert"})
+        request.update(_odollo_write_contract(values=values))
     else:
-        request.update({"adapter": "gws.people", "method": "people.createOrUpdateContact"})
+        request.update(_gws_write_contract(values=values))
     return request
 
 
 def _readback_adapter_request(action: dict[str, Any], readback: dict[str, Any]) -> dict[str, Any]:
     sink = str(action.get("sink") or "")
     request = _adapter_base(sink=sink, phase="readback")
+    resource_id = readback.get("resource_id")
     request.update(
         {
             "operation": "readback_contact",
             "serialization_key": action.get("serialization_key"),
-            "resource_id": readback.get("resource_id"),
+            "resource_id": resource_id,
             "simulated_readback": bool(readback.get("simulated", False)),
         }
     )
     if sink == "odoo":
-        request.update({"adapter": "odollo.odoo", "model": "res.partner", "method": "read"})
+        request.update(_odollo_readback_contract(resource_id=resource_id))
     else:
-        request.update({"adapter": "gws.people", "method": "people.get"})
+        request.update(_gws_readback_contract(resource_id=resource_id))
     return request
 
 
@@ -588,6 +591,191 @@ def _adapter_base(*, sink: str, phase: SinkAdapterPhase) -> dict[str, Any]:
         "writes_attempted": 0,
         "reason": "adapter request prepared only; no live adapter invoked",
     }
+
+
+def _gws_lookup_contract(*, match_keys: dict[str, str]) -> dict[str, Any]:
+    query_terms = [match_keys[field] for field in ("email", "phone", "full_name") if match_keys.get(field)]
+    return {
+        "adapter": "gws.people",
+        "profile": {
+            "source": "user_config",
+            "config_key": "sink.google_contacts_profile",
+            "required_for_live": True,
+        },
+        "api": "people.googleapis.com",
+        "resource": "people.connections",
+        "method": "people.searchContacts",
+        "request_body": {
+            "query": " ".join(query_terms),
+            "readMask": "names,emailAddresses,phoneNumbers,organizations,metadata,biographies",
+            "sources": ["READ_SOURCE_TYPE_CONTACT"],
+        },
+        "match_strategy": ["email", "phone", "full_name", "fingerprint_note"],
+        "expected_response_keys": ["results.person.resourceName", "results.person.names"],
+    }
+
+
+def _gws_write_contract(*, values: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "adapter": "gws.people",
+        "profile": {
+            "source": "user_config",
+            "config_key": "sink.google_contacts_profile",
+            "required_for_live": True,
+        },
+        "api": "people.googleapis.com",
+        "resource": "people.connections",
+        "method": "people.createContact_or_people.updateContact",
+        "request_body": {
+            "names": [{"displayName": values.get("full_name")}] if values.get("full_name") else [],
+            "emailAddresses": [{"value": values.get("email")}] if values.get("email") else [],
+            "phoneNumbers": [{"value": values.get("phone")}] if values.get("phone") else [],
+            "organizations": [
+                {
+                    "name": values.get("organization"),
+                    "title": values.get("title"),
+                }
+            ]
+            if values.get("organization") or values.get("title")
+            else [],
+            "biographies": [{"value": values.get("notes")}] if values.get("notes") else [],
+        },
+        "idempotency": {
+            "lookup_required_before_write": True,
+            "duplicate_policy": "noop_or_update_existing",
+        },
+        "expected_response_keys": ["resourceName", "etag"],
+    }
+
+
+def _gws_readback_contract(*, resource_id: Any) -> dict[str, Any]:
+    return {
+        "adapter": "gws.people",
+        "profile": {
+            "source": "user_config",
+            "config_key": "sink.google_contacts_profile",
+            "required_for_live": True,
+        },
+        "api": "people.googleapis.com",
+        "resource": "people.connections",
+        "method": "people.get",
+        "request_body": {
+            "resourceName": resource_id,
+            "personFields": "names,emailAddresses,phoneNumbers,organizations,metadata,biographies",
+        },
+        "expected_response_keys": ["resourceName", "names", "emailAddresses"],
+    }
+
+
+def _odollo_lookup_contract(*, match_keys: dict[str, str]) -> dict[str, Any]:
+    return {
+        "adapter": "odollo.odoo",
+        "tenant": {
+            "source": "user_config",
+            "config_key": "sink.odollo_tenant",
+            "required_for_live": True,
+        },
+        "model": "res.partner",
+        "method": "search_read",
+        "domain": _odoo_lookup_domain(match_keys),
+        "fields": ["id", "name", "email", "phone", "mobile", "parent_id", "company_name", "function"],
+        "limit": 10,
+        "match_strategy": ["email", "phone", "full_name", "fingerprint_contact_point"],
+        "contact_point_plan": {
+            "enabled": True,
+            "mode": "lookup_only",
+            "overwrite_canonical_slots": False,
+        },
+        "expected_response_keys": ["id", "name"],
+    }
+
+
+def _odollo_write_contract(*, values: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "adapter": "odollo.odoo",
+        "tenant": {
+            "source": "user_config",
+            "config_key": "sink.odollo_tenant",
+            "required_for_live": True,
+        },
+        "model": "res.partner",
+        "method": "create_or_write",
+        "values": {
+            "name": values.get("full_name") or values.get("organization"),
+            "email": values.get("email"),
+            "phone": values.get("phone"),
+            "function": values.get("title"),
+            "website": values.get("website"),
+            "comment": values.get("notes"),
+            "company_name": values.get("organization"),
+        },
+        "contact_point_plan": {
+            "enabled": True,
+            "mode": "additive_after_partner_write",
+            "overwrite_canonical_slots": False,
+            "points": _odollo_contact_points(values),
+        },
+        "idempotency": {
+            "lookup_required_before_write": True,
+            "duplicate_policy": "noop_or_update_existing",
+        },
+        "expected_response_keys": ["id"],
+    }
+
+
+def _odollo_readback_contract(*, resource_id: Any) -> dict[str, Any]:
+    return {
+        "adapter": "odollo.odoo",
+        "tenant": {
+            "source": "user_config",
+            "config_key": "sink.odollo_tenant",
+            "required_for_live": True,
+        },
+        "model": "res.partner",
+        "method": "read",
+        "ids": [_odoo_id_from_resource(resource_id)] if _odoo_id_from_resource(resource_id) is not None else [],
+        "fields": ["id", "name", "email", "phone", "mobile", "parent_id", "company_name", "function"],
+        "expected_response_keys": ["id", "name"],
+    }
+
+
+def _odoo_lookup_domain(match_keys: dict[str, str]) -> list[Any]:
+    clauses: list[list[Any]] = []
+    if match_keys.get("email"):
+        clauses.append(["email", "=", match_keys["email"]])
+    if match_keys.get("phone"):
+        clauses.extend([["phone", "=", match_keys["phone"]], ["mobile", "=", match_keys["phone"]]])
+    if match_keys.get("full_name"):
+        clauses.append(["name", "ilike", match_keys["full_name"]])
+    if not clauses:
+        return []
+    if len(clauses) == 1:
+        return clauses
+    return ["|"] * (len(clauses) - 1) + clauses
+
+
+def _odollo_contact_points(values: dict[str, Any]) -> list[dict[str, str]]:
+    points: list[dict[str, str]] = []
+    if values.get("email"):
+        points.append({"kind": "email", "value": str(values["email"])})
+    if values.get("phone"):
+        points.append({"kind": "phone", "value": str(values["phone"])})
+    if values.get("website"):
+        points.append({"kind": "website", "value": str(values["website"])})
+    return points
+
+
+def _odoo_id_from_resource(resource_id: Any) -> int | None:
+    if isinstance(resource_id, int):
+        return resource_id
+    raw = str(resource_id or "")
+    if raw.isdigit():
+        return int(raw)
+    if raw.startswith("odoo:res.partner:"):
+        tail = raw.rsplit(":", maxsplit=1)[-1]
+        if tail.isdigit():
+            return int(tail)
+    return None
 
 
 def _lookup_result_for_request(request: dict[str, Any], matches: list[dict[str, Any]]) -> dict[str, Any]:

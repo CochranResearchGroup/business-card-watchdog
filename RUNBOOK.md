@@ -556,3 +556,19 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_enrichment.py tests/test_cli_surfaces.py tests/test_mcp.py -q` passed with 30 tests.
+
+## Turn 33 | 2026-06-13
+
+Continued Plan 0004 execution with provider-specific sink adapter request contracts.
+
+Implemented:
+
+- Expanded blocked sink adapter request artifacts with concrete Google People API lookup/write/readback contracts.
+- Google Contacts requests now include profile placeholders, query/request bodies, read masks, match strategy, idempotency policy, and expected response keys.
+- Expanded Odollo/Odoo requests with tenant placeholders, `res.partner` lookup/write/readback contracts, Odoo lookup domains, additive contact-point plans, and expected response keys.
+- Odollo contact-point plans explicitly preserve canonical slots by default.
+- Adapter requests remain blocked and record `writes_attempted = 0`, `network_calls_made = 0`, and `requires_live_adapter = true`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sinks.py -q` passed with 14 tests.

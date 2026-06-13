@@ -103,13 +103,27 @@ def test_build_sink_lookup_plan_is_zero_network_and_keyed() -> None:
 def test_build_sink_adapter_request_prepares_lookup_write_and_readback_contracts() -> None:
     lookup_plan = build_sink_lookup_plan(
         sinks=["google_contacts", "odoo"],
-        spec={"full_name": "Ada Lovelace", "email": "ada@example.test"},
+        spec={
+            "full_name": "Ada Lovelace",
+            "email": "ada@example.test",
+            "phone": "+15550101234",
+            "organization": "Analytical Engines",
+            "title": "Founder",
+            "website": "https://example.test",
+        },
         dry_run=True,
         reason="matched email_domain=*",
     )
     sink_plan = build_sink_plan(
         sinks=["google_contacts", "odoo"],
-        spec={"full_name": "Ada Lovelace", "email": "ada@example.test"},
+        spec={
+            "full_name": "Ada Lovelace",
+            "email": "ada@example.test",
+            "phone": "+15550101234",
+            "organization": "Analytical Engines",
+            "title": "Founder",
+            "website": "https://example.test",
+        },
         dry_run=True,
         reason="matched email_domain=*",
     )
@@ -126,11 +140,28 @@ def test_build_sink_adapter_request_prepares_lookup_write_and_readback_contracts
     assert lookup["network_calls_made"] == 0
     assert lookup["writes_attempted"] == 0
     assert lookup["requests"][0]["adapter"] == "gws.people"
+    assert lookup["requests"][0]["api"] == "people.googleapis.com"
+    assert lookup["requests"][0]["profile"]["config_key"] == "sink.google_contacts_profile"
+    assert lookup["requests"][0]["request_body"]["query"] == "ada@example.test +15550101234 Ada Lovelace"
+    assert "emailAddresses" in lookup["requests"][0]["request_body"]["readMask"]
     assert lookup["requests"][1]["adapter"] == "odollo.odoo"
+    assert lookup["requests"][1]["tenant"]["config_key"] == "sink.odollo_tenant"
+    assert lookup["requests"][1]["model"] == "res.partner"
+    assert lookup["requests"][1]["domain"][0] == "|"
+    assert lookup["requests"][1]["contact_point_plan"]["mode"] == "lookup_only"
     assert write["phase"] == "write"
     assert write["requests"][0]["payload"]["values"]["email"] == "ada@example.test"
+    assert write["requests"][0]["method"] == "people.createContact_or_people.updateContact"
+    assert write["requests"][0]["request_body"]["organizations"][0]["name"] == "Analytical Engines"
+    assert write["requests"][0]["idempotency"]["lookup_required_before_write"] is True
+    assert write["requests"][1]["method"] == "create_or_write"
+    assert write["requests"][1]["values"]["function"] == "Founder"
+    assert write["requests"][1]["contact_point_plan"]["overwrite_canonical_slots"] is False
+    assert {"kind": "website", "value": "https://example.test"} in write["requests"][1]["contact_point_plan"]["points"]
     assert readback["phase"] == "readback"
     assert readback["requests"][0]["simulated_readback"] is True
+    assert readback["requests"][0]["method"] == "people.get"
+    assert readback["requests"][1]["method"] == "read"
 
 
 def test_build_sink_lookup_result_records_zero_network_matches() -> None:
