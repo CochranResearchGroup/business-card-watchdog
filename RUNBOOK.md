@@ -284,3 +284,20 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py tests/test_mcp.py tests/test_cli_surfaces.py -q` passed with 22 tests.
 - `PYTHONPATH=src pytest tests/test_service.py tests/test_mcp.py tests/test_cli_surfaces.py -q` passed with 22 tests.
+
+## Turn 17 | 2026-06-13
+
+Continued Plan 0004 execution with expanded review action semantics.
+
+Implemented:
+
+- Added review actions `request_enrichment`, `reject_not_card`, and `skip`.
+- `request_enrichment` keeps/returns the job to `needs_review`.
+- `reject_not_card` transitions the job to `failed` with explicit review error.
+- `skip` transitions the job to `cancelled`.
+- CLI and MCP schema exposure for expanded review actions.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_review.py tests/test_service.py tests/test_cli_surfaces.py tests/test_mcp.py -q` passed with 27 tests.
+- `PYTHONPATH=src pytest tests/test_review.py tests/test_service.py tests/test_cli_surfaces.py tests/test_mcp.py -q` passed with 27 tests.

@@ -21,6 +21,10 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_enrichment_check" in names
     assert "business_card_watchdog_enrichment_request" in names
     assert "business_card_watchdog_doctor" in names
+    review_tool = next(tool for tool in manifest["tools"] if tool["name"] == "business_card_watchdog_job_review")
+    assert "request_enrichment" in review_tool["input_schema"]["properties"]["action"]["enum"]
+    assert "reject_not_card" in review_tool["input_schema"]["properties"]["action"]["enum"]
+    assert "skip" in review_tool["input_schema"]["properties"]["action"]["enum"]
 
 
 def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:

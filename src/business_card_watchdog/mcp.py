@@ -107,7 +107,13 @@ def tool_manifest() -> dict[str, object]:
                         "reviewer": {"type": "string", "default": "operator"},
                         "action": {
                             "type": "string",
-                            "enum": ["approve_for_routing", "keep_needs_review"],
+                            "enum": [
+                                "approve_for_routing",
+                                "keep_needs_review",
+                                "request_enrichment",
+                                "reject_not_card",
+                                "skip",
+                            ],
                             "default": "keep_needs_review",
                         },
                         "field_corrections": {"type": "object"},

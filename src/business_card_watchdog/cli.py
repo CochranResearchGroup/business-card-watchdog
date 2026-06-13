@@ -56,7 +56,7 @@ def build_parser() -> argparse.ArgumentParser:
     jobs_review.add_argument("--reviewer", default="operator")
     jobs_review.add_argument(
         "--action",
-        choices=["approve_for_routing", "keep_needs_review"],
+        choices=["approve_for_routing", "keep_needs_review", "request_enrichment", "reject_not_card", "skip"],
         default="keep_needs_review",
     )
     jobs_review.add_argument("--field-corrections-json", default="{}")

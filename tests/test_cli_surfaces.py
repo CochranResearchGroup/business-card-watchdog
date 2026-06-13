@@ -92,6 +92,36 @@ def test_cli_jobs_review_records_submission(tmp_path: Path, capsys) -> None:
     assert payload["submission"]["reviewer"] == "cli-test"
 
 
+def test_cli_jobs_review_supports_request_enrichment_action(tmp_path: Path, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+    run_id, job_id = make_recorded_run(AppConfig(config_path=config_path, data_dir=data_dir))
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "jobs",
+                "review",
+                job_id,
+                "--run-id",
+                run_id,
+                "--action",
+                "request_enrichment",
+                "--notes",
+                "needs corroboration",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["job"]["state"] == "needs_review"
+    assert payload["submission"]["action"] == "request_enrichment"
+
+
 def test_cli_sinks_check_is_dry_run_and_non_mutating(tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.toml"
     write_config(config_path, tmp_path / "data")

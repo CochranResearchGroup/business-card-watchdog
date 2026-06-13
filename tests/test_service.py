@@ -198,6 +198,40 @@ def test_service_submit_review_rejects_unknown_fields(tmp_path: Path) -> None:
         raise AssertionError("expected ValueError")
 
 
+def test_service_submit_review_supports_request_enrichment_reject_and_skip(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    service = BusinessCardService(config)
+
+    enrich_run_id, enrich_job_id = make_recorded_run(config, run_id="run-enrich")
+    enrich = service.submit_review(
+        job_id=enrich_job_id,
+        run_id=enrich_run_id,
+        reviewer="tester",
+        action="request_enrichment",
+        notes="needs public web corroboration",
+    )
+    assert enrich["job"]["state"] == "needs_review"
+
+    reject_run_id, reject_job_id = make_recorded_run(config, run_id="run-reject")
+    rejected = service.submit_review(
+        job_id=reject_job_id,
+        run_id=reject_run_id,
+        reviewer="tester",
+        action="reject_not_card",
+    )
+    assert rejected["job"]["state"] == "failed"
+    assert "not a business card" in str(rejected["job"]["error"])
+
+    skip_run_id, skip_job_id = make_recorded_run(config, run_id="run-skip")
+    skipped = service.submit_review(
+        job_id=skip_job_id,
+        run_id=skip_run_id,
+        reviewer="tester",
+        action="skip",
+    )
+    assert skipped["job"]["state"] == "cancelled"
+
+
 def test_service_get_missing_run_raises(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     service = BusinessCardService(config)

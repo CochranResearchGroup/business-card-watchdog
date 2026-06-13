@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 
 ReviewStatus = Literal["pass", "needs_review"]
-ReviewAction = Literal["approve_for_routing", "keep_needs_review"]
+ReviewAction = Literal["approve_for_routing", "keep_needs_review", "request_enrichment", "reject_not_card", "skip"]
 
 
 @dataclass(frozen=True)

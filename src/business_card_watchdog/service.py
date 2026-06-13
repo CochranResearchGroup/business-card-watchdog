@@ -174,7 +174,7 @@ class BusinessCardService:
         crop_selection: dict[str, Any] | None = None,
         notes: str = "",
     ) -> dict[str, Any]:
-        if action not in {"approve_for_routing", "keep_needs_review"}:
+        if action not in {"approve_for_routing", "keep_needs_review", "request_enrichment", "reject_not_card", "skip"}:
             raise ValueError(f"unsupported review action: {action}")
 
         job_payload = self.get_job(job_id, run_id=run_id)
@@ -210,6 +210,16 @@ class BusinessCardService:
             )
             ledger.record_artifact(job_id=job_id, kind="reviewed_contact", path=reviewed_contact_path)
             job.transition_to("ready_to_route")
+            ledger.record_job(job)
+        elif action == "request_enrichment":
+            if job.state != "needs_review":
+                job.transition_to("needs_review")
+                ledger.record_job(job)
+        elif action == "reject_not_card":
+            job.transition_to("failed", error="review rejected image as not a business card")
+            ledger.record_job(job)
+        elif action == "skip":
+            job.transition_to("cancelled", error="review skipped job")
             ledger.record_job(job)
         ledger.record_event(
             "review_submitted",

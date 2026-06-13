@@ -182,6 +182,26 @@ Remaining:
 - Agent next actions do not yet include explicit live apply pilot readiness.
 - Automatic rerouting after reviewed-contact approval remains follow-on work.
 
+### Slice 0004-F | 2026-06-13 | Expanded Review Actions
+
+Implemented:
+
+- First-class review actions: `request_enrichment`, `reject_not_card`, and `skip`.
+- `request_enrichment` keeps or returns the job to `needs_review`.
+- `reject_not_card` transitions the job to `failed` with an explicit review error.
+- `skip` transitions the job to `cancelled`.
+- CLI and MCP schema exposure for expanded review actions.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_review.py tests/test_service.py tests/test_cli_surfaces.py tests/test_mcp.py -q` passed with 27 tests.
+- `PYTHONPATH=src pytest tests/test_review.py tests/test_service.py tests/test_cli_surfaces.py tests/test_mcp.py -q` passed with 27 tests.
+
+Remaining:
+
+- Enrichment merge approval remains manual through field corrections.
+- Live sink apply/reject/noop review actions remain follow-on work.
+
 ## `/goal` Objective
 
 Use this as the high-level `/goal` objective:
