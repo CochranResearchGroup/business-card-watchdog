@@ -843,3 +843,24 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed with the index up to date.
 - `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+## Turn 48 | 2026-06-13
+
+Continued Plan 0004 execution with run-level enrichment budget readback.
+
+Implemented:
+
+- Run summaries now include `enrichment_budget`.
+- Public-web budget readback totals request count, result count, requested query budget, submitted result count, search calls attempted, and network calls made.
+- Paid-provider budget readback totals request count, result count, configured result budget, submitted result count, paid API calls attempted, and network calls made.
+- Budget readback uses existing ledger artifacts and is exposed automatically through existing CLI/API/MCP run-summary surfaces.
+- Missing/unreadable enrichment artifacts are counted instead of failing the summary.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py -q` passed with 40 tests.
+- `.venv/bin/python -m pytest -q` passed with 138 tests.
+- `PYTHONPATH=src pytest -q` passed with 133 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.

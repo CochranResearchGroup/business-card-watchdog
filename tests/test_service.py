@@ -73,6 +73,56 @@ def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
     assert any(artifact["kind"] == "review_bundle" for artifact in service.list_artifacts(run_id))
 
 
+def test_service_run_summary_includes_enrichment_budget(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    run_id, job_id = make_recorded_run(config)
+    ledger = RunLedger(config.runs_dir / run_id)
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+    artifacts = {
+        "enrichment_public_web_request": {
+            "max_queries": 3,
+            "search_calls_attempted": 0,
+            "network_calls_made": 0,
+        },
+        "enrichment_public_web_result": {
+            "submitted_result_count": 2,
+            "search_calls_attempted": 0,
+            "network_calls_made": 0,
+        },
+        "enrichment_provider_request": {
+            "max_results": 5,
+            "paid_api_calls_attempted": 0,
+            "network_calls_made": 0,
+        },
+        "enrichment_provider_result": {
+            "submitted_result_count": 1,
+            "paid_api_calls_attempted": 0,
+            "network_calls_made": 0,
+        },
+    }
+    for kind, payload in artifacts.items():
+        path = artifact_dir / f"{kind}.json"
+        path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        ledger.record_artifact(job_id=job_id, kind=kind, path=path)
+    malformed_path = artifact_dir / "malformed_enrichment_provider_result.json"
+    malformed_path.write_text("{not-json\n", encoding="utf-8")
+    ledger.record_artifact(job_id=job_id, kind="enrichment_provider_result", path=malformed_path)
+
+    summary = BusinessCardService(config).run_summary(run_id)
+
+    assert summary["enrichment_budget"]["schema"] == "business-card-watchdog.enrichment-budget-summary.v1"
+    assert summary["enrichment_budget"]["public_web"]["request_count"] == 1
+    assert summary["enrichment_budget"]["public_web"]["result_count"] == 1
+    assert summary["enrichment_budget"]["public_web"]["max_queries"] == 3
+    assert summary["enrichment_budget"]["public_web"]["submitted_result_count"] == 2
+    assert summary["enrichment_budget"]["paid_provider"]["request_count"] == 1
+    assert summary["enrichment_budget"]["paid_provider"]["result_count"] == 1
+    assert summary["enrichment_budget"]["paid_provider"]["max_results"] == 5
+    assert summary["enrichment_budget"]["paid_provider"]["submitted_result_count"] == 1
+    assert summary["enrichment_budget"]["paid_provider"]["paid_api_calls_attempted"] == 0
+    assert summary["enrichment_budget"]["unreadable_artifact_count"] == 1
+
+
 def test_service_next_actions_recommends_review_for_needs_review_job(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, job_id = make_recorded_run(config)

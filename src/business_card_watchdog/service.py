@@ -219,17 +219,82 @@ class BusinessCardService:
         for artifact in artifacts:
             kind = str(artifact.get("kind") or "unknown")
             artifact_counts[kind] = artifact_counts.get(kind, 0) + 1
+        enrichment_budget = self._summarize_enrichment_budget(artifacts)
         return {
             "run_id": run_id,
             "state": run["state"],
             "job_count": run["job_count"],
             "state_counts": state_counts,
             "artifact_counts": artifact_counts,
+            "enrichment_budget": enrichment_budget,
             "needs_review_count": state_counts.get("needs_review", 0),
             "ready_to_route_count": state_counts.get("ready_to_route", 0),
             "failed_count": state_counts.get("failed", 0),
             "duplicate_assessment_count": artifact_counts.get("duplicate_assessment", 0),
             "reviewed_contact_count": artifact_counts.get("reviewed_contact", 0),
+        }
+
+    def _summarize_enrichment_budget(self, artifacts: list[dict[str, Any]]) -> dict[str, Any]:
+        public_web = {
+            "request_count": 0,
+            "result_count": 0,
+            "max_queries": 0,
+            "submitted_result_count": 0,
+            "search_calls_attempted": 0,
+            "network_calls_made": 0,
+        }
+        paid_provider = {
+            "request_count": 0,
+            "result_count": 0,
+            "max_results": 0,
+            "submitted_result_count": 0,
+            "paid_api_calls_attempted": 0,
+            "network_calls_made": 0,
+        }
+        unreadable_artifact_count = 0
+        for artifact in artifacts:
+            kind = str(artifact.get("kind") or "")
+            if kind not in {
+                "enrichment_public_web_request",
+                "enrichment_public_web_result",
+                "enrichment_provider_request",
+                "enrichment_provider_result",
+            }:
+                continue
+            path = Path(str(artifact.get("path") or ""))
+            if not path.exists():
+                unreadable_artifact_count += 1
+                continue
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                unreadable_artifact_count += 1
+                continue
+            if kind == "enrichment_public_web_request":
+                public_web["request_count"] += 1
+                public_web["max_queries"] += _int(payload.get("max_queries"))
+                public_web["search_calls_attempted"] += _int(payload.get("search_calls_attempted"))
+                public_web["network_calls_made"] += _int(payload.get("network_calls_made"))
+            elif kind == "enrichment_public_web_result":
+                public_web["result_count"] += 1
+                public_web["submitted_result_count"] += _int(payload.get("submitted_result_count"))
+                public_web["search_calls_attempted"] += _int(payload.get("search_calls_attempted"))
+                public_web["network_calls_made"] += _int(payload.get("network_calls_made"))
+            elif kind == "enrichment_provider_request":
+                paid_provider["request_count"] += 1
+                paid_provider["max_results"] += _int(payload.get("max_results"))
+                paid_provider["paid_api_calls_attempted"] += _int(payload.get("paid_api_calls_attempted"))
+                paid_provider["network_calls_made"] += _int(payload.get("network_calls_made"))
+            elif kind == "enrichment_provider_result":
+                paid_provider["result_count"] += 1
+                paid_provider["submitted_result_count"] += _int(payload.get("submitted_result_count"))
+                paid_provider["paid_api_calls_attempted"] += _int(payload.get("paid_api_calls_attempted"))
+                paid_provider["network_calls_made"] += _int(payload.get("network_calls_made"))
+        return {
+            "schema": "business-card-watchdog.enrichment-budget-summary.v1",
+            "public_web": public_web,
+            "paid_provider": paid_provider,
+            "unreadable_artifact_count": unreadable_artifact_count,
         }
 
     def next_actions(self, *, run_id: str | None = None, limit: int = 20) -> dict[str, Any]:
@@ -1716,6 +1781,13 @@ class BusinessCardService:
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+
+
+def _int(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def _path_check(name: str, path: Path) -> dict[str, Any]:
