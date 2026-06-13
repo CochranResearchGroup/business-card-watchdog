@@ -1024,6 +1024,29 @@ Remaining:
 
 - Sink payload mapping for profile URLs remains follow-on work and should be gated per sink field support.
 
+### Slice 0004-AQ | 2026-06-13 | Profile URL Sink Mapping
+
+Implemented:
+
+- Service route planning now preserves `contact_points` from contact candidate and reviewed contact artifacts.
+- Sink payloads now carry additive `contact_points` metadata when present.
+- GWS write adapter requests now map website/profile URLs into People API `urls` without overwriting canonical contact slots.
+- Odollo write adapter requests now include profile URLs in the additive `contact_point_plan`.
+- Tests cover direct sink payload/adaptor contracts and the service route planning boundary.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py -q` passed with 61 tests.
+- `.venv/bin/python -m pytest -q` passed with 143 tests.
+- `PYTHONPATH=src pytest -q` passed with 138 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+Remaining:
+
+- Live sink adapters still need explicit read-only lookup pilots before any write behavior can use these mapped fields.
+
 ## Next High-Level Plan
 
 The next execution block should turn the current artifact-first scaffolding into an operator-usable review and routing system while preserving the current safety boundaries: no paid enrichment unless explicitly requested, no live sink writes without an approved pilot, and no secret values in repo artifacts or logs.

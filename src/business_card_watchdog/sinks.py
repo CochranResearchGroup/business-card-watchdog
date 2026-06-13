@@ -614,6 +614,9 @@ def _payload_for_sink(sink: str, spec: dict[str, Any], fingerprint: str) -> dict
         "website": _normalize_value(spec.get("website")),
         "notes": _normalize_value(spec.get("notes")),
     }
+    contact_points = _contact_points_from_spec(spec)
+    if contact_points:
+        common["contact_points"] = contact_points
     if sink == "odoo":
         return {
             "model": "res.partner",
@@ -777,6 +780,7 @@ def _gws_write_contract(*, values: dict[str, Any], profile: str) -> dict[str, An
             if values.get("organization") or values.get("title")
             else [],
             "biographies": [{"value": values.get("notes")}] if values.get("notes") else [],
+            "urls": _gws_urls(values),
         },
         "idempotency": {
             "lookup_required_before_write": True,
@@ -905,7 +909,50 @@ def _odollo_contact_points(values: dict[str, Any]) -> list[dict[str, str]]:
         points.append({"kind": "phone", "value": str(values["phone"])})
     if values.get("website"):
         points.append({"kind": "website", "value": str(values["website"])})
+    for point in values.get("contact_points") or []:
+        if not isinstance(point, dict):
+            continue
+        kind = str(point.get("kind") or "")
+        value = str(point.get("value") or "")
+        if kind == "profile_url" and value:
+            points.append({"kind": "profile_url", "value": value, "label": str(point.get("label") or "")})
     return points
+
+
+def _contact_points_from_spec(spec: dict[str, Any]) -> list[dict[str, str]]:
+    points: list[dict[str, str]] = []
+    for point in spec.get("contact_points") or []:
+        if not isinstance(point, dict):
+            continue
+        kind = str(point.get("kind") or "")
+        value = str(point.get("value") or "")
+        if not kind or not value:
+            continue
+        clean = {"kind": kind, "value": value}
+        if point.get("label"):
+            clean["label"] = str(point["label"])
+        points.append(clean)
+    return points
+
+
+def _gws_urls(values: dict[str, Any]) -> list[dict[str, str]]:
+    urls: list[dict[str, str]] = []
+    if values.get("website"):
+        urls.append({"value": str(values["website"]), "type": "work"})
+    for point in values.get("contact_points") or []:
+        if not isinstance(point, dict):
+            continue
+        if point.get("kind") != "profile_url" or not point.get("value"):
+            continue
+        urls.append({"value": str(point["value"]), "type": "profile"})
+    deduped: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for url in urls:
+        if url["value"] in seen:
+            continue
+        deduped.append(url)
+        seen.add(url["value"])
+    return deduped
 
 
 def _odoo_id_from_resource(resource_id: Any) -> int | None:

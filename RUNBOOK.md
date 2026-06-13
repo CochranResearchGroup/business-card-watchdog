@@ -987,3 +987,24 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed with the index up to date.
 - `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+## Turn 55 | 2026-06-13
+
+Continued Plan 0004 execution with profile URL sink mapping.
+
+Implemented:
+
+- Service route planning now preserves `contact_points` from contact candidate and reviewed contact artifacts.
+- Sink payloads now carry additive `contact_points` metadata when present.
+- GWS write adapter requests now map website/profile URLs into People API `urls` without overwriting canonical contact slots.
+- Odollo write adapter requests now include profile URLs in the additive `contact_point_plan`.
+- Tests cover direct sink payload/adaptor contracts and the service route planning boundary.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py -q` passed with 61 tests.
+- `.venv/bin/python -m pytest -q` passed with 143 tests.
+- `PYTHONPATH=src pytest -q` passed with 138 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.

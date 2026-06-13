@@ -1580,10 +1580,16 @@ class BusinessCardService:
         spec_path = artifact_dir / "spec.json"
         if reviewed_path.exists():
             reviewed = json.loads(reviewed_path.read_text(encoding="utf-8"))
-            return contact_candidate_to_spec(reviewed)
+            spec = contact_candidate_to_spec(reviewed)
+            if isinstance(reviewed.get("contact_points"), list):
+                spec["contact_points"] = list(reviewed["contact_points"])
+            return spec
         if candidate_path.exists():
             candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
-            return contact_candidate_to_spec(candidate)
+            spec = contact_candidate_to_spec(candidate)
+            if isinstance(candidate.get("contact_points"), list):
+                spec["contact_points"] = list(candidate["contact_points"])
+            return spec
         if spec_path.exists():
             return json.loads(spec_path.read_text(encoding="utf-8"))
         raise FileNotFoundError(f"no contact artifact found in {artifact_dir}")

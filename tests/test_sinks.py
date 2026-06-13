@@ -109,7 +109,17 @@ def test_live_google_readiness_reports_missing_auth_evidence(tmp_path, monkeypat
 def test_build_sink_payloads_include_match_keys_and_readiness() -> None:
     payloads = build_sink_payloads(
         sinks=["google_contacts", "odoo"],
-        spec={"full_name": "Ada Lovelace", "email": "ada@example.test"},
+        spec={
+            "full_name": "Ada Lovelace",
+            "email": "ada@example.test",
+            "contact_points": [
+                {
+                    "kind": "profile_url",
+                    "value": "https://linkedin.com/in/ada-lovelace",
+                    "label": "linkedin_url",
+                }
+            ],
+        },
         dry_run=True,
     )
 
@@ -118,6 +128,13 @@ def test_build_sink_payloads_include_match_keys_and_readiness() -> None:
     assert all(payload.match_keys["email"] == "ada@example.test" for payload in payloads)
     assert payloads[0].fingerprint == payloads[1].fingerprint
     assert payloads[0].serialization_key == "email:ada@example.test"
+    assert payloads[0].payload["values"]["contact_points"] == [
+        {
+            "kind": "profile_url",
+            "value": "https://linkedin.com/in/ada-lovelace",
+            "label": "linkedin_url",
+        }
+    ]
 
 
 def test_build_sink_plan_is_dry_run_and_action_oriented() -> None:
@@ -161,6 +178,13 @@ def test_build_sink_adapter_request_prepares_lookup_write_and_readback_contracts
             "organization": "Analytical Engines",
             "title": "Founder",
             "website": "https://example.test",
+            "contact_points": [
+                {
+                    "kind": "profile_url",
+                    "value": "https://linkedin.com/in/ada-lovelace",
+                    "label": "linkedin_url",
+                }
+            ],
         },
         dry_run=True,
         reason="matched email_domain=*",
@@ -174,6 +198,13 @@ def test_build_sink_adapter_request_prepares_lookup_write_and_readback_contracts
             "organization": "Analytical Engines",
             "title": "Founder",
             "website": "https://example.test",
+            "contact_points": [
+                {
+                    "kind": "profile_url",
+                    "value": "https://linkedin.com/in/ada-lovelace",
+                    "label": "linkedin_url",
+                }
+            ],
         },
         dry_run=True,
         reason="matched email_domain=*",
@@ -206,11 +237,21 @@ def test_build_sink_adapter_request_prepares_lookup_write_and_readback_contracts
     assert write["requests"][0]["method"] == "people.createContact_or_people.updateContact"
     assert write["requests"][0]["gws_command"] == ["gws", "people", "people", "createContact"]
     assert write["requests"][0]["request_body"]["organizations"][0]["name"] == "Analytical Engines"
+    assert {"value": "https://example.test", "type": "work"} in write["requests"][0]["request_body"]["urls"]
+    assert {
+        "value": "https://linkedin.com/in/ada-lovelace",
+        "type": "profile",
+    } in write["requests"][0]["request_body"]["urls"]
     assert write["requests"][0]["idempotency"]["lookup_required_before_write"] is True
     assert write["requests"][1]["method"] == "create_or_write"
     assert write["requests"][1]["values"]["function"] == "Founder"
     assert write["requests"][1]["contact_point_plan"]["overwrite_canonical_slots"] is False
     assert {"kind": "website", "value": "https://example.test"} in write["requests"][1]["contact_point_plan"]["points"]
+    assert {
+        "kind": "profile_url",
+        "value": "https://linkedin.com/in/ada-lovelace",
+        "label": "linkedin_url",
+    } in write["requests"][1]["contact_point_plan"]["points"]
     assert readback["phase"] == "readback"
     assert readback["requests"][0]["simulated_readback"] is True
     assert readback["requests"][0]["method"] == "people.get"

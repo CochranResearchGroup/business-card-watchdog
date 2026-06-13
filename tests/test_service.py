@@ -1061,6 +1061,34 @@ def test_service_enrichment_merge_refreshes_existing_sink_plan(tmp_path: Path) -
     assert "Public-web corroboration candidate" in refreshed["plan"]["payloads"][0]["payload"]["values"]["notes"]
 
 
+def test_service_sink_plan_preserves_profile_url_contact_points(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, odoo=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts", "odoo"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+    candidate = build_contact_candidate(
+        {
+            "full_name": "Ada Lovelace",
+            "email": "ada@example.test",
+            "linkedin_url": "linkedin.com/in/ada-lovelace",
+        }
+    )
+    (artifact_dir / "contact_candidate.json").write_text(json.dumps(candidate, indent=2), encoding="utf-8")
+
+    plan = BusinessCardService(config).plan_sinks_for_job(job_id=job_id, run_id=run_id)["plan"]
+
+    for payload in plan["payloads"]:
+        assert {
+            "kind": "profile_url",
+            "value": "https://linkedin.com/in/ada-lovelace",
+            "label": "linkedin_url",
+        } in payload["payload"]["values"]["contact_points"]
+
+
 def test_service_duplicate_resolution_refreshes_existing_sink_plan(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",
