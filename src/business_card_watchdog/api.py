@@ -180,6 +180,10 @@ def create_app(config_path: Path | None = None):
             matches_by_sink={sink: [dict(match) for match in matches] for sink, matches in request.matches_by_sink.items()},
         )
 
+    @app.post("/jobs/{job_id}/downstream-duplicate-assessment")
+    def create_downstream_duplicate_assessment(job_id: str, run_id: str) -> dict[str, object]:
+        return service().assess_downstream_duplicates_for_job(job_id=job_id, run_id=run_id)
+
     @app.post("/enrichment/check")
     def enrichment_check(request: EnrichmentRequest = Body(default=EnrichmentRequest(run_id=""))) -> dict[str, object]:
         return service().enrichment_readiness(

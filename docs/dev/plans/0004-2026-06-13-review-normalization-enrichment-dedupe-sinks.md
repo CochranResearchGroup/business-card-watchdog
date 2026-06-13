@@ -449,6 +449,28 @@ Remaining:
 - Live sink-backed duplicate lookup execution remains follow-on work.
 - Non-simulated live apply remains blocked until adapters are implemented and explicitly approved.
 
+### Slice 0004-R | 2026-06-13 | Downstream Duplicate Assessment Gate
+
+Implemented:
+
+- Added downstream sink lookup result assessment into the existing duplicate assessment schema.
+- Fixture/live-shaped sink matches can now produce `strong_duplicate` or `possible_duplicate` assessments.
+- Downstream duplicate assessments write `downstream_duplicate_assessment.json` artifacts.
+- Jobs with downstream duplicate matches transition back to `needs_review` before sink planning proceeds.
+- Duplicate resolution review can resolve downstream duplicate assessments when no local `duplicate_assessment.json` exists.
+- Service, CLI, API, and MCP surfaces can run downstream duplicate assessment.
+- `next_actions` now requires `sinks assess-duplicates` after sink lookup results and before sink planning.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_dedupe.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 57 tests.
+
+Remaining:
+
+- Live Google Contacts and Odoo/Odollo lookup/write/readback adapters remain blocked.
+- Live sink-backed duplicate lookup execution remains follow-on work.
+- Non-simulated live apply remains blocked until adapters are implemented and explicitly approved.
+
 ## `/goal` Objective
 
 Use this as the high-level `/goal` objective:

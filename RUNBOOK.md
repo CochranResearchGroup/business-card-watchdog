@@ -486,3 +486,21 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 66 tests.
+
+## Turn 29 | 2026-06-13
+
+Continued Plan 0004 execution with downstream duplicate assessment gating.
+
+Implemented:
+
+- Added downstream sink lookup result assessment into the existing duplicate assessment schema.
+- Sink lookup matches can now produce `strong_duplicate` or `possible_duplicate` assessments.
+- Added `downstream_duplicate_assessment.json` artifacts.
+- Jobs with downstream duplicate matches transition back to `needs_review`.
+- Duplicate resolution review can resolve downstream duplicate assessments when no local duplicate assessment exists.
+- Service, CLI, API, and MCP surfaces can run downstream duplicate assessment.
+- `BusinessCardService.next_actions` now recommends `sinks assess-duplicates` after sink lookup results and before sink planning.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_dedupe.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 57 tests.

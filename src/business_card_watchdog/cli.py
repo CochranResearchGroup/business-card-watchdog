@@ -123,6 +123,10 @@ def build_parser() -> argparse.ArgumentParser:
     sinks_lookup_result.add_argument("--run-id", required=True)
     sinks_lookup_result.add_argument("--matches-by-sink-json", default="{}")
     sinks_lookup_result.add_argument("--json", action="store_true")
+    sinks_assess_duplicates = sinks_sub.add_parser("assess-duplicates")
+    sinks_assess_duplicates.add_argument("job_id")
+    sinks_assess_duplicates.add_argument("--run-id", required=True)
+    sinks_assess_duplicates.add_argument("--json", action="store_true")
 
     enrichment = sub.add_parser("enrichment")
     enrichment_sub = enrichment.add_subparsers(dest="enrichment_command", required=True)
@@ -277,11 +281,16 @@ def main(argv: list[str] | None = None) -> int:
                 run_id=args.run_id,
                 phase=args.phase,
             )
-        else:
+        elif args.sinks_command == "lookup-result":
             payload = service.record_sink_lookup_result_for_job(
                 job_id=args.job_id,
                 run_id=args.run_id,
                 matches_by_sink=json.loads(args.matches_by_sink_json),
+            )
+        else:
+            payload = service.assess_downstream_duplicates_for_job(
+                job_id=args.job_id,
+                run_id=args.run_id,
             )
         print(json.dumps(payload, indent=2) if args.json else payload)
         return 0

@@ -238,6 +238,18 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_downstream_duplicate_assessment",
+                "description": "Assess sink lookup results into a review-blocking downstream duplicate artifact.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "job_id": {"type": "string"},
+                        "run_id": {"type": "string"},
+                    },
+                    "required": ["job_id", "run_id"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_enrichment_check",
                 "description": "Report enrichment readiness and paid-provider gates without making provider calls.",
                 "input_schema": {
@@ -387,6 +399,11 @@ def call_tool(
             job_id=str(args["job_id"]),
             run_id=str(args["run_id"]),
             matches_by_sink=dict(args.get("matches_by_sink") or {}),
+        )
+    if tool_name == "business_card_watchdog_downstream_duplicate_assessment":
+        return service.assess_downstream_duplicates_for_job(
+            job_id=str(args["job_id"]),
+            run_id=str(args["run_id"]),
         )
     if tool_name == "business_card_watchdog_enrichment_check":
         return service.enrichment_readiness(

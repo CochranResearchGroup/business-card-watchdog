@@ -123,6 +123,41 @@ def assess_duplicate(
     )
 
 
+def assess_downstream_lookup_result(lookup_result: dict[str, Any]) -> DuplicateAssessment:
+    matches = [
+        {
+            "basis": _downstream_match_basis(match),
+            "sink": result.get("sink"),
+            "resource_id": match.get("resource_id"),
+            "confidence": match.get("confidence", 0),
+            "display": match.get("display", ""),
+            "match_basis": list(match.get("basis") or []),
+        }
+        for result in list(lookup_result.get("results") or [])
+        for match in list(result.get("matches") or [])
+    ]
+    if not matches:
+        return DuplicateAssessment(
+            state="no_match",
+            reason="no downstream sink match",
+            fingerprint=str(lookup_result.get("fingerprint") or ""),
+            matches=[],
+        )
+    if any(match["basis"] in {"downstream_fingerprint", "downstream_email", "downstream_phone"} for match in matches):
+        return DuplicateAssessment(
+            state="strong_duplicate",
+            reason="strong downstream sink identity key matched",
+            fingerprint=str(lookup_result.get("fingerprint") or ""),
+            matches=matches,
+        )
+    return DuplicateAssessment(
+        state="possible_duplicate",
+        reason="downstream sink match requires review",
+        fingerprint=str(lookup_result.get("fingerprint") or ""),
+        matches=matches,
+    )
+
+
 def remember_identity(
     config: AppConfig,
     *,
@@ -174,6 +209,17 @@ def _match_basis(current: IdentityRecord, prior: IdentityRecord) -> str | None:
     ):
         return "name_organization"
     return None
+
+
+def _downstream_match_basis(match: dict[str, Any]) -> str:
+    basis = {str(value) for value in list(match.get("basis") or [])}
+    if "fingerprint" in basis:
+        return "downstream_fingerprint"
+    if "email" in basis:
+        return "downstream_email"
+    if "phone" in basis:
+        return "downstream_phone"
+    return "downstream_match"
 
 
 def _clean(value: Any) -> str:

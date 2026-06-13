@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from business_card_watchdog.config import AppConfig, PrefilterConfig, SinkConfig
-from business_card_watchdog.dedupe import assess_duplicate, remember_identity
+from business_card_watchdog.dedupe import assess_downstream_lookup_result, assess_duplicate, remember_identity
 from business_card_watchdog.orchestrator import BatchOrchestrator
 
 from synthetic_fixtures import SyntheticSkillAdapter, latest_jobs_by_id, read_jsonl, write_synthetic_image
@@ -26,6 +26,32 @@ def test_identity_index_detects_strong_email_duplicate(tmp_path: Path) -> None:
     assert assessment.state == "strong_duplicate"
     assert assessment.blocks_routing is True
     assert assessment.matches[0]["basis"] == "email"
+
+
+def test_downstream_lookup_result_detects_strong_sink_duplicate() -> None:
+    assessment = assess_downstream_lookup_result(
+        {
+            "schema": "business-card-watchdog.sink-lookup-result.v1",
+            "results": [
+                {
+                    "sink": "google_contacts",
+                    "matches": [
+                        {
+                            "resource_id": "people/c123",
+                            "confidence": 0.92,
+                            "basis": ["email"],
+                            "display": "Ada Lovelace",
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+
+    assert assessment.state == "strong_duplicate"
+    assert assessment.blocks_routing is True
+    assert assessment.matches[0]["basis"] == "downstream_email"
+    assert assessment.matches[0]["resource_id"] == "people/c123"
 
 
 def test_duplicate_card_is_moved_to_review_before_routing(tmp_path: Path, monkeypatch) -> None:

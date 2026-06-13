@@ -422,6 +422,26 @@ def test_cli_sinks_lookup_result_writes_zero_network_artifact(tmp_path: Path, ca
     assert payload["result"]["network_calls_made"] == 0
     assert payload["result"]["match_count"] == 1
 
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "sinks",
+                "assess-duplicates",
+                job_id,
+                "--run-id",
+                run_id,
+                "--json",
+            ]
+        )
+        == 0
+    )
+    assessment = json.loads(capsys.readouterr().out)
+    assert assessment["assessment"]["schema"] == "business-card-watchdog.duplicate-assessment.v1"
+    assert assessment["assessment"]["state"] == "strong_duplicate"
+    assert assessment["job"]["state"] == "needs_review"
+
 
 def test_cli_enrichment_check_blocks_when_not_enabled(tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.toml"

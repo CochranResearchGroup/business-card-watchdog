@@ -11,6 +11,7 @@ from .contact import (
     build_contact_candidate,
     contact_candidate_to_spec,
 )
+from .dedupe import assess_downstream_lookup_result
 from .enrichment import build_enrichment_request, check_enrichment_readiness, score_public_web_results
 from .ledger import RunLedger
 from .models import CardJob
@@ -287,6 +288,8 @@ class BusinessCardService:
                 ledger.record_job(job)
         elif action == "resolve_duplicate":
             duplicate_path = artifact_dir / "duplicate_assessment.json"
+            if not duplicate_path.exists():
+                duplicate_path = artifact_dir / "downstream_duplicate_assessment.json"
             if not duplicate_path.exists():
                 raise FileNotFoundError(f"duplicate assessment not found for job: {job_id}")
             resolution = dict(duplicate_resolution or {})
@@ -732,6 +735,39 @@ class BusinessCardService:
         )
         return {"result_path": str(result_path), "result": result}
 
+    def assess_downstream_duplicates_for_job(self, *, job_id: str, run_id: str) -> dict[str, Any]:
+        job_payload = self.get_job(job_id, run_id=run_id)
+        job = CardJob.from_dict(job_payload)
+        artifact_dir = Path(job.artifact_dir) if job.artifact_dir else self.config.runs_dir / run_id / "artifacts" / job_id
+        result_path = artifact_dir / "sink_lookup_result.json"
+        if result_path.exists():
+            lookup_result = json.loads(result_path.read_text(encoding="utf-8"))
+        else:
+            lookup_result = self.record_sink_lookup_result_for_job(job_id=job_id, run_id=run_id)["result"]
+        assessment = assess_downstream_lookup_result(lookup_result).to_dict()
+        assessment_path = artifact_dir / "downstream_duplicate_assessment.json"
+        assessment_path.write_text(json.dumps(assessment, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        ledger.record_artifact(job_id=job_id, kind="downstream_duplicate_assessment", path=assessment_path)
+        if assessment["state"] != "no_match":
+            job.transition_to("needs_review")
+            ledger.record_job(job)
+        ledger.record_event(
+            "downstream_duplicate_assessed",
+            {
+                "job_id": job_id,
+                "run_id": run_id,
+                "assessment_path": str(assessment_path),
+                "state": assessment["state"],
+                "match_count": len(assessment["matches"]),
+            },
+        )
+        return {
+            "job": job.to_dict(),
+            "assessment_path": str(assessment_path),
+            "assessment": assessment,
+        }
+
     def doctor(self) -> dict[str, Any]:
         status = self.status()
         checks = [
@@ -819,6 +855,12 @@ class BusinessCardService:
                     "action": "record_sink_lookup_result",
                     "reason": "sink lookup adapter request exists; record zero-network lookup result",
                     "command": "sinks lookup-result",
+                }
+            if "downstream_duplicate_assessment" not in artifact_kinds:
+                return {
+                    "action": "assess_downstream_duplicates",
+                    "reason": "sink lookup result exists; assess downstream duplicate state",
+                    "command": "sinks assess-duplicates",
                 }
             if "sink_plan" not in artifact_kinds:
                 return {

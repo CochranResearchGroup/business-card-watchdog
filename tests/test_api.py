@@ -77,6 +77,12 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert lookup_result["result"]["schema"] == "business-card-watchdog.sink-lookup-result.v1"
     assert lookup_result["result"]["state"] == "no_match"
     assert lookup_result["result"]["network_calls_made"] == 0
+    downstream_duplicate = client.post(
+        f"/jobs/{job_id}/downstream-duplicate-assessment",
+        params={"run_id": run_id},
+    ).json()
+    assert downstream_duplicate["assessment"]["schema"] == "business-card-watchdog.duplicate-assessment.v1"
+    assert downstream_duplicate["assessment"]["state"] == "no_match"
     artifact_dir = data_dir / "runs" / run_id / "artifacts" / job_id
     (artifact_dir / "enrichment_result.json").write_text(
         json.dumps(
