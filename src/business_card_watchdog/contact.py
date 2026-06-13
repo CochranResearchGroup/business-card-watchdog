@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 CONTACT_FIELDS = ("full_name", "organization", "title", "email", "phone", "website", "notes")
 CONTACT_CANDIDATE_SCHEMA = "business-card-watchdog.contact-candidate.v1"
 REVIEWED_CONTACT_SCHEMA = "business-card-watchdog.reviewed-contact.v1"
+ENRICHMENT_MERGE_REVIEW_SCHEMA = "business-card-watchdog.enrichment-merge-review.v1"
 
 
 def build_contact_candidate(
@@ -95,6 +96,62 @@ def apply_review_corrections(
     return reviewed
 
 
+def apply_enrichment_proposals(
+    candidate: dict[str, Any],
+    *,
+    reviewer: str,
+    proposals: list[dict[str, Any]],
+    approved_fields: list[str],
+    default_country: str = "US",
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    approved = set(approved_fields)
+    reviewed = {
+        "schema": REVIEWED_CONTACT_SCHEMA,
+        "reviewer": reviewer,
+        "base_schema": candidate.get("schema"),
+        "observed": dict(candidate.get("observed") or {}),
+        "normalized": dict(candidate.get("normalized") or {}),
+        "corrections": dict(candidate.get("corrections") or {}),
+        "merge_approvals": [],
+    }
+    applied: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    for proposal in proposals:
+        field = str(proposal.get("field") or "").strip()
+        value = str(proposal.get("value") or "").strip()
+        if field not in CONTACT_FIELDS or not value:
+            skipped.append({"field": field, "reason": "unsupported or empty proposal"})
+            continue
+        if field not in approved:
+            skipped.append({"field": field, "reason": "field was not approved"})
+            continue
+        merged_value = _merge_enrichment_value(field, reviewed["normalized"], value)
+        reviewed["observed"][field] = {
+            "value": merged_value,
+            "source": "approved_enrichment",
+            "reviewer": reviewer,
+            "provider": proposal.get("source"),
+        }
+        reviewed["normalized"][field] = _normalize_field(field, merged_value, default_country=default_country)
+        approval = {
+            "field": field,
+            "value": merged_value,
+            "source": proposal.get("source"),
+            "reviewer": reviewer,
+        }
+        reviewed["merge_approvals"].append(approval)
+        applied.append(approval)
+    reviewed["name_parts"] = _name_parts(reviewed["normalized"].get("full_name", {}).get("value", ""))
+    reviewed["flat"] = contact_candidate_to_spec(reviewed)
+    return reviewed, {
+        "schema": ENRICHMENT_MERGE_REVIEW_SCHEMA,
+        "reviewer": reviewer,
+        "approved_fields": sorted(approved),
+        "applied": applied,
+        "skipped": skipped,
+    }
+
+
 def _normalize_field(field: str, value: str, *, default_country: str) -> dict[str, Any]:
     clean = " ".join(str(value or "").strip().split())
     if field == "email":
@@ -139,6 +196,16 @@ def _normalize_website(value: str) -> str:
         host = host[4:]
     path = parsed.path.rstrip("/")
     return f"https://{host}{path}" if host else value.strip()
+
+
+def _merge_enrichment_value(field: str, normalized: dict[str, Any], value: str) -> str:
+    if field != "notes":
+        return value
+    existing = normalized.get("notes") if isinstance(normalized.get("notes"), dict) else {}
+    existing_value = str(existing.get("value") or "").strip()
+    if not existing_value or value in existing_value:
+        return value if not existing_value else existing_value
+    return f"{existing_value}\n{value}"
 
 
 def _name_parts(value: str) -> dict[str, str]:

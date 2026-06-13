@@ -5,7 +5,12 @@ from pathlib import Path
 from typing import Any
 
 from .config import AppConfig, ensure_runtime_dirs
-from .contact import apply_review_corrections, build_contact_candidate, contact_candidate_to_spec
+from .contact import (
+    apply_enrichment_proposals,
+    apply_review_corrections,
+    build_contact_candidate,
+    contact_candidate_to_spec,
+)
 from .enrichment import build_enrichment_request, check_enrichment_readiness, score_public_web_results
 from .ledger import RunLedger
 from .models import CardJob
@@ -172,9 +177,17 @@ class BusinessCardService:
         action: str,
         field_corrections: dict[str, Any] | None = None,
         crop_selection: dict[str, Any] | None = None,
+        approved_enrichment_fields: list[str] | None = None,
         notes: str = "",
     ) -> dict[str, Any]:
-        if action not in {"approve_for_routing", "keep_needs_review", "request_enrichment", "reject_not_card", "skip"}:
+        if action not in {
+            "approve_for_routing",
+            "approve_enrichment_merge",
+            "keep_needs_review",
+            "request_enrichment",
+            "reject_not_card",
+            "skip",
+        }:
             raise ValueError(f"unsupported review action: {action}")
 
         job_payload = self.get_job(job_id, run_id=run_id)
@@ -185,6 +198,7 @@ class BusinessCardService:
             action=action,  # type: ignore[arg-type]
             field_corrections=field_corrections,
             crop_selection=crop_selection,
+            approved_enrichment_fields=approved_enrichment_fields,
             notes=notes,
         )
         artifact_dir = Path(job.artifact_dir) if job.artifact_dir else self.config.runs_dir / run_id / "artifacts" / job_id
@@ -211,6 +225,49 @@ class BusinessCardService:
             ledger.record_artifact(job_id=job_id, kind="reviewed_contact", path=reviewed_contact_path)
             job.transition_to("ready_to_route")
             ledger.record_job(job)
+        elif action == "approve_enrichment_merge":
+            candidate_path = artifact_dir / "reviewed_contact.json"
+            if not candidate_path.exists():
+                candidate_path = artifact_dir / "contact_candidate.json"
+            if candidate_path.exists():
+                candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+            else:
+                candidate = build_contact_candidate({})
+            enrichment_result_path = artifact_dir / "enrichment_result.json"
+            if not enrichment_result_path.exists():
+                raise FileNotFoundError(f"enrichment result not found for job: {job_id}")
+            enrichment_result = json.loads(enrichment_result_path.read_text(encoding="utf-8"))
+            reviewed_contact, merge_review = apply_enrichment_proposals(
+                candidate,
+                reviewer=reviewer,
+                proposals=list(enrichment_result.get("merge_proposals") or []),
+                approved_fields=approved_enrichment_fields or [],
+            )
+            reviewed_contact_path = artifact_dir / "reviewed_contact.json"
+            reviewed_contact_path.write_text(
+                json.dumps(reviewed_contact, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            merge_review_path = artifact_dir / "enrichment_merge_review.json"
+            merge_review_path.write_text(
+                json.dumps(merge_review, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            ledger.record_artifact(job_id=job_id, kind="reviewed_contact", path=reviewed_contact_path)
+            ledger.record_artifact(job_id=job_id, kind="enrichment_merge_review", path=merge_review_path)
+            job.transition_to("ready_to_route" if merge_review["applied"] else "needs_review")
+            ledger.record_job(job)
+            ledger.record_event(
+                "enrichment_merge_reviewed",
+                {
+                    "job_id": job_id,
+                    "run_id": run_id,
+                    "reviewer": reviewer,
+                    "approved_fields": merge_review["approved_fields"],
+                    "applied_count": len(merge_review["applied"]),
+                    "merge_review_path": str(merge_review_path),
+                },
+            )
         elif action == "request_enrichment":
             if job.state != "needs_review":
                 job.transition_to("needs_review")

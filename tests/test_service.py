@@ -283,6 +283,55 @@ def test_service_submit_review_supports_request_enrichment_reject_and_skip(tmp_p
     assert skipped["job"]["state"] == "cancelled"
 
 
+def test_service_submit_review_approves_enrichment_merge(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    run_id, job_id = make_recorded_run(config)
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+    candidate = build_contact_candidate({"full_name": "Ada Lovelace", "notes": "Card note"})
+    (artifact_dir / "contact_candidate.json").write_text(json.dumps(candidate, indent=2), encoding="utf-8")
+    (artifact_dir / "enrichment_result.json").write_text(
+        json.dumps(
+            {
+                "schema": "business-card-watchdog.enrichment-result.v1",
+                "merge_proposals": [
+                    {
+                        "field": "notes",
+                        "value": "Public-web corroboration candidate: https://example.test/ada",
+                        "source": "public_web",
+                        "requires_review": True,
+                    }
+                ],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    service = BusinessCardService(config)
+
+    result = service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_enrichment_merge",
+        approved_enrichment_fields=["notes"],
+    )
+    reviewed = json.loads((artifact_dir / "reviewed_contact.json").read_text(encoding="utf-8"))
+    merge_review = json.loads((artifact_dir / "enrichment_merge_review.json").read_text(encoding="utf-8"))
+    job = service.get_job(job_id, run_id=run_id)
+    events = [
+        json.loads(line)
+        for line in (config.runs_dir / run_id / "events.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+
+    assert result["submission"]["approved_enrichment_fields"] == ["notes"]
+    assert job["state"] == "ready_to_route"
+    assert reviewed["observed"]["notes"]["source"] == "approved_enrichment"
+    assert "Card note" in reviewed["flat"]["notes"]
+    assert merge_review["applied"][0]["field"] == "notes"
+    assert any(artifact["kind"] == "enrichment_merge_review" for artifact in job["artifacts"])
+    assert any(event["event_type"] == "enrichment_merge_reviewed" for event in events)
+
+
 def test_service_get_missing_run_raises(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     service = BusinessCardService(config)

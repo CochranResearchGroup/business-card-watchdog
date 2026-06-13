@@ -56,11 +56,19 @@ def build_parser() -> argparse.ArgumentParser:
     jobs_review.add_argument("--reviewer", default="operator")
     jobs_review.add_argument(
         "--action",
-        choices=["approve_for_routing", "keep_needs_review", "request_enrichment", "reject_not_card", "skip"],
+        choices=[
+            "approve_for_routing",
+            "approve_enrichment_merge",
+            "keep_needs_review",
+            "request_enrichment",
+            "reject_not_card",
+            "skip",
+        ],
         default="keep_needs_review",
     )
     jobs_review.add_argument("--field-corrections-json", default="{}")
     jobs_review.add_argument("--crop-selection-json", default="{}")
+    jobs_review.add_argument("--approved-enrichment-fields-json", default="[]")
     jobs_review.add_argument("--notes", default="")
     jobs_review.add_argument("--json", action="store_true")
 
@@ -190,6 +198,7 @@ def main(argv: list[str] | None = None) -> int:
                 action=args.action,
                 field_corrections=json.loads(args.field_corrections_json),
                 crop_selection=json.loads(args.crop_selection_json),
+                approved_enrichment_fields=json.loads(args.approved_enrichment_fields_json),
                 notes=args.notes,
             )
         print(json.dumps(payload, indent=2) if args.json else payload)

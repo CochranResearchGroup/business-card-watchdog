@@ -199,7 +199,6 @@ Validation:
 
 Remaining:
 
-- Enrichment merge approval remains manual through field corrections.
 - Live sink apply/reject/noop review actions remain follow-on work.
 
 ### Slice 0004-G | 2026-06-13 | Sink Apply Preflight Gate
@@ -225,6 +224,29 @@ Remaining:
 - Live Google Contacts and Odoo/Odollo write/readback adapters remain blocked.
 - Sink-backed duplicate lookup remains follow-on work.
 - Automatic apply/reject/noop review actions remain follow-on work.
+
+### Slice 0004-H | 2026-06-13 | Enrichment Merge Approval
+
+Implemented:
+
+- First-class review action `approve_enrichment_merge`.
+- Explicit `approved_enrichment_fields` review submission field.
+- Approved enrichment proposals write a new `reviewed_contact.json`.
+- Approved enrichment proposals write `enrichment_merge_review.json` audit artifacts.
+- Existing card notes are preserved when approved enrichment notes are merged.
+- Service, CLI, API, and MCP dispatcher surfaces for enrichment merge approval.
+- `enrichment_merge_reviewed` ledger events for agent-loop readback.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_contact.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 33 tests.
+
+Remaining:
+
+- Live Google Contacts and Odoo/Odollo write/readback adapters remain blocked.
+- Sink-backed duplicate lookup remains follow-on work.
+- Automatic apply/reject/noop review actions remain follow-on work.
+- Duplicate merge/noop/create-new review actions remain follow-on work.
 
 ## `/goal` Objective
 

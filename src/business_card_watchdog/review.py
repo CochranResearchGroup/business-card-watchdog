@@ -7,7 +7,14 @@ from typing import Any, Literal
 
 
 ReviewStatus = Literal["pass", "needs_review"]
-ReviewAction = Literal["approve_for_routing", "keep_needs_review", "request_enrichment", "reject_not_card", "skip"]
+ReviewAction = Literal[
+    "approve_for_routing",
+    "approve_enrichment_merge",
+    "keep_needs_review",
+    "request_enrichment",
+    "reject_not_card",
+    "skip",
+]
 
 
 @dataclass(frozen=True)
@@ -84,12 +91,15 @@ def build_review_submission(
     action: ReviewAction,
     field_corrections: dict[str, Any] | None = None,
     crop_selection: dict[str, Any] | None = None,
+    approved_enrichment_fields: list[str] | None = None,
     notes: str = "",
 ) -> dict[str, Any]:
     field_corrections = field_corrections or {}
     crop_selection = crop_selection or {}
+    approved_enrichment_fields = approved_enrichment_fields or []
     _validate_field_corrections(field_corrections)
     _validate_crop_selection(crop_selection)
+    _validate_approved_enrichment_fields(approved_enrichment_fields)
     return {
         "schema": "business-card-watchdog.review-submission.v1",
         "job_id": job_id,
@@ -97,6 +107,7 @@ def build_review_submission(
         "action": action,
         "field_corrections": field_corrections,
         "crop_selection": crop_selection,
+        "approved_enrichment_fields": approved_enrichment_fields,
         "notes": notes,
     }
 
@@ -123,3 +134,10 @@ def _validate_crop_selection(crop_selection: dict[str, Any]) -> None:
     unknown = set(crop_selection) - allowed
     if unknown:
         raise ValueError(f"unsupported crop selection keys: {', '.join(sorted(unknown))}")
+
+
+def _validate_approved_enrichment_fields(fields: list[str]) -> None:
+    allowed = {"full_name", "organization", "title", "email", "phone", "website", "notes"}
+    unknown = set(fields) - allowed
+    if unknown:
+        raise ValueError(f"unsupported enrichment fields: {', '.join(sorted(unknown))}")

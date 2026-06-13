@@ -109,6 +109,7 @@ def tool_manifest() -> dict[str, object]:
                             "type": "string",
                             "enum": [
                                 "approve_for_routing",
+                                "approve_enrichment_merge",
                                 "keep_needs_review",
                                 "request_enrichment",
                                 "reject_not_card",
@@ -118,6 +119,7 @@ def tool_manifest() -> dict[str, object]:
                         },
                         "field_corrections": {"type": "object"},
                         "crop_selection": {"type": "object"},
+                        "approved_enrichment_fields": {"type": "array", "items": {"type": "string"}},
                         "notes": {"type": "string"},
                     },
                     "required": ["job_id", "run_id"],
@@ -254,6 +256,7 @@ def call_tool(
             action=str(args.get("action") or "keep_needs_review"),
             field_corrections=dict(args.get("field_corrections") or {}),
             crop_selection=dict(args.get("crop_selection") or {}),
+            approved_enrichment_fields=list(args.get("approved_enrichment_fields") or []),
             notes=str(args.get("notes") or ""),
         )
     if tool_name == "business_card_watchdog_sinks_check":

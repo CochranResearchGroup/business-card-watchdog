@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from business_card_watchdog.config import AppConfig
@@ -23,6 +24,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_enrichment_request" in names
     assert "business_card_watchdog_doctor" in names
     review_tool = next(tool for tool in manifest["tools"] if tool["name"] == "business_card_watchdog_job_review")
+    assert "approve_enrichment_merge" in review_tool["input_schema"]["properties"]["action"]["enum"]
     assert "request_enrichment" in review_tool["input_schema"]["properties"]["action"]["enum"]
     assert "reject_not_card" in review_tool["input_schema"]["properties"]["action"]["enum"]
     assert "skip" in review_tool["input_schema"]["properties"]["action"]["enum"]
@@ -31,6 +33,22 @@ def test_manifest_has_process_tool() -> None:
 def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, job_id = make_recorded_run(config)
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+    (artifact_dir / "enrichment_result.json").write_text(
+        json.dumps(
+            {
+                "schema": "business-card-watchdog.enrichment-result.v1",
+                "merge_proposals": [
+                    {
+                        "field": "notes",
+                        "value": "Public-web corroboration candidate: https://example.test/mcp",
+                        "source": "public_web",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
 
     summary = call_tool("business_card_watchdog_run_summary", {"run_id": run_id}, config=config)
     next_actions = call_tool("business_card_watchdog_next_actions", {"run_id": run_id}, config=config)
@@ -40,12 +58,23 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
         {"job_id": job_id, "run_id": run_id},
         config=config,
     )
+    merge = call_tool(
+        "business_card_watchdog_job_review",
+        {
+            "job_id": job_id,
+            "run_id": run_id,
+            "action": "approve_enrichment_merge",
+            "approved_enrichment_fields": ["notes"],
+        },
+        config=config,
+    )
 
     assert summary["needs_review_count"] == 1
     assert next_actions["actions"][0]["action"] == "review_contact"
     assert job["job_id"] == job_id
     assert preflight["preflight"]["state"] == "preview"
     assert preflight["preflight"]["writes_attempted"] == 0
+    assert merge["submission"]["approved_enrichment_fields"] == ["notes"]
 
 
 def test_mcp_call_tool_rejects_unknown_tool(tmp_path: Path) -> None:

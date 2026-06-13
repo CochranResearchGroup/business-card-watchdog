@@ -1,5 +1,7 @@
 from business_card_watchdog.contact import (
+    ENRICHMENT_MERGE_REVIEW_SCHEMA,
     REVIEWED_CONTACT_SCHEMA,
+    apply_enrichment_proposals,
     build_contact_candidate,
     contact_candidate_to_spec,
     apply_review_corrections,
@@ -46,3 +48,35 @@ def test_review_corrections_create_reviewed_contact_without_losing_observed_fiel
     assert reviewed["observed"]["full_name"]["source"] == "operator_review"
     assert reviewed["normalized"]["email"]["value"] == "grace@example.test"
     assert reviewed["flat"]["full_name"] == "Grace Hopper"
+
+
+def test_enrichment_proposals_apply_only_approved_fields() -> None:
+    candidate = build_contact_candidate({"full_name": "Ada Lovelace", "notes": "Card note"})
+
+    reviewed, merge_review = apply_enrichment_proposals(
+        candidate,
+        reviewer="operator",
+        proposals=[
+            {
+                "field": "notes",
+                "value": "Public-web corroboration candidate: https://example.test/ada",
+                "source": "public_web",
+                "requires_review": True,
+            },
+            {
+                "field": "title",
+                "value": "Principal Engineer",
+                "source": "public_web",
+                "requires_review": True,
+            },
+        ],
+        approved_fields=["notes"],
+    )
+
+    assert merge_review["schema"] == ENRICHMENT_MERGE_REVIEW_SCHEMA
+    assert merge_review["applied"][0]["field"] == "notes"
+    assert merge_review["skipped"][0]["field"] == "title"
+    assert reviewed["observed"]["notes"]["source"] == "approved_enrichment"
+    assert "Card note" in reviewed["flat"]["notes"]
+    assert "corroboration" in reviewed["flat"]["notes"]
+    assert "title" not in reviewed["flat"]

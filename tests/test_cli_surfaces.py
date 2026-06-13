@@ -5,6 +5,7 @@ from pathlib import Path
 
 from business_card_watchdog.cli import main
 from business_card_watchdog.config import AppConfig, EnrichmentConfig, PrefilterConfig
+from business_card_watchdog.contact import build_contact_candidate
 from business_card_watchdog.orchestrator import BatchOrchestrator
 from business_card_watchdog.service_ops import service_unit_path
 
@@ -120,6 +121,56 @@ def test_cli_jobs_review_supports_request_enrichment_action(tmp_path: Path, caps
     payload = json.loads(capsys.readouterr().out)
     assert payload["job"]["state"] == "needs_review"
     assert payload["submission"]["action"] == "request_enrichment"
+
+
+def test_cli_jobs_review_approves_enrichment_merge(tmp_path: Path, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+    run_id, job_id = make_recorded_run(AppConfig(config_path=config_path, data_dir=data_dir))
+    artifact_dir = data_dir / "runs" / run_id / "artifacts" / job_id
+    (artifact_dir / "contact_candidate.json").write_text(
+        json.dumps(build_contact_candidate({"full_name": "Ada Lovelace"}), indent=2),
+        encoding="utf-8",
+    )
+    (artifact_dir / "enrichment_result.json").write_text(
+        json.dumps(
+            {
+                "schema": "business-card-watchdog.enrichment-result.v1",
+                "merge_proposals": [
+                    {
+                        "field": "notes",
+                        "value": "Public-web corroboration candidate: https://example.test/ada",
+                        "source": "public_web",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "jobs",
+                "review",
+                job_id,
+                "--run-id",
+                run_id,
+                "--action",
+                "approve_enrichment_merge",
+                "--approved-enrichment-fields-json",
+                '["notes"]',
+                "--json",
+            ]
+        )
+        == 0
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["job"]["state"] == "ready_to_route"
+    assert payload["submission"]["approved_enrichment_fields"] == ["notes"]
 
 
 def test_cli_sinks_check_is_dry_run_and_non_mutating(tmp_path: Path, capsys) -> None:

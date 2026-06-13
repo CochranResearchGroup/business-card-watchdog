@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -39,6 +40,32 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     preflight = client.post(f"/jobs/{job_id}/sink-apply-preflight", json={"run_id": run_id}).json()
     assert preflight["preflight"]["schema"] == "business-card-watchdog.sink-apply-preflight.v1"
     assert preflight["preflight"]["writes_attempted"] == 0
+    artifact_dir = data_dir / "runs" / run_id / "artifacts" / job_id
+    (artifact_dir / "enrichment_result.json").write_text(
+        json.dumps(
+            {
+                "schema": "business-card-watchdog.enrichment-result.v1",
+                "merge_proposals": [
+                    {
+                        "field": "notes",
+                        "value": "Public-web corroboration candidate: https://example.test/api",
+                        "source": "public_web",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    merge = client.post(
+        f"/jobs/{job_id}/review",
+        json={
+            "run_id": run_id,
+            "reviewer": "api-test",
+            "action": "approve_enrichment_merge",
+            "approved_enrichment_fields": ["notes"],
+        },
+    ).json()
+    assert merge["submission"]["approved_enrichment_fields"] == ["notes"]
     review = client.post(
         f"/jobs/{job_id}/review",
         json={

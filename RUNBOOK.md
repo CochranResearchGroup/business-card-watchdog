@@ -317,3 +317,20 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 35 tests.
+
+## Turn 19 | 2026-06-13
+
+Continued Plan 0004 execution with explicit enrichment merge approval.
+
+Implemented:
+
+- Added review action `approve_enrichment_merge`.
+- Added `approved_enrichment_fields` to review submissions.
+- Approved enrichment proposals now write `reviewed_contact.json` and `enrichment_merge_review.json`.
+- Existing card notes are preserved when approved enrichment notes are merged.
+- Service, CLI, API, and MCP dispatcher surfaces support enrichment merge approval.
+- Added `enrichment_merge_reviewed` events for agent-loop readback.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_contact.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 33 tests.
