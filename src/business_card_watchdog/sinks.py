@@ -320,17 +320,26 @@ def build_sink_adapter_request(
     lookup_plan: dict[str, Any] | None = None,
     sink_plan: dict[str, Any] | None = None,
     apply_result: dict[str, Any] | None = None,
+    sink_context: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    sink_context = sink_context or {}
     if phase == "lookup":
         source = lookup_plan or {}
         source_schema = source.get("schema")
-        requests = [_lookup_adapter_request(lookup) for lookup in list(source.get("lookups") or [])]
+        requests = [
+            _lookup_adapter_request(lookup, context=sink_context.get(str(lookup.get("sink") or ""), {}))
+            for lookup in list(source.get("lookups") or [])
+        ]
     elif phase == "write":
         source = sink_plan or {}
         source_schema = source.get("schema")
         payloads = {payload.get("sink"): payload for payload in list(source.get("payloads") or [])}
         requests = [
-            _write_adapter_request(action, payloads.get(action.get("sink"), {}))
+            _write_adapter_request(
+                action,
+                payloads.get(action.get("sink"), {}),
+                context=sink_context.get(str(action.get("sink") or ""), {}),
+            )
             for action in list(source.get("actions") or [])
         ]
     elif phase == "readback":
@@ -338,7 +347,11 @@ def build_sink_adapter_request(
         source_schema = source.get("schema")
         readback_by_sink = {row.get("sink"): row for row in list(source.get("readback") or [])}
         requests = [
-            _readback_adapter_request(action, readback_by_sink.get(action.get("sink"), {}))
+            _readback_adapter_request(
+                action,
+                readback_by_sink.get(action.get("sink"), {}),
+                context=sink_context.get(str(action.get("sink") or ""), {}),
+            )
             for action in list(source.get("actions") or [])
         ]
     else:
@@ -394,7 +407,14 @@ def build_sink_lookup_result(
     }
 
 
-def check_sink_readiness(sink: str, *, dry_run: bool, apply_enabled: bool = False) -> SinkReadiness:
+def check_sink_readiness(
+    sink: str,
+    *,
+    dry_run: bool,
+    apply_enabled: bool = False,
+    google_contacts_profile: str = "",
+    odollo_tenant: str = "",
+) -> SinkReadiness:
     if dry_run:
         return SinkReadiness(
             sink=sink,
@@ -410,23 +430,40 @@ def check_sink_readiness(sink: str, *, dry_run: bool, apply_enabled: bool = Fals
         )
 
     if sink == "google_contacts":
+        if not google_contacts_profile.strip():
+            return SinkReadiness(
+                sink=sink,
+                status="blocked",
+                reason="missing sink.google_contacts_profile for live Google Contacts apply",
+                details={"config_key": "sink.google_contacts_profile"},
+            )
         if shutil.which("gws") is None:
             return SinkReadiness(
                 sink=sink,
                 status="blocked",
                 reason="gws CLI not found; cannot verify Google Contacts readiness",
+                details={"profile": google_contacts_profile},
             )
         return SinkReadiness(
             sink=sink,
             status="blocked",
             reason="live Google Contacts write/readback gate is not implemented yet",
+            details={"profile": google_contacts_profile},
         )
 
     if sink == "odoo":
+        if not odollo_tenant.strip():
+            return SinkReadiness(
+                sink=sink,
+                status="blocked",
+                reason="missing sink.odollo_tenant for live Odoo/Odollo apply",
+                details={"config_key": "sink.odollo_tenant"},
+            )
         return SinkReadiness(
             sink=sink,
             status="blocked",
             reason="live Odoo/Odollo tenant readiness gate is not implemented yet",
+            details={"tenant": odollo_tenant},
         )
 
     return SinkReadiness(sink=sink, status="blocked", reason=f"unknown sink: {sink}")
@@ -524,7 +561,7 @@ def _lookup_queries_for_sink(sink: str, match_keys: dict[str, str]) -> list[dict
     ]
 
 
-def _lookup_adapter_request(lookup: dict[str, Any]) -> dict[str, Any]:
+def _lookup_adapter_request(lookup: dict[str, Any], *, context: dict[str, Any]) -> dict[str, Any]:
     sink = str(lookup.get("sink") or "")
     request = _adapter_base(sink=sink, phase="lookup")
     match_keys = lookup.get("match_keys", {})
@@ -536,13 +573,13 @@ def _lookup_adapter_request(lookup: dict[str, Any]) -> dict[str, Any]:
         }
     )
     if sink == "odoo":
-        request.update(_odollo_lookup_contract(match_keys=match_keys))
+        request.update(_odollo_lookup_contract(match_keys=match_keys, tenant=str(context.get("tenant") or "")))
     else:
-        request.update(_gws_lookup_contract(match_keys=match_keys))
+        request.update(_gws_lookup_contract(match_keys=match_keys, profile=str(context.get("profile") or "")))
     return request
 
 
-def _write_adapter_request(action: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+def _write_adapter_request(action: dict[str, Any], payload: dict[str, Any], *, context: dict[str, Any]) -> dict[str, Any]:
     sink = str(action.get("sink") or "")
     request = _adapter_base(sink=sink, phase="write")
     values = dict(payload.get("payload", {}).get("values") or {})
@@ -556,13 +593,13 @@ def _write_adapter_request(action: dict[str, Any], payload: dict[str, Any]) -> d
         }
     )
     if sink == "odoo":
-        request.update(_odollo_write_contract(values=values))
+        request.update(_odollo_write_contract(values=values, tenant=str(context.get("tenant") or "")))
     else:
-        request.update(_gws_write_contract(values=values))
+        request.update(_gws_write_contract(values=values, profile=str(context.get("profile") or "")))
     return request
 
 
-def _readback_adapter_request(action: dict[str, Any], readback: dict[str, Any]) -> dict[str, Any]:
+def _readback_adapter_request(action: dict[str, Any], readback: dict[str, Any], *, context: dict[str, Any]) -> dict[str, Any]:
     sink = str(action.get("sink") or "")
     request = _adapter_base(sink=sink, phase="readback")
     resource_id = readback.get("resource_id")
@@ -575,9 +612,9 @@ def _readback_adapter_request(action: dict[str, Any], readback: dict[str, Any]) 
         }
     )
     if sink == "odoo":
-        request.update(_odollo_readback_contract(resource_id=resource_id))
+        request.update(_odollo_readback_contract(resource_id=resource_id, tenant=str(context.get("tenant") or "")))
     else:
-        request.update(_gws_readback_contract(resource_id=resource_id))
+        request.update(_gws_readback_contract(resource_id=resource_id, profile=str(context.get("profile") or "")))
     return request
 
 
@@ -593,13 +630,14 @@ def _adapter_base(*, sink: str, phase: SinkAdapterPhase) -> dict[str, Any]:
     }
 
 
-def _gws_lookup_contract(*, match_keys: dict[str, str]) -> dict[str, Any]:
+def _gws_lookup_contract(*, match_keys: dict[str, str], profile: str) -> dict[str, Any]:
     query_terms = [match_keys[field] for field in ("email", "phone", "full_name") if match_keys.get(field)]
     return {
         "adapter": "gws.people",
         "profile": {
             "source": "user_config",
             "config_key": "sink.google_contacts_profile",
+            "name": profile,
             "required_for_live": True,
         },
         "api": "people.googleapis.com",
@@ -615,12 +653,13 @@ def _gws_lookup_contract(*, match_keys: dict[str, str]) -> dict[str, Any]:
     }
 
 
-def _gws_write_contract(*, values: dict[str, Any]) -> dict[str, Any]:
+def _gws_write_contract(*, values: dict[str, Any], profile: str) -> dict[str, Any]:
     return {
         "adapter": "gws.people",
         "profile": {
             "source": "user_config",
             "config_key": "sink.google_contacts_profile",
+            "name": profile,
             "required_for_live": True,
         },
         "api": "people.googleapis.com",
@@ -648,12 +687,13 @@ def _gws_write_contract(*, values: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _gws_readback_contract(*, resource_id: Any) -> dict[str, Any]:
+def _gws_readback_contract(*, resource_id: Any, profile: str) -> dict[str, Any]:
     return {
         "adapter": "gws.people",
         "profile": {
             "source": "user_config",
             "config_key": "sink.google_contacts_profile",
+            "name": profile,
             "required_for_live": True,
         },
         "api": "people.googleapis.com",
@@ -667,12 +707,13 @@ def _gws_readback_contract(*, resource_id: Any) -> dict[str, Any]:
     }
 
 
-def _odollo_lookup_contract(*, match_keys: dict[str, str]) -> dict[str, Any]:
+def _odollo_lookup_contract(*, match_keys: dict[str, str], tenant: str) -> dict[str, Any]:
     return {
         "adapter": "odollo.odoo",
         "tenant": {
             "source": "user_config",
             "config_key": "sink.odollo_tenant",
+            "name": tenant,
             "required_for_live": True,
         },
         "model": "res.partner",
@@ -690,12 +731,13 @@ def _odollo_lookup_contract(*, match_keys: dict[str, str]) -> dict[str, Any]:
     }
 
 
-def _odollo_write_contract(*, values: dict[str, Any]) -> dict[str, Any]:
+def _odollo_write_contract(*, values: dict[str, Any], tenant: str) -> dict[str, Any]:
     return {
         "adapter": "odollo.odoo",
         "tenant": {
             "source": "user_config",
             "config_key": "sink.odollo_tenant",
+            "name": tenant,
             "required_for_live": True,
         },
         "model": "res.partner",
@@ -723,12 +765,13 @@ def _odollo_write_contract(*, values: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _odollo_readback_contract(*, resource_id: Any) -> dict[str, Any]:
+def _odollo_readback_contract(*, resource_id: Any, tenant: str) -> dict[str, Any]:
     return {
         "adapter": "odollo.odoo",
         "tenant": {
             "source": "user_config",
             "config_key": "sink.odollo_tenant",
+            "name": tenant,
             "required_for_live": True,
         },
         "model": "res.partner",

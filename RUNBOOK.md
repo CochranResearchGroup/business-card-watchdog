@@ -572,3 +572,19 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_sinks.py -q` passed with 14 tests.
+
+## Turn 34 | 2026-06-13
+
+Continued Plan 0004 execution with sink tenant/profile config metadata.
+
+Implemented:
+
+- Added user config fields `sink.google_contacts_profile` and `sink.odollo_tenant`.
+- Default user config now includes empty profile/tenant placeholders.
+- Live apply readiness reports missing profile/tenant config before live adapter checks.
+- Configured Google Contacts profile and Odollo tenant names flow into lookup, write, and readback adapter request artifacts.
+- No live credentials, tenant files, network calls, or writes are touched.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_config.py tests/test_service.py tests/test_sinks.py -q` passed with 54 tests.

@@ -423,6 +423,8 @@ class BusinessCardService:
                     sink,
                     dry_run=self.config.sink.dry_run,
                     apply_enabled=self._sink_apply_enabled(sink),
+                    google_contacts_profile=self.config.sink.google_contacts_profile,
+                    odollo_tenant=self.config.sink.odollo_tenant,
                 ).to_dict()
                 for sink in sinks
             ],
@@ -736,21 +738,33 @@ class BusinessCardService:
                 lookup_plan = json.loads(lookup_plan_path.read_text(encoding="utf-8"))
             else:
                 lookup_plan = self.plan_sink_lookup_for_job(job_id=job_id, run_id=run_id)["lookup_plan"]
-            request = build_sink_adapter_request(phase=phase, lookup_plan=lookup_plan)
+            request = build_sink_adapter_request(
+                phase=phase,
+                lookup_plan=lookup_plan,
+                sink_context=self._sink_context(),
+            )
         elif phase == "write":
             sink_plan_path = artifact_dir / "sink_plan.json"
             if sink_plan_path.exists():
                 sink_plan = json.loads(sink_plan_path.read_text(encoding="utf-8"))
             else:
                 sink_plan = self.plan_sinks_for_job(job_id=job_id, run_id=run_id)["plan"]
-            request = build_sink_adapter_request(phase=phase, sink_plan=sink_plan)
+            request = build_sink_adapter_request(
+                phase=phase,
+                sink_plan=sink_plan,
+                sink_context=self._sink_context(),
+            )
         elif phase == "readback":
             result_path = artifact_dir / "sink_apply_result.json"
             if result_path.exists():
                 apply_result = json.loads(result_path.read_text(encoding="utf-8"))
             else:
                 apply_result = self.apply_sinks_for_job(job_id=job_id, run_id=run_id)["result"]
-            request = build_sink_adapter_request(phase=phase, apply_result=apply_result)
+            request = build_sink_adapter_request(
+                phase=phase,
+                apply_result=apply_result,
+                sink_context=self._sink_context(),
+            )
         else:
             raise ValueError("sink adapter phase must be lookup, write, or readback")
 
@@ -893,6 +907,12 @@ class BusinessCardService:
         if sink == "odoo":
             return self.config.sink.odoo_apply_enabled
         return False
+
+    def _sink_context(self) -> dict[str, dict[str, Any]]:
+        return {
+            "google_contacts": {"profile": self.config.sink.google_contacts_profile},
+            "odoo": {"tenant": self.config.sink.odollo_tenant},
+        }
 
     def _execute_safe_next_action(self, action: dict[str, Any]) -> dict[str, Any]:
         action_name = str(action.get("action") or "")

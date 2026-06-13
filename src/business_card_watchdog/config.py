@@ -26,7 +26,9 @@ def cache_home() -> Path:
 @dataclass(frozen=True)
 class SinkConfig:
     google_contacts: bool = False
+    google_contacts_profile: str = ""
     odoo: bool = False
+    odollo_tenant: str = ""
     dry_run: bool = True
     google_contacts_apply_enabled: bool = False
     odoo_apply_enabled: bool = False
@@ -149,7 +151,9 @@ def load_config(path: Path | None = None) -> AppConfig:
         ),
         sink=SinkConfig(
             google_contacts=bool(sink.get("google_contacts", False)),
+            google_contacts_profile=str(sink.get("google_contacts_profile", "")),
             odoo=bool(sink.get("odoo", False)),
+            odollo_tenant=str(sink.get("odollo_tenant", "")),
             dry_run=bool(sink.get("dry_run", True)),
             google_contacts_apply_enabled=bool(sink.get("google_contacts_apply_enabled", False)),
             odoo_apply_enabled=bool(sink.get("odoo_apply_enabled", False)),
@@ -200,8 +204,10 @@ base_url = "https://api.apollo.io"
 [sink]
 dry_run = true
 google_contacts = false
+google_contacts_profile = ""
 google_contacts_apply_enabled = false
 odoo = false
+odollo_tenant = ""
 odoo_apply_enabled = false
 
 [routing]

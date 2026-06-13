@@ -55,8 +55,10 @@ def test_load_sink_apply_policy_flags(tmp_path: Path) -> None:
 [sink]
 dry_run = false
 google_contacts = true
+google_contacts_profile = "codex"
 google_contacts_apply_enabled = true
 odoo = true
+odollo_tenant = "saber"
 odoo_apply_enabled = false
 """,
         encoding="utf-8",
@@ -66,6 +68,8 @@ odoo_apply_enabled = false
 
     assert config.sink.dry_run is False
     assert config.sink.google_contacts is True
+    assert config.sink.google_contacts_profile == "codex"
     assert config.sink.google_contacts_apply_enabled is True
     assert config.sink.odoo is True
+    assert config.sink.odollo_tenant == "saber"
     assert config.sink.odoo_apply_enabled is False

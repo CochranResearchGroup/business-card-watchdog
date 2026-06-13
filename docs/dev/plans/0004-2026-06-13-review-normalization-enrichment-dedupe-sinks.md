@@ -558,6 +558,27 @@ Remaining:
 - Live tenant/profile readiness still needs concrete config reconciliation with GWS/Odollo runtimes.
 - Non-simulated live apply remains blocked until adapters are implemented and explicitly approved.
 
+### Slice 0004-W | 2026-06-13 | Sink Tenant And Profile Config Metadata
+
+Implemented:
+
+- Added user config fields `sink.google_contacts_profile` and `sink.odollo_tenant`.
+- Default user config now includes empty profile/tenant placeholders.
+- Sink config loading preserves those values without reading live credentials or tenant runtime files.
+- Live apply readiness reports missing `sink.google_contacts_profile` or `sink.odollo_tenant` before reaching live adapter checks.
+- Configured profile/tenant values flow into generated Google Contacts and Odollo/Odoo adapter request artifacts.
+- Adapter request artifacts remain blocked and record `network_calls_made = 0` and `writes_attempted = 0`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_config.py tests/test_service.py tests/test_sinks.py -q` passed with 54 tests.
+
+Remaining:
+
+- Concrete GWS/Odollo auth checks remain blocked behind future live readiness adapters.
+- Live Google Contacts and Odoo/Odollo lookup/write/readback adapters remain blocked.
+- Non-simulated live apply remains blocked until adapters are implemented and explicitly approved.
+
 ## `/goal` Objective
 
 Use this as the high-level `/goal` objective:

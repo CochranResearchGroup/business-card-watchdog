@@ -48,7 +48,7 @@ def test_live_readiness_blocks_when_apply_disabled() -> None:
 
 
 def test_live_odoo_readiness_is_blocked_until_implemented_when_apply_enabled() -> None:
-    readiness = check_sink_readiness("odoo", dry_run=False, apply_enabled=True)
+    readiness = check_sink_readiness("odoo", dry_run=False, apply_enabled=True, odollo_tenant="saber")
 
     assert not readiness.ready
     assert readiness.status == "blocked"

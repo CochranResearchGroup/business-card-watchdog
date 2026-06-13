@@ -104,6 +104,29 @@ def test_service_sink_readiness_reports_apply_policy(tmp_path: Path) -> None:
     by_sink = {sink["sink"]: sink for sink in readiness["sinks"]}
     assert readiness["dry_run"] is False
     assert "disabled" in by_sink["google_contacts"]["reason"]
+    assert by_sink["odoo"]["details"]["config_key"] == "sink.odollo_tenant"
+
+
+def test_service_sink_readiness_reports_configured_profile_and_tenant(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(
+            google_contacts=True,
+            google_contacts_profile="codex",
+            odoo=True,
+            odollo_tenant="saber",
+            dry_run=False,
+            google_contacts_apply_enabled=True,
+            odoo_apply_enabled=True,
+        ),
+    )
+
+    readiness = BusinessCardService(config).sink_readiness()
+
+    by_sink = {sink["sink"]: sink for sink in readiness["sinks"]}
+    assert by_sink["google_contacts"]["details"].get("profile") == "codex"
+    assert by_sink["odoo"]["details"] == {"tenant": "saber"}
     assert "not implemented" in by_sink["odoo"]["reason"]
 
 
@@ -344,8 +367,14 @@ def test_service_build_sink_adapter_request_writes_phase_artifact(tmp_path: Path
     config = AppConfig(
         config_path=tmp_path / "config.toml",
         data_dir=tmp_path / "data",
-        sink=SinkConfig(google_contacts=True, dry_run=True),
-        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+        sink=SinkConfig(
+            google_contacts=True,
+            google_contacts_profile="codex",
+            odoo=True,
+            odollo_tenant="saber",
+            dry_run=True,
+        ),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts", "odoo"]}],
     )
     run_id, job_id = make_recorded_run(config)
     service = BusinessCardService(config)
@@ -362,8 +391,14 @@ def test_service_build_sink_adapter_request_writes_phase_artifact(tmp_path: Path
     assert lookup["request"]["schema"] == "business-card-watchdog.sink-adapter-request.v1"
     assert lookup["request"]["phase"] == "lookup"
     assert lookup["request"]["network_calls_made"] == 0
+    assert lookup["request"]["requests"][0]["profile"]["name"] == "codex"
+    assert lookup["request"]["requests"][1]["tenant"]["name"] == "saber"
     assert write["request"]["phase"] == "write"
+    assert write["request"]["requests"][0]["profile"]["name"] == "codex"
+    assert write["request"]["requests"][1]["tenant"]["name"] == "saber"
     assert readback["request"]["phase"] == "readback"
+    assert readback["request"]["requests"][0]["profile"]["name"] == "codex"
+    assert readback["request"]["requests"][1]["tenant"]["name"] == "saber"
     assert any(artifact["kind"] == "sink_adapter_request_lookup" for artifact in job["artifacts"])
     assert any(artifact["kind"] == "sink_adapter_request_write" for artifact in job["artifacts"])
     assert any(artifact["kind"] == "sink_adapter_request_readback" for artifact in job["artifacts"])
