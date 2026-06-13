@@ -599,6 +599,26 @@ Remaining:
 - Live Google Contacts and Odoo/Odollo lookup/write/readback adapters remain blocked.
 - Non-simulated live apply remains blocked until adapters are implemented and explicitly approved.
 
+### Slice 0004-Y | 2026-06-13 | Odollo Local Readiness Evidence
+
+Implemented:
+
+- Odoo/Odollo live readiness now reports local Odollo tenant evidence without importing Odollo runtime code or making Odoo calls.
+- Readiness distinguishes missing `sink.odollo_tenant`, missing Odollo user config, missing tenant home, missing tenant state evidence, and the still-blocked live tenant readiness gate.
+- Readiness details include `ODOLLO_HOME`, `odollo.yml` presence, tenant home path, resource/artifact/action-log presence, state DB candidate presence, and a blocked live probe descriptor.
+- The readiness contract mirrors Odollo's `odollo.core.odoo_readiness.odoo_readiness_report` boundary while keeping `network_calls_made = 0`.
+- Tests isolate `ODOLLO_HOME` to prove missing-config and local-evidence behavior without using private tenant state.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py tests/test_config.py -q` passed with 57 tests.
+
+Remaining:
+
+- Live Odollo/Odoo schema/auth verification remains blocked until an explicitly approved read-only/pilot call is allowed.
+- Live Google Contacts and Odoo/Odollo lookup/write/readback adapters remain blocked.
+- Non-simulated live apply remains blocked until adapters are implemented and explicitly approved.
+
 ## `/goal` Objective
 
 Use this as the high-level `/goal` objective:

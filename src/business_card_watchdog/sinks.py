@@ -475,11 +475,33 @@ def check_sink_readiness(
                 reason="missing sink.odollo_tenant for live Odoo/Odollo apply",
                 details={"config_key": "sink.odollo_tenant"},
             )
+        odollo_details = _odollo_local_readiness_details(tenant=odollo_tenant)
+        if not odollo_details["config_present"]:
+            return SinkReadiness(
+                sink=sink,
+                status="blocked",
+                reason="missing Odollo user config for live Odoo/Odollo apply",
+                details=odollo_details,
+            )
+        if not odollo_details["tenant_home_present"]:
+            return SinkReadiness(
+                sink=sink,
+                status="blocked",
+                reason="missing Odollo tenant home for live Odoo/Odollo apply",
+                details=odollo_details,
+            )
+        if not odollo_details["state_evidence_present"]:
+            return SinkReadiness(
+                sink=sink,
+                status="blocked",
+                reason="missing Odollo tenant state evidence for live Odoo/Odollo apply",
+                details=odollo_details,
+            )
         return SinkReadiness(
             sink=sink,
             status="blocked",
-            reason="live Odoo/Odollo tenant readiness gate is not implemented yet",
-            details={"tenant": odollo_tenant},
+            reason="Odollo local readiness evidence exists; live Odoo/Odollo tenant readiness gate is not implemented yet",
+            details=odollo_details,
         )
 
     return SinkReadiness(sink=sink, status="blocked", reason=f"unknown sink: {sink}")
@@ -509,6 +531,37 @@ def _gws_local_readiness_details(*, profile: str) -> dict[str, Any]:
             "lookup": "gws people people searchContacts --dry-run --params ...",
             "write": "gws people people createContact --dry-run --json ...",
             "network_calls_made": 0,
+        },
+    }
+
+
+def _odollo_local_readiness_details(*, tenant: str) -> dict[str, Any]:
+    home = Path(os.environ.get("ODOLLO_HOME", Path.home() / ".odollo")).expanduser()
+    tenant_home = home / "tenants" / tenant
+    state_candidates = [
+        home / f"{tenant}.sqlite",
+        home / f"{tenant}.sqlite3",
+        home / f"{tenant}.db",
+        home / "state.sqlite",
+        home / "state.sqlite3",
+        home / "state.db",
+    ]
+    return {
+        "tenant": tenant,
+        "odollo_home": str(home),
+        "config_path": str(home / "odollo.yml"),
+        "config_present": (home / "odollo.yml").exists(),
+        "tenant_home": str(tenant_home),
+        "tenant_home_present": tenant_home.exists(),
+        "tenant_resources_present": (tenant_home / "resources").exists(),
+        "tenant_artifacts_present": (tenant_home / "artifacts").exists(),
+        "tenant_actions_log_present": (tenant_home / "actions.ndjson").exists(),
+        "state_evidence_present": any(path.exists() for path in state_candidates),
+        "state_candidates": {path.name: path.exists() for path in state_candidates},
+        "live_probe": {
+            "source": "odollo.core.odoo_readiness.odoo_readiness_report",
+            "network_calls_made": 0,
+            "status": "not_invoked_without_operator_approval",
         },
     }
 

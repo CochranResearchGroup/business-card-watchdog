@@ -126,8 +126,8 @@ def test_service_sink_readiness_reports_configured_profile_and_tenant(tmp_path: 
 
     by_sink = {sink["sink"]: sink for sink in readiness["sinks"]}
     assert by_sink["google_contacts"]["details"].get("profile") == "codex"
-    assert by_sink["odoo"]["details"] == {"tenant": "saber"}
-    assert "not implemented" in by_sink["odoo"]["reason"]
+    assert by_sink["odoo"]["details"]["tenant"] == "saber"
+    assert "Odollo" in by_sink["odoo"]["reason"]
 
 
 def test_service_watch_reset_returns_runtime_path(tmp_path: Path) -> None:

@@ -52,7 +52,39 @@ def test_live_odoo_readiness_is_blocked_until_implemented_when_apply_enabled() -
 
     assert not readiness.ready
     assert readiness.status == "blocked"
+    assert "Odollo" in readiness.reason
+
+
+def test_live_odoo_readiness_reports_missing_config(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("ODOLLO_HOME", str(tmp_path / "odollo"))
+
+    readiness = check_sink_readiness("odoo", dry_run=False, apply_enabled=True, odollo_tenant="saber-prod")
+
+    assert not readiness.ready
+    assert readiness.status == "blocked"
+    assert "user config" in readiness.reason
+    assert readiness.details["config_present"] is False
+    assert readiness.details["live_probe"]["network_calls_made"] == 0
+
+
+def test_live_odoo_readiness_reports_local_evidence_without_call(tmp_path, monkeypatch) -> None:
+    odollo_home = tmp_path / "odollo"
+    tenant_home = odollo_home / "tenants" / "saber-prod"
+    (tenant_home / "resources").mkdir(parents=True)
+    (tenant_home / "artifacts").mkdir()
+    (tenant_home / "actions.ndjson").write_text("", encoding="utf-8")
+    (odollo_home / "odollo.yml").write_text("profiles: {}\n", encoding="utf-8")
+    (odollo_home / "saber-prod.sqlite").write_text("", encoding="utf-8")
+    monkeypatch.setenv("ODOLLO_HOME", str(odollo_home))
+
+    readiness = check_sink_readiness("odoo", dry_run=False, apply_enabled=True, odollo_tenant="saber-prod")
+
+    assert not readiness.ready
+    assert readiness.status == "blocked"
     assert "not implemented" in readiness.reason
+    assert readiness.details["tenant_home_present"] is True
+    assert readiness.details["state_evidence_present"] is True
+    assert readiness.details["live_probe"]["status"] == "not_invoked_without_operator_approval"
 
 
 def test_live_google_readiness_reports_missing_auth_evidence(tmp_path, monkeypatch) -> None:
