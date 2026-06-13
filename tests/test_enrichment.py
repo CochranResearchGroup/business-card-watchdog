@@ -199,6 +199,7 @@ def test_paid_api_provider_request_is_zero_network_and_secret_free(tmp_path: Pat
     assert request["status"] == "prepared"
     assert request["network_calls_made"] == 0
     assert request["paid_api_calls_attempted"] == 0
+    assert request["max_results"] == 5
     assert request["api_key_env"] == "APOLLO_API_KEY"
     assert request["api_key_available"] is True
     assert request["request_fields"]["domain"] == "example.test"
@@ -235,6 +236,8 @@ def test_paid_api_provider_results_are_reviewable_without_call() -> None:
     assert result["provider"] == "apollo"
     assert result["network_calls_made"] == 0
     assert result["paid_api_calls_attempted"] == 0
+    assert result["max_results"] == 1
+    assert result["submitted_result_count"] == 1
     assert result["results"][0]["score"] >= 80
     assert any(proposal["field"] == "title" for proposal in result["merge_proposals"])
 
@@ -414,12 +417,54 @@ def test_service_request_api_enrichment_writes_provider_request_without_call(tmp
     assert payload["result"]["schema"] == "business-card-watchdog.enrichment-provider-result.v1"
     assert payload["provider_request"]["status"] == "prepared"
     assert payload["provider_result"]["paid_api_calls_attempted"] == 0
+    assert payload["provider_request"]["max_results"] == 5
+    assert payload["provider_result"]["max_results"] == 5
+    assert payload["provider_result"]["submitted_result_count"] == 1
     assert payload["provider_request"]["network_calls_made"] == 0
     assert payload["provider_request"]["paid_api_calls_attempted"] == 0
     assert "secret" not in Path(payload["provider_request_path"]).read_text(encoding="utf-8")
     assert any(artifact["kind"] == "enrichment_provider_request" for artifact in artifacts)
     assert any(artifact["kind"] == "enrichment_provider_result" for artifact in artifacts)
     assert any(artifact["kind"] == "enrichment_result" for artifact in artifacts)
+
+
+def test_service_paid_provider_result_import_enforces_request_limit(tmp_path: Path) -> None:
+    keys_path = tmp_path / "API-keys.env"
+    keys_path.write_text("APOLLO_API_KEY=secret-value-not-printed\n", encoding="utf-8")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        enrichment=EnrichmentConfig(
+            enabled=True,
+            allow_paid_api=True,
+            api_keys_env=keys_path,
+            max_paid_provider_results_per_contact=1,
+            apollo=EnrichmentProviderConfig(enabled=True),
+        ),
+    )
+    service = BusinessCardService(config)
+    run_id, job_id = _record_candidate(config)
+
+    try:
+        service.request_enrichment(
+            job_id=job_id,
+            run_id=run_id,
+            mode="api",
+            requested_by="tester",
+            allow_paid_enrichment=True,
+            provider_results=[
+                {"person": {"name": "Ada Lovelace", "email": "ada@example.test"}},
+                {"person": {"name": "Ada Byron", "email": "ada.byron@example.test"}},
+            ],
+        )
+    except ValueError as exc:
+        assert "paid provider result import exceeds request limit" in str(exc)
+    else:
+        raise AssertionError("expected oversized paid provider result import to fail")
+
+    artifacts = read_jsonl(config.runs_dir / run_id / "artifacts.jsonl")
+    assert any(artifact["kind"] == "enrichment_provider_request" for artifact in artifacts)
+    assert not any(artifact["kind"] == "enrichment_provider_result" for artifact in artifacts)
 
 
 def _record_candidate(config: AppConfig) -> tuple[str, str]:

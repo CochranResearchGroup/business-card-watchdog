@@ -816,10 +816,17 @@ class BusinessCardService:
                 path=provider_request_path,
             )
             if provider_results:
+                max_provider_results = self.config.enrichment.max_paid_provider_results_per_contact
+                if len(provider_results) > max_provider_results:
+                    raise ValueError(
+                        "paid provider result import exceeds request limit: "
+                        f"{len(provider_results)} results for max {max_provider_results}"
+                    )
                 provider_result_payload = score_paid_api_provider_results(
                     candidate,
                     provider="apollo",
                     results=provider_results,
+                    max_results=max_provider_results,
                 )
                 provider_result_path = artifact_dir / "enrichment_provider_result.json"
                 provider_result_path.write_text(

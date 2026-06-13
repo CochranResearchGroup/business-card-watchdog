@@ -822,3 +822,24 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed with the index up to date.
 - `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+## Turn 47 | 2026-06-13
+
+Continued Plan 0004 execution with a paid-provider result import budget guard.
+
+Implemented:
+
+- Added `[enrichment] max_paid_provider_results_per_contact` user config with default `5`.
+- Paid-provider request artifacts now include `max_results`.
+- Paid-provider result artifacts now include `max_results` and `submitted_result_count`.
+- Oversized paid-provider result imports fail before writing provider result artifacts.
+- The bound is enforced at the shared service layer used by CLI, API, and MCP.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_config.py tests/test_enrichment.py -q` passed with 18 tests.
+- `.venv/bin/python -m pytest -q` passed with 137 tests.
+- `PYTHONPATH=src pytest -q` passed with 132 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.

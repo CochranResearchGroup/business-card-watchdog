@@ -228,6 +228,7 @@ def build_paid_api_provider_request(
         "allow_paid_enrichment": allow_paid_enrichment,
         "network_calls_made": 0,
         "paid_api_calls_attempted": 0,
+        "max_results": config.enrichment.max_paid_provider_results_per_contact,
         "api_key_env": config.enrichment.apollo.api_key_env,
         "api_key_available": apollo_ready.get("status") == "ready",
         "base_url": config.enrichment.apollo.base_url,
@@ -247,6 +248,7 @@ def score_paid_api_provider_results(
     *,
     provider: str,
     results: list[dict[str, Any]],
+    max_results: int | None = None,
 ) -> dict[str, Any]:
     spec = contact_candidate_to_spec(contact_candidate)
     normalized = [_normalize_provider_result(spec, result, index=index) for index, result in enumerate(results)]
@@ -258,6 +260,8 @@ def score_paid_api_provider_results(
         "cost_class": "paid_api",
         "network_calls_made": 0,
         "paid_api_calls_attempted": 0,
+        "max_results": max_results if max_results is not None else len(results),
+        "submitted_result_count": len(results),
         "results": normalized,
         "merge_proposals": _provider_merge_proposals(provider, normalized),
     }
