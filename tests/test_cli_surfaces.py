@@ -441,6 +441,49 @@ def test_cli_sinks_apply_decision_writes_zero_write_artifact(tmp_path: Path, cap
     assert readiness["readiness"]["schema"] == "business-card-watchdog.sink-apply-pilot-readiness.v1"
     assert readiness["readiness"]["writes_attempted"] == 0
 
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "sinks",
+                "adapter-request",
+                job_id,
+                "--run-id",
+                run_id,
+                "--phase",
+                "readback",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "sinks",
+                "readback-pilot",
+                job_id,
+                "--run-id",
+                run_id,
+                "--sink",
+                "google_contacts",
+                "--approved-by",
+                "cli-test",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    readback = json.loads(capsys.readouterr().out)
+    assert readback["pilot"]["schema"] == "business-card-watchdog.sink-readback-pilot.v1"
+    assert readback["pilot"]["writes_attempted"] == 0
+    assert readback["pilot"]["network_calls_made"] == 0
+
 
 def test_cli_sinks_adapter_request_writes_blocked_contract(tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.toml"

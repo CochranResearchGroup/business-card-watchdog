@@ -170,6 +170,60 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert run_next["executed"][0]["action"].startswith(("plan_", "prepare_", "record_", "assess_"))
 
 
+def test_api_sink_readback_pilot_writes_zero_write_artifact(tmp_path: Path) -> None:
+    from business_card_watchdog.api import create_app
+
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    config_path.write_text(
+        f'data_dir = "{data_dir}"\n'
+        "[watch]\ninputs = []\n"
+        "[sink]\ndry_run = true\ngoogle_contacts = true\n"
+        "[routing]\nrules = [{ match = \"email_domain\", value = \"*\", sinks = [\"google_contacts\"] }]\n",
+        encoding="utf-8",
+    )
+    run_id, job_id = make_recorded_run(
+        AppConfig(
+            config_path=config_path,
+            data_dir=data_dir,
+            sink=SinkConfig(google_contacts=True, dry_run=True),
+            routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+        )
+    )
+    client = TestClient(create_app(config_path))
+
+    client.post(
+        f"/runs/{run_id}/review-decisions",
+        json={
+            "reviewer": "api-batch",
+            "decisions": [
+                {
+                    "job_id": job_id,
+                    "action": "approve_for_routing",
+                    "field_corrections": {"full_name": "API Batch", "email": "api@example.test"},
+                }
+            ],
+        },
+    )
+    client.post(f"/jobs/{job_id}/sink-plan", params={"run_id": run_id})
+    client.post(f"/jobs/{job_id}/sink-apply-preflight", json={"run_id": run_id})
+    client.post(
+        f"/jobs/{job_id}/sink-apply-decision",
+        json={"run_id": run_id, "decision": "approve", "reviewer": "api-test"},
+    )
+    client.post(f"/jobs/{job_id}/sink-apply", json={"run_id": run_id, "apply": True, "simulate": True})
+    client.post(f"/jobs/{job_id}/sink-adapter-request", json={"run_id": run_id, "phase": "readback"})
+    readback_pilot = client.post(
+        f"/jobs/{job_id}/sink-readback-pilot",
+        json={"run_id": run_id, "sink": "google_contacts", "approved_by": "api-test"},
+    ).json()
+
+    assert readback_pilot["pilot"]["schema"] == "business-card-watchdog.sink-readback-pilot.v1"
+    assert readback_pilot["pilot"]["state"] == "verified"
+    assert readback_pilot["pilot"]["writes_attempted"] == 0
+    assert readback_pilot["pilot"]["network_calls_made"] == 0
+
+
 def test_api_enrichment_request_accepts_paid_provider_results(tmp_path: Path) -> None:
     from business_card_watchdog.api import create_app
 

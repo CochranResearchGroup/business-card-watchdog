@@ -608,6 +608,96 @@ def test_service_apply_sinks_for_job_uses_injected_write_executor(tmp_path: Path
     assert readback["request"]["requests"][0]["resource_id"] == "people/live123"
 
 
+def test_service_readback_pilot_writes_simulated_evidence(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+    service.preflight_sink_apply(job_id=job_id, run_id=run_id)
+    service.decide_sink_apply(job_id=job_id, run_id=run_id, decision="approve", reviewer="tester")
+    service.apply_sinks_for_job(job_id=job_id, run_id=run_id, apply=True, simulate=True)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="readback")
+
+    pilot = service.execute_sink_readback_pilot_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        approved_by="tester",
+    )
+    job = service.get_job(job_id, run_id=run_id)
+
+    assert pilot["pilot"]["schema"] == "business-card-watchdog.sink-readback-pilot.v1"
+    assert pilot["pilot"]["state"] == "verified"
+    assert pilot["pilot"]["simulated"] is True
+    assert pilot["pilot"]["writes_attempted"] == 0
+    assert pilot["pilot"]["network_calls_made"] == 0
+    assert pilot["pilot"]["readback"]["resource_id"].startswith("mock:google_contacts:")
+    assert any(artifact["kind"] == "sink_readback_pilot" for artifact in job["artifacts"])
+
+
+def test_service_readback_pilot_uses_injected_executor(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    calls: list[dict[str, object]] = []
+
+    def write(request: dict[str, object]) -> dict[str, object]:
+        return {
+            "sink": "google_contacts",
+            "network_calls_made": 1,
+            "writes_attempted": 1,
+            "write": {"resource_id": "people/live123", "serialization_key": request.get("serialization_key")},
+        }
+
+    def readback(request: dict[str, object]) -> dict[str, object]:
+        calls.append(request)
+        return {
+            "sink": "google_contacts",
+            "status": "live_readback_completed",
+            "network_calls_made": 1,
+            "writes_attempted": 0,
+            "readback": {
+                "resource_id": "people/live123",
+                "display": "Live Fixture",
+                "emails": ["fixture@example.test"],
+                "matched": True,
+            },
+        }
+
+    service = BusinessCardService(config, sink_write_executor=write, sink_readback_executor=readback)
+    service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="write")
+    service.preflight_sink_apply(job_id=job_id, run_id=run_id)
+    service.decide_sink_apply(job_id=job_id, run_id=run_id, decision="approve", reviewer="tester")
+    service.apply_sinks_for_job(job_id=job_id, run_id=run_id, apply=True)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="readback")
+
+    pilot = service.execute_sink_readback_pilot_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        approved_by="tester",
+        simulate=False,
+    )
+
+    assert calls[0]["sink"] == "google_contacts"
+    assert calls[0]["resource_id"] == "people/live123"
+    assert pilot["pilot"]["status"] == "live_readback_completed"
+    assert pilot["pilot"]["simulated"] is False
+    assert pilot["pilot"]["network_calls_made"] == 1
+    assert pilot["pilot"]["writes_attempted"] == 0
+    assert pilot["pilot"]["readback"]["emails"] == ["fixture@example.test"]
+
+
 def test_service_build_sink_adapter_request_writes_phase_artifact(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",

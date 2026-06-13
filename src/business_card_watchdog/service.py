@@ -29,6 +29,7 @@ from .models import CardJob, utc_now
 from .orchestrator import BatchOrchestrator
 from .review import build_review_submission, write_review_submission
 from .routing import decide_sinks
+from .sink_apply_adapters import execute_sink_readback_adapter
 from .sink_lookup_adapters import execute_sink_lookup_adapter
 from .sinks import (
     SinkAdapterPhase,
@@ -71,6 +72,7 @@ _ROUTE_ARTIFACT_FILES = {
     "sink_apply_pilot_readiness": "sink_apply_pilot_readiness.json",
     "sink_apply_result": "sink_apply_result.json",
     "sink_adapter_request_readback": "sink_adapter_request_readback.json",
+    "sink_readback_pilot": "sink_readback_pilot.json",
 }
 
 _ROUTE_REFRESH_STEPS = [
@@ -146,6 +148,12 @@ _ROUTE_REFRESH_STEPS = [
         "command": "sinks adapter-request --phase readback",
         "reason": "review changed routing-relevant contact data; refresh readback adapter request after apply",
     },
+    {
+        "kind": "sink_readback_pilot",
+        "action": "execute_sink_readback_pilot",
+        "command": "sinks readback-pilot",
+        "reason": "review changed routing-relevant contact data; refresh explicit readback pilot evidence",
+    },
 ]
 
 _REVIEW_BUNDLE_ARTIFACT_KINDS = {
@@ -177,6 +185,7 @@ _REVIEW_BUNDLE_ARTIFACT_KINDS = {
     "sink_apply_pilot_readiness",
     "sink_apply_result",
     "sink_adapter_request_readback",
+    "sink_readback_pilot",
     "route_refresh",
 }
 
@@ -188,10 +197,12 @@ class BusinessCardService:
         *,
         sink_lookup_executor: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
         sink_write_executor: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+        sink_readback_executor: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
     ) -> None:
         self.config = config
         self.sink_lookup_executor = sink_lookup_executor
         self.sink_write_executor = sink_write_executor
+        self.sink_readback_executor = sink_readback_executor
 
     def status(self) -> dict[str, Any]:
         ready, message = BusinessCardSkillAdapter(self.config).check_ready()
@@ -1917,6 +1928,94 @@ class BusinessCardService:
             "assessment": assessment,
         }
 
+    def execute_sink_readback_pilot_for_job(
+        self,
+        *,
+        job_id: str,
+        run_id: str,
+        sink: str,
+        approved_by: str,
+        readback: dict[str, Any] | None = None,
+        simulate: bool = True,
+    ) -> dict[str, Any]:
+        job = self.get_job(job_id, run_id=run_id)
+        artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
+        request_path = artifact_dir / "sink_adapter_request_readback.json"
+        if request_path.exists():
+            adapter_request = json.loads(request_path.read_text(encoding="utf-8"))
+        else:
+            adapter_request = self.build_sink_adapter_request_for_job(
+                job_id=job_id,
+                run_id=run_id,
+                phase="readback",
+            )["request"]
+        requests = [
+            request
+            for request in list(adapter_request.get("requests") or [])
+            if request.get("phase") == "readback" and request.get("sink") == sink
+        ]
+        if not requests:
+            raise ValueError(f"sink readback pilot request not found for sink: {sink}")
+        request = requests[0]
+        execution = None
+        if simulate:
+            readback_payload = readback or {
+                "resource_id": request.get("resource_id"),
+                "matched": bool(request.get("resource_id")),
+                "simulated": True,
+            }
+            network_calls_made = 0
+            status = "mock_readback_verified" if readback_payload.get("matched") else "mock_readback_missing"
+        else:
+            if self.sink_readback_executor is not None:
+                execution = self.sink_readback_executor(request)
+            else:
+                execution = execute_sink_readback_adapter(request)
+            readback_payload = dict(execution.get("readback") or {})
+            network_calls_made = int(execution.get("network_calls_made") or 0)
+            status = str(execution.get("status") or "live_readback_completed")
+        state = "verified" if readback_payload.get("matched") else "not_verified"
+        pilot = {
+            "schema": "business-card-watchdog.sink-readback-pilot.v1",
+            "state": state,
+            "status": status,
+            "job_id": job_id,
+            "run_id": run_id,
+            "sink": sink,
+            "approved_by": approved_by,
+            "simulated": simulate,
+            "read_only": True,
+            "writes_attempted": 0,
+            "network_calls_made": network_calls_made,
+            "request": request,
+            "readback": readback_payload,
+            "execution": execution,
+        }
+        pilot_path = artifact_dir / "sink_readback_pilot.json"
+        pilot_path.write_text(json.dumps(pilot, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        ledger.record_artifact(job_id=job_id, kind="sink_readback_pilot", path=pilot_path)
+        ledger.record_event(
+            "sink_readback_pilot_executed",
+            {
+                "job_id": job_id,
+                "run_id": run_id,
+                "sink": sink,
+                "approved_by": approved_by,
+                "pilot_path": str(pilot_path),
+                "state": state,
+                "writes_attempted": 0,
+                "network_calls_made": network_calls_made,
+            },
+        )
+        self._mark_route_artifact_refreshed(
+            artifact_dir,
+            job_id=job_id,
+            run_id=run_id,
+            kind="sink_readback_pilot",
+        )
+        return {"pilot_path": str(pilot_path), "pilot": pilot}
+
     def doctor(self) -> dict[str, Any]:
         status = self.status()
         checks = [
@@ -2330,6 +2429,12 @@ class BusinessCardService:
                         "action": "prepare_sink_readback_adapter",
                         "reason": "sink apply result exists; prepare blocked live readback adapter request",
                         "command": "sinks adapter-request --phase readback",
+                    }
+                if "sink_readback_pilot" not in artifact_kinds:
+                    return {
+                        "action": "execute_sink_readback_pilot",
+                        "reason": "readback adapter request exists; execute explicit read-only readback pilot",
+                        "command": "sinks readback-pilot",
                     }
                 return None
             if "sink_apply_pilot_readiness" not in artifact_kinds:

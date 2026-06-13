@@ -159,6 +159,14 @@ def build_parser() -> argparse.ArgumentParser:
     sinks_lookup_pilot.add_argument("--matches-json", default="[]")
     sinks_lookup_pilot.add_argument("--simulate", action=argparse.BooleanOptionalAction, default=True)
     sinks_lookup_pilot.add_argument("--json", action="store_true")
+    sinks_readback_pilot = sinks_sub.add_parser("readback-pilot")
+    sinks_readback_pilot.add_argument("job_id")
+    sinks_readback_pilot.add_argument("--run-id", required=True)
+    sinks_readback_pilot.add_argument("--sink", choices=["google_contacts", "odoo"], required=True)
+    sinks_readback_pilot.add_argument("--approved-by", required=True)
+    sinks_readback_pilot.add_argument("--readback-json", default="{}")
+    sinks_readback_pilot.add_argument("--simulate", action=argparse.BooleanOptionalAction, default=True)
+    sinks_readback_pilot.add_argument("--json", action="store_true")
     sinks_assess_duplicates = sinks_sub.add_parser("assess-duplicates")
     sinks_assess_duplicates.add_argument("job_id")
     sinks_assess_duplicates.add_argument("--run-id", required=True)
@@ -379,6 +387,15 @@ def main(argv: list[str] | None = None) -> int:
                 sink=args.sink,
                 approved_by=args.approved_by,
                 matches=json.loads(args.matches_json),
+                simulate=args.simulate,
+            )
+        elif args.sinks_command == "readback-pilot":
+            payload = service.execute_sink_readback_pilot_for_job(
+                job_id=args.job_id,
+                run_id=args.run_id,
+                sink=args.sink,
+                approved_by=args.approved_by,
+                readback=json.loads(args.readback_json),
                 simulate=args.simulate,
             )
         else:

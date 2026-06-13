@@ -1784,3 +1784,30 @@ Remaining:
 
 - Public CLI/API/MCP live write execution remains blocked pending an explicit operator-approved pilot surface.
 - Live readback execution is available as an adapter boundary but is not yet wired into a public pilot command.
+
+### Slice 0004-AY | 2026-06-13 | Explicit Readback Pilot Surface
+
+Implemented:
+
+- Added `sink_readback_pilot.json` artifacts for explicit read-only sink readback verification.
+- Added `BusinessCardService.execute_sink_readback_pilot_for_job` with simulated readback by default and injected/live readback execution when explicitly requested.
+- Readback pilots require `job_id`, `run_id`, `sink`, and `approved_by`; they always record `writes_attempted = 0`.
+- Added CLI `bcw sinks readback-pilot`.
+- Added API `POST /jobs/{job_id}/sink-readback-pilot`.
+- Added MCP tool `business_card_watchdog_sink_readback_pilot`.
+- Next-action readback now recommends the explicit readback pilot after a readback adapter request exists, but the safe agent-loop executor does not run it automatically.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py tests/test_sink_apply_adapters.py -q` passed with 87 tests.
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_sinks.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py tests/test_sink_apply_adapters.py -q` passed with 105 tests.
+- `.venv/bin/python -m pytest -q` passed with 168 tests.
+- `PYTHONPATH=src pytest -q` passed with 161 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+Remaining:
+
+- Live readback still requires explicit `--no-simulate`/API/MCP request and local sink auth; default tests remain offline.
+- Live write execution remains available only through injected service proof pending a public one-job write pilot command.

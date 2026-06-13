@@ -81,6 +81,13 @@ def create_app(config_path: Path | None = None):
         matches: list[dict[str, object]] = Field(default_factory=list)
         simulate: bool = True
 
+    class SinkReadbackPilotRequest(BaseModel):
+        run_id: str
+        sink: str
+        approved_by: str
+        readback: dict[str, object] = Field(default_factory=dict)
+        simulate: bool = True
+
     class RunNextActionsRequest(BaseModel):
         run_id: str | None = None
         limit: int = 10
@@ -282,6 +289,17 @@ def create_app(config_path: Path | None = None):
             sink=request.sink,
             approved_by=request.approved_by,
             matches=[dict(match) for match in request.matches],
+            simulate=request.simulate,
+        )
+
+    @app.post("/jobs/{job_id}/sink-readback-pilot")
+    def create_sink_readback_pilot(job_id: str, request: SinkReadbackPilotRequest = Body(...)) -> dict[str, object]:
+        return service().execute_sink_readback_pilot_for_job(
+            job_id=job_id,
+            run_id=request.run_id,
+            sink=request.sink,
+            approved_by=request.approved_by,
+            readback=dict(request.readback),
             simulate=request.simulate,
         )
 
