@@ -202,6 +202,30 @@ Remaining:
 - Enrichment merge approval remains manual through field corrections.
 - Live sink apply/reject/noop review actions remain follow-on work.
 
+### Slice 0004-G | 2026-06-13 | Sink Apply Preflight Gate
+
+Implemented:
+
+- `sink_apply_preflight.json` artifact generation for planned jobs.
+- Zero-write apply preflight schema with `writes_attempted = 0` and `network_calls_made = 0`.
+- Default preview mode that explains no live write was attempted.
+- Explicit `apply = true` path that remains blocked until live sink write/readback adapters exist.
+- Service `preflight_sink_apply` method.
+- CLI `bcw sinks apply-preflight`.
+- API `POST /jobs/{job_id}/sink-apply-preflight`.
+- MCP manifest and dispatcher entry for `business_card_watchdog_sink_apply_preflight`.
+- Agent next-action command updated from generic sink apply to apply preflight.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 35 tests.
+
+Remaining:
+
+- Live Google Contacts and Odoo/Odollo write/readback adapters remain blocked.
+- Sink-backed duplicate lookup remains follow-on work.
+- Automatic apply/reject/noop review actions remain follow-on work.
+
 ## `/goal` Objective
 
 Use this as the high-level `/goal` objective:

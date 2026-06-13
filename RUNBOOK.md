@@ -301,3 +301,19 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_review.py tests/test_service.py tests/test_cli_surfaces.py tests/test_mcp.py -q` passed with 27 tests.
 - `PYTHONPATH=src pytest tests/test_review.py tests/test_service.py tests/test_cli_surfaces.py tests/test_mcp.py -q` passed with 27 tests.
+
+## Turn 18 | 2026-06-13
+
+Continued Plan 0004 execution with a zero-write sink apply preflight gate.
+
+Implemented:
+
+- `sink_apply_preflight.json` artifacts for planned jobs.
+- Default preview mode that records no live write was attempted.
+- Explicit `apply = true` handling that remains blocked until live sink write/readback adapters exist.
+- Service, CLI, API, and MCP dispatcher surfaces for apply preflight.
+- Agent next-action command updated to `sinks apply-preflight`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 35 tests.

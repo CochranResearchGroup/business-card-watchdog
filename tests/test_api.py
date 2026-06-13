@@ -36,6 +36,9 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert client.get("/reviews", params={"run_id": run_id}).json()[0]["job_id"] == job_id
     assert client.post("/enrichment/check", json={"mode": "api", "run_id": run_id}).json()["checks"][0]["status"] == "blocked"
     assert client.post(f"/jobs/{job_id}/sink-plan", params={"run_id": run_id}).json()["plan"]["schema"] == "business-card-watchdog.sink-plan.v1"
+    preflight = client.post(f"/jobs/{job_id}/sink-apply-preflight", json={"run_id": run_id}).json()
+    assert preflight["preflight"]["schema"] == "business-card-watchdog.sink-apply-preflight.v1"
+    assert preflight["preflight"]["writes_attempted"] == 0
     review = client.post(
         f"/jobs/{job_id}/review",
         json={

@@ -11,6 +11,7 @@ from typing import Any, Literal
 SinkName = Literal["google_contacts", "odoo"]
 ReadinessStatus = Literal["ready", "blocked"]
 SINK_PLAN_SCHEMA = "business-card-watchdog.sink-plan.v1"
+SINK_APPLY_PREFLIGHT_SCHEMA = "business-card-watchdog.sink-apply-preflight.v1"
 
 
 FINGERPRINT_FIELDS = (
@@ -124,6 +125,58 @@ def build_sink_plan(
                 "readiness": payload.readiness.to_dict(),
             }
             for payload in payloads
+        ],
+    }
+
+
+def build_sink_apply_preflight(
+    *,
+    plan: dict[str, Any],
+    apply: bool,
+) -> dict[str, Any]:
+    actions = list(plan.get("actions") or [])
+    blocked_actions = [
+        action
+        for action in actions
+        if action.get("readiness", {}).get("status") != "ready"
+        or action.get("state") not in {"dry_run", "ready"}
+    ]
+    reasons = [
+        str(action.get("readiness", {}).get("reason") or "sink action is not ready")
+        for action in blocked_actions
+    ]
+    if apply:
+        state = "blocked"
+        reasons.append("live sink apply/readback is not implemented yet")
+    elif blocked_actions:
+        state = "blocked"
+    else:
+        state = "preview"
+        reasons.append("apply flag not set; no live write attempted")
+
+    return {
+        "schema": SINK_APPLY_PREFLIGHT_SCHEMA,
+        "state": state,
+        "apply_requested": apply,
+        "can_apply": False,
+        "writes_attempted": 0,
+        "network_calls_made": 0,
+        "reason": "; ".join(dict.fromkeys(reason for reason in reasons if reason)),
+        "plan_schema": plan.get("schema"),
+        "plan_state": plan.get("state"),
+        "job_id": plan.get("job_id"),
+        "run_id": plan.get("run_id"),
+        "actions": [
+            {
+                "sink": action.get("sink"),
+                "action": "preflight_apply",
+                "planned_action": action.get("action"),
+                "planned_state": action.get("state"),
+                "readiness": action.get("readiness", {}),
+                "serialization_key": action.get("serialization_key"),
+                "match_keys": action.get("match_keys", {}),
+            }
+            for action in actions
         ],
     }
 

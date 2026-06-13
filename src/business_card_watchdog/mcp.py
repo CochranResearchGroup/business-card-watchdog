@@ -142,6 +142,19 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_sink_apply_preflight",
+                "description": "Create a zero-write sink apply preflight artifact for one planned job.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "job_id": {"type": "string"},
+                        "run_id": {"type": "string"},
+                        "apply": {"type": "boolean", "default": False},
+                    },
+                    "required": ["job_id", "run_id"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_enrichment_check",
                 "description": "Report enrichment readiness and paid-provider gates without making provider calls.",
                 "input_schema": {
@@ -250,6 +263,12 @@ def call_tool(
             job_id=str(args["job_id"]),
             run_id=str(args["run_id"]),
             dry_run=bool(args.get("dry_run", True)),
+        )
+    if tool_name == "business_card_watchdog_sink_apply_preflight":
+        return service.preflight_sink_apply(
+            job_id=str(args["job_id"]),
+            run_id=str(args["run_id"]),
+            apply=bool(args.get("apply", False)),
         )
     if tool_name == "business_card_watchdog_enrichment_check":
         return service.enrichment_readiness(

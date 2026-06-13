@@ -31,6 +31,10 @@ def create_app(config_path: Path | None = None):
         allow_paid_enrichment: bool = False
         public_web_results: list[dict[str, object]] = Field(default_factory=list)
 
+    class SinkApplyPreflightRequest(BaseModel):
+        run_id: str
+        apply: bool = False
+
     app = FastAPI(title="Business Card Watchdog")
 
     def service() -> BusinessCardService:
@@ -107,6 +111,13 @@ def create_app(config_path: Path | None = None):
     @app.post("/jobs/{job_id}/sink-plan")
     def create_sink_plan(job_id: str, run_id: str, dry_run: bool = True) -> dict[str, object]:
         return service().plan_sinks_for_job(job_id=job_id, run_id=run_id, dry_run=dry_run)
+
+    @app.post("/jobs/{job_id}/sink-apply-preflight")
+    def create_sink_apply_preflight(
+        job_id: str,
+        request: SinkApplyPreflightRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().preflight_sink_apply(job_id=job_id, run_id=request.run_id, apply=request.apply)
 
     @app.post("/enrichment/check")
     def enrichment_check(request: EnrichmentRequest = Body(default=EnrichmentRequest(run_id=""))) -> dict[str, object]:

@@ -12,7 +12,7 @@ from .models import CardJob
 from .orchestrator import BatchOrchestrator
 from .review import build_review_submission, write_review_submission
 from .routing import decide_sinks
-from .sinks import build_sink_plan, check_sink_readiness
+from .sinks import build_sink_apply_preflight, build_sink_plan, check_sink_readiness
 from .skill_adapter import BusinessCardSkillAdapter
 from .watcher import PollingWatcher
 
@@ -372,6 +372,33 @@ class BusinessCardService:
         )
         return {"plan_path": str(plan_path), "plan": plan}
 
+    def preflight_sink_apply(self, *, job_id: str, run_id: str, apply: bool = False) -> dict[str, Any]:
+        job = self.get_job(job_id, run_id=run_id)
+        artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
+        plan_path = artifact_dir / "sink_plan.json"
+        if plan_path.exists():
+            plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        else:
+            plan = self.plan_sinks_for_job(job_id=job_id, run_id=run_id, dry_run=True)["plan"]
+        preflight = build_sink_apply_preflight(plan=plan, apply=apply)
+        preflight_path = artifact_dir / "sink_apply_preflight.json"
+        preflight_path.write_text(json.dumps(preflight, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        ledger.record_artifact(job_id=job_id, kind="sink_apply_preflight", path=preflight_path)
+        ledger.record_event(
+            "sink_apply_preflight_created",
+            {
+                "job_id": job_id,
+                "run_id": run_id,
+                "preflight_path": str(preflight_path),
+                "state": preflight["state"],
+                "apply_requested": apply,
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        return {"preflight_path": str(preflight_path), "preflight": preflight}
+
     def doctor(self) -> dict[str, Any]:
         status = self.status()
         checks = [
@@ -444,7 +471,7 @@ class BusinessCardService:
             return {
                 "action": "await_apply_approval",
                 "reason": "sink plan exists; live apply remains explicit and gated",
-                "command": "sinks apply",
+                "command": "sinks apply-preflight",
             }
         if state == "failed":
             return {
