@@ -23,6 +23,7 @@ def create_app(config_path: Path | None = None):
         field_corrections: dict[str, object] = Field(default_factory=dict)
         crop_selection: dict[str, object] = Field(default_factory=dict)
         approved_enrichment_fields: list[str] = Field(default_factory=list)
+        duplicate_resolution: dict[str, object] = Field(default_factory=dict)
         notes: str = ""
 
     class EnrichmentRequest(BaseModel):
@@ -92,6 +93,7 @@ def create_app(config_path: Path | None = None):
             field_corrections=dict(request.field_corrections),
             crop_selection=dict(request.crop_selection),
             approved_enrichment_fields=list(request.approved_enrichment_fields),
+            duplicate_resolution=dict(request.duplicate_resolution),
             notes=request.notes,
         )
 

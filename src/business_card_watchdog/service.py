@@ -178,6 +178,7 @@ class BusinessCardService:
         field_corrections: dict[str, Any] | None = None,
         crop_selection: dict[str, Any] | None = None,
         approved_enrichment_fields: list[str] | None = None,
+        duplicate_resolution: dict[str, Any] | None = None,
         notes: str = "",
     ) -> dict[str, Any]:
         if action not in {
@@ -185,6 +186,7 @@ class BusinessCardService:
             "approve_enrichment_merge",
             "keep_needs_review",
             "request_enrichment",
+            "resolve_duplicate",
             "reject_not_card",
             "skip",
         }:
@@ -199,6 +201,7 @@ class BusinessCardService:
             field_corrections=field_corrections,
             crop_selection=crop_selection,
             approved_enrichment_fields=approved_enrichment_fields,
+            duplicate_resolution=duplicate_resolution,
             notes=notes,
         )
         artifact_dir = Path(job.artifact_dir) if job.artifact_dir else self.config.runs_dir / run_id / "artifacts" / job_id
@@ -272,6 +275,45 @@ class BusinessCardService:
             if job.state != "needs_review":
                 job.transition_to("needs_review")
                 ledger.record_job(job)
+        elif action == "resolve_duplicate":
+            duplicate_path = artifact_dir / "duplicate_assessment.json"
+            if not duplicate_path.exists():
+                raise FileNotFoundError(f"duplicate assessment not found for job: {job_id}")
+            resolution = dict(duplicate_resolution or {})
+            decision = str(resolution.get("decision") or "")
+            if not decision:
+                raise ValueError("duplicate resolution decision is required")
+            resolution_payload = {
+                "schema": "business-card-watchdog.duplicate-resolution.v1",
+                "job_id": job_id,
+                "run_id": run_id,
+                "reviewer": reviewer,
+                "decision": decision,
+                "target_identity": resolution.get("target_identity"),
+                "reason": resolution.get("reason") or notes,
+                "duplicate_assessment": json.loads(duplicate_path.read_text(encoding="utf-8")),
+            }
+            resolution_path = artifact_dir / "duplicate_resolution.json"
+            resolution_path.write_text(
+                json.dumps(resolution_payload, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            ledger.record_artifact(job_id=job_id, kind="duplicate_resolution", path=resolution_path)
+            if decision == "noop":
+                job.transition_to("cancelled", error="duplicate resolved as no-op")
+            else:
+                job.transition_to("ready_to_route")
+            ledger.record_job(job)
+            ledger.record_event(
+                "duplicate_resolved",
+                {
+                    "job_id": job_id,
+                    "run_id": run_id,
+                    "reviewer": reviewer,
+                    "decision": decision,
+                    "resolution_path": str(resolution_path),
+                },
+            )
         elif action == "reject_not_card":
             job.transition_to("failed", error="review rejected image as not a business card")
             ledger.record_job(job)
@@ -413,6 +455,9 @@ class BusinessCardService:
         plan["job_id"] = job_id
         plan["run_id"] = run_id
         plan["decision"] = decision.to_dict()
+        duplicate_resolution_path = artifact_dir / "duplicate_resolution.json"
+        if duplicate_resolution_path.exists():
+            plan["duplicate_resolution"] = json.loads(duplicate_resolution_path.read_text(encoding="utf-8"))
         plan_path = artifact_dir / "sink_plan.json"
         plan_path.write_text(json.dumps(plan, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         ledger = RunLedger(self.config.runs_dir / run_id)

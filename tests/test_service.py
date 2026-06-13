@@ -332,6 +332,76 @@ def test_service_submit_review_approves_enrichment_merge(tmp_path: Path) -> None
     assert any(event["event_type"] == "enrichment_merge_reviewed" for event in events)
 
 
+def test_service_submit_review_resolves_duplicate_for_routing(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+    (artifact_dir / "duplicate_assessment.json").write_text(
+        json.dumps(
+            {
+                "schema": "business-card-watchdog.duplicate-assessment.v1",
+                "state": "strong_duplicate",
+                "matches": [{"match_type": "email", "serialization_key": "email:ada@example.test"}],
+                "reasons": ["email match"],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    service = BusinessCardService(config)
+
+    result = service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="resolve_duplicate",
+        duplicate_resolution={
+            "decision": "merge_existing",
+            "target_identity": "email:ada@example.test",
+            "reason": "same contact",
+        },
+    )
+    plan = service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+    resolution = json.loads((artifact_dir / "duplicate_resolution.json").read_text(encoding="utf-8"))
+    job = service.get_job(job_id, run_id=run_id)
+    events = [
+        json.loads(line)
+        for line in (config.runs_dir / run_id / "events.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+
+    assert result["job"]["state"] == "ready_to_route"
+    assert resolution["decision"] == "merge_existing"
+    assert job["state"] == "ready_to_route"
+    assert plan["plan"]["duplicate_resolution"]["decision"] == "merge_existing"
+    assert any(artifact["kind"] == "duplicate_resolution" for artifact in job["artifacts"])
+    assert any(event["event_type"] == "duplicate_resolved" for event in events)
+
+
+def test_service_submit_review_resolves_duplicate_noop_as_cancelled(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    run_id, job_id = make_recorded_run(config)
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+    (artifact_dir / "duplicate_assessment.json").write_text(
+        '{"schema": "business-card-watchdog.duplicate-assessment.v1", "state": "strong_duplicate"}\n',
+        encoding="utf-8",
+    )
+
+    result = BusinessCardService(config).submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="resolve_duplicate",
+        duplicate_resolution={"decision": "noop", "reason": "already imported"},
+    )
+
+    assert result["job"]["state"] == "cancelled"
+    assert result["job"]["error"] == "duplicate resolved as no-op"
+
+
 def test_service_get_missing_run_raises(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     service = BusinessCardService(config)

@@ -246,7 +246,29 @@ Remaining:
 - Live Google Contacts and Odoo/Odollo write/readback adapters remain blocked.
 - Sink-backed duplicate lookup remains follow-on work.
 - Automatic apply/reject/noop review actions remain follow-on work.
-- Duplicate merge/noop/create-new review actions remain follow-on work.
+
+### Slice 0004-I | 2026-06-13 | Duplicate Resolution Review Actions
+
+Implemented:
+
+- First-class review action `resolve_duplicate`.
+- Explicit duplicate decisions: `create_new`, `merge_existing`, and `noop`.
+- `duplicate_resolution.json` audit artifacts.
+- `duplicate_resolved` ledger events.
+- `create_new` and `merge_existing` transition reviewed duplicate jobs to `ready_to_route`.
+- `noop` transitions reviewed duplicate jobs to `cancelled`.
+- Sink plans carry `duplicate_resolution` forward when present.
+- Service, CLI, API, and MCP dispatcher surfaces support duplicate resolution.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_review.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 38 tests.
+
+Remaining:
+
+- Live Google Contacts and Odoo/Odollo write/readback adapters remain blocked.
+- Sink-backed duplicate lookup remains follow-on work.
+- Automatic apply/reject/noop sink apply actions remain follow-on work.
 
 ## `/goal` Objective
 

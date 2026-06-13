@@ -12,6 +12,7 @@ ReviewAction = Literal[
     "approve_enrichment_merge",
     "keep_needs_review",
     "request_enrichment",
+    "resolve_duplicate",
     "reject_not_card",
     "skip",
 ]
@@ -92,14 +93,17 @@ def build_review_submission(
     field_corrections: dict[str, Any] | None = None,
     crop_selection: dict[str, Any] | None = None,
     approved_enrichment_fields: list[str] | None = None,
+    duplicate_resolution: dict[str, Any] | None = None,
     notes: str = "",
 ) -> dict[str, Any]:
     field_corrections = field_corrections or {}
     crop_selection = crop_selection or {}
     approved_enrichment_fields = approved_enrichment_fields or []
+    duplicate_resolution = duplicate_resolution or {}
     _validate_field_corrections(field_corrections)
     _validate_crop_selection(crop_selection)
     _validate_approved_enrichment_fields(approved_enrichment_fields)
+    _validate_duplicate_resolution(duplicate_resolution)
     return {
         "schema": "business-card-watchdog.review-submission.v1",
         "job_id": job_id,
@@ -108,6 +112,7 @@ def build_review_submission(
         "field_corrections": field_corrections,
         "crop_selection": crop_selection,
         "approved_enrichment_fields": approved_enrichment_fields,
+        "duplicate_resolution": duplicate_resolution,
         "notes": notes,
     }
 
@@ -141,3 +146,15 @@ def _validate_approved_enrichment_fields(fields: list[str]) -> None:
     unknown = set(fields) - allowed
     if unknown:
         raise ValueError(f"unsupported enrichment fields: {', '.join(sorted(unknown))}")
+
+
+def _validate_duplicate_resolution(resolution: dict[str, Any]) -> None:
+    if not resolution:
+        return
+    allowed_keys = {"decision", "target_identity", "reason"}
+    unknown = set(resolution) - allowed_keys
+    if unknown:
+        raise ValueError(f"unsupported duplicate resolution keys: {', '.join(sorted(unknown))}")
+    decision = str(resolution.get("decision") or "").strip()
+    if decision not in {"create_new", "merge_existing", "noop"}:
+        raise ValueError("duplicate resolution decision must be create_new, merge_existing, or noop")

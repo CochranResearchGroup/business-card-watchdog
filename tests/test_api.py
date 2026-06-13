@@ -66,6 +66,20 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
         },
     ).json()
     assert merge["submission"]["approved_enrichment_fields"] == ["notes"]
+    (artifact_dir / "duplicate_assessment.json").write_text(
+        '{"schema": "business-card-watchdog.duplicate-assessment.v1", "state": "possible_duplicate"}\n',
+        encoding="utf-8",
+    )
+    duplicate = client.post(
+        f"/jobs/{job_id}/review",
+        json={
+            "run_id": run_id,
+            "reviewer": "api-test",
+            "action": "resolve_duplicate",
+            "duplicate_resolution": {"decision": "create_new", "reason": "confirmed separate contact"},
+        },
+    ).json()
+    assert duplicate["submission"]["duplicate_resolution"]["decision"] == "create_new"
     review = client.post(
         f"/jobs/{job_id}/review",
         json={

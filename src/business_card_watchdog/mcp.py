@@ -112,6 +112,7 @@ def tool_manifest() -> dict[str, object]:
                                 "approve_enrichment_merge",
                                 "keep_needs_review",
                                 "request_enrichment",
+                                "resolve_duplicate",
                                 "reject_not_card",
                                 "skip",
                             ],
@@ -120,6 +121,7 @@ def tool_manifest() -> dict[str, object]:
                         "field_corrections": {"type": "object"},
                         "crop_selection": {"type": "object"},
                         "approved_enrichment_fields": {"type": "array", "items": {"type": "string"}},
+                        "duplicate_resolution": {"type": "object"},
                         "notes": {"type": "string"},
                     },
                     "required": ["job_id", "run_id"],
@@ -257,6 +259,7 @@ def call_tool(
             field_corrections=dict(args.get("field_corrections") or {}),
             crop_selection=dict(args.get("crop_selection") or {}),
             approved_enrichment_fields=list(args.get("approved_enrichment_fields") or []),
+            duplicate_resolution=dict(args.get("duplicate_resolution") or {}),
             notes=str(args.get("notes") or ""),
         )
     if tool_name == "business_card_watchdog_sinks_check":

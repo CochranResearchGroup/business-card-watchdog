@@ -173,6 +173,41 @@ def test_cli_jobs_review_approves_enrichment_merge(tmp_path: Path, capsys) -> No
     assert payload["submission"]["approved_enrichment_fields"] == ["notes"]
 
 
+def test_cli_jobs_review_resolves_duplicate(tmp_path: Path, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+    run_id, job_id = make_recorded_run(AppConfig(config_path=config_path, data_dir=data_dir))
+    artifact_dir = data_dir / "runs" / run_id / "artifacts" / job_id
+    (artifact_dir / "duplicate_assessment.json").write_text(
+        '{"schema": "business-card-watchdog.duplicate-assessment.v1", "state": "strong_duplicate"}\n',
+        encoding="utf-8",
+    )
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "jobs",
+                "review",
+                job_id,
+                "--run-id",
+                run_id,
+                "--action",
+                "resolve_duplicate",
+                "--duplicate-resolution-json",
+                '{"decision": "create_new", "reason": "operator confirmed separate person"}',
+                "--json",
+            ]
+        )
+        == 0
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["job"]["state"] == "ready_to_route"
+    assert payload["submission"]["duplicate_resolution"]["decision"] == "create_new"
+
+
 def test_cli_sinks_check_is_dry_run_and_non_mutating(tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.toml"
     write_config(config_path, tmp_path / "data")

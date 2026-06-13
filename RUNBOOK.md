@@ -334,3 +334,20 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_contact.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 33 tests.
+
+## Turn 20 | 2026-06-13
+
+Continued Plan 0004 execution with duplicate resolution review actions.
+
+Implemented:
+
+- Added review action `resolve_duplicate`.
+- Added duplicate decisions `create_new`, `merge_existing`, and `noop`.
+- Duplicate resolution writes `duplicate_resolution.json` and `duplicate_resolved` events.
+- `create_new` and `merge_existing` move jobs to `ready_to_route`; `noop` cancels the job.
+- Sink plans include the duplicate resolution artifact when present.
+- Service, CLI, API, and MCP dispatcher surfaces support duplicate resolution.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_review.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 38 tests.

@@ -26,6 +26,7 @@ def test_manifest_has_process_tool() -> None:
     review_tool = next(tool for tool in manifest["tools"] if tool["name"] == "business_card_watchdog_job_review")
     assert "approve_enrichment_merge" in review_tool["input_schema"]["properties"]["action"]["enum"]
     assert "request_enrichment" in review_tool["input_schema"]["properties"]["action"]["enum"]
+    assert "resolve_duplicate" in review_tool["input_schema"]["properties"]["action"]["enum"]
     assert "reject_not_card" in review_tool["input_schema"]["properties"]["action"]["enum"]
     assert "skip" in review_tool["input_schema"]["properties"]["action"]["enum"]
 
@@ -49,6 +50,10 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
         ),
         encoding="utf-8",
     )
+    (artifact_dir / "duplicate_assessment.json").write_text(
+        '{"schema": "business-card-watchdog.duplicate-assessment.v1", "state": "possible_duplicate"}\n',
+        encoding="utf-8",
+    )
 
     summary = call_tool("business_card_watchdog_run_summary", {"run_id": run_id}, config=config)
     next_actions = call_tool("business_card_watchdog_next_actions", {"run_id": run_id}, config=config)
@@ -68,6 +73,16 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
         },
         config=config,
     )
+    duplicate = call_tool(
+        "business_card_watchdog_job_review",
+        {
+            "job_id": job_id,
+            "run_id": run_id,
+            "action": "resolve_duplicate",
+            "duplicate_resolution": {"decision": "create_new", "reason": "separate contact"},
+        },
+        config=config,
+    )
 
     assert summary["needs_review_count"] == 1
     assert next_actions["actions"][0]["action"] == "review_contact"
@@ -75,6 +90,7 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert preflight["preflight"]["state"] == "preview"
     assert preflight["preflight"]["writes_attempted"] == 0
     assert merge["submission"]["approved_enrichment_fields"] == ["notes"]
+    assert duplicate["submission"]["duplicate_resolution"]["decision"] == "create_new"
 
 
 def test_mcp_call_tool_rejects_unknown_tool(tmp_path: Path) -> None:
