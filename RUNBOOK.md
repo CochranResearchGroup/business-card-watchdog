@@ -967,3 +967,23 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed with the index up to date.
 - `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+## Turn 54 | 2026-06-13
+
+Continued Plan 0004 execution with profile URL contact points.
+
+Implemented:
+
+- Contact candidates now derive `profile_url` contact points from extra profile/social URL fields such as `linkedin`, `linkedin_url`, `profile_url`, `social_url`, and `social_profile`.
+- Profile URLs are normalized with scheme, host casing, `www.` removal, and trailing-slash cleanup.
+- Reviewed contacts and enrichment-merged contacts now preserve `extras` from the base candidate.
+- Profile URL contact points remain outside canonical flat contact fields, so they cannot overwrite card-observed name, email, phone, website, or notes.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_contact.py -q` passed with 5 tests.
+- `.venv/bin/python -m pytest -q` passed with 142 tests.
+- `PYTHONPATH=src pytest -q` passed with 137 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.

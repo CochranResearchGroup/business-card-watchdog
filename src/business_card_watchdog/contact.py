@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 
 
 CONTACT_FIELDS = ("full_name", "organization", "title", "email", "phone", "website", "notes")
+PROFILE_URL_FIELDS = ("linkedin", "linkedin_url", "profile_url", "profile", "social_url", "social_profile")
 CONTACT_CANDIDATE_SCHEMA = "business-card-watchdog.contact-candidate.v1"
 REVIEWED_CONTACT_SCHEMA = "business-card-watchdog.reviewed-contact.v1"
 ENRICHMENT_MERGE_REVIEW_SCHEMA = "business-card-watchdog.enrichment-merge-review.v1"
@@ -29,6 +30,11 @@ def build_contact_candidate(
         field: _normalize_field(field, str(payload["value"]), default_country=default_country)
         for field, payload in observed.items()
     }
+    extras = {
+        key: value
+        for key, value in spec.items()
+        if key not in CONTACT_FIELDS and value not in (None, "", [], {})
+    }
     candidate: dict[str, Any] = {
         "schema": CONTACT_CANDIDATE_SCHEMA,
         "source": source,
@@ -37,13 +43,9 @@ def build_contact_candidate(
         },
         "observed": observed,
         "normalized": normalized,
-        "contact_points": _contact_points(normalized, observed),
+        "contact_points": _contact_points(normalized, observed, extras),
         "name_parts": _name_parts(normalized.get("full_name", {}).get("value", "")),
-        "extras": {
-            key: value
-            for key, value in spec.items()
-            if key not in CONTACT_FIELDS and value not in (None, "", [], {})
-        },
+        "extras": extras,
     }
     candidate["flat"] = contact_candidate_to_spec(candidate)
     return candidate
@@ -82,6 +84,7 @@ def apply_review_corrections(
         },
         "observed": dict(candidate.get("observed") or {}),
         "normalized": dict(candidate.get("normalized") or {}),
+        "extras": dict(candidate.get("extras") or {}),
         "corrections": {},
     }
     for field, value in field_corrections.items():
@@ -99,7 +102,11 @@ def apply_review_corrections(
             "reviewer": reviewer,
         }
     reviewed["name_parts"] = _name_parts(reviewed["normalized"].get("full_name", {}).get("value", ""))
-    reviewed["contact_points"] = _contact_points(reviewed["normalized"], reviewed["observed"])
+    reviewed["contact_points"] = _contact_points(
+        reviewed["normalized"],
+        reviewed["observed"],
+        reviewed["extras"],
+    )
     reviewed["flat"] = contact_candidate_to_spec(reviewed)
     return reviewed
 
@@ -122,6 +129,7 @@ def apply_enrichment_proposals(
         },
         "observed": dict(candidate.get("observed") or {}),
         "normalized": dict(candidate.get("normalized") or {}),
+        "extras": dict(candidate.get("extras") or {}),
         "corrections": dict(candidate.get("corrections") or {}),
         "merge_approvals": [],
     }
@@ -153,7 +161,11 @@ def apply_enrichment_proposals(
         reviewed["merge_approvals"].append(approval)
         applied.append(approval)
     reviewed["name_parts"] = _name_parts(reviewed["normalized"].get("full_name", {}).get("value", ""))
-    reviewed["contact_points"] = _contact_points(reviewed["normalized"], reviewed["observed"])
+    reviewed["contact_points"] = _contact_points(
+        reviewed["normalized"],
+        reviewed["observed"],
+        reviewed["extras"],
+    )
     reviewed["flat"] = contact_candidate_to_spec(reviewed)
     return reviewed, {
         "schema": ENRICHMENT_MERGE_REVIEW_SCHEMA,
@@ -237,7 +249,11 @@ def _merge_enrichment_value(field: str, normalized: dict[str, Any], value: str) 
     return f"{existing_value}\n{value}"
 
 
-def _contact_points(normalized: dict[str, Any], observed: dict[str, Any]) -> list[dict[str, Any]]:
+def _contact_points(
+    normalized: dict[str, Any],
+    observed: dict[str, Any],
+    extras: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     points: list[dict[str, Any]] = []
     for field, kind in (("email", "email"), ("phone", "phone"), ("website", "website")):
         payload = normalized.get(field) if isinstance(normalized.get(field), dict) else {}
@@ -255,6 +271,37 @@ def _contact_points(normalized: dict[str, Any], observed: dict[str, Any]) -> lis
                 "reason": payload.get("reason") or "",
             }
         )
+    seen_values = {str(point.get("value") or "") for point in points}
+    for point in _profile_contact_points(extras or {}):
+        if str(point.get("value") or "") in seen_values:
+            continue
+        points.append(point)
+        seen_values.add(str(point.get("value") or ""))
+    return points
+
+
+def _profile_contact_points(extras: dict[str, Any]) -> list[dict[str, Any]]:
+    points: list[dict[str, Any]] = []
+    for key, raw_value in extras.items():
+        if key not in PROFILE_URL_FIELDS:
+            continue
+        values = raw_value if isinstance(raw_value, list) else [raw_value]
+        for item in values:
+            raw = str(item or "").strip()
+            if not raw:
+                continue
+            normalized = _normalize_website(raw)
+            points.append(
+                {
+                    "kind": "profile_url",
+                    "value": normalized,
+                    "source": "business_card_skill",
+                    "raw": raw,
+                    "confidence": "high" if normalized.startswith("https://") else "review",
+                    "reason": "normalized profile URL",
+                    "label": key,
+                }
+            )
     return points
 
 

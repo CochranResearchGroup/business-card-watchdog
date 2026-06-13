@@ -75,7 +75,12 @@ def test_contact_candidate_marks_non_default_country_phone_for_review() -> None:
 
 
 def test_review_corrections_create_reviewed_contact_without_losing_observed_fields() -> None:
-    candidate = build_contact_candidate({"organization": "Fixture Labs"})
+    candidate = build_contact_candidate(
+        {
+            "organization": "Fixture Labs",
+            "linkedin": "linkedin.com/in/grace-hopper",
+        }
+    )
 
     reviewed = apply_review_corrections(
         candidate,
@@ -91,11 +96,58 @@ def test_review_corrections_create_reviewed_contact_without_losing_observed_fiel
     assert reviewed["observed"]["full_name"]["source"] == "operator_review"
     assert reviewed["normalized"]["email"]["value"] == "grace@example.test"
     assert reviewed["contact_points"][0]["source"] == "operator_review"
+    assert reviewed["extras"]["linkedin"] == "linkedin.com/in/grace-hopper"
+    assert {
+        "kind": "profile_url",
+        "value": "https://linkedin.com/in/grace-hopper",
+        "source": "business_card_skill",
+        "raw": "linkedin.com/in/grace-hopper",
+        "confidence": "high",
+        "reason": "normalized profile URL",
+        "label": "linkedin",
+    } in reviewed["contact_points"]
     assert reviewed["flat"]["full_name"] == "Grace Hopper"
 
 
+def test_contact_candidate_adds_profile_url_contact_points_from_extras() -> None:
+    candidate = build_contact_candidate(
+        {
+            "full_name": "Ada Lovelace",
+            "linkedin_url": "https://www.linkedin.com/in/ada-lovelace/",
+            "social_profile": ["github.com/ada"],
+        }
+    )
+
+    assert candidate["extras"]["linkedin_url"] == "https://www.linkedin.com/in/ada-lovelace/"
+    assert {
+        "kind": "profile_url",
+        "value": "https://linkedin.com/in/ada-lovelace",
+        "source": "business_card_skill",
+        "raw": "https://www.linkedin.com/in/ada-lovelace/",
+        "confidence": "high",
+        "reason": "normalized profile URL",
+        "label": "linkedin_url",
+    } in candidate["contact_points"]
+    assert {
+        "kind": "profile_url",
+        "value": "https://github.com/ada",
+        "source": "business_card_skill",
+        "raw": "github.com/ada",
+        "confidence": "high",
+        "reason": "normalized profile URL",
+        "label": "social_profile",
+    } in candidate["contact_points"]
+    assert "linkedin_url" not in candidate["flat"]
+
+
 def test_enrichment_proposals_apply_only_approved_fields() -> None:
-    candidate = build_contact_candidate({"full_name": "Ada Lovelace", "notes": "Card note"})
+    candidate = build_contact_candidate(
+        {
+            "full_name": "Ada Lovelace",
+            "notes": "Card note",
+            "profile_url": "example.test/ada",
+        }
+    )
 
     reviewed, merge_review = apply_enrichment_proposals(
         candidate,
@@ -123,4 +175,6 @@ def test_enrichment_proposals_apply_only_approved_fields() -> None:
     assert reviewed["observed"]["notes"]["source"] == "approved_enrichment"
     assert "Card note" in reviewed["flat"]["notes"]
     assert "corroboration" in reviewed["flat"]["notes"]
+    assert reviewed["extras"]["profile_url"] == "example.test/ada"
+    assert any(point["kind"] == "profile_url" for point in reviewed["contact_points"])
     assert "title" not in reviewed["flat"]
