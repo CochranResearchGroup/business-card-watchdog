@@ -2850,6 +2850,10 @@ class BusinessCardService:
             "corrected_email",
             "corrected_phone",
             "corrected_website",
+            "approved_enrichment_fields",
+            "duplicate_decision",
+            "duplicate_target_identity",
+            "duplicate_reason",
             "review_notes",
             "skip_import",
             "decision_template_json",
@@ -2904,6 +2908,18 @@ class BusinessCardService:
                     field_corrections[field] = value
             if field_corrections:
                 decision["field_corrections"] = field_corrections
+            approved_fields = self._split_workbook_list(row.get("approved_enrichment_fields"))
+            if approved_fields:
+                decision["approved_enrichment_fields"] = approved_fields
+            duplicate_decision = str(row.get("duplicate_decision") or "").strip()
+            if duplicate_decision:
+                duplicate_resolution = dict(decision.get("duplicate_resolution") or {})
+                duplicate_resolution["decision"] = duplicate_decision
+                if row.get("duplicate_target_identity"):
+                    duplicate_resolution["target_identity"] = str(row["duplicate_target_identity"]).strip()
+                if row.get("duplicate_reason"):
+                    duplicate_resolution["reason"] = str(row["duplicate_reason"]).strip()
+                decision["duplicate_resolution"] = duplicate_resolution
             for column, key in [
                 ("field_corrections_json", "field_corrections"),
                 ("crop_selection_json", "crop_selection"),
@@ -2963,10 +2979,24 @@ class BusinessCardService:
             "corrected_email": self._review_contact_value(contact, "email"),
             "corrected_phone": self._review_contact_value(contact, "phone"),
             "corrected_website": self._review_contact_value(contact, "website"),
+            "approved_enrichment_fields": "",
+            "duplicate_decision": "",
+            "duplicate_target_identity": "",
+            "duplicate_reason": "",
             "review_notes": "",
             "skip_import": "",
             "decision_template_json": json.dumps(decision_template, sort_keys=True),
         }
+
+    def _split_workbook_list(self, value: Any) -> list[str]:
+        text = str(value or "").strip()
+        if not text:
+            return []
+        separators = [",", ";"]
+        for separator in separators:
+            if separator in text:
+                return [item.strip() for item in text.split(separator) if item.strip()]
+        return [text]
 
     def _review_contact_value(self, contact: dict[str, Any], field: str) -> str:
         flat = contact.get("flat")

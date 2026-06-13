@@ -2125,3 +2125,21 @@ Validation:
 Remaining:
 
 - More specialized workbook helpers for duplicate resolution and enrichment approval can be added later without changing the shared review-decision importer.
+
+### Slice 0004-BN | 2026-06-13 | Workbook Enrichment And Duplicate Decision Columns
+
+Implemented:
+
+- Added workbook columns for `approved_enrichment_fields`, `duplicate_decision`, `duplicate_target_identity`, and `duplicate_reason`.
+- CSV workbook imports now translate those columns into the existing `approved_enrichment_fields` and `duplicate_resolution` review-decision fields.
+- Added service regression coverage for approving enrichment merge proposals from workbook rows.
+- Added service regression coverage for resolving duplicates from workbook rows.
+- Kept the import path on shared review submission, preserving existing validation, artifacts, route refresh behavior, and zero-network/zero-write boundaries.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_run_summary_and_review_queue tests/test_service.py::test_service_apply_review_workbook_csv_uses_decision_template_json tests/test_service.py::test_service_apply_review_workbook_csv_supports_enrichment_columns tests/test_service.py::test_service_apply_review_workbook_csv_supports_duplicate_resolution_columns -q` passed with 4 tests.
+
+Remaining:
+
+- Workbook convenience columns now cover normal field correction, enrichment approval, and duplicate resolution; future work can add richer validation previews before import.

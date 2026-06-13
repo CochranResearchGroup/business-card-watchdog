@@ -471,6 +471,94 @@ def test_service_apply_review_workbook_csv_uses_decision_template_json(tmp_path:
     assert job["state"] == "ready_to_route"
 
 
+def test_service_apply_review_workbook_csv_supports_enrichment_columns(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+        field_corrections={"full_name": "Card Name", "email": "card@example.test", "notes": "Card note"},
+    )
+    (artifact_dir / "enrichment_result.json").write_text(
+        json.dumps(
+            {
+                "schema": "business-card-watchdog.enrichment-result.v1",
+                "merge_proposals": [
+                    {
+                        "field": "notes",
+                        "value": "Public-web corroboration candidate: https://example.test/card",
+                        "source": "public_web",
+                    }
+                ],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    workbook = service.review_workbook(run_id=run_id)
+    rows = list(csv.DictReader(StringIO(workbook["csv"])))
+    rows[0]["review_action"] = "approve_enrichment_merge"
+    rows[0]["approved_enrichment_fields"] = "notes"
+    output = StringIO()
+    writer = csv.DictWriter(output, fieldnames=list(rows[0]))
+    writer.writeheader()
+    writer.writerows(rows)
+
+    payload = service.apply_review_workbook_csv(
+        run_id=run_id,
+        reviewer="workbook-reviewer",
+        csv_text=output.getvalue(),
+    )
+    reviewed = json.loads((artifact_dir / "reviewed_contact.json").read_text(encoding="utf-8"))
+
+    assert payload["results"][0]["action"] == "approve_enrichment_merge"
+    assert "Public-web corroboration candidate" in reviewed["flat"]["notes"]
+
+
+def test_service_apply_review_workbook_csv_supports_duplicate_resolution_columns(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+    (artifact_dir / "duplicate_assessment.json").write_text(
+        json.dumps(
+            {
+                "schema": "business-card-watchdog.duplicate-assessment.v1",
+                "state": "strong_duplicate",
+                "matches": [{"match_type": "email", "serialization_key": "email:card@example.test"}],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    workbook = service.review_workbook(run_id=run_id)
+    rows = list(csv.DictReader(StringIO(workbook["csv"])))
+    rows[0]["review_action"] = "resolve_duplicate"
+    rows[0]["duplicate_decision"] = "merge_existing"
+    rows[0]["duplicate_target_identity"] = "email:card@example.test"
+    rows[0]["duplicate_reason"] = "same person confirmed"
+    output = StringIO()
+    writer = csv.DictWriter(output, fieldnames=list(rows[0]))
+    writer.writeheader()
+    writer.writerows(rows)
+
+    payload = service.apply_review_workbook_csv(
+        run_id=run_id,
+        reviewer="workbook-reviewer",
+        csv_text=output.getvalue(),
+    )
+    resolution = json.loads((artifact_dir / "duplicate_resolution.json").read_text(encoding="utf-8"))
+
+    assert payload["results"][0]["action"] == "resolve_duplicate"
+    assert payload["results"][0]["job_state"] == "ready_to_route"
+    assert resolution["decision"] == "merge_existing"
+    assert resolution["target_identity"] == "email:card@example.test"
+
+
 def test_service_plan_sinks_for_job_writes_dry_run_plan(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",
