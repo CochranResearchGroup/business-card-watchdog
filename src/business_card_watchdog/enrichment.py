@@ -3,12 +3,16 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlparse
 
 from .config import AppConfig
+from .contact import contact_candidate_to_spec
 
 
 EnrichmentMode = Literal["none", "public_web", "api", "all"]
 EnrichmentReadinessStatus = Literal["ready", "blocked"]
+ENRICHMENT_REQUEST_SCHEMA = "business-card-watchdog.enrichment-request.v1"
+ENRICHMENT_RESULT_SCHEMA = "business-card-watchdog.enrichment-result.v1"
 
 
 @dataclass(frozen=True)
@@ -78,6 +82,67 @@ def check_enrichment_readiness(
     return readiness
 
 
+def build_enrichment_request(
+    contact_candidate: dict[str, Any],
+    *,
+    mode: str,
+    allow_paid_enrichment: bool = False,
+    requested_by: str = "operator",
+) -> dict[str, Any]:
+    spec = contact_candidate_to_spec(contact_candidate)
+    return {
+        "schema": ENRICHMENT_REQUEST_SCHEMA,
+        "mode": mode,
+        "requested_by": requested_by,
+        "allow_paid_enrichment": allow_paid_enrichment,
+        "cost_gate": _cost_gate(mode, allow_paid_enrichment=allow_paid_enrichment),
+        "queries": build_public_web_queries(spec) if mode in {"public_web", "all"} else [],
+        "observed": {
+            key: spec[key]
+            for key in ("full_name", "organization", "email", "phone", "website")
+            if spec.get(key)
+        },
+    }
+
+
+def score_public_web_results(
+    contact_candidate: dict[str, Any],
+    *,
+    results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    spec = contact_candidate_to_spec(contact_candidate)
+    scored = [_score_result(spec, result, index=index) for index, result in enumerate(results)]
+    scored.sort(key=lambda row: int(row["score"]), reverse=True)
+    return {
+        "schema": ENRICHMENT_RESULT_SCHEMA,
+        "provider": "public_web",
+        "cost_class": "operator_search",
+        "network_calls_made": 0,
+        "results": scored,
+        "merge_proposals": _merge_proposals(spec, scored),
+    }
+
+
+def build_public_web_queries(spec: dict[str, Any], *, max_queries: int = 8) -> list[dict[str, Any]]:
+    queries: list[dict[str, Any]] = []
+    email = str(spec.get("email") or "").strip().lower()
+    phone = str(spec.get("phone") or "").strip()
+    full_name = str(spec.get("full_name") or "").strip()
+    organization = str(spec.get("organization") or "").strip()
+    website = str(spec.get("website") or "").strip()
+    if email:
+        queries.append({"query": f'"{email}"', "purpose": "exact_email", "required": True})
+    if phone:
+        queries.append({"query": f'"{phone}"', "purpose": "exact_phone", "required": True})
+    if full_name and organization:
+        queries.append({"query": f'"{full_name}" "{organization}"', "purpose": "name_organization"})
+    if full_name and website:
+        queries.append({"query": f'"{full_name}" site:{_host(website)}', "purpose": "name_site"})
+    if organization and website:
+        queries.append({"query": f'"{organization}" site:{_host(website)}', "purpose": "organization_site"})
+    return queries[:max_queries]
+
+
 def _apollo_readiness(config: AppConfig, *, allow_paid_enrichment: bool) -> EnrichmentReadiness:
     provider = config.enrichment.apollo
     if not provider.enabled:
@@ -113,6 +178,59 @@ def _apollo_readiness(config: AppConfig, *, allow_paid_enrichment: bool) -> Enri
         reason="Apollo API key name is present; no provider call was made",
         cost_class="paid_api",
     )
+
+
+def _cost_gate(mode: str, *, allow_paid_enrichment: bool) -> dict[str, Any]:
+    return {
+        "paid_api_requested": mode in {"api", "all"},
+        "paid_api_allowed": bool(allow_paid_enrichment),
+        "can_call_paid_api": mode in {"api", "all"} and bool(allow_paid_enrichment),
+    }
+
+
+def _score_result(spec: dict[str, Any], result: dict[str, Any], *, index: int) -> dict[str, Any]:
+    title = str(result.get("title") or result.get("name") or "").strip()
+    url = str(result.get("url") or result.get("link") or "").strip()
+    snippet = str(result.get("snippet") or result.get("description") or "").strip()
+    text = " ".join([title, url, snippet]).casefold()
+    score = 0
+    signals: list[str] = []
+    for field, points in (("email", 40), ("phone", 30), ("full_name", 20), ("organization", 15)):
+        value = str(spec.get(field) or "").strip()
+        if value and value.casefold() in text:
+            score += points
+            signals.append(field)
+    website = str(spec.get("website") or "").strip()
+    if website and _host(website) and _host(website) in _host(url):
+        score += 15
+        signals.append("website_host")
+    return {
+        "rank": index + 1,
+        "score": score,
+        "signals": signals,
+        "title": title,
+        "url": url,
+        "snippet": snippet,
+    }
+
+
+def _merge_proposals(spec: dict[str, Any], scored: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not scored or int(scored[0].get("score") or 0) < 40:
+        return []
+    return [
+        {
+            "field": "notes",
+            "value": f"Public-web corroboration candidate: {scored[0]['url']}",
+            "source": "public_web",
+            "requires_review": True,
+        }
+    ]
+
+
+def _host(url: str) -> str:
+    parsed = urlparse(url if "://" in url else f"https://{url}")
+    host = parsed.netloc.lower()
+    return host[4:] if host.startswith("www.") else host
 
 
 def _present_env_keys(path: Path) -> set[str]:

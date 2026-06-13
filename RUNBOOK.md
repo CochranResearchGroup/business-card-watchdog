@@ -234,3 +234,20 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 16 tests.
 - `PYTHONPATH=src pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 15 tests and 1 skipped optional API-extra test.
+
+## Turn 14 | 2026-06-13
+
+Continued Plan 0004 execution with enrichment request/result artifacts.
+
+Implemented:
+
+- `enrichment_request.json` artifacts for selected jobs.
+- Fixture-backed `enrichment_result.json` artifacts for public-web results supplied by the caller.
+- Deterministic public-web query generation and result scoring.
+- Review-required merge proposals that do not overwrite observed card fields.
+- Service, CLI, API, and MCP-manifest surfaces for enrichment requests.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_enrichment.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 14 tests.
+- `PYTHONPATH=src pytest tests/test_enrichment.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 13 tests and 1 skipped optional API-extra test.

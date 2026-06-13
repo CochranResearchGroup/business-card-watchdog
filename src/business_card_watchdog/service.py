@@ -6,7 +6,7 @@ from typing import Any
 
 from .config import AppConfig, ensure_runtime_dirs
 from .contact import apply_review_corrections, build_contact_candidate
-from .enrichment import check_enrichment_readiness
+from .enrichment import build_enrichment_request, check_enrichment_readiness, score_public_web_results
 from .ledger import RunLedger
 from .models import CardJob
 from .orchestrator import BatchOrchestrator
@@ -238,6 +238,71 @@ class BusinessCardService:
             "default_mode": self.config.enrichment.default_mode,
             "allow_paid_api": self.config.enrichment.allow_paid_api,
             "checks": [check.to_dict() for check in checks],
+        }
+
+    def request_enrichment(
+        self,
+        *,
+        job_id: str,
+        run_id: str,
+        mode: str = "public_web",
+        requested_by: str = "operator",
+        allow_paid_enrichment: bool = False,
+        public_web_results: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        readiness = self.enrichment_readiness(
+            mode=mode,
+            allow_paid_enrichment=allow_paid_enrichment,
+        )
+        if any(check["status"] != "ready" for check in readiness["checks"]):
+            return {
+                "status": "blocked",
+                "readiness": readiness,
+            }
+        job = self.get_job(job_id, run_id=run_id)
+        artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
+        candidate_path = artifact_dir / "contact_candidate.json"
+        if not candidate_path.exists():
+            raise FileNotFoundError(f"contact candidate not found for job: {job_id}")
+        candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+        request = build_enrichment_request(
+            candidate,
+            mode=mode,
+            allow_paid_enrichment=allow_paid_enrichment,
+            requested_by=requested_by,
+        )
+        request_path = artifact_dir / "enrichment_request.json"
+        request_path.write_text(json.dumps(request, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        ledger.record_artifact(job_id=job_id, kind="enrichment_request", path=request_path)
+        result_payload = None
+        result_path = None
+        if mode in {"public_web", "all"}:
+            result_payload = score_public_web_results(candidate, results=public_web_results or [])
+            result_path = artifact_dir / "enrichment_result.json"
+            result_path.write_text(
+                json.dumps(result_payload, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            ledger.record_artifact(job_id=job_id, kind="enrichment_result", path=result_path)
+        ledger.record_event(
+            "enrichment_requested",
+            {
+                "job_id": job_id,
+                "run_id": run_id,
+                "mode": mode,
+                "requested_by": requested_by,
+                "request_path": str(request_path),
+                "result_path": str(result_path) if result_path else None,
+            },
+        )
+        return {
+            "status": "ok",
+            "readiness": readiness,
+            "request_path": str(request_path),
+            "result_path": str(result_path) if result_path else None,
+            "request": request,
+            "result": result_payload,
         }
 
     def doctor(self) -> dict[str, Any]:

@@ -34,6 +34,7 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert client.get(f"/runs/{run_id}/jobs").json()[0]["job_id"] == job_id
     assert client.get(f"/jobs/{job_id}", params={"run_id": run_id}).json()["job_id"] == job_id
     assert client.get("/reviews", params={"run_id": run_id}).json()[0]["job_id"] == job_id
+    assert client.post("/enrichment/check", json={"mode": "api", "run_id": run_id}).json()["checks"][0]["status"] == "blocked"
     review = client.post(
         f"/jobs/{job_id}/review",
         json={

@@ -121,6 +121,26 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_enrichment_request",
+                "description": "Create enrichment request/result artifacts for one job without making provider calls.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "job_id": {"type": "string"},
+                        "run_id": {"type": "string"},
+                        "mode": {
+                            "type": "string",
+                            "enum": ["public_web", "api", "all"],
+                            "default": "public_web",
+                        },
+                        "requested_by": {"type": "string", "default": "operator"},
+                        "allow_paid_enrichment": {"type": "boolean", "default": False},
+                        "public_web_results": {"type": "array", "items": {"type": "object"}},
+                    },
+                    "required": ["job_id", "run_id"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_watch_status",
                 "description": "Report watched inputs, seen-file count, backlog, unsettled files, and last error.",
                 "input_schema": {"type": "object", "properties": {}},

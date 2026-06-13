@@ -113,6 +113,31 @@ Remaining:
 - Batch next-action recommendations for agent loops.
 - Automatic re-routing after reviewed-contact approval.
 
+### Slice 0004-C | 2026-06-13 | Enrichment Request And Fixture Result Artifacts
+
+Implemented:
+
+- `enrichment_request.json` artifacts for selected jobs.
+- `enrichment_result.json` artifacts for fixture-backed public-web results.
+- Deterministic public-web query generation from normalized contact candidates.
+- Deterministic public-web result scoring from caller-supplied results.
+- Merge proposals that remain review-required and do not overwrite observed card fields.
+- Service `request_enrichment` method.
+- CLI `bcw enrichment request`.
+- API `POST /jobs/{job_id}/enrichment` and `POST /enrichment/check`.
+- MCP manifest entry for enrichment requests.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_enrichment.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 14 tests.
+- `PYTHONPATH=src pytest tests/test_enrichment.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 13 tests and 1 skipped optional API-extra test.
+
+Remaining:
+
+- Real public-web search execution remains out of scope for default tests and was not added.
+- Apollo adapter integration remains behind the paid API gate.
+- Enrichment request review/merge approval is still separate follow-on work.
+
 ## `/goal` Objective
 
 Use this as the high-level `/goal` objective:

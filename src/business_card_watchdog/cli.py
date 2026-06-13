@@ -82,6 +82,14 @@ def build_parser() -> argparse.ArgumentParser:
     enrichment_check.add_argument("--mode", choices=["none", "public_web", "api", "all"], default=None)
     enrichment_check.add_argument("--allow-paid-enrichment", action="store_true")
     enrichment_check.add_argument("--json", action="store_true")
+    enrichment_request = enrichment_sub.add_parser("request")
+    enrichment_request.add_argument("job_id")
+    enrichment_request.add_argument("--run-id", required=True)
+    enrichment_request.add_argument("--mode", choices=["public_web", "api", "all"], default="public_web")
+    enrichment_request.add_argument("--requested-by", default="operator")
+    enrichment_request.add_argument("--allow-paid-enrichment", action="store_true")
+    enrichment_request.add_argument("--public-web-results-json", default="[]")
+    enrichment_request.add_argument("--json", action="store_true")
 
     watch = sub.add_parser("watch")
     watch.add_argument("--once", action="store_true")
@@ -180,12 +188,23 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "enrichment":
-        payload = service.enrichment_readiness(
-            mode=args.mode,
-            allow_paid_enrichment=args.allow_paid_enrichment,
-        )
+        if args.enrichment_command == "check":
+            payload = service.enrichment_readiness(
+                mode=args.mode,
+                allow_paid_enrichment=args.allow_paid_enrichment,
+            )
+        else:
+            payload = service.request_enrichment(
+                job_id=args.job_id,
+                run_id=args.run_id,
+                mode=args.mode,
+                requested_by=args.requested_by,
+                allow_paid_enrichment=args.allow_paid_enrichment,
+                public_web_results=json.loads(args.public_web_results_json),
+            )
         print(json.dumps(payload, indent=2) if args.json else payload)
-        return 0 if all(check["status"] == "ready" for check in payload["checks"]) else 2
+        checks = payload.get("checks") or payload.get("readiness", {}).get("checks", [])
+        return 0 if all(check["status"] == "ready" for check in checks) else 2
 
     if args.command == "watch":
         PollingWatcher(

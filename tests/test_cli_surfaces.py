@@ -4,9 +4,11 @@ import json
 from pathlib import Path
 
 from business_card_watchdog.cli import main
-from business_card_watchdog.config import AppConfig
+from business_card_watchdog.config import AppConfig, EnrichmentConfig, PrefilterConfig
+from business_card_watchdog.orchestrator import BatchOrchestrator
 from business_card_watchdog.service_ops import service_unit_path
 
+from synthetic_fixtures import SyntheticSkillAdapter, latest_jobs_by_id, write_synthetic_image
 from test_service import make_recorded_run
 
 
@@ -92,6 +94,51 @@ def test_cli_enrichment_check_blocks_when_not_enabled(tmp_path: Path, capsys) ->
     payload = json.loads(capsys.readouterr().out)
     assert payload["checks"][0]["status"] == "blocked"
     assert "disabled" in payload["checks"][0]["reason"]
+
+
+def test_cli_enrichment_request_writes_public_web_artifacts(tmp_path: Path, monkeypatch, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    source_dir = tmp_path / "cards"
+    write_synthetic_image(source_dir / "card.png")
+    config_path.write_text(
+        f'data_dir = "{data_dir}"\ncache_dir = "{tmp_path / "cache"}"\n'
+        "[watch]\ninputs = []\n"
+        "[enrichment]\nenabled = true\n",
+        encoding="utf-8",
+    )
+    config = AppConfig(
+        config_path=config_path,
+        data_dir=data_dir,
+        cache_dir=tmp_path / "cache",
+        prefilter=PrefilterConfig(process_uncertain=True),
+        enrichment=EnrichmentConfig(enabled=True),
+    )
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+    job = next(iter(latest_jobs_by_id(run_dir / "jobs.jsonl").values()))
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "enrichment",
+                "request",
+                job["job_id"],
+                "--run-id",
+                run_dir.name,
+                "--public-web-results-json",
+                '[{"title":"Fixture Labs","url":"https://example.test","snippet":"fixture@example.test"}]',
+                "--json",
+            ]
+        )
+        == 0
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "ok"
+    assert payload["result"]["network_calls_made"] == 0
 
 
 def test_cli_doctor_reports_user_scope_checks(tmp_path: Path, capsys) -> None:

@@ -24,6 +24,13 @@ def create_app(config_path: Path | None = None):
         crop_selection: dict[str, object] = Field(default_factory=dict)
         notes: str = ""
 
+    class EnrichmentRequest(BaseModel):
+        run_id: str
+        mode: str = "public_web"
+        requested_by: str = "operator"
+        allow_paid_enrichment: bool = False
+        public_web_results: list[dict[str, object]] = Field(default_factory=list)
+
     app = FastAPI(title="Business Card Watchdog")
 
     def service() -> BusinessCardService:
@@ -82,9 +89,27 @@ def create_app(config_path: Path | None = None):
             notes=request.notes,
         )
 
+    @app.post("/jobs/{job_id}/enrichment")
+    def request_enrichment(job_id: str, request: EnrichmentRequest = Body(...)) -> dict[str, object]:
+        return service().request_enrichment(
+            job_id=job_id,
+            run_id=request.run_id,
+            mode=request.mode,
+            requested_by=request.requested_by,
+            allow_paid_enrichment=request.allow_paid_enrichment,
+            public_web_results=[dict(row) for row in request.public_web_results],
+        )
+
     @app.post("/sinks/check")
     def sink_check() -> dict[str, object]:
         return service().sink_readiness()
+
+    @app.post("/enrichment/check")
+    def enrichment_check(request: EnrichmentRequest = Body(default=EnrichmentRequest(run_id=""))) -> dict[str, object]:
+        return service().enrichment_readiness(
+            mode=request.mode,
+            allow_paid_enrichment=request.allow_paid_enrichment,
+        )
 
     @app.get("/watch/status")
     def watch_status() -> dict[str, object]:
