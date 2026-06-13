@@ -70,8 +70,10 @@ def build_sink_payloads(
     sinks: list[str],
     spec: dict[str, Any],
     dry_run: bool,
+    apply_enabled: dict[str, bool] | None = None,
 ) -> list[SinkPayload]:
     fingerprint = canonical_contact_fingerprint(spec)
+    apply_enabled = apply_enabled or {}
     return [
         SinkPayload(
             sink=sink,
@@ -83,7 +85,7 @@ def build_sink_payloads(
             readiness=readiness,
         )
         for sink in sinks
-        for readiness in [check_sink_readiness(sink, dry_run=dry_run)]
+        for readiness in [check_sink_readiness(sink, dry_run=dry_run, apply_enabled=apply_enabled.get(sink, False))]
     ]
 
 
@@ -110,8 +112,9 @@ def build_sink_plan(
     spec: dict[str, Any],
     dry_run: bool,
     reason: str,
+    apply_enabled: dict[str, bool] | None = None,
 ) -> dict[str, Any]:
-    payloads = build_sink_payloads(sinks=sinks, spec=spec, dry_run=dry_run)
+    payloads = build_sink_payloads(sinks=sinks, spec=spec, dry_run=dry_run, apply_enabled=apply_enabled)
     return {
         "schema": SINK_PLAN_SCHEMA,
         "state": "dry_run" if dry_run else ("ready" if all(payload.readiness.ready for payload in payloads) else "blocked"),
@@ -301,12 +304,19 @@ def build_sink_apply_result(
     }
 
 
-def check_sink_readiness(sink: str, *, dry_run: bool) -> SinkReadiness:
+def check_sink_readiness(sink: str, *, dry_run: bool, apply_enabled: bool = False) -> SinkReadiness:
     if dry_run:
         return SinkReadiness(
             sink=sink,
             status="ready",
             reason="dry-run payload generation does not require external credentials",
+        )
+    if not apply_enabled:
+        return SinkReadiness(
+            sink=sink,
+            status="blocked",
+            reason="live sink apply is disabled in user config",
+            details={"apply_enabled": False},
         )
 
     if sink == "google_contacts":

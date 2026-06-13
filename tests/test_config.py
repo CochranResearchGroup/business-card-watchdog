@@ -46,3 +46,26 @@ base_url = "https://apollo.example.test"
     assert config.enrichment.max_public_web_queries_per_contact == 3
     assert config.enrichment.apollo.enabled is True
     assert config.enrichment.apollo.api_key_env == "CUSTOM_APOLLO_KEY"
+
+
+def test_load_sink_apply_policy_flags(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        """
+[sink]
+dry_run = false
+google_contacts = true
+google_contacts_apply_enabled = true
+odoo = true
+odoo_apply_enabled = false
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(config_path)
+
+    assert config.sink.dry_run is False
+    assert config.sink.google_contacts is True
+    assert config.sink.google_contacts_apply_enabled is True
+    assert config.sink.odoo is True
+    assert config.sink.odoo_apply_enabled is False

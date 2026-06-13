@@ -86,6 +86,27 @@ def test_service_status_and_sink_readiness_are_structured(tmp_path: Path) -> Non
     assert {sink["sink"] for sink in readiness["sinks"]} == {"google_contacts", "odoo"}
 
 
+def test_service_sink_readiness_reports_apply_policy(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(
+            google_contacts=True,
+            odoo=True,
+            dry_run=False,
+            google_contacts_apply_enabled=False,
+            odoo_apply_enabled=True,
+        ),
+    )
+
+    readiness = BusinessCardService(config).sink_readiness()
+
+    by_sink = {sink["sink"]: sink for sink in readiness["sinks"]}
+    assert readiness["dry_run"] is False
+    assert "disabled" in by_sink["google_contacts"]["reason"]
+    assert "not implemented" in by_sink["odoo"]["reason"]
+
+
 def test_service_watch_reset_returns_runtime_path(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     service = BusinessCardService(config)

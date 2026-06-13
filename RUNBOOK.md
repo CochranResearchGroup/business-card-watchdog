@@ -403,3 +403,19 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 52 tests.
+
+## Turn 24 | 2026-06-13
+
+Continued Plan 0004 execution with per-sink live apply policy readiness gates.
+
+Implemented:
+
+- Added user config flags `google_contacts_apply_enabled` and `odoo_apply_enabled`, both defaulting to `false`.
+- Updated default config template with the live apply policy flags.
+- Live sink readiness now blocks on disabled apply policy before checking tools or adapters.
+- Service readiness passes per-sink apply policy into sink readiness checks.
+- Live plan readiness can distinguish dry-run readiness, disabled live apply policy, and adapter-not-implemented state.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_config.py tests/test_sinks.py tests/test_service.py -q` passed with 40 tests.

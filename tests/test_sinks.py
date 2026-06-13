@@ -37,11 +37,20 @@ def test_dry_run_readiness_does_not_require_credentials() -> None:
     assert "dry-run" in readiness.reason
 
 
-def test_live_odoo_readiness_is_blocked_until_implemented() -> None:
+def test_live_readiness_blocks_when_apply_disabled() -> None:
     readiness = check_sink_readiness("odoo", dry_run=False)
 
     assert not readiness.ready
     assert readiness.status == "blocked"
+    assert "disabled" in readiness.reason
+
+
+def test_live_odoo_readiness_is_blocked_until_implemented_when_apply_enabled() -> None:
+    readiness = check_sink_readiness("odoo", dry_run=False, apply_enabled=True)
+
+    assert not readiness.ready
+    assert readiness.status == "blocked"
+    assert "not implemented" in readiness.reason
 
 
 def test_build_sink_payloads_include_match_keys_and_readiness() -> None:

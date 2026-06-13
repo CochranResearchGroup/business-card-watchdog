@@ -360,7 +360,11 @@ class BusinessCardService:
         return {
             "dry_run": self.config.sink.dry_run,
             "sinks": [
-                check_sink_readiness(sink, dry_run=self.config.sink.dry_run).to_dict()
+                check_sink_readiness(
+                    sink,
+                    dry_run=self.config.sink.dry_run,
+                    apply_enabled=self._sink_apply_enabled(sink),
+                ).to_dict()
                 for sink in sinks
             ],
         }
@@ -458,6 +462,7 @@ class BusinessCardService:
             spec=spec,
             dry_run=dry_run or decision.dry_run,
             reason=decision.reason,
+            apply_enabled={sink: self._sink_apply_enabled(sink) for sink in decision.sinks},
         )
         plan["job_id"] = job_id
         plan["run_id"] = run_id
@@ -666,6 +671,13 @@ class BusinessCardService:
         if spec_path.exists():
             return json.loads(spec_path.read_text(encoding="utf-8"))
         raise FileNotFoundError(f"no contact artifact found in {artifact_dir}")
+
+    def _sink_apply_enabled(self, sink: str) -> bool:
+        if sink == "google_contacts":
+            return self.config.sink.google_contacts_apply_enabled
+        if sink == "odoo":
+            return self.config.sink.odoo_apply_enabled
+        return False
 
     def _next_action_for_job(self, job: dict[str, Any], artifact_kinds: set[str]) -> dict[str, Any] | None:
         state = str(job.get("state") or "")

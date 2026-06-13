@@ -343,6 +343,26 @@ Remaining:
 - Live sink-backed duplicate lookup execution remains follow-on work.
 - Live apply result remains blocked until adapters are implemented and explicitly approved.
 
+### Slice 0004-M | 2026-06-13 | Sink Apply Policy Readiness Gates
+
+Implemented:
+
+- User config flags `google_contacts_apply_enabled` and `odoo_apply_enabled`, both defaulting to `false`.
+- Default config template documents the live apply policy flags.
+- Live sink readiness now blocks on disabled apply policy before checking tools or adapters.
+- Service readiness passes per-sink apply policy into readiness checks.
+- Live plan readiness can distinguish dry-run readiness, disabled live apply policy, and adapter-not-implemented state.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_config.py tests/test_sinks.py tests/test_service.py -q` passed with 40 tests.
+
+Remaining:
+
+- Live Google Contacts and Odoo/Odollo lookup/write/readback adapters remain blocked.
+- Live sink-backed duplicate lookup execution remains follow-on work.
+- Live apply result remains blocked until adapters are implemented and explicitly approved.
+
 ## `/goal` Objective
 
 Use this as the high-level `/goal` objective:

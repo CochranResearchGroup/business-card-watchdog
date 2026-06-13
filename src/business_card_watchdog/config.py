@@ -28,6 +28,8 @@ class SinkConfig:
     google_contacts: bool = False
     odoo: bool = False
     dry_run: bool = True
+    google_contacts_apply_enabled: bool = False
+    odoo_apply_enabled: bool = False
 
 
 @dataclass(frozen=True)
@@ -149,6 +151,8 @@ def load_config(path: Path | None = None) -> AppConfig:
             google_contacts=bool(sink.get("google_contacts", False)),
             odoo=bool(sink.get("odoo", False)),
             dry_run=bool(sink.get("dry_run", True)),
+            google_contacts_apply_enabled=bool(sink.get("google_contacts_apply_enabled", False)),
+            odoo_apply_enabled=bool(sink.get("odoo_apply_enabled", False)),
         ),
         routing_rules=list(routing.get("rules", [])),
     )
@@ -196,7 +200,9 @@ base_url = "https://api.apollo.io"
 [sink]
 dry_run = true
 google_contacts = false
+google_contacts_apply_enabled = false
 odoo = false
+odoo_apply_enabled = false
 
 [routing]
 rules = [
