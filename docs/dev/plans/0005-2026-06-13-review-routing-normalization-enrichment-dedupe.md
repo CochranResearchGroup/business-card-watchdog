@@ -6,6 +6,13 @@ Predecessor:
 
 - `docs/dev/plans/0004-2026-06-13-review-normalization-enrichment-dedupe-sinks.md`
 
+Planning inputs:
+
+- Operator discussion on 2026-06-13 about review surfaces, GWS/Odollo sinks, normalization, enrichment, and dedupe.
+- Explicit decision that API-based enrichment usually has cost and must be explicitly requested.
+- Explicit decision that web-search enrichment can be useful but still belongs behind an explicit enrichment request/run policy.
+- Explicit decision that reusable Odollo enrichment/contact tools may be copied or adapted where they fit this repo boundary.
+
 ## Scope
 
 Turn the current artifact-backed review, enrichment, duplicate, and sink-pilot surfaces into the next operator-usable workflow for arbitrary-size business-card batches.
@@ -41,6 +48,85 @@ Important gaps:
 - no merged enrichment review flow that records accepted/rejected suggestions
 - no durable duplicate-resolution index that survives future batches as operator-approved identity knowledge
 - no "ready for pilot" report that combines review, dedupe, enrichment, route, sink lookup, and apply-pilot status across the whole run
+
+## Product Decisions For This Plan
+
+Review:
+
+- The first review surface is generated and local: static HTML plus JSON artifacts, with a spreadsheet/workbook export as a follow-on once the schema stabilizes.
+- Review rows must show the card image reference, extracted contact, normalized contact, duplicate status, enrichment proposals, routing explanation, sink lookup status, and sink pilot state.
+- Review actions are append-only decisions. They update derived artifacts, but they do not erase raw OCR/App Intelligence evidence.
+
+Sinks:
+
+- GWS Contacts and Odollo/Odoo are independent sink profiles. A contact may route to GWS, Odollo/Odoo, both, neither, or `needs_review`.
+- Route eligibility is not write approval. Eligibility says "this contact belongs in this sink"; apply approval says "this specific write pilot is allowed."
+- Sink adapters must support lookup, write-pilot, readback-pilot, and pilot-report phases. Live writes remain one-job, one-sink, explicit actions until later policy changes.
+
+Normalization:
+
+- The canonical contact model is the center of the system. Review, dedupe, routing, enrichment merge, and sink payloads should consume canonical fields, not raw OCR fields.
+- Observed card data, normalized values, reviewer corrections, enrichment values, downstream lookup values, and sink readbacks must keep separate provenance.
+- Ambiguous normalization creates warnings for review instead of silently guessing.
+
+Enrichment:
+
+- Local deterministic enrichment may run as part of safe execution only when it uses already-present artifacts and makes no network/API calls.
+- Public-web enrichment requires an explicit enrichment request or run-level policy because it performs network/search work.
+- Paid API enrichment requires an explicit request, enabled provider config, available key in `~/credentials/API-keys.env`, and budget/count limits. Generic `continue` or safe agent-loop execution must never run it.
+- Enrichment results are suggestions until reviewed. Accepted values are provenance-marked and may be included or excluded per sink policy.
+
+Dedupe:
+
+- Strong duplicate evidence, such as exact normalized email/phone or downstream resource match, blocks write pilots until reviewed or resolved.
+- Weak evidence, such as same company/domain or fuzzy person/company match, creates review work but does not merge people automatically.
+- Reviewer-approved duplicate resolutions become durable identity evidence for future runs.
+
+## Odollo Reuse Targets
+
+The first implementation pass should inspect and adapt these Odollo assets before inventing new provider logic:
+
+- `/home/ecochran76/workspace.local/odollo/src/odollo/core/public_web_enrichment.py`
+- `/home/ecochran76/workspace.local/odollo/src/odollo/adapters/apollo.py`
+- `/home/ecochran76/workspace.local/odollo/src/odollo/core/apollo_intake.py`
+- `/home/ecochran76/workspace.local/odollo/src/odollo/core/apollo_intake_review.py`
+- `/home/ecochran76/workspace.local/odollo/src/odollo/core/apollo_catalog.py`
+- `/home/ecochran76/workspace.local/odollo/src/odollo/core/contact_points.py`
+- `/home/ecochran76/workspace.local/odollo/skills/business-card-to-contact/scripts/build_apollo_enrichment_stub.py`
+- `/home/ecochran76/workspace.local/odollo/skills/business-card-to-contact/references/merge-policy.md`
+- `/home/ecochran76/workspace.local/odollo/skills/business-card-to-contact/references/idempotency-contracts.md`
+
+Reuse boundary:
+
+- Copy/adapt small provider, scoring, normalization, contact-point, and fixture patterns into this package when that avoids a runtime dependency.
+- Do not import broad Odollo runtime modules into the watchdog service unless they are isolated behind a narrow optional adapter.
+- Keep Odollo tenant identity and credentials in user config/runtime, never in repo fixtures.
+
+## `/goal` Execution Model
+
+This plan is intended to run as a sequence of bounded `/goal` slices. Each slice should end with tests, `git diff --check`, `codegraph sync && codegraph status`, a commit, and a retry of `git push` if a remote exists.
+
+Default stop rule:
+
+- Safe agent-loop execution may continue only zero-write, zero-paid-call, fixture/local-file steps.
+- Stop and report explicit operator actions for public-web search, paid API enrichment, live sink lookup, live write pilot, live readback pilot, duplicate merge decisions, and route/apply approvals.
+
+Recommended slice order:
+
+1. `0005-A | Review Matrix`: enrich review bundle/HTML rows with normalized, duplicate, enrichment, route, and sink eligibility columns.
+2. `0005-B | Canonical Contact`: harden canonical observed/normalized/reviewed/enriched contact schema and provenance diagnostics.
+3. `0005-C | Dedupe Index`: create durable identity index and duplicate-resolution artifacts that block strong duplicates.
+4. `0005-D | Route Policy`: add explainable route policy and sink eligibility reports for GWS/Odollo/both/neither.
+5. `0005-E | Odollo Enrichment Reuse`: adapt Odollo public-web/Apollo/contact-point patterns behind watchdog provider interfaces.
+6. `0005-F | Enrichment Review`: add accepted/rejected enrichment proposal artifacts and review-surface integration.
+7. `0005-G | Pilot Readiness Report`: add a run-level report combining review, normalize, enrichment, dedupe, route, lookup, approval, write-pilot, readback-pilot, and pilot-report state.
+8. `0005-H | MCP/API/CLI Parity`: ensure every new service method is exposed consistently through CLI, API, and MCP.
+
+Suggested main `/goal` prompt:
+
+```text
+Execute Plan 0005 in bounded, committed slices. Use safe agent-loop defaults: no paid API calls, no public-web search unless explicitly requested for that slice, and no live GWS/Odollo writes. Start with the next incomplete slice in docs/dev/plans/0005-2026-06-13-review-routing-normalization-enrichment-dedupe.md, validate it, commit it, and retry git push.
+```
 
 ## Workstreams
 
@@ -345,20 +431,21 @@ External-call validation:
 
 ## Open Questions
 
-- Which Odollo enrichment helpers should be copied directly, and which should remain adapter calls into an installed Odollo package?
+- During `0005-E`, which Odollo helpers from the reuse target list are small enough to copy/adapt directly, and which should remain behind an optional adapter?
 - Which public-web search provider should be the first executable adapter?
-- Which paid API provider should be first, and what exact environment variable names in `~/credentials/API-keys.env` should be recognized?
-- Should the first review surface be static HTML, spreadsheet/workbook, or both?
-- What should be the first live routing policy: GWS only, Odollo only, or both after duplicate clearance?
+- Apollo is the first planned paid API provider shell; should `~/credentials/API-keys.env` recognize only `APOLLO_API_KEY` first, or also Odollo's existing aliases if present?
+- After the static HTML/JSON review surface is stable, should workbook export be CSV-first, XLSX-first, or Google Sheets handoff?
+- What should be the first live routing policy: GWS only, Odollo/Odoo only, or both after duplicate clearance?
 - Which Odollo tenant should be used for the first one-job live pilot?
 
 ## Initial Execution Order
 
-1. Add batch review surface and reviewer decision mutation methods.
-2. Harden canonical contact/provenance model used by review, dedupe, routing, and sinks.
-3. Add durable duplicate-resolution actions and make strong duplicates block apply pilots.
-4. Add route policy/explanation and sink eligibility reports.
-5. Add enrichment provider interface and fixture-backed public-web/API adapters with explicit request and cost gates.
-6. Add batch phase report and agent-loop grouped next actions.
-7. Run one fully simulated end-to-end pilot chain across review, dedupe, route, sink lookup, write pilot, readback pilot, and pilot report.
-
+1. Execute `0005-A | Review Matrix`.
+2. Execute `0005-B | Canonical Contact`.
+3. Execute `0005-C | Dedupe Index`.
+4. Execute `0005-D | Route Policy`.
+5. Execute `0005-E | Odollo Enrichment Reuse`.
+6. Execute `0005-F | Enrichment Review`.
+7. Execute `0005-G | Pilot Readiness Report`.
+8. Execute `0005-H | MCP/API/CLI Parity`.
+9. Run one fully simulated end-to-end pilot chain across review, dedupe, route, sink lookup, write pilot, readback pilot, and pilot report.
