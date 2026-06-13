@@ -5,7 +5,7 @@
 Build a robust, installable business-card ingestion system that can process arbitrary-size batches from watched folders and route reviewed contact data to Google Contacts and/or Odoo/Odollo tenants.
 
 Product authority: `PRODUCT_SPEC.md`.
-High-level implementation plan: `docs/dev/plans/0002-2026-06-11-high-level-implementation-goal-plan.md`.
+High-level implementation plan: `docs/dev/plans/0004-2026-06-13-review-normalization-enrichment-dedupe-sinks.md`.
 
 ## Milestones
 
@@ -27,6 +27,8 @@ Status evidence: Plan 0002 closed with dry-run batch core, shared service surfac
 - Add deterministic retry policy and per-card phase state.
 - Add review queues for uncertain fields or poor crop confidence.
 - Add batch-level summaries and failure triage artifacts.
+- Apply reviewed corrections into canonical contact artifacts before routing.
+- Add explicit enrichment request/review actions.
 
 ### M3 | Watched Folder Service | PLANNED
 
@@ -41,6 +43,8 @@ Status evidence: Plan 0002 closed with dry-run batch core, shared service surfac
 - Add Odoo/Odollo tenant readiness checks and idempotent partner upsert.
 - Store per-sink external IDs and fingerprints in runtime state.
 - Keep sink writes sequential per matched person/contact.
+- Add duplicate detection before live writes.
+- Keep paid API enrichment behind explicit operator request.
 
 ### M5 | Production MCP/API Surface | PLANNED
 

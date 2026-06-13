@@ -177,3 +177,18 @@ Validation:
 - `PYTHONPATH=src pytest tests/test_preclassifier.py tests/test_watcher.py -q` passed with 13 tests and 2 skipped OpenCV tests.
 - `.venv/bin/bcw status --json` passed against the real user config and reported 5 top-level backlog images, no unsettled files, no truncation, and no last error.
 - Real top-level SyncThing JPGs classified as `uncertain` with zero card-like contours instead of `likely_business_card`.
+
+## Turn 11 | 2026-06-13
+
+Opened the next high-level plan for review, normalization, enrichment, dedupe, and live sink routing.
+
+Updated:
+
+- Added `docs/dev/plans/0004-2026-06-13-review-normalization-enrichment-dedupe-sinks.md`.
+- Updated `ROADMAP.md` to point at Plan 0004 as the current high-level implementation plan.
+- Captured the policy that API-based enrichment has cost and must be explicitly requested.
+- Captured Odollo-derived implementation sources for Apollo enrichment, public-web enrichment, Odoo readiness/lookup, contact points, and review action semantics.
+
+Validation:
+
+- Planning-only change; run `git diff --check` before commit.
