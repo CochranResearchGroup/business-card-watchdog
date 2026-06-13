@@ -48,6 +48,10 @@ def create_app(config_path: Path | None = None):
         run_id: str
         phase: str = "lookup"
 
+    class SinkLookupResultRequest(BaseModel):
+        run_id: str
+        matches_by_sink: dict[str, list[dict[str, object]]] = Field(default_factory=dict)
+
     app = FastAPI(title="Business Card Watchdog")
 
     def service() -> BusinessCardService:
@@ -166,6 +170,14 @@ def create_app(config_path: Path | None = None):
             job_id=job_id,
             run_id=request.run_id,
             phase=request.phase,  # type: ignore[arg-type]
+        )
+
+    @app.post("/jobs/{job_id}/sink-lookup-result")
+    def create_sink_lookup_result(job_id: str, request: SinkLookupResultRequest = Body(...)) -> dict[str, object]:
+        return service().record_sink_lookup_result_for_job(
+            job_id=job_id,
+            run_id=request.run_id,
+            matches_by_sink={sink: [dict(match) for match in matches] for sink, matches in request.matches_by_sink.items()},
         )
 
     @app.post("/enrichment/check")

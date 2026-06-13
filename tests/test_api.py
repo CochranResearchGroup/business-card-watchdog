@@ -63,6 +63,20 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert adapter_request["request"]["schema"] == "business-card-watchdog.sink-adapter-request.v1"
     assert adapter_request["request"]["phase"] == "readback"
     assert adapter_request["request"]["network_calls_made"] == 0
+    lookup_result = client.post(
+        f"/jobs/{job_id}/sink-lookup-result",
+        json={
+            "run_id": run_id,
+            "matches_by_sink": {
+                "google_contacts": [
+                    {"resource_id": "people/c123", "confidence": 0.91, "basis": ["email"]}
+                ]
+            },
+        },
+    ).json()
+    assert lookup_result["result"]["schema"] == "business-card-watchdog.sink-lookup-result.v1"
+    assert lookup_result["result"]["state"] == "no_match"
+    assert lookup_result["result"]["network_calls_made"] == 0
     artifact_dir = data_dir / "runs" / run_id / "artifacts" / job_id
     (artifact_dir / "enrichment_result.json").write_text(
         json.dumps(

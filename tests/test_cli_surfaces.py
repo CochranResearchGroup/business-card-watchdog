@@ -388,6 +388,41 @@ def test_cli_sinks_adapter_request_writes_blocked_contract(tmp_path: Path, capsy
     assert payload["request"]["requests"][0]["status"] == "blocked"
 
 
+def test_cli_sinks_lookup_result_writes_zero_network_artifact(tmp_path: Path, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    config_path.write_text(
+        f'data_dir = "{data_dir}"\n'
+        "[watch]\ninputs = []\n"
+        "[sink]\ndry_run = true\ngoogle_contacts = true\n",
+        encoding="utf-8",
+    )
+    run_id, job_id = make_recorded_run(AppConfig(config_path=config_path, data_dir=data_dir))
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "sinks",
+                "lookup-result",
+                job_id,
+                "--run-id",
+                run_id,
+                "--matches-by-sink-json",
+                '{"google_contacts": [{"resource_id": "people/c123", "confidence": 0.91, "basis": ["email"]}]}',
+                "--json",
+            ]
+        )
+        == 0
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["result"]["schema"] == "business-card-watchdog.sink-lookup-result.v1"
+    assert payload["result"]["state"] == "possible_duplicate"
+    assert payload["result"]["network_calls_made"] == 0
+    assert payload["result"]["match_count"] == 1
+
+
 def test_cli_enrichment_check_blocks_when_not_enabled(tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.toml"
     write_config(config_path, tmp_path / "data")

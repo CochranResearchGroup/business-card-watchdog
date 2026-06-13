@@ -24,6 +24,7 @@ from .sinks import (
     build_sink_apply_preflight,
     build_sink_apply_result,
     build_sink_lookup_plan,
+    build_sink_lookup_result,
     build_sink_plan,
     check_sink_readiness,
 )
@@ -691,6 +692,46 @@ class BusinessCardService:
         )
         return {"request_path": str(request_path), "request": request}
 
+    def record_sink_lookup_result_for_job(
+        self,
+        *,
+        job_id: str,
+        run_id: str,
+        matches_by_sink: dict[str, list[dict[str, Any]]] | None = None,
+    ) -> dict[str, Any]:
+        job = self.get_job(job_id, run_id=run_id)
+        artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
+        request_path = artifact_dir / "sink_adapter_request_lookup.json"
+        if request_path.exists():
+            adapter_request = json.loads(request_path.read_text(encoding="utf-8"))
+        else:
+            adapter_request = self.build_sink_adapter_request_for_job(
+                job_id=job_id,
+                run_id=run_id,
+                phase="lookup",
+            )["request"]
+        result = build_sink_lookup_result(
+            adapter_request=adapter_request,
+            matches_by_sink=matches_by_sink or {},
+        )
+        result_path = artifact_dir / "sink_lookup_result.json"
+        result_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        ledger.record_artifact(job_id=job_id, kind="sink_lookup_result", path=result_path)
+        ledger.record_event(
+            "sink_lookup_result_recorded",
+            {
+                "job_id": job_id,
+                "run_id": run_id,
+                "result_path": str(result_path),
+                "state": result["state"],
+                "match_count": result["match_count"],
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        return {"result_path": str(result_path), "result": result}
+
     def doctor(self) -> dict[str, Any]:
         status = self.status()
         checks = [
@@ -772,6 +813,12 @@ class BusinessCardService:
                     "action": "prepare_sink_lookup_adapter",
                     "reason": "sink lookup plan exists; prepare blocked live lookup adapter request",
                     "command": "sinks adapter-request --phase lookup",
+                }
+            if "sink_lookup_result" not in artifact_kinds:
+                return {
+                    "action": "record_sink_lookup_result",
+                    "reason": "sink lookup adapter request exists; record zero-network lookup result",
+                    "command": "sinks lookup-result",
                 }
             if "sink_plan" not in artifact_kinds:
                 return {

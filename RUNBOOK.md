@@ -469,3 +469,20 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_mcp.py -q` passed with 48 tests.
+
+## Turn 28 | 2026-06-13
+
+Continued Plan 0004 execution with downstream sink lookup result artifacts.
+
+Implemented:
+
+- Added `sink_lookup_result.json` artifacts for downstream lookup results.
+- Lookup result artifacts default to zero-network `not_executed` results and can hold fixture-provided downstream matches.
+- Fixture matches set `state = possible_duplicate`, `duplicate_review_required = true`, and preserve sink resource IDs, basis, confidence, and display labels.
+- Service, CLI, API, and MCP surfaces can record lookup result artifacts.
+- `BusinessCardService.next_actions` now recommends `sinks lookup-result` after lookup adapter requests and before sink planning.
+- Lookup result artifacts record `writes_attempted = 0` and `network_calls_made = 0`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 66 tests.

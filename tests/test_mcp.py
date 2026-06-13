@@ -24,6 +24,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_sink_apply_decision" in names
     assert "business_card_watchdog_sink_apply" in names
     assert "business_card_watchdog_sink_adapter_request" in names
+    assert "business_card_watchdog_sink_lookup_result" in names
     assert "business_card_watchdog_enrichment_check" in names
     assert "business_card_watchdog_enrichment_request" in names
     assert "business_card_watchdog_doctor" in names
@@ -92,6 +93,19 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
         {"job_id": job_id, "run_id": run_id, "phase": "readback"},
         config=config,
     )
+    lookup_result = call_tool(
+        "business_card_watchdog_sink_lookup_result",
+        {
+            "job_id": job_id,
+            "run_id": run_id,
+            "matches_by_sink": {
+                "google_contacts": [
+                    {"resource_id": "people/c123", "confidence": 0.91, "basis": ["email"]}
+                ]
+            },
+        },
+        config=config,
+    )
     merge = call_tool(
         "business_card_watchdog_job_review",
         {
@@ -126,6 +140,8 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert apply_result["result"]["readback"][0]["simulated"] is True
     assert adapter_request["request"]["phase"] == "readback"
     assert adapter_request["request"]["network_calls_made"] == 0
+    assert lookup_result["result"]["state"] == "possible_duplicate"
+    assert lookup_result["result"]["network_calls_made"] == 0
     assert merge["submission"]["approved_enrichment_fields"] == ["notes"]
     assert duplicate["submission"]["duplicate_resolution"]["decision"] == "create_new"
 

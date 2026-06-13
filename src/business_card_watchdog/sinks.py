@@ -17,6 +17,7 @@ SINK_LOOKUP_PLAN_SCHEMA = "business-card-watchdog.sink-lookup-plan.v1"
 SINK_APPLY_DECISION_SCHEMA = "business-card-watchdog.sink-apply-decision.v1"
 SINK_APPLY_RESULT_SCHEMA = "business-card-watchdog.sink-apply-result.v1"
 SINK_ADAPTER_REQUEST_SCHEMA = "business-card-watchdog.sink-adapter-request.v1"
+SINK_LOOKUP_RESULT_SCHEMA = "business-card-watchdog.sink-lookup-result.v1"
 
 
 FINGERPRINT_FIELDS = (
@@ -360,6 +361,39 @@ def build_sink_adapter_request(
     }
 
 
+def build_sink_lookup_result(
+    *,
+    adapter_request: dict[str, Any],
+    matches_by_sink: dict[str, list[dict[str, Any]]] | None = None,
+) -> dict[str, Any]:
+    matches_by_sink = matches_by_sink or {}
+    results = [
+        _lookup_result_for_request(request, matches_by_sink.get(str(request.get("sink") or ""), []))
+        for request in list(adapter_request.get("requests") or [])
+        if request.get("phase") == "lookup"
+    ]
+    match_count = sum(len(result["matches"]) for result in results)
+    return {
+        "schema": SINK_LOOKUP_RESULT_SCHEMA,
+        "state": "possible_duplicate" if match_count else "no_match",
+        "status": "fixture_matches" if match_count else "not_executed",
+        "reason": (
+            "fixture-provided downstream matches require review"
+            if match_count
+            else "live downstream lookup adapter was not invoked"
+        ),
+        "source_schema": adapter_request.get("schema"),
+        "job_id": adapter_request.get("job_id"),
+        "run_id": adapter_request.get("run_id"),
+        "requires_live_adapter": True,
+        "duplicate_review_required": bool(match_count),
+        "network_calls_made": 0,
+        "writes_attempted": 0,
+        "match_count": match_count,
+        "results": results,
+    }
+
+
 def check_sink_readiness(sink: str, *, dry_run: bool, apply_enabled: bool = False) -> SinkReadiness:
     if dry_run:
         return SinkReadiness(
@@ -553,6 +587,31 @@ def _adapter_base(*, sink: str, phase: SinkAdapterPhase) -> dict[str, Any]:
         "network_calls_made": 0,
         "writes_attempted": 0,
         "reason": "adapter request prepared only; no live adapter invoked",
+    }
+
+
+def _lookup_result_for_request(request: dict[str, Any], matches: list[dict[str, Any]]) -> dict[str, Any]:
+    sink = str(request.get("sink") or "")
+    normalized_matches = [
+        {
+            "sink": sink,
+            "resource_id": str(match.get("resource_id") or ""),
+            "confidence": float(match.get("confidence", 0)),
+            "basis": list(match.get("basis") or []),
+            "display": str(match.get("display") or ""),
+            "raw": dict(match.get("raw") or {}),
+        }
+        for match in matches
+    ]
+    return {
+        "sink": sink,
+        "status": "fixture_matches" if normalized_matches else "not_executed",
+        "requires_live_adapter": True,
+        "network_calls_made": 0,
+        "writes_attempted": 0,
+        "match_keys": request.get("match_keys", {}),
+        "query_count": len(list(request.get("queries") or [])),
+        "matches": normalized_matches,
     }
 
 

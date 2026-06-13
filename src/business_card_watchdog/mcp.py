@@ -219,6 +219,25 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_sink_lookup_result",
+                "description": "Record a zero-network downstream sink lookup result artifact for one job.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "job_id": {"type": "string"},
+                        "run_id": {"type": "string"},
+                        "matches_by_sink": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "array",
+                                "items": {"type": "object"},
+                            },
+                        },
+                    },
+                    "required": ["job_id", "run_id"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_enrichment_check",
                 "description": "Report enrichment readiness and paid-provider gates without making provider calls.",
                 "input_schema": {
@@ -362,6 +381,12 @@ def call_tool(
             job_id=str(args["job_id"]),
             run_id=str(args["run_id"]),
             phase=str(args.get("phase") or "lookup"),  # type: ignore[arg-type]
+        )
+    if tool_name == "business_card_watchdog_sink_lookup_result":
+        return service.record_sink_lookup_result_for_job(
+            job_id=str(args["job_id"]),
+            run_id=str(args["run_id"]),
+            matches_by_sink=dict(args.get("matches_by_sink") or {}),
         )
     if tool_name == "business_card_watchdog_enrichment_check":
         return service.enrichment_readiness(

@@ -427,6 +427,28 @@ Remaining:
 - Live sink-backed duplicate lookup execution remains follow-on work.
 - Non-simulated live apply remains blocked until adapters are implemented and explicitly approved.
 
+### Slice 0004-Q | 2026-06-13 | Sink Lookup Result Artifacts
+
+Implemented:
+
+- Added `sink_lookup_result.json` artifacts for downstream lookup results.
+- Lookup result artifacts can record future live/fixture sink matches while defaulting to zero-network `not_executed` results.
+- Fixture-provided downstream matches set `state = possible_duplicate` and `duplicate_review_required = true`.
+- Lookup results preserve adapter request source schema, sink match keys, query counts, match basis, confidence, and resource IDs.
+- Service, CLI, API, and MCP surfaces can record lookup result artifacts.
+- `next_actions` now requires `sinks lookup-result` after lookup adapter requests and before sink planning.
+- Lookup result artifacts record `writes_attempted = 0` and `network_calls_made = 0`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 66 tests.
+
+Remaining:
+
+- Live Google Contacts and Odoo/Odollo lookup/write/readback adapters remain blocked.
+- Live sink-backed duplicate lookup execution remains follow-on work.
+- Non-simulated live apply remains blocked until adapters are implemented and explicitly approved.
+
 ## `/goal` Objective
 
 Use this as the high-level `/goal` objective:

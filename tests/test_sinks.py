@@ -4,6 +4,7 @@ from business_card_watchdog.sinks import (
     build_sink_apply_preflight,
     build_sink_apply_result,
     build_sink_lookup_plan,
+    build_sink_lookup_result,
     build_sink_plan,
     build_sink_payloads,
     canonical_contact_fingerprint,
@@ -130,6 +131,40 @@ def test_build_sink_adapter_request_prepares_lookup_write_and_readback_contracts
     assert write["requests"][0]["payload"]["values"]["email"] == "ada@example.test"
     assert readback["phase"] == "readback"
     assert readback["requests"][0]["simulated_readback"] is True
+
+
+def test_build_sink_lookup_result_records_zero_network_matches() -> None:
+    lookup_plan = build_sink_lookup_plan(
+        sinks=["google_contacts"],
+        spec={"full_name": "Ada Lovelace", "email": "ada@example.test"},
+        dry_run=True,
+        reason="matched email_domain=*",
+    )
+    adapter_request = build_sink_adapter_request(phase="lookup", lookup_plan=lookup_plan)
+
+    empty = build_sink_lookup_result(adapter_request=adapter_request)
+    matched = build_sink_lookup_result(
+        adapter_request=adapter_request,
+        matches_by_sink={
+            "google_contacts": [
+                {
+                    "resource_id": "people/c123",
+                    "confidence": 0.94,
+                    "basis": ["email"],
+                    "display": "Ada Lovelace",
+                }
+            ]
+        },
+    )
+
+    assert empty["schema"] == "business-card-watchdog.sink-lookup-result.v1"
+    assert empty["state"] == "no_match"
+    assert empty["status"] == "not_executed"
+    assert empty["network_calls_made"] == 0
+    assert matched["state"] == "possible_duplicate"
+    assert matched["duplicate_review_required"] is True
+    assert matched["match_count"] == 1
+    assert matched["results"][0]["matches"][0]["resource_id"] == "people/c123"
 
 
 def test_build_sink_apply_preflight_is_zero_write_and_explicitly_gated() -> None:

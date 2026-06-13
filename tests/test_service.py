@@ -370,6 +370,45 @@ def test_service_build_sink_adapter_request_writes_phase_artifact(tmp_path: Path
     assert any(event["event_type"] == "sink_adapter_request_created" for event in events)
 
 
+def test_service_record_sink_lookup_result_writes_zero_network_artifact(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+
+    result = service.record_sink_lookup_result_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        matches_by_sink={
+            "google_contacts": [
+                {
+                    "resource_id": "people/c123",
+                    "confidence": 0.9,
+                    "basis": ["email"],
+                    "display": "Reviewed Fixture",
+                }
+            ]
+        },
+    )
+    job = service.get_job(job_id, run_id=run_id)
+    events = [
+        json.loads(line)
+        for line in (config.runs_dir / run_id / "events.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+
+    assert result["result"]["schema"] == "business-card-watchdog.sink-lookup-result.v1"
+    assert result["result"]["state"] == "possible_duplicate"
+    assert result["result"]["network_calls_made"] == 0
+    assert result["result"]["writes_attempted"] == 0
+    assert result["result"]["match_count"] == 1
+    assert any(artifact["kind"] == "sink_lookup_result" for artifact in job["artifacts"])
+    assert any(event["event_type"] == "sink_lookup_result_recorded" for event in events)
+
+
 def test_service_next_actions_recommends_sink_lookup_for_ready_job(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, job_id = make_recorded_run(config)
@@ -407,7 +446,7 @@ def test_service_next_actions_recommends_lookup_adapter_request_after_lookup_pla
     assert payload["actions"][0]["command"] == "sinks adapter-request --phase lookup"
 
 
-def test_service_next_actions_recommends_sink_plan_after_lookup_adapter_request(tmp_path: Path) -> None:
+def test_service_next_actions_recommends_lookup_result_after_lookup_adapter_request(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, job_id = make_recorded_run(config)
     service = BusinessCardService(config)
@@ -420,6 +459,27 @@ def test_service_next_actions_recommends_sink_plan_after_lookup_adapter_request(
     )
     service.plan_sink_lookup_for_job(job_id=job_id, run_id=run_id)
     service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
+
+    payload = service.next_actions(run_id=run_id)
+
+    assert payload["actions"][0]["action"] == "record_sink_lookup_result"
+    assert payload["actions"][0]["command"] == "sinks lookup-result"
+
+
+def test_service_next_actions_recommends_sink_plan_after_lookup_result(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+        field_corrections={"full_name": "Reviewed Fixture", "email": "fixture@example.test"},
+    )
+    service.plan_sink_lookup_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
+    service.record_sink_lookup_result_for_job(job_id=job_id, run_id=run_id)
 
     payload = service.next_actions(run_id=run_id)
 
@@ -443,6 +503,7 @@ def test_service_next_actions_recommends_write_adapter_request_after_sink_plan(t
     )
     service.plan_sink_lookup_for_job(job_id=job_id, run_id=run_id)
     service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
+    service.record_sink_lookup_result_for_job(job_id=job_id, run_id=run_id)
     service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
 
     payload = service.next_actions(run_id=run_id)
@@ -468,6 +529,7 @@ def test_service_next_actions_recommends_apply_preflight_after_write_adapter_req
     )
     service.plan_sink_lookup_for_job(job_id=job_id, run_id=run_id)
     service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
+    service.record_sink_lookup_result_for_job(job_id=job_id, run_id=run_id)
     service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
     service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="write")
 
@@ -494,6 +556,7 @@ def test_service_next_actions_recommends_apply_decision_after_preflight(tmp_path
     )
     service.plan_sink_lookup_for_job(job_id=job_id, run_id=run_id)
     service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
+    service.record_sink_lookup_result_for_job(job_id=job_id, run_id=run_id)
     service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
     service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="write")
     service.preflight_sink_apply(job_id=job_id, run_id=run_id)
@@ -521,6 +584,7 @@ def test_service_next_actions_recommends_live_apply_after_decision(tmp_path: Pat
     )
     service.plan_sink_lookup_for_job(job_id=job_id, run_id=run_id)
     service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
+    service.record_sink_lookup_result_for_job(job_id=job_id, run_id=run_id)
     service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
     service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="write")
     service.preflight_sink_apply(job_id=job_id, run_id=run_id)
@@ -549,6 +613,7 @@ def test_service_next_actions_recommends_readback_adapter_request_after_apply_re
     )
     service.plan_sink_lookup_for_job(job_id=job_id, run_id=run_id)
     service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
+    service.record_sink_lookup_result_for_job(job_id=job_id, run_id=run_id)
     service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
     service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="write")
     service.preflight_sink_apply(job_id=job_id, run_id=run_id)
