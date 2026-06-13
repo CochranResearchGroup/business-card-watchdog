@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import csv
 import json
 from html import escape
+from io import StringIO
 from pathlib import Path
 from typing import Any, Callable
 
@@ -187,6 +189,7 @@ _ROUTE_REFRESH_STEPS = [
 _REVIEW_BUNDLE_ARTIFACT_KINDS = {
     "preclassification",
     "review_packet",
+    "contact_spec",
     "contact_candidate",
     "reviewed_contact",
     "review_submission",
@@ -876,6 +879,39 @@ class BusinessCardService:
             "writes_attempted": 0,
             "network_calls_made": 0,
         }
+
+    def review_workbook(self, *, run_id: str, state: str = "all", write: bool = True) -> dict[str, Any]:
+        bundle = self.review_bundle(run_id=run_id, state=state, write=write)
+        csv_text = self._render_review_workbook_csv(bundle)
+        workbook_path = self.config.runs_dir / run_id / "review_workbook.csv"
+        payload = {
+            "schema": "business-card-watchdog.review-workbook.v1",
+            "run_id": run_id,
+            "state_filter": state,
+            "format": "csv",
+            "row_count": bundle["job_count"],
+            "csv": csv_text,
+            "bundle_path": bundle.get("review_bundle_path"),
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+        if write:
+            workbook_path.write_text(csv_text, encoding="utf-8")
+            ledger = RunLedger(self.config.runs_dir / run_id)
+            ledger.record_artifact(job_id="__run__", kind="review_workbook", path=workbook_path)
+            ledger.record_event(
+                "review_workbook_created",
+                {
+                    "run_id": run_id,
+                    "workbook_path": str(workbook_path),
+                    "row_count": bundle["job_count"],
+                    "state_filter": state,
+                    "writes_attempted": 0,
+                    "network_calls_made": 0,
+                },
+            )
+            payload["workbook_path"] = str(workbook_path)
+        return payload
 
     def submit_review(
         self,
@@ -2766,6 +2802,108 @@ class BusinessCardService:
         except (OSError, json.JSONDecodeError):
             return {}
         return payload if isinstance(payload, dict) else {}
+
+    def _render_review_workbook_csv(self, bundle: dict[str, Any]) -> str:
+        output = StringIO()
+        fieldnames = [
+            "run_id",
+            "job_id",
+            "state",
+            "image_path",
+            "next_action",
+            "next_action_reason",
+            "sink_pilot_state",
+            "safe_to_auto_continue",
+            "requires_explicit_operator_action",
+            "full_name",
+            "organization",
+            "title",
+            "email",
+            "phone",
+            "website",
+            "duplicate_state",
+            "enrichment_proposal_count",
+            "planned_sinks",
+            "route_refresh_state",
+            "artifact_kinds",
+            "review_command",
+            "decision_action",
+            "decision_template_json",
+        ]
+        writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore", lineterminator="\n")
+        writer.writeheader()
+        for entry in bundle["entries"]:
+            writer.writerow(self._review_workbook_row(entry))
+        return output.getvalue()
+
+    def _review_workbook_row(self, entry: dict[str, Any]) -> dict[str, Any]:
+        artifacts = entry.get("artifacts") or {}
+        reviewed = (artifacts.get("reviewed_contact") or {}).get("payload") or {}
+        candidate = (artifacts.get("contact_candidate") or {}).get("payload") or {}
+        contact = reviewed if reviewed else candidate
+        duplicate = (artifacts.get("downstream_duplicate_assessment") or {}).get("payload") or (
+            artifacts.get("duplicate_assessment") or {}
+        ).get("payload") or {}
+        enrichment = (artifacts.get("enrichment_result") or {}).get("payload") or {}
+        sink_plan = (artifacts.get("sink_plan") or {}).get("payload") or {}
+        route_refresh = (artifacts.get("route_refresh") or {}).get("payload") or {}
+        next_action = entry.get("next_action") or {}
+        pilot_status = entry.get("sink_pilot_status") or {}
+        decision_template = entry.get("decision_template") or {}
+        return {
+            "run_id": entry.get("run_id"),
+            "job_id": entry.get("job_id"),
+            "state": entry.get("state"),
+            "image_path": entry.get("image_path"),
+            "next_action": next_action.get("action"),
+            "next_action_reason": next_action.get("reason"),
+            "sink_pilot_state": pilot_status.get("state"),
+            "safe_to_auto_continue": pilot_status.get("safe_to_auto_continue"),
+            "requires_explicit_operator_action": pilot_status.get("requires_explicit_operator_action"),
+            "full_name": self._review_contact_value(contact, "full_name"),
+            "organization": self._review_contact_value(contact, "organization"),
+            "title": self._review_contact_value(contact, "title"),
+            "email": self._review_contact_value(contact, "email"),
+            "phone": self._review_contact_value(contact, "phone"),
+            "website": self._review_contact_value(contact, "website"),
+            "duplicate_state": duplicate.get("state"),
+            "enrichment_proposal_count": len(enrichment.get("merge_proposals") or []),
+            "planned_sinks": self._review_sink_names(sink_plan),
+            "route_refresh_state": route_refresh.get("state"),
+            "artifact_kinds": ";".join(str(kind) for kind in entry.get("artifact_kinds") or []),
+            "review_command": (entry.get("commands") or {}).get("review"),
+            "decision_action": decision_template.get("action"),
+            "decision_template_json": json.dumps(decision_template, sort_keys=True),
+        }
+
+    def _review_contact_value(self, contact: dict[str, Any], field: str) -> str:
+        flat = contact.get("flat")
+        if isinstance(flat, dict) and flat.get(field) not in {None, ""}:
+            return str(flat[field])
+        for section_name in ("normalized", "observed"):
+            section = contact.get(section_name)
+            if not isinstance(section, dict):
+                continue
+            value = section.get(field)
+            if isinstance(value, dict):
+                value = value.get("value")
+            if value not in {None, ""}:
+                return str(value)
+        return ""
+
+    def _review_sink_names(self, sink_plan: dict[str, Any]) -> str:
+        sinks = sink_plan.get("sinks")
+        if isinstance(sinks, list):
+            return ";".join(str(sink) for sink in sinks)
+        actions = sink_plan.get("actions")
+        if isinstance(actions, list):
+            names = [str(action.get("sink")) for action in actions if isinstance(action, dict) and action.get("sink")]
+            return ";".join(names)
+        payloads = sink_plan.get("payloads")
+        if isinstance(payloads, list):
+            names = [str(payload.get("sink")) for payload in payloads if isinstance(payload, dict) and payload.get("sink")]
+            return ";".join(names)
+        return ""
 
     def _render_review_html(self, bundle: dict[str, Any]) -> str:
         rows = "\n".join(self._review_html_row(entry) for entry in bundle["entries"])

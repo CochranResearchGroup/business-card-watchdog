@@ -2069,3 +2069,22 @@ Validation:
 Remaining:
 
 - Explicit lookup/write/readback pilot evidence still requires operator-approved commands after route-refresh invalidation.
+
+### Slice 0004-BK | 2026-06-13 | CSV Review Workbook Surface
+
+Implemented:
+
+- Added `review_workbook.csv` generation from the shared review bundle.
+- The workbook contains one row per job with state, image path, next action, sink pilot state, core contact fields, duplicate state, enrichment proposal count, planned sinks, route-refresh state, artifact kinds, review command, and decision template JSON.
+- Added service `review_workbook`, CLI `bcw reviews workbook`, API `POST /runs/{run_id}/review-workbook`, and MCP tool `business_card_watchdog_review_workbook`.
+- CLI workbook output prints CSV by default and returns metadata plus CSV with `--json`.
+- Added `contact_spec` to the review-bundle artifact registry so legacy extracted-spec evidence is visible in workbook exports.
+- Kept the surface read-only and zero-network/zero-write.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_run_summary_and_review_queue tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+
+Remaining:
+
+- Workbook import still flows through the existing JSON decision import path; a direct CSV decision importer remains follow-on work.

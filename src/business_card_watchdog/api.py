@@ -162,6 +162,10 @@ def create_app(config_path: Path | None = None):
     def create_review_html(run_id: str, state: str = "all", write: bool = True) -> dict[str, object]:
         return service().review_html(run_id=run_id, state=state, write=write)
 
+    @app.post("/runs/{run_id}/review-workbook")
+    def create_review_workbook(run_id: str, state: str = "all", write: bool = True) -> dict[str, object]:
+        return service().review_workbook(run_id=run_id, state=state, write=write)
+
     @app.post("/runs/{run_id}/review-decisions")
     def apply_review_decisions(run_id: str, request: ReviewDecisionsRequest = Body(...)) -> dict[str, object]:
         return service().apply_review_decisions(

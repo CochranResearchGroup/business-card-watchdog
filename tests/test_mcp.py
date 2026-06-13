@@ -1,6 +1,7 @@
+import csv
 import json
-from pathlib import Path
 from io import StringIO
+from pathlib import Path
 
 from business_card_watchdog.config import AppConfig, EnrichmentConfig, EnrichmentProviderConfig, SinkConfig
 from business_card_watchdog.contact import build_contact_candidate
@@ -24,6 +25,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_reviews_list" in names
     assert "business_card_watchdog_review_bundle" in names
     assert "business_card_watchdog_review_html" in names
+    assert "business_card_watchdog_review_workbook" in names
     assert "business_card_watchdog_apply_review_decisions" in names
     assert "business_card_watchdog_sinks_check" in names
     assert "business_card_watchdog_sink_plan" in names
@@ -96,6 +98,7 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     )
     review_bundle = call_tool("business_card_watchdog_review_bundle", {"run_id": run_id}, config=config)
     review_html = call_tool("business_card_watchdog_review_html", {"run_id": run_id}, config=config)
+    review_workbook = call_tool("business_card_watchdog_review_workbook", {"run_id": run_id}, config=config)
     next_actions = call_tool("business_card_watchdog_next_actions", {"run_id": run_id}, config=config)
     review_import = call_tool(
         "business_card_watchdog_apply_review_decisions",
@@ -237,6 +240,10 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert review_bundle["decision_import_template"][0]["job_id"] == job_id
     assert review_html["schema"] == "business-card-watchdog.review-html.v1"
     assert "Business Card Review" in review_html["html"]
+    assert review_workbook["schema"] == "business-card-watchdog.review-workbook.v1"
+    workbook_rows = list(csv.DictReader(StringIO(review_workbook["csv"])))
+    assert workbook_rows[0]["job_id"] == job_id
+    assert workbook_rows[0]["next_action"] == "review_contact"
     assert review_import["import"]["schema"] == "business-card-watchdog.review-decisions-import.v1"
     assert review_import["results"][0]["job_state"] == "ready_to_route"
     assert next_actions["actions"][0]["action"] == "review_contact"

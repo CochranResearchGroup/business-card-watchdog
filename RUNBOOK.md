@@ -1411,3 +1411,19 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_review_update_stales_full_pilot_chain_and_safe_refresh_stops_at_pilot -q` passed with 1 test.
+
+## Turn 76 | 2026-06-13
+
+Continued Plan 0004 execution with a CSV review workbook surface.
+
+Implemented:
+
+- Added `review_workbook.csv` generation from the shared review bundle.
+- Exposed the workbook through service, CLI `bcw reviews workbook`, API `POST /runs/{run_id}/review-workbook`, and MCP `business_card_watchdog_review_workbook`.
+- Workbook rows include job state, image path, next action, sink pilot state, contact fields, duplicate/enrichment/routing status, artifact kinds, review command, and decision template JSON.
+- Added `contact_spec` to the review-bundle artifact registry.
+- Kept the workbook surface read-only and zero-network/zero-write.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_run_summary_and_review_queue tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.

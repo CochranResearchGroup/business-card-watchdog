@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import csv
 import json
+from io import StringIO
 from pathlib import Path
 
 from business_card_watchdog.config import AppConfig, EnrichmentConfig, EnrichmentProviderConfig, SinkConfig
@@ -126,6 +128,22 @@ def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
     assert job_id in html["html"]
     assert html_path.exists()
     assert any(artifact["kind"] == "review_html" for artifact in service.list_artifacts(run_id))
+
+    workbook = service.review_workbook(run_id=run_id)
+    workbook_path = config.runs_dir / run_id / "review_workbook.csv"
+    rows = list(csv.DictReader(StringIO(workbook["csv"])))
+    assert workbook["schema"] == "business-card-watchdog.review-workbook.v1"
+    assert workbook["workbook_path"] == str(workbook_path)
+    assert workbook["format"] == "csv"
+    assert workbook["row_count"] == 1
+    assert rows[0]["run_id"] == run_id
+    assert rows[0]["job_id"] == job_id
+    assert rows[0]["state"] == "needs_review"
+    assert rows[0]["next_action"] == "review_contact"
+    assert rows[0]["decision_action"] == "approve_for_routing"
+    assert "contact_spec" in rows[0]["artifact_kinds"]
+    assert workbook_path.exists()
+    assert any(artifact["kind"] == "review_workbook" for artifact in service.list_artifacts(run_id))
 
 
 def test_service_run_summary_includes_enrichment_budget(tmp_path: Path) -> None:

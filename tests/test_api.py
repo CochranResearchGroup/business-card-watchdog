@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import csv
 import json
+from io import StringIO
 from pathlib import Path
 
 import pytest
@@ -54,6 +56,11 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     review_html = client.post(f"/runs/{run_id}/review-html").json()
     assert review_html["schema"] == "business-card-watchdog.review-html.v1"
     assert "Business Card Review" in review_html["html"]
+    review_workbook = client.post(f"/runs/{run_id}/review-workbook").json()
+    assert review_workbook["schema"] == "business-card-watchdog.review-workbook.v1"
+    workbook_rows = list(csv.DictReader(StringIO(review_workbook["csv"])))
+    assert workbook_rows[0]["job_id"] == job_id
+    assert workbook_rows[0]["next_action"] == "review_contact"
     review_import = client.post(
         f"/runs/{run_id}/review-decisions",
         json={

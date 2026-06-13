@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import csv
 import json
+from io import StringIO
 from pathlib import Path
 
 from business_card_watchdog.cli import build_parser, main
@@ -95,6 +97,19 @@ def test_cli_runs_and_jobs_use_recorded_runtime_state(
     assert html["schema"] == "business-card-watchdog.review-html.v1"
     assert "Business Card Review" in html["html"]
     assert Path(html["html_path"]).exists()
+
+    assert main(["--config", str(config_path), "reviews", "workbook", "--run-id", run_id, "--json"]) == 0
+    workbook = json.loads(capsys.readouterr().out)
+    assert workbook["schema"] == "business-card-watchdog.review-workbook.v1"
+    assert Path(workbook["workbook_path"]).exists()
+    rows = list(csv.DictReader(StringIO(workbook["csv"])))
+    assert rows[0]["job_id"] == job_id
+    assert rows[0]["next_action"] == "review_contact"
+
+    assert main(["--config", str(config_path), "reviews", "workbook", "--run-id", run_id, "--no-write"]) == 0
+    csv_text = capsys.readouterr().out
+    assert "job_id,state,image_path,next_action" in csv_text
+    assert job_id in csv_text
 
     assert (
         main(
