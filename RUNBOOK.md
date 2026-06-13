@@ -947,3 +947,23 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed with the index up to date.
 - `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+## Turn 53 | 2026-06-13
+
+Continued Plan 0004 execution with full route-refresh chain proof.
+
+Implemented:
+
+- Strengthened review-update route-refresh regression coverage to prove the full existing downstream chain is marked stale.
+- The test now verifies stale and refreshed route artifact kinds for lookup plan, lookup adapter request, lookup result, downstream duplicate assessment, sink plan, write adapter request, and apply preflight.
+- The test snapshots old route artifacts and proves refreshed lookup and sink plans use the corrected reviewed email.
+- No runtime behavior changed; this locks in the existing safe agent-loop refresh semantics.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py -q` passed with 43 tests.
+- `.venv/bin/python -m pytest -q` passed with 141 tests.
+- `PYTHONPATH=src pytest -q` passed with 136 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.

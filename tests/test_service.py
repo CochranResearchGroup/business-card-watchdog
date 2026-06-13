@@ -943,6 +943,19 @@ def test_service_review_update_refreshes_stale_route_artifacts(tmp_path: Path) -
         field_corrections={"full_name": "Old Fixture", "email": "old@example.test"},
     )
     service.run_next_actions(run_id=run_id, limit=10)
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+    stale_artifact_payloads = {
+        kind: json.loads((artifact_dir / filename).read_text(encoding="utf-8"))
+        for kind, filename in {
+            "sink_lookup_plan": "sink_lookup_plan.json",
+            "sink_adapter_request_lookup": "sink_adapter_request_lookup.json",
+            "sink_lookup_result": "sink_lookup_result.json",
+            "downstream_duplicate_assessment": "downstream_duplicate_assessment.json",
+            "sink_plan": "sink_plan.json",
+            "sink_adapter_request_write": "sink_adapter_request_write.json",
+            "sink_apply_preflight": "sink_apply_preflight.json",
+        }.items()
+    }
 
     result = service.submit_review(
         job_id=job_id,
@@ -953,7 +966,6 @@ def test_service_review_update_refreshes_stale_route_artifacts(tmp_path: Path) -
     )
     next_action = service.next_actions(run_id=run_id)["actions"][0]
     rerun = service.run_next_actions(run_id=run_id, limit=10)
-    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
     route_refresh = json.loads((artifact_dir / "route_refresh.json").read_text(encoding="utf-8"))
     lookup_plan = json.loads((artifact_dir / "sink_lookup_plan.json").read_text(encoding="utf-8"))
     sink_plan = json.loads((artifact_dir / "sink_plan.json").read_text(encoding="utf-8"))
@@ -963,7 +975,16 @@ def test_service_review_update_refreshes_stale_route_artifacts(tmp_path: Path) -
     ]
 
     assert result["route_refresh"]["schema"] == "business-card-watchdog.route-refresh.v1"
-    assert "sink_lookup_plan" in result["route_refresh"]["pending_artifact_kinds"]
+    assert result["route_refresh"]["stale_artifact_kinds"] == [
+        "sink_lookup_plan",
+        "sink_adapter_request_lookup",
+        "sink_lookup_result",
+        "downstream_duplicate_assessment",
+        "sink_plan",
+        "sink_adapter_request_write",
+        "sink_apply_preflight",
+    ]
+    assert result["route_refresh"]["pending_artifact_kinds"] == result["route_refresh"]["stale_artifact_kinds"]
     assert next_action["action"] == "plan_sink_lookup"
     assert next_action["route_refresh_path"].endswith("route_refresh.json")
     assert [item["action"] for item in rerun["executed"]] == [
@@ -977,6 +998,9 @@ def test_service_review_update_refreshes_stale_route_artifacts(tmp_path: Path) -
     ]
     assert route_refresh["state"] == "complete"
     assert route_refresh["pending_artifact_kinds"] == []
+    assert route_refresh["refreshed_artifact_kinds"] == result["route_refresh"]["stale_artifact_kinds"]
+    assert stale_artifact_payloads["sink_lookup_plan"]["lookups"][0]["match_keys"]["email"] == "old@example.test"
+    assert stale_artifact_payloads["sink_plan"]["actions"][0]["match_keys"]["email"] == "old@example.test"
     assert lookup_plan["lookups"][0]["match_keys"]["email"] == "new@example.test"
     assert sink_plan["actions"][0]["match_keys"]["email"] == "new@example.test"
     assert any(event["event_type"] == "route_refresh_requested" for event in events)
