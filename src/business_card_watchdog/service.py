@@ -15,6 +15,7 @@ from .dedupe import assess_downstream_lookup_result
 from .enrichment import (
     build_enrichment_request,
     build_paid_api_provider_request,
+    build_public_web_search_request,
     check_enrichment_readiness,
     score_public_web_results,
 )
@@ -485,8 +486,28 @@ class BusinessCardService:
         ledger.record_artifact(job_id=job_id, kind="enrichment_request", path=request_path)
         result_payload = None
         result_path = None
+        public_web_request_payload = None
+        public_web_request_path = None
         provider_request_payload = None
         provider_request_path = None
+        if mode in {"public_web", "all"}:
+            public_web_request_payload = build_public_web_search_request(
+                self.config,
+                candidate,
+                mode=mode,
+                requested_by=requested_by,
+                readiness=list(readiness["checks"]),
+            )
+            public_web_request_path = artifact_dir / "enrichment_public_web_request.json"
+            public_web_request_path.write_text(
+                json.dumps(public_web_request_payload, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            ledger.record_artifact(
+                job_id=job_id,
+                kind="enrichment_public_web_request",
+                path=public_web_request_path,
+            )
         if mode in {"api", "all"}:
             provider_request_payload = build_paid_api_provider_request(
                 self.config,
@@ -523,6 +544,7 @@ class BusinessCardService:
                     "requested_by": requested_by,
                     "request_path": str(request_path),
                     "result_path": str(result_path) if result_path else None,
+                    "public_web_request_path": str(public_web_request_path) if public_web_request_path else None,
                     "provider_request_path": str(provider_request_path) if provider_request_path else None,
                 },
             )
@@ -531,9 +553,11 @@ class BusinessCardService:
             "readiness": readiness,
             "request_path": str(request_path),
             "result_path": str(result_path) if result_path else None,
+            "public_web_request_path": str(public_web_request_path) if public_web_request_path else None,
             "provider_request_path": str(provider_request_path) if provider_request_path else None,
             "request": request,
             "result": result_payload,
+            "public_web_request": public_web_request_payload,
             "provider_request": provider_request_payload,
         }
 

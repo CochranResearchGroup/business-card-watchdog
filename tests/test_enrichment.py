@@ -5,6 +5,7 @@ from business_card_watchdog.config import AppConfig, EnrichmentConfig, Enrichmen
 from business_card_watchdog.enrichment import (
     build_enrichment_request,
     build_paid_api_provider_request,
+    build_public_web_search_request,
     check_enrichment_readiness,
 )
 from business_card_watchdog.orchestrator import BatchOrchestrator
@@ -77,6 +78,43 @@ def test_public_web_request_builds_queries_from_contact_candidate() -> None:
     assert request["schema"] == "business-card-watchdog.enrichment-request.v1"
     assert request["queries"][0]["query"] == '"ada@example.test"'
     assert request["cost_gate"]["paid_api_requested"] is False
+
+
+def test_public_web_search_request_is_zero_network_and_operator_scoped(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        enrichment=EnrichmentConfig(enabled=True, max_public_web_queries_per_contact=2),
+    )
+    readiness = [
+        check.to_dict()
+        for check in check_enrichment_readiness(config, mode="public_web")
+    ]
+
+    request = build_public_web_search_request(
+        config,
+        {
+            "schema": "business-card-watchdog.contact-candidate.v1",
+            "normalized": {
+                "full_name": {"value": "Ada Lovelace"},
+                "organization": {"value": "Example Labs"},
+                "email": {"value": "ada@example.test"},
+                "website": {"value": "https://example.test/team"},
+            },
+        },
+        mode="public_web",
+        requested_by="tester",
+        readiness=readiness,
+    )
+
+    assert request["schema"] == "business-card-watchdog.enrichment-public-web-request.v1"
+    assert request["status"] == "prepared"
+    assert request["cost_class"] == "operator_search"
+    assert request["network_calls_made"] == 0
+    assert request["search_calls_attempted"] == 0
+    assert request["max_queries"] == 2
+    assert len(request["queries"]) == 2
+    assert request["queries"][0]["search_url"].startswith("https://www.google.com/search?q=")
+    assert "paid API" in request["instructions"][2]
 
 
 def test_paid_api_provider_request_is_zero_network_and_secret_free(tmp_path: Path) -> None:
@@ -167,10 +205,13 @@ def test_service_request_enrichment_writes_request_and_fixture_result(tmp_path: 
     result_path = Path(payload["result_path"])
 
     assert payload["status"] == "ok"
+    assert payload["public_web_request"]["schema"] == "business-card-watchdog.enrichment-public-web-request.v1"
+    assert payload["public_web_request"]["network_calls_made"] == 0
     assert payload["result"]["network_calls_made"] == 0
     assert payload["result"]["results"][0]["score"] >= 75
     assert result_path.exists()
     assert any(artifact["kind"] == "enrichment_request" for artifact in artifacts)
+    assert any(artifact["kind"] == "enrichment_public_web_request" for artifact in artifacts)
     assert any(artifact["kind"] == "enrichment_result" for artifact in artifacts)
 
 

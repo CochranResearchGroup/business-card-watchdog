@@ -619,6 +619,26 @@ Remaining:
 - Live Google Contacts and Odoo/Odollo lookup/write/readback adapters remain blocked.
 - Non-simulated live apply remains blocked until adapters are implemented and explicitly approved.
 
+### Slice 0004-Z | 2026-06-13 | Public-Web Search Request Artifacts
+
+Implemented:
+
+- Added `enrichment_public_web_request.json` artifacts for public-web enrichment requests.
+- Public-web request artifacts include observed card fields, deterministic search queries, search URLs, operator/search-agent instructions, max query count, and readiness status.
+- Public-web request artifacts record `network_calls_made = 0` and `search_calls_attempted = 0`.
+- Service `request_enrichment` writes public-web request artifacts for `public_web` and `all` modes before result scoring.
+- CLI/API/MCP enrichment surfaces receive the new payload through the shared service method without adding duplicate orchestration logic.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_enrichment.py tests/test_cli_surfaces.py tests/test_mcp.py tests/test_api.py -q` passed with 32 tests.
+
+Remaining:
+
+- Real public-web search execution remains blocked until an explicit operator/search-adapter action is approved.
+- Apollo live API calls remain blocked behind explicit operator request and future adapter implementation.
+- Live Google Contacts and Odoo/Odollo lookup/write/readback adapters remain blocked.
+
 ## `/goal` Objective
 
 Use this as the high-level `/goal` objective:

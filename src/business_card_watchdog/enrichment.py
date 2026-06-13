@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Literal
-from urllib.parse import urlparse
+from urllib.parse import quote_plus, urlparse
 
 from .config import AppConfig
 from .contact import contact_candidate_to_spec
@@ -14,6 +14,7 @@ EnrichmentReadinessStatus = Literal["ready", "blocked"]
 ENRICHMENT_REQUEST_SCHEMA = "business-card-watchdog.enrichment-request.v1"
 ENRICHMENT_RESULT_SCHEMA = "business-card-watchdog.enrichment-result.v1"
 ENRICHMENT_PROVIDER_REQUEST_SCHEMA = "business-card-watchdog.enrichment-provider-request.v1"
+ENRICHMENT_PUBLIC_WEB_REQUEST_SCHEMA = "business-card-watchdog.enrichment-public-web-request.v1"
 
 
 @dataclass(frozen=True)
@@ -121,6 +122,52 @@ def score_public_web_results(
         "network_calls_made": 0,
         "results": scored,
         "merge_proposals": _merge_proposals(spec, scored),
+    }
+
+
+def build_public_web_search_request(
+    config: AppConfig,
+    contact_candidate: dict[str, Any],
+    *,
+    mode: str,
+    requested_by: str,
+    readiness: list[dict[str, Any]],
+) -> dict[str, Any]:
+    spec = contact_candidate_to_spec(contact_candidate)
+    public_web_ready = next((check for check in readiness if check.get("provider") == "public_web"), {})
+    queries = build_public_web_queries(
+        spec,
+        max_queries=config.enrichment.max_public_web_queries_per_contact,
+    )
+    observed = {
+        key: spec[key]
+        for key in ("full_name", "organization", "email", "phone", "website")
+        if spec.get(key)
+    }
+    return {
+        "schema": ENRICHMENT_PUBLIC_WEB_REQUEST_SCHEMA,
+        "provider": "public_web",
+        "mode": mode,
+        "requested_by": requested_by,
+        "status": "prepared" if public_web_ready.get("status") == "ready" else "blocked",
+        "reason": public_web_ready.get("reason") or "public-web readiness was not evaluated",
+        "cost_class": "operator_search",
+        "network_calls_made": 0,
+        "search_calls_attempted": 0,
+        "max_queries": config.enrichment.max_public_web_queries_per_contact,
+        "observed": observed,
+        "queries": [
+            {
+                **query,
+                "search_url": f"https://www.google.com/search?q={quote_plus(str(query.get('query') or ''))}",
+            }
+            for query in queries
+        ],
+        "instructions": [
+            "Collect only public professional identity evidence relevant to the observed business card fields.",
+            "Return title, url, snippet, and any observed matching fields; do not overwrite card-observed values without review.",
+            "Record no paid API calls under this request.",
+        ],
     }
 
 

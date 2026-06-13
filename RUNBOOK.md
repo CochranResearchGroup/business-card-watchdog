@@ -620,3 +620,19 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py tests/test_config.py -q` passed with 57 tests.
+
+## Turn 37 | 2026-06-13
+
+Continued Plan 0004 execution with public-web search request artifacts.
+
+Implemented:
+
+- Added `enrichment_public_web_request.json` artifacts for public-web enrichment requests.
+- Request artifacts include observed card fields, deterministic search queries, search URLs, operator/search-agent instructions, max query count, and readiness status.
+- Public-web request artifacts record `network_calls_made = 0` and `search_calls_attempted = 0`.
+- Service `request_enrichment` writes public-web request artifacts for `public_web` and `all` modes before result scoring.
+- CLI/API/MCP enrichment surfaces receive the new payload through the shared service method.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_enrichment.py tests/test_cli_surfaces.py tests/test_mcp.py tests/test_api.py -q` passed with 32 tests.
