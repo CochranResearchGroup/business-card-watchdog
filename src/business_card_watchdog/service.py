@@ -714,7 +714,14 @@ class BusinessCardService:
                 return job
         raise FileNotFoundError(f"job not found: {job_id}")
 
-    def review_queue(self, *, run_id: str | None = None, state: str = "needs_review") -> list[dict[str, Any]]:
+    def review_queue(
+        self,
+        *,
+        run_id: str | None = None,
+        state: str = "needs_review",
+        next_action: str | None = None,
+        artifact_kind: str | None = None,
+    ) -> list[dict[str, Any]]:
         jobs = self.list_jobs(run_id)
         queue: list[dict[str, Any]] = []
         for job in jobs:
@@ -726,6 +733,11 @@ class BusinessCardService:
                 if artifact.get("job_id") == job["job_id"]
             ]
             by_kind = {str(artifact.get("kind")): artifact for artifact in artifacts}
+            if artifact_kind and artifact_kind not in by_kind:
+                continue
+            action = self._next_action_for_job(job, set(by_kind))
+            if next_action and str((action or {}).get("action") or "") != next_action:
+                continue
             queue.append(
                 {
                     "run_id": job["run_id"],
@@ -734,6 +746,7 @@ class BusinessCardService:
                     "image_path": job["image_path"],
                     "error": job.get("error"),
                     "artifact_dir": job.get("artifact_dir"),
+                    "next_action": action,
                     "review_packet": by_kind.get("review_packet"),
                     "duplicate_assessment": by_kind.get("duplicate_assessment"),
                     "contact_candidate": by_kind.get("contact_candidate"),

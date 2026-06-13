@@ -83,6 +83,8 @@ def build_parser() -> argparse.ArgumentParser:
     reviews_list = reviews_sub.add_parser("list")
     reviews_list.add_argument("--run-id", default=None)
     reviews_list.add_argument("--state", default="needs_review")
+    reviews_list.add_argument("--next-action", default=None)
+    reviews_list.add_argument("--artifact-kind", default=None)
     reviews_list.add_argument("--json", action="store_true")
     reviews_bundle = reviews_sub.add_parser("bundle")
     reviews_bundle.add_argument("--run-id", required=True)
@@ -314,7 +316,12 @@ def main(argv: list[str] | None = None) -> int:
                 decisions=json.loads(decisions_body),
             )
         else:
-            payload = service.review_queue(run_id=args.run_id, state=args.state)
+            payload = service.review_queue(
+                run_id=args.run_id,
+                state=args.state,
+                next_action=args.next_action,
+                artifact_kind=args.artifact_kind,
+            )
         print(json.dumps(payload, indent=2) if args.json else payload)
         return 0
 

@@ -40,6 +40,11 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert client.get(f"/runs/{run_id}/jobs").json()[0]["job_id"] == job_id
     assert client.get(f"/jobs/{job_id}", params={"run_id": run_id}).json()["job_id"] == job_id
     assert client.get("/reviews", params={"run_id": run_id}).json()[0]["job_id"] == job_id
+    filtered_reviews = client.get(
+        "/reviews",
+        params={"run_id": run_id, "next_action": "review_contact", "artifact_kind": "contact_spec"},
+    ).json()
+    assert [entry["job_id"] for entry in filtered_reviews] == [job_id]
     review_bundle = client.post(f"/runs/{run_id}/review-bundle").json()
     assert review_bundle["schema"] == "business-card-watchdog.review-bundle.v1"
     assert review_bundle["entries"][0]["job_id"] == job_id

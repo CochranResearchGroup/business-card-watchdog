@@ -1986,3 +1986,28 @@ Validation:
 Remaining:
 
 - Stop rules are readback policy only; explicit operator commands still perform the actual review/enrichment/pilot actions.
+
+### Slice 0004-BG | 2026-06-13 | Review Queue Next-Action Filters
+
+Implemented:
+
+- Added review queue filters for `next_action` and `artifact_kind`.
+- Review queue entries now include their deterministic `next_action` payload.
+- Added CLI filters `bcw reviews list --next-action ... --artifact-kind ...`.
+- Added API query parameters `next_action` and `artifact_kind` on `GET /reviews`.
+- Added MCP `business_card_watchdog_reviews_list` input fields for `next_action` and `artifact_kind`.
+- Covered service, CLI, API, and MCP filtering behavior with focused tests.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_run_summary_and_review_queue tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 4 tests.
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 83 tests.
+- `.venv/bin/python -m pytest -q` passed with 172 tests.
+- `PYTHONPATH=src pytest -q` passed with 165 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+Remaining:
+
+- Review queue filters are read-only; reviewer decisions still flow through explicit review submission/import actions.

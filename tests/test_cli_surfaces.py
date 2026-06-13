@@ -58,6 +58,28 @@ def test_cli_runs_and_jobs_use_recorded_runtime_state(
     assert main(["--config", str(config_path), "reviews", "list", "--run-id", run_id, "--json"]) == 0
     reviews = json.loads(capsys.readouterr().out)
     assert reviews[0]["job_id"] == job_id
+    assert reviews[0]["next_action"]["action"] == "review_contact"
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "reviews",
+                "list",
+                "--run-id",
+                run_id,
+                "--next-action",
+                "review_contact",
+                "--artifact-kind",
+                "contact_spec",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    filtered_reviews = json.loads(capsys.readouterr().out)
+    assert [entry["job_id"] for entry in filtered_reviews] == [job_id]
 
     assert main(["--config", str(config_path), "reviews", "bundle", "--run-id", run_id, "--json"]) == 0
     bundle = json.loads(capsys.readouterr().out)

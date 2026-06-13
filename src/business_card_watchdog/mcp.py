@@ -101,6 +101,8 @@ def tool_manifest() -> dict[str, object]:
                     "properties": {
                         "run_id": {"type": "string"},
                         "state": {"type": "string", "default": "needs_review"},
+                        "next_action": {"type": "string"},
+                        "artifact_kind": {"type": "string"},
                     },
                 },
             },
@@ -526,6 +528,8 @@ def call_tool(
         return service.review_queue(
             run_id=str(args["run_id"]) if args.get("run_id") else None,
             state=str(args.get("state") or "needs_review"),
+            next_action=str(args["next_action"]) if args.get("next_action") else None,
+            artifact_kind=str(args["artifact_kind"]) if args.get("artifact_kind") else None,
         )
     if tool_name == "business_card_watchdog_review_bundle":
         return service.review_bundle(

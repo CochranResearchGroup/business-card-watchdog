@@ -90,6 +90,11 @@ def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
     ]
     assert queue[0]["job_id"] == job_id
     assert queue[0]["artifact_kinds"] == ["contact_spec"]
+    assert queue[0]["next_action"]["action"] == "review_contact"
+    assert service.review_queue(run_id=run_id, next_action="review_contact")[0]["job_id"] == job_id
+    assert service.review_queue(run_id=run_id, artifact_kind="contact_spec")[0]["job_id"] == job_id
+    assert service.review_queue(run_id=run_id, next_action="plan_sinks") == []
+    assert service.review_queue(run_id=run_id, artifact_kind="reviewed_contact") == []
     assert bundle["schema"] == "business-card-watchdog.review-bundle.v1"
     assert bundle["review_bundle_path"] == str(bundle_path)
     assert bundle["entries"][0]["job_id"] == job_id

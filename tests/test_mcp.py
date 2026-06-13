@@ -85,6 +85,15 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
 
     summary = call_tool("business_card_watchdog_run_summary", {"run_id": run_id}, config=config)
     phase_report = call_tool("business_card_watchdog_phase_report", {"run_id": run_id}, config=config)
+    reviews = call_tool(
+        "business_card_watchdog_reviews_list",
+        {
+            "run_id": run_id,
+            "next_action": "review_contact",
+            "artifact_kind": "contact_spec",
+        },
+        config=config,
+    )
     review_bundle = call_tool("business_card_watchdog_review_bundle", {"run_id": run_id}, config=config)
     review_html = call_tool("business_card_watchdog_review_html", {"run_id": run_id}, config=config)
     next_actions = call_tool("business_card_watchdog_next_actions", {"run_id": run_id}, config=config)
@@ -220,6 +229,7 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert phase_report["schema"] == "business-card-watchdog.phase-report.v1"
     assert phase_report["phases"][2]["phase"] == "review"
     assert phase_report["phases"][2]["counts"]["blocked"] == 1
+    assert [entry["job_id"] for entry in reviews] == [job_id]
     assert review_bundle["schema"] == "business-card-watchdog.review-bundle.v1"
     assert review_bundle["entries"][0]["job_id"] == job_id
     assert review_bundle["entries"][0]["next_action"]["action"] == "review_contact"

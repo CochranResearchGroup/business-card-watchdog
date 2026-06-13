@@ -141,8 +141,18 @@ def create_app(config_path: Path | None = None):
         return service().list_jobs(run_id)
 
     @app.get("/reviews")
-    def list_reviews(run_id: str | None = None, state: str = "needs_review") -> list[dict[str, object]]:
-        return service().review_queue(run_id=run_id, state=state)
+    def list_reviews(
+        run_id: str | None = None,
+        state: str = "needs_review",
+        next_action: str | None = None,
+        artifact_kind: str | None = None,
+    ) -> list[dict[str, object]]:
+        return service().review_queue(
+            run_id=run_id,
+            state=state,
+            next_action=next_action,
+            artifact_kind=artifact_kind,
+        )
 
     @app.post("/runs/{run_id}/review-bundle")
     def create_review_bundle(run_id: str, state: str = "all", write: bool = True) -> dict[str, object]:
