@@ -445,6 +445,13 @@ def test_service_preflight_sink_apply_writes_zero_write_artifact(tmp_path: Path)
     )
     run_id, job_id = make_recorded_run(config)
     service = BusinessCardService(config)
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+        field_corrections={"full_name": "Reviewed Fixture", "email": "fixture@example.test"},
+    )
     service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
 
     preview = service.preflight_sink_apply(job_id=job_id, run_id=run_id)
@@ -473,6 +480,13 @@ def test_service_decide_sink_apply_writes_zero_write_decision(tmp_path: Path) ->
     )
     run_id, job_id = make_recorded_run(config)
     service = BusinessCardService(config)
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+        field_corrections={"full_name": "Reviewed Fixture", "email": "fixture@example.test"},
+    )
     service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
     service.preflight_sink_apply(job_id=job_id, run_id=run_id)
 
@@ -720,6 +734,43 @@ def test_service_readback_pilot_writes_simulated_evidence(tmp_path: Path) -> Non
     assert pilot["pilot"]["network_calls_made"] == 0
     assert pilot["pilot"]["readback"]["resource_id"].startswith("mock:google_contacts:")
     assert any(artifact["kind"] == "sink_readback_pilot" for artifact in job["artifacts"])
+
+
+def test_service_apply_pilot_report_summarizes_write_and_readback(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+        field_corrections={"full_name": "Reviewed Fixture", "email": "fixture@example.test"},
+    )
+    service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="write")
+    service.preflight_sink_apply(job_id=job_id, run_id=run_id)
+    service.decide_sink_apply(job_id=job_id, run_id=run_id, decision="approve", reviewer="tester")
+    service.build_sink_apply_pilot_readiness_for_job(job_id=job_id, run_id=run_id)
+    service.execute_sink_write_pilot_for_job(job_id=job_id, run_id=run_id, sink="google_contacts", approved_by="tester")
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="readback")
+    service.execute_sink_readback_pilot_for_job(job_id=job_id, run_id=run_id, sink="google_contacts", approved_by="tester")
+
+    report = service.build_sink_apply_pilot_report_for_job(job_id=job_id, run_id=run_id)
+    job = service.get_job(job_id, run_id=run_id)
+
+    assert report["report"]["schema"] == "business-card-watchdog.sink-apply-pilot-report.v1"
+    assert report["report"]["state"] == "complete"
+    assert report["report"]["writes_attempted"] == 0
+    assert report["report"]["network_calls_made"] == 0
+    assert report["report"]["missing_artifacts"] == []
+    assert report["report"]["sinks"][0]["readback_matched"] is True
+    assert any(artifact["kind"] == "sink_apply_pilot_report" for artifact in job["artifacts"])
 
 
 def test_service_readback_pilot_uses_injected_executor(tmp_path: Path) -> None:

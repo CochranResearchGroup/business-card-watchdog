@@ -1199,3 +1199,24 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed with the index up to date.
 - `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+## Turn 65 | 2026-06-13
+
+Continued Plan 0004 execution with an apply pilot report surface.
+
+Implemented:
+
+- Added `sink_apply_pilot_report.json` artifacts summarizing readiness, write pilot, apply result, readback adapter request, and readback pilot evidence.
+- Reports include complete/incomplete state, missing artifacts, per-sink resource IDs, simulated/live flags, readback match status, write counters, and network counters.
+- Added service, CLI, API, and MCP surfaces for the shared report builder.
+- Next-action readback now recommends report creation after explicit write and readback pilot evidence exists; safe agent-loop execution may create the zero-write report.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py tests/test_sink_apply_adapters.py -q` passed with 90 tests.
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_sinks.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py tests/test_sink_apply_adapters.py -q` passed with 108 tests.
+- `.venv/bin/python -m pytest -q` passed with 171 tests.
+- `PYTHONPATH=src pytest -q` passed with 164 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.

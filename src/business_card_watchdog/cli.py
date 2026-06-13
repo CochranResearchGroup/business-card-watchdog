@@ -134,6 +134,10 @@ def build_parser() -> argparse.ArgumentParser:
     sinks_apply_pilot_readiness.add_argument("job_id")
     sinks_apply_pilot_readiness.add_argument("--run-id", required=True)
     sinks_apply_pilot_readiness.add_argument("--json", action="store_true")
+    sinks_apply_pilot_report = sinks_sub.add_parser("apply-pilot-report")
+    sinks_apply_pilot_report.add_argument("job_id")
+    sinks_apply_pilot_report.add_argument("--run-id", required=True)
+    sinks_apply_pilot_report.add_argument("--json", action="store_true")
     sinks_apply_decision = sinks_sub.add_parser("apply-decision")
     sinks_apply_decision.add_argument("job_id")
     sinks_apply_decision.add_argument("--run-id", required=True)
@@ -372,6 +376,11 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif args.sinks_command == "apply-pilot-readiness":
             payload = service.build_sink_apply_pilot_readiness_for_job(
+                job_id=args.job_id,
+                run_id=args.run_id,
+            )
+        elif args.sinks_command == "apply-pilot-report":
+            payload = service.build_sink_apply_pilot_report_for_job(
                 job_id=args.job_id,
                 run_id=args.run_id,
             )

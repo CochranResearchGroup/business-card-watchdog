@@ -31,6 +31,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_sink_apply_decision" in names
     assert "business_card_watchdog_sink_apply" in names
     assert "business_card_watchdog_sink_apply_pilot_readiness" in names
+    assert "business_card_watchdog_sink_apply_pilot_report" in names
     assert "business_card_watchdog_sink_adapter_request" in names
     assert "business_card_watchdog_sink_lookup_pilot" in names
     assert "business_card_watchdog_sink_write_pilot" in names
@@ -151,6 +152,11 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
         },
         config=config,
     )
+    pilot_report = call_tool(
+        "business_card_watchdog_sink_apply_pilot_report",
+        {"job_id": job_id, "run_id": run_id},
+        config=config,
+    )
     lookup_pilot = call_tool(
         "business_card_watchdog_sink_lookup_pilot",
         {
@@ -237,6 +243,8 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert readback_pilot["pilot"]["schema"] == "business-card-watchdog.sink-readback-pilot.v1"
     assert readback_pilot["pilot"]["writes_attempted"] == 0
     assert readback_pilot["pilot"]["network_calls_made"] == 0
+    assert pilot_report["report"]["schema"] == "business-card-watchdog.sink-apply-pilot-report.v1"
+    assert pilot_report["report"]["state"] == "complete"
     assert lookup_pilot["pilot"]["schema"] == "business-card-watchdog.sink-lookup-pilot.v1"
     assert lookup_pilot["pilot"]["approved_by"] == "mcp-operator"
     assert lookup_pilot["pilot"]["writes_attempted"] == 0

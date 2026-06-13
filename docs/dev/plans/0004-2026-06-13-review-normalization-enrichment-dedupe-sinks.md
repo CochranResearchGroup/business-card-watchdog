@@ -1840,3 +1840,29 @@ Remaining:
 
 - Real live write pilots still require explicit non-simulated invocation plus local sink readiness and auth.
 - Readback remains a separate explicit pilot step after write evidence exists.
+
+### Slice 0004-BA | 2026-06-13 | Apply Pilot Report Surface
+
+Implemented:
+
+- Added `sink_apply_pilot_report.json` artifacts that summarize readiness, write pilot, apply result, readback adapter request, and readback pilot evidence.
+- Reports compute complete/incomplete state, missing required artifacts, per-sink resource IDs, simulated/live flags, readback match status, write counters, and network counters.
+- Added service `build_sink_apply_pilot_report_for_job`.
+- Added CLI `bcw sinks apply-pilot-report`.
+- Added API `POST /jobs/{job_id}/sink-apply-pilot-report`.
+- Added MCP tool `business_card_watchdog_sink_apply_pilot_report`.
+- Next-action readback now recommends report creation after explicit write and readback pilot evidence exists; safe agent-loop execution may create the zero-write report.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py tests/test_sink_apply_adapters.py -q` passed with 90 tests.
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_sinks.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py tests/test_sink_apply_adapters.py -q` passed with 108 tests.
+- `.venv/bin/python -m pytest -q` passed with 171 tests.
+- `PYTHONPATH=src pytest -q` passed with 164 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+Remaining:
+
+- Reports summarize existing pilot artifacts only; they do not perform live writes, readbacks, or external readiness probes.

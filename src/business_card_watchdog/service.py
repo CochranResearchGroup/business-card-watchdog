@@ -57,6 +57,7 @@ _SAFE_NEXT_ACTIONS = {
     "preflight_sink_apply",
     "prepare_sink_apply_pilot_readiness",
     "prepare_sink_readback_adapter",
+    "prepare_sink_apply_pilot_report",
 }
 
 _ROUTE_ARTIFACT_FILES = {
@@ -74,6 +75,7 @@ _ROUTE_ARTIFACT_FILES = {
     "sink_apply_result": "sink_apply_result.json",
     "sink_adapter_request_readback": "sink_adapter_request_readback.json",
     "sink_readback_pilot": "sink_readback_pilot.json",
+    "sink_apply_pilot_report": "sink_apply_pilot_report.json",
 }
 
 _ROUTE_REFRESH_STEPS = [
@@ -161,6 +163,12 @@ _ROUTE_REFRESH_STEPS = [
         "command": "sinks readback-pilot",
         "reason": "review changed routing-relevant contact data; refresh explicit readback pilot evidence",
     },
+    {
+        "kind": "sink_apply_pilot_report",
+        "action": "prepare_sink_apply_pilot_report",
+        "command": "sinks apply-pilot-report",
+        "reason": "review changed routing-relevant contact data; refresh apply pilot report",
+    },
 ]
 
 _REVIEW_BUNDLE_ARTIFACT_KINDS = {
@@ -194,6 +202,7 @@ _REVIEW_BUNDLE_ARTIFACT_KINDS = {
     "sink_apply_result",
     "sink_adapter_request_readback",
     "sink_readback_pilot",
+    "sink_apply_pilot_report",
     "route_refresh",
 }
 
@@ -2188,6 +2197,100 @@ class BusinessCardService:
         )
         return {"pilot_path": str(pilot_path), "pilot": pilot}
 
+    def build_sink_apply_pilot_report_for_job(self, *, job_id: str, run_id: str) -> dict[str, Any]:
+        job = self.get_job(job_id, run_id=run_id)
+        artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
+        readiness = _read_json_file(artifact_dir / "sink_apply_pilot_readiness.json")
+        write_pilot = _read_json_file(artifact_dir / "sink_write_pilot.json")
+        apply_result = _read_json_file(artifact_dir / "sink_apply_result.json")
+        readback_request = _read_json_file(artifact_dir / "sink_adapter_request_readback.json")
+        readback_pilot = _read_json_file(artifact_dir / "sink_readback_pilot.json")
+        write_sink = str((write_pilot or {}).get("sink") or "")
+        readback_sink = str((readback_pilot or {}).get("sink") or "")
+        sinks = sorted({sink for sink in [write_sink, readback_sink] if sink})
+        sink_reports = []
+        for sink in sinks:
+            write_for_sink = write_pilot if write_sink == sink else None
+            readback_for_sink = readback_pilot if readback_sink == sink else None
+            sink_reports.append(
+                {
+                    "sink": sink,
+                    "write_state": (write_for_sink or {}).get("state", "missing"),
+                    "write_simulated": bool((write_for_sink or {}).get("simulated", False)),
+                    "write_resource_id": ((write_for_sink or {}).get("write") or {}).get("resource_id"),
+                    "readback_state": (readback_for_sink or {}).get("state", "missing"),
+                    "readback_simulated": bool((readback_for_sink or {}).get("simulated", False)),
+                    "readback_resource_id": ((readback_for_sink or {}).get("readback") or {}).get("resource_id"),
+                    "readback_matched": bool(((readback_for_sink or {}).get("readback") or {}).get("matched", False)),
+                }
+            )
+        missing = [
+            name
+            for name, payload in [
+                ("sink_apply_pilot_readiness", readiness),
+                ("sink_write_pilot", write_pilot),
+                ("sink_apply_result", apply_result),
+                ("sink_adapter_request_readback", readback_request),
+                ("sink_readback_pilot", readback_pilot),
+            ]
+            if payload is None
+        ]
+        readback_verified = bool(readback_pilot and readback_pilot.get("state") == "verified")
+        write_present = bool(write_pilot)
+        state = "complete" if write_present and readback_verified and not missing else "incomplete"
+        writes_attempted = int((write_pilot or {}).get("writes_attempted") or 0)
+        network_calls_made = int((write_pilot or {}).get("network_calls_made") or 0) + int(
+            (readback_pilot or {}).get("network_calls_made") or 0
+        )
+        payload = {
+            "schema": "business-card-watchdog.sink-apply-pilot-report.v1",
+            "state": state,
+            "status": state,
+            "reason": (
+                "write pilot and readback pilot evidence are present"
+                if state == "complete"
+                else "apply pilot report is missing one or more required artifacts"
+            ),
+            "job_id": job_id,
+            "run_id": run_id,
+            "writes_attempted": writes_attempted,
+            "network_calls_made": network_calls_made,
+            "missing_artifacts": missing,
+            "readiness_state": (readiness or {}).get("state", "missing"),
+            "apply_result_state": (apply_result or {}).get("state", "missing"),
+            "readback_request_state": (readback_request or {}).get("state", "missing"),
+            "sinks": sink_reports,
+            "artifact_paths": {
+                "sink_apply_pilot_readiness": str(artifact_dir / "sink_apply_pilot_readiness.json"),
+                "sink_write_pilot": str(artifact_dir / "sink_write_pilot.json"),
+                "sink_apply_result": str(artifact_dir / "sink_apply_result.json"),
+                "sink_adapter_request_readback": str(artifact_dir / "sink_adapter_request_readback.json"),
+                "sink_readback_pilot": str(artifact_dir / "sink_readback_pilot.json"),
+            },
+        }
+        report_path = artifact_dir / "sink_apply_pilot_report.json"
+        report_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        ledger.record_artifact(job_id=job_id, kind="sink_apply_pilot_report", path=report_path)
+        ledger.record_event(
+            "sink_apply_pilot_report_created",
+            {
+                "job_id": job_id,
+                "run_id": run_id,
+                "report_path": str(report_path),
+                "state": state,
+                "writes_attempted": writes_attempted,
+                "network_calls_made": network_calls_made,
+            },
+        )
+        self._mark_route_artifact_refreshed(
+            artifact_dir,
+            job_id=job_id,
+            run_id=run_id,
+            kind="sink_apply_pilot_report",
+        )
+        return {"report_path": str(report_path), "report": payload}
+
     def doctor(self) -> dict[str, Any]:
         status = self.status()
         checks = [
@@ -2519,6 +2622,8 @@ class BusinessCardService:
             return self.build_sink_apply_pilot_readiness_for_job(job_id=job_id, run_id=run_id)
         if action_name == "prepare_sink_readback_adapter":
             return self.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="readback")
+        if action_name == "prepare_sink_apply_pilot_report":
+            return self.build_sink_apply_pilot_report_for_job(job_id=job_id, run_id=run_id)
         raise ValueError(f"next action is not safe to execute automatically: {action_name}")
 
     def _next_action_for_job(self, job: dict[str, Any], artifact_kinds: set[str]) -> dict[str, Any] | None:
@@ -2608,6 +2713,12 @@ class BusinessCardService:
                         "reason": "readback adapter request exists; execute explicit read-only readback pilot",
                         "command": "sinks readback-pilot",
                     }
+                if "sink_apply_pilot_report" not in artifact_kinds:
+                    return {
+                        "action": "prepare_sink_apply_pilot_report",
+                        "reason": "write and readback pilot evidence exists; prepare apply pilot report",
+                        "command": "sinks apply-pilot-report",
+                    }
                 return None
             if "sink_apply_pilot_readiness" not in artifact_kinds:
                 return {
@@ -2637,6 +2748,16 @@ class BusinessCardService:
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+
+
+def _read_json_file(path: Path) -> dict[str, Any] | None:
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
 
 
 def _int(value: Any) -> int:

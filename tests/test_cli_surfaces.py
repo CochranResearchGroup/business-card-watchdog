@@ -508,6 +508,26 @@ def test_cli_sinks_apply_decision_writes_zero_write_artifact(tmp_path: Path, cap
     assert readback["pilot"]["writes_attempted"] == 0
     assert readback["pilot"]["network_calls_made"] == 0
 
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "sinks",
+                "apply-pilot-report",
+                job_id,
+                "--run-id",
+                run_id,
+                "--json",
+            ]
+        )
+        == 0
+    )
+    report = json.loads(capsys.readouterr().out)
+    assert report["report"]["schema"] == "business-card-watchdog.sink-apply-pilot-report.v1"
+    assert report["report"]["state"] == "complete"
+    assert report["report"]["writes_attempted"] == 0
+
 
 def test_cli_sinks_adapter_request_writes_blocked_contract(tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.toml"
