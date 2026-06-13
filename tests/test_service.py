@@ -62,6 +62,17 @@ def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
     assert queue[0]["artifact_kinds"] == ["contact_spec"]
 
 
+def test_service_next_actions_recommends_review_for_needs_review_job(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    run_id, job_id = make_recorded_run(config)
+
+    payload = BusinessCardService(config).next_actions(run_id=run_id)
+
+    assert payload["action_count"] == 1
+    assert payload["actions"][0]["job_id"] == job_id
+    assert payload["actions"][0]["action"] == "review_contact"
+
+
 def test_service_status_and_sink_readiness_are_structured(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     service = BusinessCardService(config)
@@ -149,6 +160,23 @@ def test_service_plan_sinks_for_job_writes_dry_run_plan(tmp_path: Path) -> None:
     assert [action["sink"] for action in result["plan"]["actions"]] == ["google_contacts", "odoo"]
     assert result["plan"]["actions"][0]["match_keys"]["email"] == "ada@example.test"
     assert any(artifact["kind"] == "sink_plan" for artifact in job["artifacts"])
+
+
+def test_service_next_actions_recommends_sink_plan_for_ready_job(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+        field_corrections={"full_name": "Reviewed Fixture", "email": "fixture@example.test"},
+    )
+
+    payload = service.next_actions(run_id=run_id)
+
+    assert payload["actions"][0]["action"] == "plan_sinks"
 
 
 def test_service_submit_review_rejects_unknown_fields(tmp_path: Path) -> None:

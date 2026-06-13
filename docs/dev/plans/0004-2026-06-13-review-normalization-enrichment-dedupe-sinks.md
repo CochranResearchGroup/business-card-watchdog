@@ -161,6 +161,27 @@ Remaining:
 - Live apply/readback remains blocked.
 - Approved reviewed-contact jobs still need automatic rerouting/plan refresh.
 
+### Slice 0004-E | 2026-06-13 | Agent Next Actions And MCP Dispatcher
+
+Implemented:
+
+- Shared service `next_actions` readback for deterministic agent-loop orchestration.
+- Next-action recommendations for review, duplicate resolution, enrichment review, sink planning, apply approval, and failure inspection.
+- MCP manifest entry for `business_card_watchdog_next_actions`.
+- Executable MCP-style dispatcher `call_tool` for current manifest tools.
+- CLI `bcw mcp-call` for local tool execution with JSON arguments.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_mcp.py tests/test_cli_surfaces.py -q` passed with 22 tests.
+- `PYTHONPATH=src pytest tests/test_service.py tests/test_mcp.py tests/test_cli_surfaces.py -q` passed with 22 tests.
+
+Remaining:
+
+- Streaming MCP server transport is not implemented.
+- Agent next actions do not yet include explicit live apply pilot readiness.
+- Automatic rerouting after reviewed-contact approval remains follow-on work.
+
 ## `/goal` Objective
 
 Use this as the high-level `/goal` objective:

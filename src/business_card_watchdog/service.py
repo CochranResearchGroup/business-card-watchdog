@@ -83,6 +83,32 @@ class BusinessCardService:
             "reviewed_contact_count": artifact_counts.get("reviewed_contact", 0),
         }
 
+    def next_actions(self, *, run_id: str | None = None, limit: int = 20) -> dict[str, Any]:
+        actions: list[dict[str, Any]] = []
+        runs = [self.get_run(run_id)] if run_id else self.list_runs()
+        for run in runs:
+            current_run_id = str(run["run_id"])
+            for job in self.list_jobs(current_run_id):
+                artifacts = [
+                    artifact
+                    for artifact in self.list_artifacts(current_run_id)
+                    if artifact.get("job_id") == job["job_id"]
+                ]
+                kinds = {str(artifact.get("kind")) for artifact in artifacts}
+                action = self._next_action_for_job(job, kinds)
+                if action is not None:
+                    actions.append({"run_id": current_run_id, "job_id": job["job_id"], **action})
+                if len(actions) >= limit:
+                    break
+            if len(actions) >= limit:
+                break
+        return {
+            "run_id": run_id,
+            "limit": limit,
+            "actions": actions,
+            "action_count": len(actions),
+        }
+
     def list_jobs(self, run_id: str | None = None) -> list[dict[str, Any]]:
         run_ids = [run_id] if run_id is not None else [str(run["run_id"]) for run in self.list_runs()]
         jobs: list[dict[str, Any]] = []
@@ -377,6 +403,46 @@ class BusinessCardService:
         if spec_path.exists():
             return json.loads(spec_path.read_text(encoding="utf-8"))
         raise FileNotFoundError(f"no contact artifact found in {artifact_dir}")
+
+    def _next_action_for_job(self, job: dict[str, Any], artifact_kinds: set[str]) -> dict[str, Any] | None:
+        state = str(job.get("state") or "")
+        if state == "needs_review":
+            if "duplicate_assessment" in artifact_kinds:
+                return {
+                    "action": "resolve_duplicate",
+                    "reason": "job has duplicate assessment and needs review",
+                    "command": "jobs review",
+                }
+            if "enrichment_result" in artifact_kinds:
+                return {
+                    "action": "review_enrichment",
+                    "reason": "job has enrichment result awaiting review",
+                    "command": "jobs review",
+                }
+            return {
+                "action": "review_contact",
+                "reason": "job needs operator or agent review",
+                "command": "jobs review",
+            }
+        if state == "ready_to_route":
+            if "sink_plan" not in artifact_kinds:
+                return {
+                    "action": "plan_sinks",
+                    "reason": "reviewed/normalized job is ready for dry-run sink planning",
+                    "command": "sinks plan",
+                }
+            return {
+                "action": "await_apply_approval",
+                "reason": "sink plan exists; live apply remains explicit and gated",
+                "command": "sinks apply",
+            }
+        if state == "failed":
+            return {
+                "action": "inspect_failure",
+                "reason": str(job.get("error") or "job failed"),
+                "command": "jobs show",
+            }
+        return None
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:

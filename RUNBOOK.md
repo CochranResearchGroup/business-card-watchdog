@@ -267,3 +267,20 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 25 tests.
 - `PYTHONPATH=src pytest tests/test_sinks.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 24 tests and 1 skipped optional API-extra test.
+
+## Turn 16 | 2026-06-13
+
+Continued Plan 0004 execution with agent next-action readback and MCP dispatcher.
+
+Implemented:
+
+- `BusinessCardService.next_actions` for deterministic agent-loop orchestration.
+- Next-action recommendations for review, duplicate resolution, enrichment review, sink planning, apply approval, and failure inspection.
+- MCP manifest entry for next actions.
+- Local executable MCP dispatcher `call_tool`.
+- CLI `bcw mcp-call` for JSON-argument tool execution.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_mcp.py tests/test_cli_surfaces.py -q` passed with 22 tests.
+- `PYTHONPATH=src pytest tests/test_service.py tests/test_mcp.py tests/test_cli_surfaces.py -q` passed with 22 tests.

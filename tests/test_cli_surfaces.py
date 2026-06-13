@@ -41,6 +41,22 @@ def test_cli_runs_and_jobs_use_recorded_runtime_state(
     reviews = json.loads(capsys.readouterr().out)
     assert reviews[0]["job_id"] == job_id
 
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "mcp-call",
+                "business_card_watchdog_next_actions",
+                "--arguments-json",
+                f'{{"run_id": "{run_id}"}}',
+            ]
+        )
+        == 0
+    )
+    next_actions = json.loads(capsys.readouterr().out)
+    assert next_actions["actions"][0]["action"] == "review_contact"
+
 
 def test_cli_jobs_review_records_submission(tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.toml"

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .api import create_app
 from .config import load_config, write_default_config
-from .mcp import manifest_json
+from .mcp import call_tool, manifest_json
 from .service import BusinessCardService
 from .service_ops import install_user_service, service_status, uninstall_user_service
 from .watcher import PollingWatcher
@@ -122,6 +122,9 @@ def build_parser() -> argparse.ArgumentParser:
     service_uninstall.add_argument("--json", action="store_true")
 
     sub.add_parser("mcp-manifest")
+    mcp_call = sub.add_parser("mcp-call")
+    mcp_call.add_argument("tool_name")
+    mcp_call.add_argument("--arguments-json", default="{}")
     return parser
 
 
@@ -260,6 +263,15 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "mcp-manifest":
         print(manifest_json(), end="")
+        return 0
+
+    if args.command == "mcp-call":
+        payload = call_tool(
+            args.tool_name,
+            json.loads(args.arguments_json),
+            config=config,
+        )
+        print(json.dumps(payload, indent=2))
         return 0
 
     raise AssertionError(args.command)
