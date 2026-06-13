@@ -187,9 +187,11 @@ class BusinessCardService:
         config: AppConfig,
         *,
         sink_lookup_executor: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+        sink_write_executor: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
     ) -> None:
         self.config = config
         self.sink_lookup_executor = sink_lookup_executor
+        self.sink_write_executor = sink_write_executor
 
     def status(self) -> dict[str, Any]:
         ready, message = BusinessCardSkillAdapter(self.config).check_ready()
@@ -1475,7 +1477,48 @@ class BusinessCardService:
                 raise ValueError(
                     "simulated sink apply requires ready sink_apply_pilot_readiness.json"
                 )
+        write_executions: list[dict[str, Any]] = []
+        if apply and not simulate and decision.get("decision") == "approve" and self.sink_write_executor is not None:
+            write_adapter_path = artifact_dir / "sink_adapter_request_write.json"
+            if write_adapter_path.exists():
+                write_adapter = json.loads(write_adapter_path.read_text(encoding="utf-8"))
+            else:
+                write_adapter = self.build_sink_adapter_request_for_job(
+                    job_id=job_id,
+                    run_id=run_id,
+                    phase="write",
+                )["request"]
+            for request in list(write_adapter.get("requests") or []):
+                if request.get("phase") != "write":
+                    continue
+                write_executions.append(self.sink_write_executor(request))
+
         result = build_sink_apply_result(preflight=preflight, decision=decision, apply=apply, simulate=simulate)
+        if write_executions:
+            write_by_sink = {str(row.get("sink") or ""): row for row in write_executions}
+            result["state"] = "live_applied"
+            result["reason"] = "injected sink write adapter completed; readback adapter still requires explicit request"
+            result["writes_attempted"] = sum(int(row.get("writes_attempted") or 0) for row in write_executions)
+            result["network_calls_made"] = sum(int(row.get("network_calls_made") or 0) for row in write_executions)
+            result["write_executions"] = write_executions
+            result["readback"] = []
+            for action in result["actions"]:
+                execution = write_by_sink.get(str(action.get("sink") or ""))
+                if execution is None:
+                    continue
+                write = dict(execution.get("write") or {})
+                action["state"] = "live_applied"
+                action["write_attempted"] = True
+                action["resource_id"] = write.get("resource_id")
+                result["readback"].append(
+                    {
+                        "sink": action.get("sink"),
+                        "resource_id": write.get("resource_id"),
+                        "serialization_key": action.get("serialization_key"),
+                        "matched": bool(write.get("resource_id")),
+                        "simulated": False,
+                    }
+                )
         result_path = artifact_dir / "sink_apply_result.json"
         result_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         ledger = RunLedger(self.config.runs_dir / run_id)
@@ -1489,8 +1532,8 @@ class BusinessCardService:
                 "simulated": result["simulated"],
                 "state": result["state"],
                 "result_path": str(result_path),
-                "writes_attempted": 0,
-                "network_calls_made": 0,
+                "writes_attempted": result["writes_attempted"],
+                "network_calls_made": result["network_calls_made"],
             },
         )
         self._mark_route_artifact_refreshed(

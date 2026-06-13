@@ -1758,3 +1758,29 @@ Validation:
 Remaining:
 
 - Live write/readback adapters remain follow-on work; this slice only makes the mock pilot readiness gate meaningful.
+
+### Slice 0004-AX | 2026-06-13 | Write And Readback Adapter Boundary
+
+Implemented:
+
+- Added `sink_apply_adapters.py` with explicit write and readback adapter execution boundaries for GWS People and Odollo/Odoo.
+- GWS write/readback runners construct command-vector calls from existing adapter request contracts and parse JSON responses.
+- Odollo write/readback runners use `OdooClient.create` and `OdooClient.read` through the configured tenant profile when invoked.
+- Adapter execution results normalize resource IDs, write counters, network counters, and readback evidence into deterministic payloads.
+- `BusinessCardService` now supports an injected write executor for one-job pilot tests, while default CLI/API/MCP service construction still leaves non-simulated live apply blocked.
+- Injected write execution records `live_applied` apply results and carries the returned resource ID into the existing readback adapter request path.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sink_apply_adapters.py tests/test_service.py tests/test_sinks.py -q` passed with 74 tests.
+- `.venv/bin/python -m pytest tests/test_sink_apply_adapters.py tests/test_service.py tests/test_sinks.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 102 tests.
+- `.venv/bin/python -m pytest -q` passed with 165 tests.
+- `PYTHONPATH=src pytest -q` passed with 159 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+Remaining:
+
+- Public CLI/API/MCP live write execution remains blocked pending an explicit operator-approved pilot surface.
+- Live readback execution is available as an adapter boundary but is not yet wired into a public pilot command.

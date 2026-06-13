@@ -566,6 +566,48 @@ def test_service_apply_sinks_for_job_can_emit_mock_readback(tmp_path: Path) -> N
     assert any(event["payload"]["simulated"] is True for event in events if event["event_type"] == "sink_apply_attempted")
 
 
+def test_service_apply_sinks_for_job_uses_injected_write_executor(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    calls: list[dict[str, object]] = []
+
+    def execute(request: dict[str, object]) -> dict[str, object]:
+        calls.append(request)
+        return {
+            "sink": "google_contacts",
+            "status": "live_write_completed",
+            "network_calls_made": 1,
+            "writes_attempted": 1,
+            "write": {
+                "sink": "google_contacts",
+                "resource_id": "people/live123",
+                "serialization_key": request.get("serialization_key"),
+            },
+        }
+
+    service = BusinessCardService(config, sink_write_executor=execute)
+    service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="write")
+    service.preflight_sink_apply(job_id=job_id, run_id=run_id)
+    service.decide_sink_apply(job_id=job_id, run_id=run_id, decision="approve", reviewer="tester")
+
+    result = service.apply_sinks_for_job(job_id=job_id, run_id=run_id, apply=True)
+    readback = service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="readback")
+
+    assert calls[0]["sink"] == "google_contacts"
+    assert result["result"]["state"] == "live_applied"
+    assert result["result"]["writes_attempted"] == 1
+    assert result["result"]["network_calls_made"] == 1
+    assert result["result"]["readback"][0]["resource_id"] == "people/live123"
+    assert result["result"]["actions"][0]["write_attempted"] is True
+    assert readback["request"]["requests"][0]["resource_id"] == "people/live123"
+
+
 def test_service_build_sink_adapter_request_writes_phase_artifact(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",

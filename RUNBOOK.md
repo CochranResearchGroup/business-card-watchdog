@@ -1130,3 +1130,26 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed with the index up to date.
 - `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+## Turn 62 | 2026-06-13
+
+Continued Plan 0004 execution with write and readback adapter execution boundaries.
+
+Implemented:
+
+- Added explicit GWS People and Odollo/Odoo write/readback adapter helpers in `sink_apply_adapters.py`.
+- GWS helpers build command-vector calls from existing adapter requests and parse JSON output without running during default tests.
+- Odollo helpers call `OdooClient.create` and `OdooClient.read` when explicitly invoked with tenant profile context.
+- Adapter execution results normalize resource IDs, write counters, network counters, and readback evidence.
+- Added an injected service write-executor path for one-job pilot proof while keeping default CLI/API/MCP live apply blocked.
+- Injected service write execution records `live_applied` results and feeds returned resource IDs into existing readback adapter requests.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sink_apply_adapters.py tests/test_service.py tests/test_sinks.py -q` passed with 74 tests.
+- `.venv/bin/python -m pytest tests/test_sink_apply_adapters.py tests/test_service.py tests/test_sinks.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 102 tests.
+- `.venv/bin/python -m pytest -q` passed with 165 tests.
+- `PYTHONPATH=src pytest -q` passed with 159 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
