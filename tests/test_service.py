@@ -452,6 +452,10 @@ def test_service_preflight_sink_apply_writes_zero_write_artifact(tmp_path: Path)
         action="approve_for_routing",
         field_corrections={"full_name": "Reviewed Fixture", "email": "fixture@example.test"},
     )
+    service.plan_sink_lookup_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
+    service.record_sink_lookup_result_for_job(job_id=job_id, run_id=run_id)
+    service.assess_downstream_duplicates_for_job(job_id=job_id, run_id=run_id)
     service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
 
     preview = service.preflight_sink_apply(job_id=job_id, run_id=run_id)
@@ -771,6 +775,54 @@ def test_service_apply_pilot_report_summarizes_write_and_readback(tmp_path: Path
     assert report["report"]["missing_artifacts"] == []
     assert report["report"]["sinks"][0]["readback_matched"] is True
     assert any(artifact["kind"] == "sink_apply_pilot_report" for artifact in job["artifacts"])
+
+
+def test_service_review_bundle_includes_sink_pilot_status(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+        field_corrections={"full_name": "Reviewed Fixture", "email": "fixture@example.test"},
+    )
+    service.plan_sink_lookup_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
+    service.record_sink_lookup_result_for_job(job_id=job_id, run_id=run_id)
+    service.assess_downstream_duplicates_for_job(job_id=job_id, run_id=run_id)
+    service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="write")
+    service.preflight_sink_apply(job_id=job_id, run_id=run_id)
+    service.decide_sink_apply(job_id=job_id, run_id=run_id, decision="approve", reviewer="tester")
+    service.build_sink_apply_pilot_readiness_for_job(job_id=job_id, run_id=run_id)
+    service.execute_sink_write_pilot_for_job(job_id=job_id, run_id=run_id, sink="google_contacts", approved_by="tester")
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="readback")
+    service.execute_sink_readback_pilot_for_job(job_id=job_id, run_id=run_id, sink="google_contacts", approved_by="tester")
+    service.build_sink_apply_pilot_report_for_job(job_id=job_id, run_id=run_id)
+
+    bundle = service.review_bundle(run_id=run_id)
+    status = bundle["entries"][0]["sink_pilot_status"]
+    html = service.review_html(run_id=run_id)
+
+    assert status["schema"] == "business-card-watchdog.sink-pilot-status.v1"
+    assert status["state"] == "pilot_report_complete"
+    assert status["report_complete"] is True
+    assert status["has_write_pilot"] is True
+    assert status["has_readback_pilot"] is True
+    assert status["has_pilot_report"] is True
+    assert status["readback_verified"] is True
+    assert status["safe_to_auto_continue"] is False
+    assert status["requires_explicit_operator_action"] is False
+    assert bundle["groups"]["by_sink_pilot_state"]["pilot_report_complete"]["job_ids"] == [job_id]
+    assert "By Sink Pilot State" in html["html"]
+    assert "pilot_report_complete" in html["html"]
 
 
 def test_service_readback_pilot_uses_injected_executor(tmp_path: Path) -> None:

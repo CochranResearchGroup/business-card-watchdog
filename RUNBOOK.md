@@ -1237,3 +1237,24 @@ Planned:
 Validation:
 
 - `git diff --check` passed.
+
+## Turn 67 | 2026-06-13
+
+Continued Plan 0004 execution with review-bundle sink pilot status summaries.
+
+Implemented:
+
+- Added per-job `sink_pilot_status` to review bundles.
+- Added `groups.by_sink_pilot_state` for batch-level review and agent-loop progress readback.
+- Added sink pilot state to the static offline review HTML.
+- Covered a full simulated lookup, downstream dedupe, sink plan, write pilot, readback pilot, and apply-pilot-report chain through the review bundle.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_review_bundle_includes_sink_pilot_status tests/test_service.py::test_service_apply_pilot_report_summarizes_write_and_readback tests/test_service.py::test_service_run_summary_and_review_queue -q` passed with 3 tests.
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 83 tests.
+- `.venv/bin/python -m pytest -q` passed with 172 tests.
+- `PYTHONPATH=src pytest -q` passed with 165 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.

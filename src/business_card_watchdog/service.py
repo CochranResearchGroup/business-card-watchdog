@@ -511,6 +511,7 @@ class BusinessCardService:
                 continue
             by_kind = artifacts_by_job.get(str(job["job_id"]), {})
             next_action = next_by_job.get(str(job["job_id"]))
+            sink_pilot_status = self._sink_pilot_status(by_kind=by_kind, next_action=next_action)
             entries.append(
                 {
                     "run_id": run_id,
@@ -520,6 +521,7 @@ class BusinessCardService:
                     "error": job.get("error"),
                     "artifact_dir": job.get("artifact_dir"),
                     "next_action": next_action,
+                    "sink_pilot_status": sink_pilot_status,
                     "artifact_kinds": sorted(by_kind),
                     "artifacts": {
                         kind: self._artifact_bundle_entry(record)
@@ -2402,6 +2404,7 @@ class BusinessCardService:
     def _review_bundle_groups(self, entries: list[dict[str, Any]]) -> dict[str, Any]:
         by_state: dict[str, dict[str, Any]] = {}
         by_next_action: dict[str, dict[str, Any]] = {}
+        by_sink_pilot_state: dict[str, dict[str, Any]] = {}
         for entry in entries:
             state = str(entry.get("state") or "unknown")
             state_group = by_state.setdefault(state, {"count": 0, "job_ids": []})
@@ -2411,15 +2414,104 @@ class BusinessCardService:
             action_group = by_next_action.setdefault(action, {"count": 0, "job_ids": []})
             action_group["count"] += 1
             action_group["job_ids"].append(entry["job_id"])
+            pilot_state = str((entry.get("sink_pilot_status") or {}).get("state") or "not_started")
+            pilot_group = by_sink_pilot_state.setdefault(pilot_state, {"count": 0, "job_ids": []})
+            pilot_group["count"] += 1
+            pilot_group["job_ids"].append(entry["job_id"])
         return {
             "by_state": dict(sorted(by_state.items())),
             "by_next_action": dict(sorted(by_next_action.items())),
+            "by_sink_pilot_state": dict(sorted(by_sink_pilot_state.items())),
         }
+
+    def _sink_pilot_status(
+        self,
+        *,
+        by_kind: dict[str, dict[str, Any]],
+        next_action: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        stage_order = [
+            ("sink_lookup_plan", "lookup_planned"),
+            ("sink_adapter_request_lookup", "lookup_adapter_prepared"),
+            ("sink_lookup_pilot", "lookup_pilot_recorded"),
+            ("sink_lookup_result", "lookup_result_recorded"),
+            ("downstream_duplicate_assessment", "downstream_duplicates_assessed"),
+            ("sink_plan", "sink_plan_ready"),
+            ("sink_adapter_request_write", "write_adapter_prepared"),
+            ("sink_apply_preflight", "apply_preflight_ready"),
+            ("sink_apply_decision", "apply_decision_recorded"),
+            ("sink_apply_pilot_readiness", "apply_pilot_readiness_recorded"),
+            ("sink_write_pilot", "write_pilot_recorded"),
+            ("sink_apply_result", "apply_result_recorded"),
+            ("sink_adapter_request_readback", "readback_adapter_prepared"),
+            ("sink_readback_pilot", "readback_pilot_recorded"),
+            ("sink_apply_pilot_report", "pilot_report_recorded"),
+        ]
+        artifact_kinds = set(by_kind)
+        latest_kind = ""
+        state = "not_started"
+        completed_stages: list[str] = []
+        for kind, label in stage_order:
+            if kind in artifact_kinds:
+                latest_kind = kind
+                state = label
+                completed_stages.append(kind)
+
+        next_action_name = str((next_action or {}).get("action") or "")
+        report = self._read_bundle_json(by_kind.get("sink_apply_pilot_report"))
+        readiness = self._read_bundle_json(by_kind.get("sink_apply_pilot_readiness"))
+        write_pilot = self._read_bundle_json(by_kind.get("sink_write_pilot"))
+        readback_pilot = self._read_bundle_json(by_kind.get("sink_readback_pilot"))
+        if report:
+            state = f"pilot_report_{report.get('state') or 'recorded'}"
+        elif readiness and readiness.get("state"):
+            state = str(readiness["state"])
+
+        return {
+            "schema": "business-card-watchdog.sink-pilot-status.v1",
+            "state": state,
+            "latest_artifact_kind": latest_kind or None,
+            "completed_artifact_kinds": completed_stages,
+            "has_apply_decision": "sink_apply_decision" in artifact_kinds,
+            "has_write_pilot": "sink_write_pilot" in artifact_kinds,
+            "has_readback_pilot": "sink_readback_pilot" in artifact_kinds,
+            "has_pilot_report": "sink_apply_pilot_report" in artifact_kinds,
+            "report_complete": bool(report and report.get("state") == "complete"),
+            "next_action": next_action_name or None,
+            "safe_to_auto_continue": next_action_name in _SAFE_NEXT_ACTIONS,
+            "requires_explicit_operator_action": next_action_name
+            in {
+                "decide_sink_apply",
+                "execute_sink_lookup_pilot",
+                "execute_sink_write_pilot",
+                "execute_sink_readback_pilot",
+                "await_apply_approval",
+            },
+            "simulated": _maybe_bool(write_pilot.get("simulated") if write_pilot else None),
+            "readback_verified": _maybe_bool(readback_pilot.get("state") == "verified" if readback_pilot else None),
+            "missing_artifacts": list(report.get("missing_artifacts") or []) if report else [],
+            "sinks": list(report.get("sinks") or []) if report else [],
+            "writes_attempted": _int(report.get("writes_attempted") if report else 0),
+            "network_calls_made": _int(report.get("network_calls_made") if report else 0),
+        }
+
+    def _read_bundle_json(self, record: dict[str, Any] | None) -> dict[str, Any]:
+        if not record:
+            return {}
+        path = Path(str(record.get("path") or ""))
+        if not path.exists():
+            return {}
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+        return payload if isinstance(payload, dict) else {}
 
     def _render_review_html(self, bundle: dict[str, Any]) -> str:
         rows = "\n".join(self._review_html_row(entry) for entry in bundle["entries"])
         state_groups = self._review_html_groups(bundle["groups"]["by_state"])
         action_groups = self._review_html_groups(bundle["groups"]["by_next_action"])
+        pilot_groups = self._review_html_groups(bundle["groups"].get("by_sink_pilot_state", {}))
         return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -2454,6 +2546,10 @@ class BusinessCardService:
       <h2>By Next Action</h2>
       {action_groups}
     </div>
+    <div>
+      <h2>By Sink Pilot State</h2>
+      {pilot_groups}
+    </div>
   </section>
   <h2>Jobs</h2>
   <table>
@@ -2463,6 +2559,7 @@ class BusinessCardService:
         <th>State</th>
         <th>Image</th>
         <th>Next Action</th>
+        <th>Sink Pilot</th>
         <th>Artifacts</th>
         <th>Decision Template</th>
       </tr>
@@ -2484,6 +2581,7 @@ class BusinessCardService:
 
     def _review_html_row(self, entry: dict[str, Any]) -> str:
         next_action = entry.get("next_action") or {}
+        pilot_status = entry.get("sink_pilot_status") or {}
         artifacts = ", ".join(escape(kind) for kind in entry.get("artifact_kinds") or [])
         decision_template = escape(json.dumps(entry["decision_template"], sort_keys=True, indent=2))
         image_path = escape(str(entry.get("image_path") or ""))
@@ -2492,6 +2590,7 @@ class BusinessCardService:
   <td>{escape(str(entry.get("state") or ""))}</td>
   <td><code>{image_path}</code></td>
   <td><code>{escape(str(next_action.get("action") or "none"))}</code><br>{escape(str(next_action.get("reason") or ""))}</td>
+  <td><code>{escape(str(pilot_status.get("state") or "not_started"))}</code><br>safe: {escape(str(pilot_status.get("safe_to_auto_continue")))}<br>explicit: {escape(str(pilot_status.get("requires_explicit_operator_action")))}</td>
   <td>{artifacts}</td>
   <td><pre>{decision_template}</pre></td>
 </tr>"""
@@ -2765,6 +2864,12 @@ def _int(value: Any) -> int:
         return int(value or 0)
     except (TypeError, ValueError):
         return 0
+
+
+def _maybe_bool(value: Any) -> bool | None:
+    if value is None:
+        return None
+    return bool(value)
 
 
 def _path_check(name: str, path: Path) -> dict[str, Any]:

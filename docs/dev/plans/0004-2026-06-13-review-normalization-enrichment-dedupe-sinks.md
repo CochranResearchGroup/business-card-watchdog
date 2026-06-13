@@ -1866,3 +1866,27 @@ Validation:
 Remaining:
 
 - Reports summarize existing pilot artifacts only; they do not perform live writes, readbacks, or external readiness probes.
+
+### Slice 0004-BB | 2026-06-13 | Review Bundle Sink Pilot Status
+
+Implemented:
+
+- Added per-job `sink_pilot_status` summaries to `review_bundle.json`.
+- Status summaries include completed sink pilot artifact kinds, latest pilot stage, report completion, write/readback/report booleans, safe-next-action state, explicit-operator-action state, write counters, network counters, and report sink readback evidence.
+- Added `groups.by_sink_pilot_state` so batch review and agent-loop consumers can count jobs by pilot progress without opening every artifact.
+- Added the same sink pilot status to the static offline review HTML export.
+- Added service tests for a full simulated lookup, downstream dedupe, sink plan, write pilot, readback pilot, and apply-pilot-report chain as shown through the review bundle.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_review_bundle_includes_sink_pilot_status tests/test_service.py::test_service_apply_pilot_report_summarizes_write_and_readback tests/test_service.py::test_service_run_summary_and_review_queue -q` passed with 3 tests.
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 83 tests.
+- `.venv/bin/python -m pytest -q` passed with 172 tests.
+- `PYTHONPATH=src pytest -q` passed with 165 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+Remaining:
+
+- The review bundle summarizes pilot state only; explicit write/readback pilots and paid/provider-backed enrichment remain separate operator-approved actions.
