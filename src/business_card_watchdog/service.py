@@ -60,6 +60,19 @@ _SAFE_NEXT_ACTIONS = {
     "prepare_sink_apply_pilot_report",
 }
 
+_EXPLICIT_OPERATOR_ACTIONS = {
+    "decide_sink_apply",
+    "execute_sink_lookup_pilot",
+    "execute_sink_write_pilot",
+    "execute_sink_readback_pilot",
+    "await_apply_approval",
+    "request_enrichment",
+    "review_contact",
+    "review_duplicate",
+    "review_enrichment",
+    "resolve_duplicate",
+}
+
 _ROUTE_ARTIFACT_FILES = {
     "sink_lookup_plan": "sink_lookup_plan.json",
     "sink_adapter_request_lookup": "sink_adapter_request_lookup.json",
@@ -357,10 +370,47 @@ class BusinessCardService:
             "created_at": utc_now(),
             "run_state": run.get("state"),
             "job_count": len(jobs),
+            "stop_rules": self._phase_stop_rules(),
             "phases": [phase_rows[phase] for phase in phases],
             "jobs": job_rows,
             "writes_attempted": 0,
             "network_calls_made": 0,
+        }
+
+    def _phase_stop_rules(self) -> dict[str, Any]:
+        return {
+            "schema": "business-card-watchdog.phase-stop-rules.v1",
+            "safe_auto_actions": sorted(_SAFE_NEXT_ACTIONS),
+            "explicit_operator_actions": sorted(_EXPLICIT_OPERATOR_ACTIONS),
+            "generic_continue_policy": {
+                "allows_paid_api_enrichment": False,
+                "allows_public_web_enrichment": False,
+                "allows_live_sink_write": False,
+                "allows_live_sink_readback": False,
+                "allows_zero_write_artifact_preparation": True,
+            },
+            "phase_actions": {
+                "enrichment": {
+                    "safe_auto_actions": [],
+                    "explicit_operator_actions": ["request_enrichment", "review_enrichment"],
+                },
+                "apply_approval": {
+                    "safe_auto_actions": ["preflight_sink_apply", "prepare_sink_apply_pilot_readiness"],
+                    "explicit_operator_actions": ["decide_sink_apply", "await_apply_approval"],
+                },
+                "write_pilot": {
+                    "safe_auto_actions": [],
+                    "explicit_operator_actions": ["execute_sink_write_pilot"],
+                },
+                "readback_pilot": {
+                    "safe_auto_actions": [],
+                    "explicit_operator_actions": ["execute_sink_readback_pilot"],
+                },
+                "pilot_report": {
+                    "safe_auto_actions": ["prepare_sink_apply_pilot_report"],
+                    "explicit_operator_actions": [],
+                },
+            },
         }
 
     def _phase_states_for_job(
@@ -2680,14 +2730,7 @@ class BusinessCardService:
             "report_complete": bool(report and report.get("state") == "complete"),
             "next_action": next_action_name or None,
             "safe_to_auto_continue": next_action_name in _SAFE_NEXT_ACTIONS,
-            "requires_explicit_operator_action": next_action_name
-            in {
-                "decide_sink_apply",
-                "execute_sink_lookup_pilot",
-                "execute_sink_write_pilot",
-                "execute_sink_readback_pilot",
-                "await_apply_approval",
-            },
+            "requires_explicit_operator_action": next_action_name in _EXPLICIT_OPERATOR_ACTIONS,
             "simulated": _maybe_bool(write_pilot.get("simulated") if write_pilot else None),
             "readback_verified": _maybe_bool(readback_pilot.get("state") == "verified" if readback_pilot else None),
             "missing_artifacts": list(report.get("missing_artifacts") or []) if report else [],

@@ -79,6 +79,15 @@ def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
     assert phase_report["phases"][2]["phase"] == "review"
     assert phase_report["phases"][2]["counts"]["blocked"] == 1
     assert phase_report["jobs"][0]["phase_states"]["review"] == "blocked"
+    assert phase_report["stop_rules"]["schema"] == "business-card-watchdog.phase-stop-rules.v1"
+    assert phase_report["stop_rules"]["generic_continue_policy"]["allows_paid_api_enrichment"] is False
+    assert phase_report["stop_rules"]["generic_continue_policy"]["allows_live_sink_write"] is False
+    assert "prepare_sink_apply_pilot_report" in phase_report["stop_rules"]["safe_auto_actions"]
+    assert "execute_sink_write_pilot" in phase_report["stop_rules"]["explicit_operator_actions"]
+    assert phase_report["stop_rules"]["phase_actions"]["write_pilot"]["safe_auto_actions"] == []
+    assert phase_report["stop_rules"]["phase_actions"]["write_pilot"]["explicit_operator_actions"] == [
+        "execute_sink_write_pilot"
+    ]
     assert queue[0]["job_id"] == job_id
     assert queue[0]["artifact_kinds"] == ["contact_spec"]
     assert bundle["schema"] == "business-card-watchdog.review-bundle.v1"

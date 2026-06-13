@@ -1962,3 +1962,27 @@ Validation:
 Remaining:
 
 - Run-next still executes only zero-write/no-paid-call safe actions and skips review, paid enrichment, write pilots, readback pilots, and live apply.
+
+### Slice 0004-BF | 2026-06-13 | Phase Stop-Rule Policy Readback
+
+Implemented:
+
+- Added machine-readable `stop_rules` to phase reports.
+- Stop rules list safe auto actions, explicit operator actions, and phase-specific action policy.
+- Generic continue policy now explicitly reports that paid API enrichment, public-web enrichment, live sink writes, and live sink readbacks are not allowed from generic safe execution.
+- Reused the explicit-operator-action set in sink pilot status summaries.
+- Added focused tests for safe vs explicit write-pilot policy and no-paid/no-live generic continue rules.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_run_summary_and_review_queue tests/test_service.py::test_service_review_bundle_includes_sink_pilot_status tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 83 tests.
+- `.venv/bin/python -m pytest -q` passed with 172 tests.
+- `PYTHONPATH=src pytest -q` passed with 165 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+Remaining:
+
+- Stop rules are readback policy only; explicit operator commands still perform the actual review/enrichment/pilot actions.
