@@ -864,3 +864,24 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed with the index up to date.
 - `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+## Turn 49 | 2026-06-13
+
+Continued Plan 0004 execution with run-level enrichment budget hard stops.
+
+Implemented:
+
+- Added `[enrichment] max_public_web_queries_per_run` user config with default `200`.
+- Added `[enrichment] max_paid_provider_results_per_run` user config with default `50`.
+- Run summaries now report public-web remaining query budget and paid-provider remaining result budget.
+- Service enrichment requests refuse before writing new request artifacts when a run-level public-web or paid-provider request budget would be exceeded.
+- The hard stop is enforced at the shared service layer used by CLI, API, and MCP.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_config.py tests/test_service.py -q` passed with 47 tests.
+- `.venv/bin/python -m pytest -q` passed with 140 tests.
+- `PYTHONPATH=src pytest -q` passed with 135 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.

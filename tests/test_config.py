@@ -25,7 +25,9 @@ enabled = true
 default_mode = "public_web"
 allow_paid_api = true
 api_keys_env = "{keys_path}"
+max_public_web_queries_per_run = 6
 max_paid_provider_results_per_contact = 2
+max_paid_provider_results_per_run = 4
 
 [enrichment.providers.public_web]
 enabled = false
@@ -45,7 +47,9 @@ base_url = "https://apollo.example.test"
     assert config.enrichment.default_mode == "public_web"
     assert config.enrichment.public_web_enabled is False
     assert config.enrichment.max_public_web_queries_per_contact == 3
+    assert config.enrichment.max_public_web_queries_per_run == 6
     assert config.enrichment.max_paid_provider_results_per_contact == 2
+    assert config.enrichment.max_paid_provider_results_per_run == 4
     assert config.enrichment.apollo.enabled is True
     assert config.enrichment.apollo.api_key_env == "CUSTOM_APOLLO_KEY"
 

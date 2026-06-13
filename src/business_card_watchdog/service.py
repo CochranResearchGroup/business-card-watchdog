@@ -239,6 +239,8 @@ class BusinessCardService:
             "request_count": 0,
             "result_count": 0,
             "max_queries": 0,
+            "max_queries_per_run": self.config.enrichment.max_public_web_queries_per_run,
+            "remaining_queries": self.config.enrichment.max_public_web_queries_per_run,
             "submitted_result_count": 0,
             "search_calls_attempted": 0,
             "network_calls_made": 0,
@@ -247,6 +249,8 @@ class BusinessCardService:
             "request_count": 0,
             "result_count": 0,
             "max_results": 0,
+            "max_results_per_run": self.config.enrichment.max_paid_provider_results_per_run,
+            "remaining_results": self.config.enrichment.max_paid_provider_results_per_run,
             "submitted_result_count": 0,
             "paid_api_calls_attempted": 0,
             "network_calls_made": 0,
@@ -290,12 +294,36 @@ class BusinessCardService:
                 paid_provider["submitted_result_count"] += _int(payload.get("submitted_result_count"))
                 paid_provider["paid_api_calls_attempted"] += _int(payload.get("paid_api_calls_attempted"))
                 paid_provider["network_calls_made"] += _int(payload.get("network_calls_made"))
+        public_web["remaining_queries"] = max(0, public_web["max_queries_per_run"] - public_web["max_queries"])
+        paid_provider["remaining_results"] = max(0, paid_provider["max_results_per_run"] - paid_provider["max_results"])
         return {
             "schema": "business-card-watchdog.enrichment-budget-summary.v1",
             "public_web": public_web,
             "paid_provider": paid_provider,
             "unreadable_artifact_count": unreadable_artifact_count,
         }
+
+    def _enforce_run_enrichment_budget(self, *, run_id: str, mode: str) -> None:
+        summary = self.run_summary(run_id)
+        budget = summary["enrichment_budget"]
+        if mode in {"public_web", "all"}:
+            public_web = budget["public_web"]
+            projected_queries = public_web["max_queries"] + self.config.enrichment.max_public_web_queries_per_contact
+            max_queries = public_web["max_queries_per_run"]
+            if projected_queries > max_queries:
+                raise ValueError(
+                    "public web enrichment request exceeds run budget: "
+                    f"{projected_queries} requested queries for max {max_queries}"
+                )
+        if mode in {"api", "all"}:
+            paid_provider = budget["paid_provider"]
+            projected_results = paid_provider["max_results"] + self.config.enrichment.max_paid_provider_results_per_contact
+            max_results = paid_provider["max_results_per_run"]
+            if projected_results > max_results:
+                raise ValueError(
+                    "paid provider enrichment request exceeds run budget: "
+                    f"{projected_results} requested results for max {max_results}"
+                )
 
     def next_actions(self, *, run_id: str | None = None, limit: int = 20) -> dict[str, Any]:
         actions: list[dict[str, Any]] = []
@@ -819,6 +847,7 @@ class BusinessCardService:
                 "status": "blocked",
                 "readiness": readiness,
             }
+        self._enforce_run_enrichment_budget(run_id=run_id, mode=mode)
         job = self.get_job(job_id, run_id=run_id)
         artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
         candidate_path = artifact_dir / "contact_candidate.json"

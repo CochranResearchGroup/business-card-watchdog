@@ -69,7 +69,9 @@ class EnrichmentConfig:
     api_keys_env: Path = field(default_factory=lambda: Path("~/credentials/API-keys.env"))
     public_web_enabled: bool = True
     max_public_web_queries_per_contact: int = 8
+    max_public_web_queries_per_run: int = 200
     max_paid_provider_results_per_contact: int = 5
+    max_paid_provider_results_per_run: int = 50
     apollo: EnrichmentProviderConfig = field(default_factory=EnrichmentProviderConfig)
 
 
@@ -154,7 +156,9 @@ def load_config(path: Path | None = None) -> AppConfig:
             api_keys_env=Path(str(enrichment.get("api_keys_env", "~/credentials/API-keys.env"))).expanduser(),
             public_web_enabled=bool(public_web_provider.get("enabled", True)),
             max_public_web_queries_per_contact=int(public_web_provider.get("max_queries_per_contact", 8)),
+            max_public_web_queries_per_run=int(enrichment.get("max_public_web_queries_per_run", 200)),
             max_paid_provider_results_per_contact=int(enrichment.get("max_paid_provider_results_per_contact", 5)),
+            max_paid_provider_results_per_run=int(enrichment.get("max_paid_provider_results_per_run", 50)),
             apollo=EnrichmentProviderConfig(
                 enabled=bool(apollo_provider.get("enabled", False)),
                 api_key_env=str(apollo_provider.get("api_key_env", "APOLLO_API_KEY")),
@@ -206,7 +210,9 @@ enabled = false
 default_mode = "none"
 allow_paid_api = false
 api_keys_env = "~/credentials/API-keys.env"
+max_public_web_queries_per_run = 200
 max_paid_provider_results_per_contact = 5
+max_paid_provider_results_per_run = 50
 
 [enrichment.providers.public_web]
 enabled = true

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from business_card_watchdog.config import AppConfig, SinkConfig
+from business_card_watchdog.config import AppConfig, EnrichmentConfig, EnrichmentProviderConfig, SinkConfig
 from business_card_watchdog.contact import build_contact_candidate
 from business_card_watchdog.ledger import RunLedger
 from business_card_watchdog.models import CardJob
@@ -29,6 +29,19 @@ def make_recorded_run(config: AppConfig, run_id: str = "run-001") -> tuple[str, 
     ledger.record_job(job)
     ledger.transition_run("waiting_for_review")
     return run_id, job.job_id
+
+
+def write_candidate_for_job(config: AppConfig, run_id: str, job_id: str) -> Path:
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+    candidate = build_contact_candidate(
+        {
+            "full_name": "Ada Lovelace",
+            "organization": "Example Labs",
+            "email": "ada@example.test",
+        }
+    )
+    (artifact_dir / "contact_candidate.json").write_text(json.dumps(candidate, indent=2), encoding="utf-8")
+    return artifact_dir
 
 
 def test_service_lists_and_shows_runs_jobs_and_artifacts(tmp_path: Path) -> None:
@@ -114,13 +127,95 @@ def test_service_run_summary_includes_enrichment_budget(tmp_path: Path) -> None:
     assert summary["enrichment_budget"]["public_web"]["request_count"] == 1
     assert summary["enrichment_budget"]["public_web"]["result_count"] == 1
     assert summary["enrichment_budget"]["public_web"]["max_queries"] == 3
+    assert summary["enrichment_budget"]["public_web"]["max_queries_per_run"] == 200
+    assert summary["enrichment_budget"]["public_web"]["remaining_queries"] == 197
     assert summary["enrichment_budget"]["public_web"]["submitted_result_count"] == 2
     assert summary["enrichment_budget"]["paid_provider"]["request_count"] == 1
     assert summary["enrichment_budget"]["paid_provider"]["result_count"] == 1
     assert summary["enrichment_budget"]["paid_provider"]["max_results"] == 5
+    assert summary["enrichment_budget"]["paid_provider"]["max_results_per_run"] == 50
+    assert summary["enrichment_budget"]["paid_provider"]["remaining_results"] == 45
     assert summary["enrichment_budget"]["paid_provider"]["submitted_result_count"] == 1
     assert summary["enrichment_budget"]["paid_provider"]["paid_api_calls_attempted"] == 0
     assert summary["enrichment_budget"]["unreadable_artifact_count"] == 1
+
+
+def test_service_public_web_enrichment_request_enforces_run_budget(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        enrichment=EnrichmentConfig(
+            enabled=True,
+            max_public_web_queries_per_contact=3,
+            max_public_web_queries_per_run=3,
+        ),
+    )
+    run_id, job_id = make_recorded_run(config)
+    artifact_dir = write_candidate_for_job(config, run_id, job_id)
+    ledger = RunLedger(config.runs_dir / run_id)
+    existing_request = artifact_dir / "existing_public_web_request.json"
+    existing_request.write_text(
+        json.dumps({"max_queries": 3, "search_calls_attempted": 0, "network_calls_made": 0}),
+        encoding="utf-8",
+    )
+    ledger.record_artifact(job_id=job_id, kind="enrichment_public_web_request", path=existing_request)
+
+    try:
+        BusinessCardService(config).request_enrichment(
+            job_id=job_id,
+            run_id=run_id,
+            mode="public_web",
+            requested_by="tester",
+        )
+    except ValueError as exc:
+        assert "public web enrichment request exceeds run budget" in str(exc)
+    else:
+        raise AssertionError("expected public-web enrichment request to exceed run budget")
+
+    artifacts = BusinessCardService(config).list_artifacts(run_id)
+    assert sum(1 for artifact in artifacts if artifact["kind"] == "enrichment_request") == 0
+
+
+def test_service_paid_provider_enrichment_request_enforces_run_budget(tmp_path: Path) -> None:
+    keys_path = tmp_path / "API-keys.env"
+    keys_path.write_text("APOLLO_API_KEY=secret-value-not-printed\n", encoding="utf-8")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        enrichment=EnrichmentConfig(
+            enabled=True,
+            allow_paid_api=True,
+            api_keys_env=keys_path,
+            max_paid_provider_results_per_contact=2,
+            max_paid_provider_results_per_run=2,
+            apollo=EnrichmentProviderConfig(enabled=True),
+        ),
+    )
+    run_id, job_id = make_recorded_run(config)
+    artifact_dir = write_candidate_for_job(config, run_id, job_id)
+    ledger = RunLedger(config.runs_dir / run_id)
+    existing_request = artifact_dir / "existing_provider_request.json"
+    existing_request.write_text(
+        json.dumps({"max_results": 2, "paid_api_calls_attempted": 0, "network_calls_made": 0}),
+        encoding="utf-8",
+    )
+    ledger.record_artifact(job_id=job_id, kind="enrichment_provider_request", path=existing_request)
+
+    try:
+        BusinessCardService(config).request_enrichment(
+            job_id=job_id,
+            run_id=run_id,
+            mode="api",
+            requested_by="tester",
+            allow_paid_enrichment=True,
+        )
+    except ValueError as exc:
+        assert "paid provider enrichment request exceeds run budget" in str(exc)
+    else:
+        raise AssertionError("expected paid-provider enrichment request to exceed run budget")
+
+    artifacts = BusinessCardService(config).list_artifacts(run_id)
+    assert sum(1 for artifact in artifacts if artifact["kind"] == "enrichment_request") == 0
 
 
 def test_service_next_actions_recommends_review_for_needs_review_job(tmp_path: Path) -> None:
