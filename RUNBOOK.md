@@ -522,3 +522,20 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 55 tests.
+
+## Turn 31 | 2026-06-13
+
+Continued Plan 0004 execution with MCP stdio transport.
+
+Implemented:
+
+- Added `business_card_watchdog.mcp_server` JSONL stdio transport.
+- Transport handles `initialize`, `tools/list`, `tools/call`, `ping`, and `shutdown` JSON-RPC requests.
+- `tools/list` maps the repo manifest to MCP-style `inputSchema` records.
+- `tools/call` delegates to the shared MCP dispatcher and service-layer methods.
+- Added CLI `bcw mcp-stdio`.
+- Added transport and CLI parser tests.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_mcp.py tests/test_cli_surfaces.py -q` passed with 21 tests.

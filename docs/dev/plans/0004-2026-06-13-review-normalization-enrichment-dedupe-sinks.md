@@ -493,6 +493,27 @@ Remaining:
 - Live sink-backed duplicate lookup execution remains follow-on work.
 - Non-simulated live apply remains blocked until adapters are implemented and explicitly approved.
 
+### Slice 0004-T | 2026-06-13 | MCP Stdio Transport
+
+Implemented:
+
+- Added `business_card_watchdog.mcp_server` JSONL stdio transport.
+- Transport handles `initialize`, `tools/list`, `tools/call`, `ping`, and `shutdown` JSON-RPC requests.
+- `tools/list` adapts the existing manifest into MCP-style `inputSchema` records.
+- `tools/call` delegates to the existing `mcp.call_tool` dispatcher so service-layer policy remains shared with CLI/API.
+- Added CLI `bcw mcp-stdio`.
+- Added tests for transport initialize, tool listing, tool call dispatch, shutdown, and CLI parser exposure.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_mcp.py tests/test_cli_surfaces.py -q` passed with 21 tests.
+
+Remaining:
+
+- Live Google Contacts and Odoo/Odollo lookup/write/readback adapters remain blocked.
+- Live sink-backed duplicate lookup execution remains follow-on work.
+- Non-simulated live apply remains blocked until adapters are implemented and explicitly approved.
+
 ## `/goal` Objective
 
 Use this as the high-level `/goal` objective:

@@ -1,8 +1,10 @@
 import json
 from pathlib import Path
+from io import StringIO
 
 from business_card_watchdog.config import AppConfig, SinkConfig
 from business_card_watchdog.mcp import call_tool, tool_manifest
+from business_card_watchdog.mcp_server import serve_jsonl
 
 from test_service import make_recorded_run
 
@@ -171,3 +173,29 @@ def test_mcp_call_tool_rejects_unknown_tool(tmp_path: Path) -> None:
         assert "unknown MCP tool" in str(exc)
     else:
         raise AssertionError("expected ValueError")
+
+
+def test_mcp_jsonl_server_lists_and_calls_tools(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    input_stream = StringIO(
+        "\n".join(
+            [
+                '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}',
+                '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}',
+                '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"business_card_watchdog_status","arguments":{}}}',
+                '{"jsonrpc":"2.0","id":4,"method":"shutdown","params":{}}',
+            ]
+        )
+        + "\n"
+    )
+    output_stream = StringIO()
+
+    serve_jsonl(input_stream=input_stream, output_stream=output_stream, config=config)
+    responses = [json.loads(line) for line in output_stream.getvalue().splitlines()]
+
+    assert responses[0]["result"]["serverInfo"]["name"] == "business-card-watchdog"
+    assert responses[1]["result"]["tools"][0]["inputSchema"]["type"] == "object"
+    assert any(tool["name"] == "business_card_watchdog_status" for tool in responses[1]["result"]["tools"])
+    assert responses[2]["result"]["isError"] is False
+    assert responses[2]["result"]["structuredContent"]["skill_ready"] is True
+    assert responses[3]["result"]["shutdown"] is True

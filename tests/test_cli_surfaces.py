@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from business_card_watchdog.cli import main
+from business_card_watchdog.cli import build_parser, main
 from business_card_watchdog.config import AppConfig, EnrichmentConfig, PrefilterConfig
 from business_card_watchdog.contact import build_contact_candidate
 from business_card_watchdog.orchestrator import BatchOrchestrator
@@ -15,6 +15,12 @@ from test_service import make_recorded_run
 
 def write_config(path: Path, data_dir: Path) -> None:
     path.write_text(f'data_dir = "{data_dir}"\n[watch]\ninputs = []\n', encoding="utf-8")
+
+
+def test_cli_has_mcp_stdio_command() -> None:
+    args = build_parser().parse_args(["mcp-stdio"])
+
+    assert args.command == "mcp-stdio"
 
 
 def test_cli_runs_and_jobs_use_recorded_runtime_state(
