@@ -4,7 +4,12 @@ import json
 from pathlib import Path
 
 from business_card_watchdog.cli import build_parser, main
-from business_card_watchdog.config import AppConfig, EnrichmentConfig, PrefilterConfig
+from business_card_watchdog.config import (
+    AppConfig,
+    EnrichmentConfig,
+    EnrichmentProviderConfig,
+    PrefilterConfig,
+)
 from business_card_watchdog.contact import build_contact_candidate
 from business_card_watchdog.orchestrator import BatchOrchestrator
 from business_card_watchdog.service_ops import service_unit_path
@@ -524,6 +529,71 @@ def test_cli_enrichment_request_writes_public_web_artifacts(tmp_path: Path, monk
     payload = json.loads(capsys.readouterr().out)
     assert payload["status"] == "ok"
     assert payload["result"]["network_calls_made"] == 0
+
+
+def test_cli_enrichment_request_writes_paid_provider_request_without_call(tmp_path: Path, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    keys_path = tmp_path / "API-keys.env"
+    keys_path.write_text("APOLLO_API_KEY=secret-value-not-printed\n", encoding="utf-8")
+    config_path.write_text(
+        f'data_dir = "{data_dir}"\n'
+        "[watch]\ninputs = []\n"
+        "[enrichment]\nenabled = true\nallow_paid_api = true\n"
+        f'api_keys_env = "{keys_path}"\n'
+        "[enrichment.providers.apollo]\nenabled = true\napi_key_env = \"APOLLO_API_KEY\"\n",
+        encoding="utf-8",
+    )
+    run_id, job_id = make_recorded_run(
+        AppConfig(
+            config_path=config_path,
+            data_dir=data_dir,
+            enrichment=EnrichmentConfig(
+                enabled=True,
+                allow_paid_api=True,
+                api_keys_env=keys_path,
+                apollo=EnrichmentProviderConfig(enabled=True),
+            ),
+        )
+    )
+    artifact_dir = data_dir / "runs" / run_id / "artifacts" / job_id
+    (artifact_dir / "contact_candidate.json").write_text(
+        json.dumps(
+            build_contact_candidate(
+                {
+                    "full_name": "Ada Lovelace",
+                    "organization": "Example Labs",
+                    "email": "ada@example.test",
+                }
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "enrichment",
+                "request",
+                job_id,
+                "--run-id",
+                run_id,
+                "--mode",
+                "api",
+                "--allow-paid-enrichment",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["provider_request"]["schema"] == "business-card-watchdog.enrichment-provider-request.v1"
+    assert payload["provider_request"]["status"] == "prepared"
+    assert payload["provider_request"]["network_calls_made"] == 0
+    assert "secret" not in json.dumps(payload)
 
 
 def test_cli_doctor_reports_user_scope_checks(tmp_path: Path, capsys) -> None:

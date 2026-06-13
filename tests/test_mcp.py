@@ -2,7 +2,8 @@ import json
 from pathlib import Path
 from io import StringIO
 
-from business_card_watchdog.config import AppConfig, SinkConfig
+from business_card_watchdog.config import AppConfig, EnrichmentConfig, EnrichmentProviderConfig, SinkConfig
+from business_card_watchdog.contact import build_contact_candidate
 from business_card_watchdog.mcp import call_tool, tool_manifest
 from business_card_watchdog.mcp_server import serve_jsonl
 
@@ -162,6 +163,44 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert duplicate["submission"]["duplicate_resolution"]["decision"] == "create_new"
     assert run_next["executed_count"] == 1
     assert run_next["executed"][0]["action"].startswith(("plan_", "prepare_", "record_", "assess_"))
+
+
+def test_mcp_enrichment_request_can_prepare_paid_provider_without_call(tmp_path: Path) -> None:
+    keys_path = tmp_path / "API-keys.env"
+    keys_path.write_text("APOLLO_API_KEY=secret-value-not-printed\n", encoding="utf-8")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        enrichment=EnrichmentConfig(
+            enabled=True,
+            allow_paid_api=True,
+            api_keys_env=keys_path,
+            apollo=EnrichmentProviderConfig(enabled=True),
+        ),
+    )
+    run_id, job_id = make_recorded_run(config)
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+    (artifact_dir / "contact_candidate.json").write_text(
+        json.dumps(build_contact_candidate({"full_name": "Ada Lovelace", "email": "ada@example.test"}))
+        + "\n",
+        encoding="utf-8",
+    )
+
+    payload = call_tool(
+        "business_card_watchdog_enrichment_request",
+        {
+            "job_id": job_id,
+            "run_id": run_id,
+            "mode": "api",
+            "allow_paid_enrichment": True,
+        },
+        config=config,
+    )
+
+    assert payload["status"] == "ok"
+    assert payload["provider_request"]["status"] == "prepared"
+    assert payload["provider_request"]["network_calls_made"] == 0
+    assert "secret" not in json.dumps(payload)
 
 
 def test_mcp_call_tool_rejects_unknown_tool(tmp_path: Path) -> None:

@@ -514,6 +514,28 @@ Remaining:
 - Live sink-backed duplicate lookup execution remains follow-on work.
 - Non-simulated live apply remains blocked until adapters are implemented and explicitly approved.
 
+### Slice 0004-U | 2026-06-13 | Paid Enrichment Provider Request Artifacts
+
+Implemented:
+
+- Added `enrichment_provider_request.json` artifacts for explicitly requested paid API enrichment.
+- Added Apollo-shaped provider request builder with observed contact fields, request fields, configured base URL, and API key env name.
+- Provider request artifacts record `network_calls_made = 0` and `paid_api_calls_attempted = 0`.
+- Provider request artifacts never include API key values.
+- Service `request_enrichment` writes provider request artifacts for `api` and `all` modes only after readiness passes.
+- CLI and MCP enrichment request surfaces can produce the provider request artifact with `--allow-paid-enrichment` / `allow_paid_enrichment`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_enrichment.py tests/test_cli_surfaces.py tests/test_mcp.py -q` passed with 30 tests.
+
+Remaining:
+
+- Real public-web search execution remains out of scope for default tests.
+- Apollo live API calls remain blocked behind explicit operator request and future adapter implementation.
+- Live Google Contacts and Odoo/Odollo lookup/write/readback adapters remain blocked.
+- Non-simulated live apply remains blocked until adapters are implemented and explicitly approved.
+
 ## `/goal` Objective
 
 Use this as the high-level `/goal` objective:

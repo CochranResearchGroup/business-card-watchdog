@@ -13,6 +13,7 @@ EnrichmentMode = Literal["none", "public_web", "api", "all"]
 EnrichmentReadinessStatus = Literal["ready", "blocked"]
 ENRICHMENT_REQUEST_SCHEMA = "business-card-watchdog.enrichment-request.v1"
 ENRICHMENT_RESULT_SCHEMA = "business-card-watchdog.enrichment-result.v1"
+ENRICHMENT_PROVIDER_REQUEST_SCHEMA = "business-card-watchdog.enrichment-provider-request.v1"
 
 
 @dataclass(frozen=True)
@@ -120,6 +121,47 @@ def score_public_web_results(
         "network_calls_made": 0,
         "results": scored,
         "merge_proposals": _merge_proposals(spec, scored),
+    }
+
+
+def build_paid_api_provider_request(
+    config: AppConfig,
+    contact_candidate: dict[str, Any],
+    *,
+    mode: str,
+    requested_by: str,
+    allow_paid_enrichment: bool,
+    readiness: list[dict[str, Any]],
+) -> dict[str, Any]:
+    spec = contact_candidate_to_spec(contact_candidate)
+    apollo_ready = next((check for check in readiness if check.get("provider") == "apollo"), {})
+    observed = {
+        key: spec[key]
+        for key in ("full_name", "organization", "email", "phone", "website")
+        if spec.get(key)
+    }
+    return {
+        "schema": ENRICHMENT_PROVIDER_REQUEST_SCHEMA,
+        "provider": "apollo",
+        "mode": mode,
+        "requested_by": requested_by,
+        "status": "prepared" if apollo_ready.get("status") == "ready" else "blocked",
+        "reason": apollo_ready.get("reason") or "Apollo readiness was not evaluated",
+        "cost_class": "paid_api",
+        "allow_paid_enrichment": allow_paid_enrichment,
+        "network_calls_made": 0,
+        "paid_api_calls_attempted": 0,
+        "api_key_env": config.enrichment.apollo.api_key_env,
+        "api_key_available": apollo_ready.get("status") == "ready",
+        "base_url": config.enrichment.apollo.base_url,
+        "operation": "person_company_lookup",
+        "observed": observed,
+        "request_fields": {
+            "email": observed.get("email", ""),
+            "name": observed.get("full_name", ""),
+            "organization_name": observed.get("organization", ""),
+            "domain": _host(str(observed.get("website") or "")),
+        },
     }
 
 

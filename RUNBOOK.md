@@ -539,3 +539,20 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_mcp.py tests/test_cli_surfaces.py -q` passed with 21 tests.
+
+## Turn 32 | 2026-06-13
+
+Continued Plan 0004 execution with paid enrichment provider request artifacts.
+
+Implemented:
+
+- Added `enrichment_provider_request.json` artifacts for explicitly requested paid API enrichment.
+- Added Apollo-shaped provider request builder with observed contact fields, request fields, configured base URL, and API key env name.
+- Provider request artifacts record `network_calls_made = 0` and `paid_api_calls_attempted = 0`.
+- Provider request artifacts do not include API key values.
+- Service `request_enrichment` writes provider request artifacts for `api` and `all` modes after readiness passes.
+- CLI and MCP enrichment request surfaces can produce the provider request artifact with explicit paid-enrichment approval.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_enrichment.py tests/test_cli_surfaces.py tests/test_mcp.py -q` passed with 30 tests.

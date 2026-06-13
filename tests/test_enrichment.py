@@ -1,7 +1,12 @@
+import json
 from pathlib import Path
 
 from business_card_watchdog.config import AppConfig, EnrichmentConfig, EnrichmentProviderConfig, PrefilterConfig
-from business_card_watchdog.enrichment import build_enrichment_request, check_enrichment_readiness
+from business_card_watchdog.enrichment import (
+    build_enrichment_request,
+    build_paid_api_provider_request,
+    check_enrichment_readiness,
+)
 from business_card_watchdog.orchestrator import BatchOrchestrator
 from business_card_watchdog.service import BusinessCardService
 
@@ -74,6 +79,50 @@ def test_public_web_request_builds_queries_from_contact_candidate() -> None:
     assert request["cost_gate"]["paid_api_requested"] is False
 
 
+def test_paid_api_provider_request_is_zero_network_and_secret_free(tmp_path: Path) -> None:
+    keys_path = tmp_path / "API-keys.env"
+    keys_path.write_text("APOLLO_API_KEY=secret-value-not-printed\n", encoding="utf-8")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        enrichment=EnrichmentConfig(
+            enabled=True,
+            allow_paid_api=True,
+            api_keys_env=keys_path,
+            apollo=EnrichmentProviderConfig(enabled=True),
+        ),
+    )
+    readiness = [
+        check.to_dict()
+        for check in check_enrichment_readiness(config, mode="api", allow_paid_enrichment=True)
+    ]
+
+    request = build_paid_api_provider_request(
+        config,
+        {
+            "schema": "business-card-watchdog.contact-candidate.v1",
+            "normalized": {
+                "full_name": {"value": "Ada Lovelace"},
+                "organization": {"value": "Example Labs"},
+                "email": {"value": "ada@example.test"},
+                "website": {"value": "https://example.test/team"},
+            },
+        },
+        mode="api",
+        requested_by="tester",
+        allow_paid_enrichment=True,
+        readiness=readiness,
+    )
+
+    assert request["schema"] == "business-card-watchdog.enrichment-provider-request.v1"
+    assert request["status"] == "prepared"
+    assert request["network_calls_made"] == 0
+    assert request["paid_api_calls_attempted"] == 0
+    assert request["api_key_env"] == "APOLLO_API_KEY"
+    assert request["api_key_available"] is True
+    assert request["request_fields"]["domain"] == "example.test"
+    assert "secret" not in str(request)
+
+
 def test_service_request_enrichment_writes_request_and_fixture_result(tmp_path: Path, monkeypatch) -> None:
     source_dir = tmp_path / "synthetic-cards"
     write_synthetic_image(source_dir / "card.png")
@@ -123,3 +172,67 @@ def test_service_request_enrichment_writes_request_and_fixture_result(tmp_path: 
     assert result_path.exists()
     assert any(artifact["kind"] == "enrichment_request" for artifact in artifacts)
     assert any(artifact["kind"] == "enrichment_result" for artifact in artifacts)
+
+
+def test_service_request_api_enrichment_writes_provider_request_without_call(tmp_path: Path) -> None:
+    keys_path = tmp_path / "API-keys.env"
+    keys_path.write_text("APOLLO_API_KEY=secret-value-not-printed\n", encoding="utf-8")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        enrichment=EnrichmentConfig(
+            enabled=True,
+            allow_paid_api=True,
+            api_keys_env=keys_path,
+            apollo=EnrichmentProviderConfig(enabled=True),
+        ),
+    )
+    service = BusinessCardService(config)
+    run_id, job_id = _record_candidate(config)
+
+    payload = service.request_enrichment(
+        job_id=job_id,
+        run_id=run_id,
+        mode="api",
+        requested_by="tester",
+        allow_paid_enrichment=True,
+    )
+    artifacts = read_jsonl(config.runs_dir / run_id / "artifacts.jsonl")
+
+    assert payload["status"] == "ok"
+    assert payload["result"] is None
+    assert payload["provider_request"]["status"] == "prepared"
+    assert payload["provider_request"]["network_calls_made"] == 0
+    assert payload["provider_request"]["paid_api_calls_attempted"] == 0
+    assert "secret" not in Path(payload["provider_request_path"]).read_text(encoding="utf-8")
+    assert any(artifact["kind"] == "enrichment_provider_request" for artifact in artifacts)
+
+
+def _record_candidate(config: AppConfig) -> tuple[str, str]:
+    from business_card_watchdog.ledger import RunLedger
+    from business_card_watchdog.models import CardJob
+
+    run_id = "run-enrichment-api"
+    ledger = RunLedger(config.runs_dir / run_id)
+    ledger.initialize(source="/tmp/cards", dry_run=True)
+    job = CardJob(image_path="/tmp/cards/card.png", job_id="job-enrichment-api")
+    artifact_dir = ledger.run_dir / "artifacts" / job.job_id
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    candidate = {
+        "schema": "business-card-watchdog.contact-candidate.v1",
+        "normalized": {
+            "full_name": {"value": "Ada Lovelace"},
+            "organization": {"value": "Example Labs"},
+            "email": {"value": "ada@example.test"},
+            "website": {"value": "https://example.test/team"},
+        },
+    }
+    candidate_path = artifact_dir / "contact_candidate.json"
+    candidate_path.write_text(json.dumps(candidate) + "\n", encoding="utf-8")
+    job.artifact_dir = str(artifact_dir)
+    job.transition_to("processing")
+    job.transition_to("needs_review")
+    ledger.set_job_count(1)
+    ledger.record_job(job)
+    ledger.record_artifact(job_id=job.job_id, kind="contact_candidate", path=candidate_path)
+    return run_id, job.job_id

@@ -12,7 +12,12 @@ from .contact import (
     contact_candidate_to_spec,
 )
 from .dedupe import assess_downstream_lookup_result
-from .enrichment import build_enrichment_request, check_enrichment_readiness, score_public_web_results
+from .enrichment import (
+    build_enrichment_request,
+    build_paid_api_provider_request,
+    check_enrichment_readiness,
+    score_public_web_results,
+)
 from .ledger import RunLedger
 from .models import CardJob
 from .orchestrator import BatchOrchestrator
@@ -478,6 +483,27 @@ class BusinessCardService:
         ledger.record_artifact(job_id=job_id, kind="enrichment_request", path=request_path)
         result_payload = None
         result_path = None
+        provider_request_payload = None
+        provider_request_path = None
+        if mode in {"api", "all"}:
+            provider_request_payload = build_paid_api_provider_request(
+                self.config,
+                candidate,
+                mode=mode,
+                requested_by=requested_by,
+                allow_paid_enrichment=allow_paid_enrichment,
+                readiness=list(readiness["checks"]),
+            )
+            provider_request_path = artifact_dir / "enrichment_provider_request.json"
+            provider_request_path.write_text(
+                json.dumps(provider_request_payload, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            ledger.record_artifact(
+                job_id=job_id,
+                kind="enrichment_provider_request",
+                path=provider_request_path,
+            )
         if mode in {"public_web", "all"}:
             result_payload = score_public_web_results(candidate, results=public_web_results or [])
             result_path = artifact_dir / "enrichment_result.json"
@@ -491,19 +517,22 @@ class BusinessCardService:
             {
                 "job_id": job_id,
                 "run_id": run_id,
-                "mode": mode,
-                "requested_by": requested_by,
-                "request_path": str(request_path),
-                "result_path": str(result_path) if result_path else None,
-            },
-        )
+                    "mode": mode,
+                    "requested_by": requested_by,
+                    "request_path": str(request_path),
+                    "result_path": str(result_path) if result_path else None,
+                    "provider_request_path": str(provider_request_path) if provider_request_path else None,
+                },
+            )
         return {
             "status": "ok",
             "readiness": readiness,
             "request_path": str(request_path),
             "result_path": str(result_path) if result_path else None,
+            "provider_request_path": str(provider_request_path) if provider_request_path else None,
             "request": request,
             "result": result_payload,
+            "provider_request": provider_request_payload,
         }
 
     def plan_sinks_for_job(self, *, job_id: str, run_id: str, dry_run: bool = True) -> dict[str, Any]:
