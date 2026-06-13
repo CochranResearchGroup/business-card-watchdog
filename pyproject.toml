@@ -1,0 +1,34 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "business-card-watchdog"
+version = "0.1.0"
+description = "Watched-folder business card OCR, batch orchestration, and contact-routing software."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+authors = [
+  { name = "Cochran Research Group" }
+]
+
+[project.optional-dependencies]
+api = ["fastapi>=0.111", "httpx2>=2.4", "uvicorn>=0.30"]
+vision = ["opencv-python-headless>=4.10"]
+watch = ["watchfiles>=0.22"]
+dev = ["pytest>=8.2", "ruff>=0.5"]
+
+[project.scripts]
+bcw = "business_card_watchdog.cli:main"
+business-card-watchdog = "business_card_watchdog.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/business_card_watchdog"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

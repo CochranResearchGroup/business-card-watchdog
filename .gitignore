@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+dist/
+build/
+*.egg-info/
+
+# Local runtime/config material belongs in the user scope, not the repo.
+.env
+.env.*
+runs/
+artifacts/
+*.log
+
