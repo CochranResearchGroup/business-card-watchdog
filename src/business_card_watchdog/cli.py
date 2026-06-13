@@ -81,6 +81,11 @@ def build_parser() -> argparse.ArgumentParser:
     reviews_list.add_argument("--run-id", default=None)
     reviews_list.add_argument("--state", default="needs_review")
     reviews_list.add_argument("--json", action="store_true")
+    reviews_bundle = reviews_sub.add_parser("bundle")
+    reviews_bundle.add_argument("--run-id", required=True)
+    reviews_bundle.add_argument("--state", default="all")
+    reviews_bundle.add_argument("--no-write", action="store_true")
+    reviews_bundle.add_argument("--json", action="store_true")
 
     actions = sub.add_parser("actions")
     actions_sub = actions.add_subparsers(dest="actions_command", required=True)
@@ -229,7 +234,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "reviews":
-        payload = service.review_queue(run_id=args.run_id, state=args.state)
+        if args.reviews_command == "bundle":
+            payload = service.review_bundle(run_id=args.run_id, state=args.state, write=not args.no_write)
+        else:
+            payload = service.review_queue(run_id=args.run_id, state=args.state)
         print(json.dumps(payload, indent=2) if args.json else payload)
         return 0
 

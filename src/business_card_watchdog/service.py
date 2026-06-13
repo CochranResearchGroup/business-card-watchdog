@@ -21,7 +21,7 @@ from .enrichment import (
     score_public_web_results,
 )
 from .ledger import RunLedger
-from .models import CardJob
+from .models import CardJob, utc_now
 from .orchestrator import BatchOrchestrator
 from .review import build_review_submission, write_review_submission
 from .routing import decide_sinks
@@ -134,6 +134,34 @@ _ROUTE_REFRESH_STEPS = [
         "reason": "review changed routing-relevant contact data; refresh readback adapter request after apply",
     },
 ]
+
+_REVIEW_BUNDLE_ARTIFACT_KINDS = {
+    "preclassification",
+    "review_packet",
+    "contact_candidate",
+    "reviewed_contact",
+    "review_submission",
+    "enrichment_request",
+    "enrichment_public_web_request",
+    "enrichment_provider_request",
+    "enrichment_result",
+    "enrichment_provider_result",
+    "enrichment_merge_review",
+    "duplicate_assessment",
+    "downstream_duplicate_assessment",
+    "duplicate_resolution",
+    "sink_lookup_plan",
+    "sink_adapter_request_lookup",
+    "sink_lookup_result",
+    "sink_plan",
+    "sink_adapter_request_write",
+    "sink_apply_preflight",
+    "sink_apply_decision",
+    "sink_apply_pilot_readiness",
+    "sink_apply_result",
+    "sink_adapter_request_readback",
+    "route_refresh",
+}
 
 
 class BusinessCardService:
@@ -317,6 +345,81 @@ class BusinessCardService:
                 }
             )
         return queue
+
+    def review_bundle(self, *, run_id: str, state: str = "all", write: bool = True) -> dict[str, Any]:
+        run = self.get_run(run_id)
+        artifacts = self.list_artifacts(run_id)
+        artifacts_by_job: dict[str, dict[str, dict[str, Any]]] = {}
+        for artifact in artifacts:
+            job_id = str(artifact.get("job_id") or "")
+            kind = str(artifact.get("kind") or "")
+            if kind in _REVIEW_BUNDLE_ARTIFACT_KINDS:
+                artifacts_by_job.setdefault(job_id, {})[kind] = artifact
+        next_by_job = {
+            str(action["job_id"]): action
+            for action in self.next_actions(run_id=run_id, limit=max(1000, int(run.get("job_count") or 0) + 10))["actions"]
+        }
+        entries: list[dict[str, Any]] = []
+        for job in self.list_jobs(run_id):
+            if state != "all" and job.get("state") != state:
+                continue
+            by_kind = artifacts_by_job.get(str(job["job_id"]), {})
+            entries.append(
+                {
+                    "run_id": run_id,
+                    "job_id": job["job_id"],
+                    "state": job["state"],
+                    "image_path": job["image_path"],
+                    "error": job.get("error"),
+                    "artifact_dir": job.get("artifact_dir"),
+                    "next_action": next_by_job.get(str(job["job_id"])),
+                    "artifact_kinds": sorted(by_kind),
+                    "artifacts": {
+                        kind: self._artifact_bundle_entry(record)
+                        for kind, record in sorted(by_kind.items())
+                    },
+                    "commands": {
+                        "show_job": f"jobs show {job['job_id']} --run-id {run_id}",
+                        "review": f"jobs review {job['job_id']} --run-id {run_id}",
+                        "next": next_by_job.get(str(job["job_id"]), {}).get("command"),
+                    },
+                }
+            )
+        payload = {
+            "schema": "business-card-watchdog.review-bundle.v1",
+            "run_id": run_id,
+            "state_filter": state,
+            "created_at": utc_now(),
+            "job_count": len(entries),
+            "run_state": run.get("state"),
+            "summary": self.run_summary(run_id),
+            "entries": entries,
+            "commands": {
+                "refresh": f"reviews bundle --run-id {run_id} --state {state}",
+                "list": f"reviews list --run-id {run_id} --state {state}",
+                "next_actions": f"mcp-call business_card_watchdog_next_actions --arguments-json '{{\"run_id\":\"{run_id}\"}}'",
+            },
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+        if write:
+            bundle_path = self.config.runs_dir / run_id / "review_bundle.json"
+            bundle_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            ledger = RunLedger(self.config.runs_dir / run_id)
+            ledger.record_artifact(job_id="__run__", kind="review_bundle", path=bundle_path)
+            ledger.record_event(
+                "review_bundle_created",
+                {
+                    "run_id": run_id,
+                    "bundle_path": str(bundle_path),
+                    "job_count": len(entries),
+                    "state_filter": state,
+                    "writes_attempted": 0,
+                    "network_calls_made": 0,
+                },
+            )
+            payload["review_bundle_path"] = str(bundle_path)
+        return payload
 
     def submit_review(
         self,
@@ -1213,6 +1316,25 @@ class BusinessCardService:
             "google_contacts": {"profile": self.config.sink.google_contacts_profile},
             "odoo": {"tenant": self.config.sink.odollo_tenant},
         }
+
+    def _artifact_bundle_entry(self, record: dict[str, Any]) -> dict[str, Any]:
+        path = Path(str(record.get("path") or ""))
+        entry = {
+            "kind": record.get("kind"),
+            "path": str(path),
+            "metadata": record.get("metadata") or {},
+            "exists": path.exists(),
+        }
+        if not path.exists():
+            entry["payload"] = None
+            entry["error"] = "artifact path does not exist"
+            return entry
+        try:
+            entry["payload"] = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            entry["payload"] = None
+            entry["error"] = f"artifact is not JSON: {exc}"
+        return entry
 
     def _record_route_refresh_if_needed(
         self,

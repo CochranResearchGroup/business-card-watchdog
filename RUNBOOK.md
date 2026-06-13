@@ -708,3 +708,27 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed with the index up to date.
 - `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+## Turn 42 | 2026-06-13
+
+Continued Plan 0004 execution with a batch review bundle surface.
+
+Implemented:
+
+- Added run-level `review_bundle.json` artifacts for operator/agent batch review.
+- Review bundles inline review-relevant artifact payloads for each job, including contact candidates, reviewed contacts, enrichment artifacts, duplicate assessments, sink plans, route refresh state, apply gates, and adapter requests.
+- Review bundles include per-job next-action readback and command hints while keeping decisions routed through existing service methods.
+- Added shared service `review_bundle`.
+- Added CLI `bcw reviews bundle`.
+- Added API `POST /runs/{run_id}/review-bundle`.
+- Added MCP tool `business_card_watchdog_review_bundle`.
+- Review bundle creation records `review_bundle_created` and a run-level `review_bundle` artifact with `job_id = "__run__"`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 63 tests.
+- `.venv/bin/python -m pytest -q` passed with 128 tests.
+- `PYTHONPATH=src pytest -q` passed with 124 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.

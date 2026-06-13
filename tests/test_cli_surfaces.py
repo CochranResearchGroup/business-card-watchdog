@@ -53,6 +53,13 @@ def test_cli_runs_and_jobs_use_recorded_runtime_state(
     reviews = json.loads(capsys.readouterr().out)
     assert reviews[0]["job_id"] == job_id
 
+    assert main(["--config", str(config_path), "reviews", "bundle", "--run-id", run_id, "--json"]) == 0
+    bundle = json.loads(capsys.readouterr().out)
+    assert bundle["schema"] == "business-card-watchdog.review-bundle.v1"
+    assert bundle["entries"][0]["job_id"] == job_id
+    assert bundle["entries"][0]["next_action"]["action"] == "review_contact"
+    assert Path(bundle["review_bundle_path"]).exists()
+
     assert (
         main(
             [

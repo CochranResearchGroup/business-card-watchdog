@@ -99,6 +99,10 @@ def create_app(config_path: Path | None = None):
     def list_reviews(run_id: str | None = None, state: str = "needs_review") -> list[dict[str, object]]:
         return service().review_queue(run_id=run_id, state=state)
 
+    @app.post("/runs/{run_id}/review-bundle")
+    def create_review_bundle(run_id: str, state: str = "all", write: bool = True) -> dict[str, object]:
+        return service().review_bundle(run_id=run_id, state=state, write=write)
+
     @app.post("/actions/run-next")
     def run_next_actions(request: RunNextActionsRequest = Body(default=RunNextActionsRequest())) -> dict[str, object]:
         return service().run_next_actions(run_id=request.run_id, limit=request.limit)

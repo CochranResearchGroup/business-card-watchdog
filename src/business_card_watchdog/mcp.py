@@ -96,6 +96,19 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_review_bundle",
+                "description": "Create a run-level batch review bundle with inline review-relevant artifact payloads.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "state": {"type": "string", "default": "all"},
+                        "write": {"type": "boolean", "default": True},
+                    },
+                    "required": ["run_id"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_job_show",
                 "description": "Show one job and its artifact records.",
                 "input_schema": {
@@ -364,6 +377,12 @@ def call_tool(
         return service.review_queue(
             run_id=str(args["run_id"]) if args.get("run_id") else None,
             state=str(args.get("state") or "needs_review"),
+        )
+    if tool_name == "business_card_watchdog_review_bundle":
+        return service.review_bundle(
+            run_id=str(args["run_id"]),
+            state=str(args.get("state") or "all"),
+            write=bool(args.get("write", True)),
         )
     if tool_name == "business_card_watchdog_job_show":
         return service.get_job(

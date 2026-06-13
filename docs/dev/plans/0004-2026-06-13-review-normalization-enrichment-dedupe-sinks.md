@@ -707,6 +707,32 @@ Remaining:
 - Live GWS/Odollo lookup/write/readback adapters remain blocked pending explicit pilot work.
 - Public-web and paid API enrichment execution remain explicit follow-on actions.
 
+### Slice 0004-AD | 2026-06-13 | Batch Review Bundle Surface
+
+Implemented:
+
+- Added run-level `review_bundle.json` artifacts for operator/agent batch review.
+- Review bundles inline current review-relevant artifact payloads for each job, including contact candidates, reviewed contacts, enrichment artifacts, duplicate assessments, sink plans, route refresh state, apply gates, and adapter requests.
+- Review bundles include per-job next-action readback and command hints while keeping all decisions routed through existing service methods.
+- Added service `review_bundle`, CLI `bcw reviews bundle`, API `POST /runs/{run_id}/review-bundle`, and MCP `business_card_watchdog_review_bundle`.
+- Review bundle creation records `review_bundle_created` events and a run-level `review_bundle` artifact record with `job_id = "__run__"`.
+- Review bundle artifacts record `writes_attempted = 0` and `network_calls_made = 0`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 63 tests.
+- `.venv/bin/python -m pytest -q` passed with 128 tests.
+- `PYTHONPATH=src pytest -q` passed with 124 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+Remaining:
+
+- This is still a JSON artifact surface, not a spreadsheet or local web UI.
+- Review decision import from a workbook remains follow-on work.
+- Live sink adapters and enrichment execution remain blocked behind explicit pilot work.
+
 ## Next High-Level Plan
 
 The next execution block should turn the current artifact-first scaffolding into an operator-usable review and routing system while preserving the current safety boundaries: no paid enrichment unless explicitly requested, no live sink writes without an approved pilot, and no secret values in repo artifacts or logs.

@@ -54,12 +54,23 @@ def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
 
     summary = service.run_summary(run_id)
     queue = service.review_queue(run_id=run_id)
+    bundle = service.review_bundle(run_id=run_id)
+    bundle_path = config.runs_dir / run_id / "review_bundle.json"
 
     assert summary["run_id"] == run_id
     assert summary["needs_review_count"] == 1
     assert summary["artifact_counts"]["contact_spec"] == 1
     assert queue[0]["job_id"] == job_id
     assert queue[0]["artifact_kinds"] == ["contact_spec"]
+    assert bundle["schema"] == "business-card-watchdog.review-bundle.v1"
+    assert bundle["review_bundle_path"] == str(bundle_path)
+    assert bundle["entries"][0]["job_id"] == job_id
+    assert bundle["entries"][0]["next_action"]["action"] == "review_contact"
+    assert bundle["entries"][0]["commands"]["review"] == f"jobs review {job_id} --run-id {run_id}"
+    assert bundle["writes_attempted"] == 0
+    assert bundle["network_calls_made"] == 0
+    assert bundle_path.exists()
+    assert any(artifact["kind"] == "review_bundle" for artifact in service.list_artifacts(run_id))
 
 
 def test_service_next_actions_recommends_review_for_needs_review_job(tmp_path: Path) -> None:

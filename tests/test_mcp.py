@@ -21,6 +21,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_next_actions" in names
     assert "business_card_watchdog_run_next_actions" in names
     assert "business_card_watchdog_reviews_list" in names
+    assert "business_card_watchdog_review_bundle" in names
     assert "business_card_watchdog_sinks_check" in names
     assert "business_card_watchdog_sink_plan" in names
     assert "business_card_watchdog_sink_lookup_plan" in names
@@ -72,6 +73,7 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     )
 
     summary = call_tool("business_card_watchdog_run_summary", {"run_id": run_id}, config=config)
+    review_bundle = call_tool("business_card_watchdog_review_bundle", {"run_id": run_id}, config=config)
     next_actions = call_tool("business_card_watchdog_next_actions", {"run_id": run_id}, config=config)
     job = call_tool("business_card_watchdog_job_show", {"job_id": job_id, "run_id": run_id}, config=config)
     lookup = call_tool(
@@ -149,6 +151,9 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     )
 
     assert summary["needs_review_count"] == 1
+    assert review_bundle["schema"] == "business-card-watchdog.review-bundle.v1"
+    assert review_bundle["entries"][0]["job_id"] == job_id
+    assert review_bundle["entries"][0]["next_action"]["action"] == "review_contact"
     assert next_actions["actions"][0]["action"] == "review_contact"
     assert job["job_id"] == job_id
     assert lookup["lookup_plan"]["network_calls_made"] == 0
