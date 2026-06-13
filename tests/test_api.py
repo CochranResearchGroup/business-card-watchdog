@@ -234,6 +234,35 @@ def test_api_enrichment_request_accepts_paid_provider_results(tmp_path: Path) ->
     assert payload["status"] == "ok"
     assert payload["provider_result"]["schema"] == "business-card-watchdog.enrichment-provider-result.v1"
     assert payload["provider_result"]["network_calls_made"] == 0
+    handoff = client.post(
+        f"/jobs/{job_id}/enrichment/provider-handoff",
+        json={"run_id": run_id},
+    ).json()
+    assert handoff["handoff"]["schema"] == "business-card-watchdog.enrichment-provider-handoff.v1"
+    assert handoff["handoff"]["paid_api_calls_attempted"] == 0
+    assert "secret" not in json.dumps(handoff)
+
+    result = client.post(
+        f"/jobs/{job_id}/enrichment/provider-results",
+        json={
+            "run_id": run_id,
+            "provider": "apollo",
+            "submitted_by": "api-agent",
+            "results": [
+                {
+                    "person": {
+                        "name": "Ada Lovelace",
+                        "email": "ada@example.test",
+                        "title": "Principal",
+                    },
+                    "organization": {"name": "Example Labs"},
+                }
+            ],
+        },
+    ).json()
+    assert result["provider_result"]["schema"] == "business-card-watchdog.enrichment-provider-result.v1"
+    assert result["provider_result"]["submitted_by"] == "api-agent"
+    assert result["provider_result"]["paid_api_calls_attempted"] == 0
     assert client.post("/sinks/check").json()["dry_run"] is True
     assert client.get("/watch/status").json()["seen_count"] == 0
 

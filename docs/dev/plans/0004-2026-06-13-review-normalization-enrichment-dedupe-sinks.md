@@ -1068,6 +1068,32 @@ Remaining:
 
 - Live public-web search execution remains explicit follow-on work; this slice only prepares a deterministic handoff for an operator or search agent.
 
+### Slice 0004-AS | 2026-06-13 | Paid Provider Handoff And Result Import
+
+Implemented:
+
+- Added `enrichment_provider_handoff.json` artifacts generated from existing `enrichment_provider_request.json` artifacts.
+- Provider handoffs carry approval state, key environment variable name, request fields, max result budget, zero-call counters, and explicit CLI/API/MCP result-import surfaces without writing credential values.
+- Added service `build_provider_enrichment_handoff`.
+- Added service `record_provider_enrichment_results` so provider results can be imported after the original request artifact exists.
+- Added CLI `bcw enrichment provider-handoff` and `bcw enrichment provider-results`.
+- Added API `POST /jobs/{job_id}/enrichment/provider-handoff` and `POST /jobs/{job_id}/enrichment/provider-results`.
+- Added MCP tools `business_card_watchdog_provider_enrichment_handoff` and `business_card_watchdog_provider_enrichment_results`.
+- Review bundle indexing now includes the provider handoff artifact kind.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_enrichment.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 44 tests.
+- `.venv/bin/python -m pytest -q` passed with 147 tests.
+- `PYTHONPATH=src pytest -q` passed with 142 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+Remaining:
+
+- Live paid-provider API execution remains explicit follow-on work and must stay behind config plus request-level approval.
+
 ## Next High-Level Plan
 
 The next execution block should turn the current artifact-first scaffolding into an operator-usable review and routing system while preserving the current safety boundaries: no paid enrichment unless explicitly requested, no live sink writes without an approved pilot, and no secret values in repo artifacts or logs.

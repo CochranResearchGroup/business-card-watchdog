@@ -46,6 +46,15 @@ def create_app(config_path: Path | None = None):
     class PublicWebHandoffRequest(BaseModel):
         run_id: str
 
+    class ProviderResultsRequest(BaseModel):
+        run_id: str
+        provider: str = "apollo"
+        submitted_by: str = "operator"
+        results: list[dict[str, object]] = Field(default_factory=list)
+
+    class ProviderHandoffRequest(BaseModel):
+        run_id: str
+
     class SinkApplyPreflightRequest(BaseModel):
         run_id: str
         apply: bool = False
@@ -175,6 +184,23 @@ def create_app(config_path: Path | None = None):
         return service().build_public_web_enrichment_handoff(
             job_id=job_id,
             run_id=request.run_id,
+        )
+
+    @app.post("/jobs/{job_id}/enrichment/provider-handoff")
+    def create_provider_handoff(job_id: str, request: ProviderHandoffRequest = Body(...)) -> dict[str, object]:
+        return service().build_provider_enrichment_handoff(
+            job_id=job_id,
+            run_id=request.run_id,
+        )
+
+    @app.post("/jobs/{job_id}/enrichment/provider-results")
+    def record_provider_results(job_id: str, request: ProviderResultsRequest = Body(...)) -> dict[str, object]:
+        return service().record_provider_enrichment_results(
+            job_id=job_id,
+            run_id=request.run_id,
+            provider=request.provider,
+            submitted_by=request.submitted_by,
+            results=[dict(row) for row in request.results],
         )
 
     @app.post("/sinks/check")

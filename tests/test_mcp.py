@@ -38,6 +38,8 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_enrichment_request" in names
     assert "business_card_watchdog_public_web_enrichment_handoff" in names
     assert "business_card_watchdog_public_web_enrichment_results" in names
+    assert "business_card_watchdog_provider_enrichment_handoff" in names
+    assert "business_card_watchdog_provider_enrichment_results" in names
     assert "business_card_watchdog_doctor" in names
     review_tool = next(tool for tool in manifest["tools"] if tool["name"] == "business_card_watchdog_job_review")
     assert "approve_enrichment_merge" in review_tool["input_schema"]["properties"]["action"]["enum"]
@@ -251,6 +253,36 @@ def test_mcp_enrichment_request_can_prepare_paid_provider_without_call(tmp_path:
     assert payload["provider_result"]["schema"] == "business-card-watchdog.enrichment-provider-result.v1"
     assert payload["provider_result"]["network_calls_made"] == 0
     assert "secret" not in json.dumps(payload)
+    handoff = call_tool(
+        "business_card_watchdog_provider_enrichment_handoff",
+        {"job_id": job_id, "run_id": run_id},
+        config=config,
+    )
+    result = call_tool(
+        "business_card_watchdog_provider_enrichment_results",
+        {
+            "job_id": job_id,
+            "run_id": run_id,
+            "provider": "apollo",
+            "submitted_by": "mcp-agent",
+            "results": [
+                {
+                    "person": {
+                        "name": "Ada Lovelace",
+                        "email": "ada@example.test",
+                        "title": "Principal",
+                    },
+                    "organization": {"name": "Example Labs"},
+                }
+            ],
+        },
+        config=config,
+    )
+    assert handoff["handoff"]["schema"] == "business-card-watchdog.enrichment-provider-handoff.v1"
+    assert handoff["handoff"]["paid_api_calls_attempted"] == 0
+    assert "secret" not in json.dumps(handoff)
+    assert result["provider_result"]["submitted_by"] == "mcp-agent"
+    assert result["provider_result"]["paid_api_calls_attempted"] == 0
 
 
 def test_mcp_public_web_enrichment_results_are_explicit(tmp_path: Path) -> None:

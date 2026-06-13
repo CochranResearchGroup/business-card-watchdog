@@ -14,6 +14,7 @@ from .contact import (
 )
 from .dedupe import assess_downstream_lookup_result
 from .enrichment import (
+    build_paid_api_provider_handoff,
     build_public_web_result_artifact,
     build_enrichment_request,
     build_paid_api_provider_request,
@@ -149,6 +150,7 @@ _REVIEW_BUNDLE_ARTIFACT_KINDS = {
     "enrichment_public_web_search_handoff",
     "enrichment_public_web_result",
     "enrichment_provider_request",
+    "enrichment_provider_handoff",
     "enrichment_result",
     "enrichment_provider_result",
     "enrichment_merge_review",
@@ -1132,6 +1134,128 @@ class BusinessCardService:
             "status": "ok",
             "handoff_path": str(handoff_path),
             "handoff": handoff,
+        }
+
+    def build_provider_enrichment_handoff(
+        self,
+        *,
+        job_id: str,
+        run_id: str,
+    ) -> dict[str, Any]:
+        job = self.get_job(job_id, run_id=run_id)
+        artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
+        request_path = artifact_dir / "enrichment_provider_request.json"
+        if not request_path.exists():
+            raise FileNotFoundError(f"provider enrichment request not found for job: {job_id}")
+        provider_request = json.loads(request_path.read_text(encoding="utf-8"))
+        handoff = build_paid_api_provider_handoff(
+            provider_request,
+            run_id=run_id,
+            job_id=job_id,
+        )
+        handoff_path = artifact_dir / "enrichment_provider_handoff.json"
+        handoff_path.write_text(
+            json.dumps(handoff, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        ledger.record_artifact(job_id=job_id, kind="enrichment_provider_handoff", path=handoff_path)
+        ledger.record_event(
+            "enrichment_provider_handoff_created",
+            {
+                "job_id": job_id,
+                "run_id": run_id,
+                "provider": handoff["provider"],
+                "handoff_path": str(handoff_path),
+                "max_results": handoff["max_results"],
+                "network_calls_made": 0,
+                "paid_api_calls_attempted": 0,
+            },
+        )
+        return {
+            "status": "ok",
+            "handoff_path": str(handoff_path),
+            "handoff": handoff,
+        }
+
+    def record_provider_enrichment_results(
+        self,
+        *,
+        job_id: str,
+        run_id: str,
+        provider: str = "apollo",
+        results: list[dict[str, Any]],
+        submitted_by: str = "operator",
+    ) -> dict[str, Any]:
+        job = self.get_job(job_id, run_id=run_id)
+        artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
+        candidate_path = artifact_dir / "contact_candidate.json"
+        request_path = artifact_dir / "enrichment_provider_request.json"
+        if not candidate_path.exists():
+            raise FileNotFoundError(f"contact candidate not found for job: {job_id}")
+        if not request_path.exists():
+            raise FileNotFoundError(f"provider enrichment request not found for job: {job_id}")
+        candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+        provider_request = json.loads(request_path.read_text(encoding="utf-8"))
+        requested_provider = str(provider_request.get("provider") or provider)
+        if requested_provider != provider:
+            raise ValueError(f"provider result import provider mismatch: {provider} for request provider {requested_provider}")
+        max_results = int(provider_request.get("max_results") or self.config.enrichment.max_paid_provider_results_per_contact)
+        if len(results) > max_results:
+            raise ValueError(
+                f"paid provider result import exceeds request limit: {len(results)} results for max {max_results}"
+            )
+        provider_result = score_paid_api_provider_results(
+            candidate,
+            provider=provider,
+            results=results,
+            max_results=max_results,
+        )
+        provider_result["submitted_by"] = submitted_by
+        provider_result["source_request_schema"] = provider_request.get("schema")
+        provider_result["source_request_status"] = provider_request.get("status")
+        provider_result_path = artifact_dir / "enrichment_provider_result.json"
+        provider_result_path.write_text(
+            json.dumps(provider_result, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        result_payload = {
+            "schema": provider_result["result_schema"],
+            "provider": provider_result["provider"],
+            "cost_class": provider_result["cost_class"],
+            "network_calls_made": provider_result["network_calls_made"],
+            "results": provider_result["results"],
+            "merge_proposals": provider_result["merge_proposals"],
+        }
+        result_path = artifact_dir / "enrichment_result.json"
+        result_path.write_text(
+            json.dumps(result_payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        ledger.record_artifact(job_id=job_id, kind="enrichment_provider_result", path=provider_result_path)
+        ledger.record_artifact(job_id=job_id, kind="enrichment_result", path=result_path)
+        ledger.record_event(
+            "enrichment_provider_results_recorded",
+            {
+                "job_id": job_id,
+                "run_id": run_id,
+                "provider": provider,
+                "submitted_by": submitted_by,
+                "provider_result_path": str(provider_result_path),
+                "result_path": str(result_path),
+                "submitted_result_count": len(results),
+                "merge_proposal_count": len(result_payload["merge_proposals"]),
+                "network_calls_made": 0,
+                "paid_api_calls_attempted": 0,
+            },
+        )
+        return {
+            "status": "ok",
+            "provider_result_path": str(provider_result_path),
+            "result_path": str(result_path),
+            "provider_result": provider_result,
+            "result": result_payload,
         }
 
     def plan_sinks_for_job(self, *, job_id: str, run_id: str, dry_run: bool = True) -> dict[str, Any]:

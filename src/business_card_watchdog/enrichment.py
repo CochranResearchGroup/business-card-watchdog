@@ -14,6 +14,7 @@ EnrichmentReadinessStatus = Literal["ready", "blocked"]
 ENRICHMENT_REQUEST_SCHEMA = "business-card-watchdog.enrichment-request.v1"
 ENRICHMENT_RESULT_SCHEMA = "business-card-watchdog.enrichment-result.v1"
 ENRICHMENT_PROVIDER_REQUEST_SCHEMA = "business-card-watchdog.enrichment-provider-request.v1"
+ENRICHMENT_PROVIDER_HANDOFF_SCHEMA = "business-card-watchdog.enrichment-provider-handoff.v1"
 ENRICHMENT_PUBLIC_WEB_REQUEST_SCHEMA = "business-card-watchdog.enrichment-public-web-request.v1"
 ENRICHMENT_PUBLIC_WEB_SEARCH_HANDOFF_SCHEMA = "business-card-watchdog.enrichment-public-web-search-handoff.v1"
 ENRICHMENT_PUBLIC_WEB_RESULT_SCHEMA = "business-card-watchdog.enrichment-public-web-result.v1"
@@ -280,6 +281,50 @@ def build_paid_api_provider_request(
             "name": observed.get("full_name", ""),
             "organization_name": observed.get("organization", ""),
             "domain": _host(str(observed.get("website") or "")),
+        },
+    }
+
+
+def build_paid_api_provider_handoff(
+    provider_request: dict[str, Any],
+    *,
+    run_id: str,
+    job_id: str,
+) -> dict[str, Any]:
+    provider = str(provider_request.get("provider") or "apollo")
+    max_results = int(provider_request.get("max_results") or 0)
+    return {
+        "schema": ENRICHMENT_PROVIDER_HANDOFF_SCHEMA,
+        "source_request_schema": provider_request.get("schema"),
+        "source_request_status": provider_request.get("status"),
+        "run_id": run_id,
+        "job_id": job_id,
+        "provider": provider,
+        "mode": provider_request.get("mode") or "api",
+        "operation": provider_request.get("operation") or "person_company_lookup",
+        "cost_class": "paid_api",
+        "allow_paid_enrichment": bool(provider_request.get("allow_paid_enrichment", False)),
+        "network_calls_made": 0,
+        "paid_api_calls_attempted": 0,
+        "max_results": max_results,
+        "api_key_env": provider_request.get("api_key_env"),
+        "api_key_available": bool(provider_request.get("api_key_available", False)),
+        "base_url": provider_request.get("base_url"),
+        "request_fields": dict(provider_request.get("request_fields") or {}),
+        "instructions": [
+            "Use this handoff only after explicit operator approval for paid API enrichment.",
+            "Load the API key from the named environment variable; never write or return the credential value.",
+            "Submit at most max_results rows through the provider result import surface for scoring and review.",
+            "Do not merge provider values directly into contacts without review approval.",
+        ],
+        "result_import": {
+            "cli": (
+                "bcw enrichment provider-results "
+                f"{job_id} --run-id {run_id} --provider {provider} --results-json '<json-array>' --submitted-by <operator> --json"
+            ),
+            "api": f"POST /jobs/{job_id}/enrichment/provider-results",
+            "mcp_tool": "business_card_watchdog_provider_enrichment_results",
+            "result_schema": ENRICHMENT_PROVIDER_RESULT_SCHEMA,
         },
     }
 

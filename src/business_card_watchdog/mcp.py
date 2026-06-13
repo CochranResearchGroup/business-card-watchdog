@@ -373,6 +373,33 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_provider_enrichment_handoff",
+                "description": "Create a zero-call paid-provider handoff from an existing provider enrichment request artifact.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "job_id": {"type": "string"},
+                        "run_id": {"type": "string"},
+                    },
+                    "required": ["job_id", "run_id"],
+                },
+            },
+            {
+                "name": "business_card_watchdog_provider_enrichment_results",
+                "description": "Record explicit paid-provider result rows for one job and create reviewable enrichment result artifacts.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "job_id": {"type": "string"},
+                        "run_id": {"type": "string"},
+                        "provider": {"type": "string", "default": "apollo"},
+                        "submitted_by": {"type": "string", "default": "operator"},
+                        "results": {"type": "array", "items": {"type": "object"}},
+                    },
+                    "required": ["job_id", "run_id"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_watch_status",
                 "description": "Report watched inputs, seen-file count, backlog, unsettled files, and last error.",
                 "input_schema": {"type": "object", "properties": {}},
@@ -548,6 +575,19 @@ def call_tool(
         return service.build_public_web_enrichment_handoff(
             job_id=str(args["job_id"]),
             run_id=str(args["run_id"]),
+        )
+    if tool_name == "business_card_watchdog_provider_enrichment_handoff":
+        return service.build_provider_enrichment_handoff(
+            job_id=str(args["job_id"]),
+            run_id=str(args["run_id"]),
+        )
+    if tool_name == "business_card_watchdog_provider_enrichment_results":
+        return service.record_provider_enrichment_results(
+            job_id=str(args["job_id"]),
+            run_id=str(args["run_id"]),
+            provider=str(args.get("provider") or "apollo"),
+            submitted_by=str(args.get("submitted_by") or "operator"),
+            results=list(args.get("results") or []),
         )
     if tool_name == "business_card_watchdog_watch_status":
         return service.watch_status()

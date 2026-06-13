@@ -5,6 +5,7 @@ from business_card_watchdog.config import AppConfig, EnrichmentConfig, Enrichmen
 from business_card_watchdog.contact import build_contact_candidate
 from business_card_watchdog.enrichment import (
     build_enrichment_request,
+    build_paid_api_provider_handoff,
     build_paid_api_provider_request,
     build_public_web_result_artifact,
     build_public_web_search_handoff,
@@ -234,6 +235,35 @@ def test_paid_api_provider_request_is_zero_network_and_secret_free(tmp_path: Pat
     assert request["api_key_available"] is True
     assert request["request_fields"]["domain"] == "example.test"
     assert "secret" not in str(request)
+
+
+def test_paid_api_provider_handoff_is_explicit_and_secret_free() -> None:
+    provider_request = {
+        "schema": "business-card-watchdog.enrichment-provider-request.v1",
+        "provider": "apollo",
+        "mode": "api",
+        "status": "prepared",
+        "operation": "person_company_lookup",
+        "allow_paid_enrichment": True,
+        "max_results": 2,
+        "api_key_env": "APOLLO_API_KEY",
+        "api_key_available": True,
+        "base_url": "https://api.apollo.io",
+        "request_fields": {"email": "ada@example.test"},
+    }
+
+    handoff = build_paid_api_provider_handoff(provider_request, run_id="run-1", job_id="job-1")
+
+    assert handoff["schema"] == "business-card-watchdog.enrichment-provider-handoff.v1"
+    assert handoff["cost_class"] == "paid_api"
+    assert handoff["allow_paid_enrichment"] is True
+    assert handoff["network_calls_made"] == 0
+    assert handoff["paid_api_calls_attempted"] == 0
+    assert handoff["max_results"] == 2
+    assert handoff["api_key_env"] == "APOLLO_API_KEY"
+    assert handoff["result_import"]["mcp_tool"] == "business_card_watchdog_provider_enrichment_results"
+    assert "provider-results job-1 --run-id run-1" in handoff["result_import"]["cli"]
+    assert "secret" not in json.dumps(handoff)
 
 
 def test_paid_api_provider_results_are_reviewable_without_call() -> None:
@@ -480,6 +510,65 @@ def test_service_request_api_enrichment_writes_provider_request_without_call(tmp
     assert any(artifact["kind"] == "enrichment_provider_request" for artifact in artifacts)
     assert any(artifact["kind"] == "enrichment_provider_result" for artifact in artifacts)
     assert any(artifact["kind"] == "enrichment_result" for artifact in artifacts)
+
+
+def test_service_creates_provider_handoff_and_records_results_after_request(tmp_path: Path) -> None:
+    keys_path = tmp_path / "API-keys.env"
+    keys_path.write_text("APOLLO_API_KEY=secret-value-not-printed\n", encoding="utf-8")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        enrichment=EnrichmentConfig(
+            enabled=True,
+            allow_paid_api=True,
+            api_keys_env=keys_path,
+            max_paid_provider_results_per_contact=2,
+            apollo=EnrichmentProviderConfig(enabled=True),
+        ),
+    )
+    service = BusinessCardService(config)
+    run_id, job_id = _record_candidate(config)
+    service.request_enrichment(
+        job_id=job_id,
+        run_id=run_id,
+        mode="api",
+        requested_by="tester",
+        allow_paid_enrichment=True,
+    )
+
+    handoff = service.build_provider_enrichment_handoff(job_id=job_id, run_id=run_id)
+    payload = service.record_provider_enrichment_results(
+        job_id=job_id,
+        run_id=run_id,
+        provider="apollo",
+        submitted_by="api-agent",
+        results=[
+            {
+                "person": {
+                    "name": "Ada Lovelace",
+                    "email": "ada@example.test",
+                    "title": "Principal",
+                },
+                "organization": {"name": "Example Labs"},
+            }
+        ],
+    )
+    artifacts = read_jsonl(config.runs_dir / run_id / "artifacts.jsonl")
+    events = read_jsonl(config.runs_dir / run_id / "events.jsonl")
+
+    assert handoff["handoff"]["schema"] == "business-card-watchdog.enrichment-provider-handoff.v1"
+    assert handoff["handoff"]["paid_api_calls_attempted"] == 0
+    assert handoff["handoff"]["max_results"] == 2
+    assert "secret" not in Path(handoff["handoff_path"]).read_text(encoding="utf-8")
+    assert payload["provider_result"]["schema"] == "business-card-watchdog.enrichment-provider-result.v1"
+    assert payload["provider_result"]["submitted_by"] == "api-agent"
+    assert payload["provider_result"]["paid_api_calls_attempted"] == 0
+    assert payload["provider_result"]["max_results"] == 2
+    assert payload["result"]["schema"] == "business-card-watchdog.enrichment-result.v1"
+    assert any(artifact["kind"] == "enrichment_provider_handoff" for artifact in artifacts)
+    assert any(artifact["kind"] == "enrichment_provider_result" for artifact in artifacts)
+    assert any(event["event_type"] == "enrichment_provider_handoff_created" for event in events)
+    assert any(event["event_type"] == "enrichment_provider_results_recorded" for event in events)
 
 
 def test_service_paid_provider_result_import_enforces_request_limit(tmp_path: Path) -> None:

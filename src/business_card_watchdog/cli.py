@@ -181,6 +181,17 @@ def build_parser() -> argparse.ArgumentParser:
     enrichment_public_web_handoff.add_argument("job_id")
     enrichment_public_web_handoff.add_argument("--run-id", required=True)
     enrichment_public_web_handoff.add_argument("--json", action="store_true")
+    enrichment_provider_handoff = enrichment_sub.add_parser("provider-handoff")
+    enrichment_provider_handoff.add_argument("job_id")
+    enrichment_provider_handoff.add_argument("--run-id", required=True)
+    enrichment_provider_handoff.add_argument("--json", action="store_true")
+    enrichment_provider_results = enrichment_sub.add_parser("provider-results")
+    enrichment_provider_results.add_argument("job_id")
+    enrichment_provider_results.add_argument("--run-id", required=True)
+    enrichment_provider_results.add_argument("--provider", default="apollo")
+    enrichment_provider_results.add_argument("--submitted-by", default="operator")
+    enrichment_provider_results.add_argument("--results-json", default="[]")
+    enrichment_provider_results.add_argument("--json", action="store_true")
 
     watch = sub.add_parser("watch")
     watch.add_argument("--once", action="store_true")
@@ -384,10 +395,23 @@ def main(argv: list[str] | None = None) -> int:
                 searched_by=args.searched_by,
                 results=json.loads(args.results_json),
             )
-        else:
+        elif args.enrichment_command == "public-web-handoff":
             payload = service.build_public_web_enrichment_handoff(
                 job_id=args.job_id,
                 run_id=args.run_id,
+            )
+        elif args.enrichment_command == "provider-handoff":
+            payload = service.build_provider_enrichment_handoff(
+                job_id=args.job_id,
+                run_id=args.run_id,
+            )
+        else:
+            payload = service.record_provider_enrichment_results(
+                job_id=args.job_id,
+                run_id=args.run_id,
+                provider=args.provider,
+                submitted_by=args.submitted_by,
+                results=json.loads(args.results_json),
             )
         print(json.dumps(payload, indent=2) if args.json else payload)
         checks = payload.get("checks") or payload.get("readiness", {}).get("checks", [])

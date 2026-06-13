@@ -1028,3 +1028,24 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed with the index up to date.
 - `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+## Turn 57 | 2026-06-13
+
+Continued Plan 0004 execution with paid-provider handoff and post-request result import.
+
+Implemented:
+
+- Added deterministic `enrichment_provider_handoff.json` artifacts from existing provider enrichment request artifacts.
+- Provider handoffs preserve explicit approval state, provider operation details, max result budget, key environment variable name, and zero-call counters without writing credential values.
+- Added service, CLI, API, and MCP surfaces for provider handoff creation.
+- Added service, CLI, API, and MCP surfaces for importing paid-provider result rows after the original request artifact exists.
+- Added the provider handoff artifact kind to review bundle indexing.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_enrichment.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 44 tests.
+- `.venv/bin/python -m pytest -q` passed with 147 tests.
+- `PYTHONPATH=src pytest -q` passed with 142 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.

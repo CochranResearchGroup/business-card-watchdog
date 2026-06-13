@@ -699,6 +699,53 @@ def test_cli_enrichment_request_writes_paid_provider_request_without_call(tmp_pa
     assert payload["provider_result"]["paid_api_calls_attempted"] == 0
     assert "secret" not in json.dumps(payload)
 
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "enrichment",
+                "provider-handoff",
+                job_id,
+                "--run-id",
+                run_id,
+                "--json",
+            ]
+        )
+        == 0
+    )
+    handoff_payload = json.loads(capsys.readouterr().out)
+    assert handoff_payload["handoff"]["schema"] == "business-card-watchdog.enrichment-provider-handoff.v1"
+    assert handoff_payload["handoff"]["paid_api_calls_attempted"] == 0
+    assert handoff_payload["handoff"]["result_import"]["mcp_tool"] == "business_card_watchdog_provider_enrichment_results"
+    assert "secret" not in json.dumps(handoff_payload)
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "enrichment",
+                "provider-results",
+                job_id,
+                "--run-id",
+                run_id,
+                "--provider",
+                "apollo",
+                "--submitted-by",
+                "cli-agent",
+                "--results-json",
+                '[{"person":{"name":"Ada Lovelace","email":"ada@example.test","title":"Principal"},"organization":{"name":"Example Labs"}}]',
+                "--json",
+            ]
+        )
+        == 0
+    )
+    result_payload = json.loads(capsys.readouterr().out)
+    assert result_payload["provider_result"]["schema"] == "business-card-watchdog.enrichment-provider-result.v1"
+    assert result_payload["provider_result"]["submitted_by"] == "cli-agent"
+    assert result_payload["provider_result"]["paid_api_calls_attempted"] == 0
+
 
 def test_cli_doctor_reports_user_scope_checks(tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.toml"
