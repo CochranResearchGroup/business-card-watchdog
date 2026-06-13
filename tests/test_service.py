@@ -647,6 +647,47 @@ def test_service_next_actions_recommends_apply_decision_after_preflight(tmp_path
     assert payload["actions"][0]["command"] == "sinks apply-decision"
 
 
+def test_service_run_next_actions_executes_safe_steps_until_manual_decision(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+        field_corrections={"full_name": "Reviewed Fixture", "email": "fixture@example.test"},
+    )
+
+    payload = service.run_next_actions(run_id=run_id, limit=10)
+    job = service.get_job(job_id, run_id=run_id)
+
+    assert [item["action"] for item in payload["executed"]] == [
+        "plan_sink_lookup",
+        "prepare_sink_lookup_adapter",
+        "record_sink_lookup_result",
+        "assess_downstream_duplicates",
+        "plan_sinks",
+        "prepare_sink_write_adapter",
+        "preflight_sink_apply",
+    ]
+    assert payload["skipped"][0]["action"] == "decide_sink_apply"
+    assert payload["skipped"][0]["status"] == "skipped"
+    assert {artifact["kind"] for artifact in job["artifacts"]} >= {
+        "sink_lookup_plan",
+        "sink_adapter_request_lookup",
+        "sink_lookup_result",
+        "downstream_duplicate_assessment",
+        "sink_plan",
+        "sink_adapter_request_write",
+        "sink_apply_preflight",
+    }
+
+
 def test_service_next_actions_recommends_live_apply_after_decision(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",

@@ -33,6 +33,18 @@ from .skill_adapter import BusinessCardSkillAdapter
 from .watcher import PollingWatcher
 
 
+_SAFE_NEXT_ACTIONS = {
+    "plan_sink_lookup",
+    "prepare_sink_lookup_adapter",
+    "record_sink_lookup_result",
+    "assess_downstream_duplicates",
+    "plan_sinks",
+    "prepare_sink_write_adapter",
+    "preflight_sink_apply",
+    "prepare_sink_readback_adapter",
+}
+
+
 class BusinessCardService:
     def __init__(self, config: AppConfig) -> None:
         self.config = config
@@ -123,6 +135,42 @@ class BusinessCardService:
             "limit": limit,
             "actions": actions,
             "action_count": len(actions),
+        }
+
+    def run_next_actions(self, *, run_id: str | None = None, limit: int = 10) -> dict[str, Any]:
+        executed: list[dict[str, Any]] = []
+        skipped: list[dict[str, Any]] = []
+        for _ in range(max(0, limit)):
+            candidates = self.next_actions(run_id=run_id, limit=max(1, limit))["actions"]
+            executable = next(
+                (candidate for candidate in candidates if candidate.get("action") in _SAFE_NEXT_ACTIONS),
+                None,
+            )
+            if executable is None:
+                skipped = [
+                    {
+                        **candidate,
+                        "status": "skipped",
+                        "skip_reason": "action requires review, approval, live apply, or manual inspection",
+                    }
+                    for candidate in candidates
+                ]
+                break
+            result = self._execute_safe_next_action(executable)
+            executed.append(
+                {
+                    **executable,
+                    "status": "executed",
+                    "result": result,
+                }
+            )
+        return {
+            "run_id": run_id,
+            "limit": limit,
+            "executed": executed,
+            "skipped": skipped,
+            "executed_count": len(executed),
+            "skipped_count": len(skipped),
         }
 
     def list_jobs(self, run_id: str | None = None) -> list[dict[str, Any]]:
@@ -816,6 +864,28 @@ class BusinessCardService:
         if sink == "odoo":
             return self.config.sink.odoo_apply_enabled
         return False
+
+    def _execute_safe_next_action(self, action: dict[str, Any]) -> dict[str, Any]:
+        action_name = str(action.get("action") or "")
+        job_id = str(action["job_id"])
+        run_id = str(action["run_id"])
+        if action_name == "plan_sink_lookup":
+            return self.plan_sink_lookup_for_job(job_id=job_id, run_id=run_id)
+        if action_name == "prepare_sink_lookup_adapter":
+            return self.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
+        if action_name == "record_sink_lookup_result":
+            return self.record_sink_lookup_result_for_job(job_id=job_id, run_id=run_id)
+        if action_name == "assess_downstream_duplicates":
+            return self.assess_downstream_duplicates_for_job(job_id=job_id, run_id=run_id)
+        if action_name == "plan_sinks":
+            return self.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+        if action_name == "prepare_sink_write_adapter":
+            return self.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="write")
+        if action_name == "preflight_sink_apply":
+            return self.preflight_sink_apply(job_id=job_id, run_id=run_id)
+        if action_name == "prepare_sink_readback_adapter":
+            return self.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="readback")
+        raise ValueError(f"next action is not safe to execute automatically: {action_name}")
 
     def _next_action_for_job(self, job: dict[str, Any], artifact_kinds: set[str]) -> dict[str, Any] | None:
         state = str(job.get("state") or "")

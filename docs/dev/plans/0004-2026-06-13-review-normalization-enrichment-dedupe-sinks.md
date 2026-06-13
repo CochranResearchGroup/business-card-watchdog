@@ -471,6 +471,28 @@ Remaining:
 - Live sink-backed duplicate lookup execution remains follow-on work.
 - Non-simulated live apply remains blocked until adapters are implemented and explicitly approved.
 
+### Slice 0004-S | 2026-06-13 | Safe Agent Next-Action Executor
+
+Implemented:
+
+- Added `run_next_actions` service method for deterministic agent-loop execution.
+- Executor repeatedly runs only allowlisted safe actions: lookup planning, adapter request creation, lookup result recording, downstream duplicate assessment, sink planning, write adapter request creation, apply preflight, and readback adapter request creation.
+- Executor skips review, duplicate resolution, enrichment review, apply decisions, live apply approval, and failure inspection.
+- Added CLI `bcw actions run-next`.
+- Added API `POST /actions/run-next`.
+- Added MCP tool `business_card_watchdog_run_next_actions`.
+- Safe executor returns executed and skipped action records for agent-loop readback.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 55 tests.
+
+Remaining:
+
+- Live Google Contacts and Odoo/Odollo lookup/write/readback adapters remain blocked.
+- Live sink-backed duplicate lookup execution remains follow-on work.
+- Non-simulated live apply remains blocked until adapters are implemented and explicitly approved.
+
 ## `/goal` Objective
 
 Use this as the high-level `/goal` objective:

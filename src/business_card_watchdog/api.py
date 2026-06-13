@@ -52,6 +52,10 @@ def create_app(config_path: Path | None = None):
         run_id: str
         matches_by_sink: dict[str, list[dict[str, object]]] = Field(default_factory=dict)
 
+    class RunNextActionsRequest(BaseModel):
+        run_id: str | None = None
+        limit: int = 10
+
     app = FastAPI(title="Business Card Watchdog")
 
     def service() -> BusinessCardService:
@@ -93,6 +97,10 @@ def create_app(config_path: Path | None = None):
     @app.get("/reviews")
     def list_reviews(run_id: str | None = None, state: str = "needs_review") -> list[dict[str, object]]:
         return service().review_queue(run_id=run_id, state=state)
+
+    @app.post("/actions/run-next")
+    def run_next_actions(request: RunNextActionsRequest = Body(default=RunNextActionsRequest())) -> dict[str, object]:
+        return service().run_next_actions(run_id=request.run_id, limit=request.limit)
 
     @app.get("/jobs/{job_id}")
     def get_job(job_id: str, run_id: str | None = None) -> dict[str, object]:

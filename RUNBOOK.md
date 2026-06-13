@@ -504,3 +504,21 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_dedupe.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 57 tests.
+
+## Turn 30 | 2026-06-13
+
+Continued Plan 0004 execution with a safe next-action executor for agent loops.
+
+Implemented:
+
+- Added `BusinessCardService.run_next_actions`.
+- Executor runs only allowlisted zero-network/zero-write safe actions.
+- Executor skips review, duplicate resolution, enrichment review, apply decisions, live apply approval, and failure inspection.
+- Added CLI `bcw actions run-next`.
+- Added API `POST /actions/run-next`.
+- Added MCP tool `business_card_watchdog_run_next_actions`.
+- Executor returns executed and skipped action records for deterministic agent-loop readback.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 55 tests.

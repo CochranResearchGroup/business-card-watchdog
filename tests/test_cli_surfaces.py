@@ -92,6 +92,28 @@ def test_cli_jobs_review_records_submission(tmp_path: Path, capsys) -> None:
     assert payload["job"]["state"] == "ready_to_route"
     assert payload["submission"]["reviewer"] == "cli-test"
 
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "actions",
+                "run-next",
+                "--run-id",
+                run_id,
+                "--limit",
+                "2",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    actions = json.loads(capsys.readouterr().out)
+    assert [item["action"] for item in actions["executed"]] == [
+        "plan_sink_lookup",
+        "prepare_sink_lookup_adapter",
+    ]
+
 
 def test_cli_jobs_review_supports_request_enrichment_action(tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.toml"

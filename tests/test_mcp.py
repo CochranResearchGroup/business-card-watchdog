@@ -16,6 +16,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_job_review" in names
     assert "business_card_watchdog_run_summary" in names
     assert "business_card_watchdog_next_actions" in names
+    assert "business_card_watchdog_run_next_actions" in names
     assert "business_card_watchdog_reviews_list" in names
     assert "business_card_watchdog_sinks_check" in names
     assert "business_card_watchdog_sink_plan" in names
@@ -132,6 +133,11 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
         },
         config=config,
     )
+    run_next = call_tool(
+        "business_card_watchdog_run_next_actions",
+        {"run_id": run_id, "limit": 1},
+        config=config,
+    )
 
     assert summary["needs_review_count"] == 1
     assert next_actions["actions"][0]["action"] == "review_contact"
@@ -152,6 +158,8 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert downstream_duplicate["job"]["state"] == "needs_review"
     assert merge["submission"]["approved_enrichment_fields"] == ["notes"]
     assert duplicate["submission"]["duplicate_resolution"]["decision"] == "create_new"
+    assert run_next["executed_count"] == 1
+    assert run_next["executed"][0]["action"].startswith(("plan_", "prepare_", "record_", "assess_"))
 
 
 def test_mcp_call_tool_rejects_unknown_tool(tmp_path: Path) -> None:

@@ -66,6 +66,17 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_run_next_actions",
+                "description": "Execute safe zero-network/zero-write next actions for deterministic agent loops.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 100, "default": 10},
+                    },
+                },
+            },
+            {
                 "name": "business_card_watchdog_jobs_list",
                 "description": "List latest job states, optionally for one run.",
                 "input_schema": {
@@ -328,6 +339,11 @@ def call_tool(
         return service.next_actions(
             run_id=str(args["run_id"]) if args.get("run_id") else None,
             limit=int(args.get("limit", 20)),
+        )
+    if tool_name == "business_card_watchdog_run_next_actions":
+        return service.run_next_actions(
+            run_id=str(args["run_id"]) if args.get("run_id") else None,
+            limit=int(args.get("limit", 10)),
         )
     if tool_name == "business_card_watchdog_jobs_list":
         return service.list_jobs(str(args["run_id"]) if args.get("run_id") else None)

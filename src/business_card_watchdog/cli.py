@@ -81,6 +81,13 @@ def build_parser() -> argparse.ArgumentParser:
     reviews_list.add_argument("--state", default="needs_review")
     reviews_list.add_argument("--json", action="store_true")
 
+    actions = sub.add_parser("actions")
+    actions_sub = actions.add_subparsers(dest="actions_command", required=True)
+    actions_run_next = actions_sub.add_parser("run-next")
+    actions_run_next.add_argument("--run-id", default=None)
+    actions_run_next.add_argument("--limit", type=int, default=10)
+    actions_run_next.add_argument("--json", action="store_true")
+
     sinks = sub.add_parser("sinks")
     sinks_sub = sinks.add_subparsers(dest="sinks_command", required=True)
     sinks_check = sinks_sub.add_parser("check")
@@ -216,6 +223,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "reviews":
         payload = service.review_queue(run_id=args.run_id, state=args.state)
+        print(json.dumps(payload, indent=2) if args.json else payload)
+        return 0
+
+    if args.command == "actions":
+        payload = service.run_next_actions(run_id=args.run_id, limit=args.limit)
         print(json.dumps(payload, indent=2) if args.json else payload)
         return 0
 
