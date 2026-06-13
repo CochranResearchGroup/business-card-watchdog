@@ -819,7 +819,10 @@ class BusinessCardService:
                 "refresh": f"reviews bundle --run-id {run_id} --state {state}",
                 "list": f"reviews list --run-id {run_id} --state {state}",
                 "apply_decisions": f"reviews apply-decisions --run-id {run_id} --decisions-file <path>",
+                "phase_report": f"runs phase-report {run_id}",
+                "run_next_safe": f"actions run-next --run-id {run_id}",
                 "next_actions": f"mcp-call business_card_watchdog_next_actions --arguments-json '{{\"run_id\":\"{run_id}\"}}'",
+                "mcp_phase_report": f"mcp-call business_card_watchdog_phase_report --arguments-json '{{\"run_id\":\"{run_id}\"}}'",
             },
             "writes_attempted": 0,
             "network_calls_made": 0,
@@ -2769,6 +2772,7 @@ class BusinessCardService:
         state_groups = self._review_html_groups(bundle["groups"]["by_state"])
         action_groups = self._review_html_groups(bundle["groups"]["by_next_action"])
         pilot_groups = self._review_html_groups(bundle["groups"].get("by_sink_pilot_state", {}))
+        commands = self._review_html_commands(bundle.get("commands") or {})
         return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -2794,6 +2798,10 @@ class BusinessCardService:
     <div>State filter: <code>{escape(str(bundle["state_filter"]))}</code></div>
     <div>Jobs: {escape(str(bundle["job_count"]))}</div>
   </header>
+  <section>
+    <h2>Commands</h2>
+    {commands}
+  </section>
   <section class="groups">
     <div>
       <h2>By State</h2>
@@ -2833,6 +2841,13 @@ class BusinessCardService:
         items = [
             f"<li><code>{escape(name)}</code>: {escape(str(group['count']))}</li>"
             for name, group in sorted(groups.items())
+        ]
+        return "<ul>" + "".join(items) + "</ul>"
+
+    def _review_html_commands(self, commands: dict[str, Any]) -> str:
+        items = [
+            f"<li><code>{escape(str(name))}</code>: <code>{escape(str(command))}</code></li>"
+            for name, command in sorted(commands.items())
         ]
         return "<ul>" + "".join(items) + "</ul>"
 

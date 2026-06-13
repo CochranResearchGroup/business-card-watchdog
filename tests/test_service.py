@@ -105,6 +105,11 @@ def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
     assert bundle["groups"]["by_next_action"]["review_contact"]["count"] == 1
     assert bundle["decision_import_template"][0]["job_id"] == job_id
     assert bundle["commands"]["apply_decisions"] == f"reviews apply-decisions --run-id {run_id} --decisions-file <path>"
+    assert bundle["commands"]["phase_report"] == f"runs phase-report {run_id}"
+    assert bundle["commands"]["run_next_safe"] == f"actions run-next --run-id {run_id}"
+    assert bundle["commands"]["mcp_phase_report"] == (
+        f"mcp-call business_card_watchdog_phase_report --arguments-json '{{\"run_id\":\"{run_id}\"}}'"
+    )
     assert bundle["writes_attempted"] == 0
     assert bundle["network_calls_made"] == 0
     assert bundle_path.exists()
@@ -115,6 +120,9 @@ def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
     assert html["schema"] == "business-card-watchdog.review-html.v1"
     assert html["html_path"] == str(html_path)
     assert "Business Card Review" in html["html"]
+    assert "Commands" in html["html"]
+    assert f"runs phase-report {run_id}" in html["html"]
+    assert f"actions run-next --run-id {run_id}" in html["html"]
     assert job_id in html["html"]
     assert html_path.exists()
     assert any(artifact["kind"] == "review_html" for artifact in service.list_artifacts(run_id))
