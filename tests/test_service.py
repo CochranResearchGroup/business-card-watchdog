@@ -66,6 +66,7 @@ def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
     service = BusinessCardService(config)
 
     summary = service.run_summary(run_id)
+    phase_report = service.phase_report(run_id)
     queue = service.review_queue(run_id=run_id)
     bundle = service.review_bundle(run_id=run_id)
     bundle_path = config.runs_dir / run_id / "review_bundle.json"
@@ -73,6 +74,11 @@ def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
     assert summary["run_id"] == run_id
     assert summary["needs_review_count"] == 1
     assert summary["artifact_counts"]["contact_spec"] == 1
+    assert phase_report["schema"] == "business-card-watchdog.phase-report.v1"
+    assert phase_report["job_count"] == 1
+    assert phase_report["phases"][2]["phase"] == "review"
+    assert phase_report["phases"][2]["counts"]["blocked"] == 1
+    assert phase_report["jobs"][0]["phase_states"]["review"] == "blocked"
     assert queue[0]["job_id"] == job_id
     assert queue[0]["artifact_kinds"] == ["contact_spec"]
     assert bundle["schema"] == "business-card-watchdog.review-bundle.v1"
@@ -831,6 +837,12 @@ def test_service_review_bundle_includes_sink_pilot_status(tmp_path: Path) -> Non
     assert pilot_summary["complete_report_count"] == 1
     assert pilot_summary["jobs"][0]["job_id"] == job_id
     assert pilot_summary["jobs"][0]["state"] == "pilot_report_complete"
+    phase_report = service.phase_report(run_id)
+    phase_counts = {phase["phase"]: phase["counts"] for phase in phase_report["phases"]}
+    assert phase_counts["pilot_report"]["complete"] == 1
+    assert phase_counts["write_pilot"]["complete"] == 1
+    assert phase_counts["readback_pilot"]["complete"] == 1
+    assert phase_report["jobs"][0]["phase_states"]["pilot_report"] == "complete"
     assert "By Sink Pilot State" in html["html"]
     assert "pilot_report_complete" in html["html"]
 

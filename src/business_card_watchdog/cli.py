@@ -41,6 +41,9 @@ def build_parser() -> argparse.ArgumentParser:
     runs_summary = runs_sub.add_parser("summary")
     runs_summary.add_argument("run_id")
     runs_summary.add_argument("--json", action="store_true")
+    runs_phase_report = runs_sub.add_parser("phase-report")
+    runs_phase_report.add_argument("run_id")
+    runs_phase_report.add_argument("--json", action="store_true")
 
     jobs = sub.add_parser("jobs")
     jobs_sub = jobs.add_subparsers(dest="jobs_command", required=True)
@@ -287,6 +290,8 @@ def main(argv: list[str] | None = None) -> int:
             payload = service.list_runs()
         elif args.runs_command == "summary":
             payload = service.run_summary(args.run_id)
+        elif args.runs_command == "phase-report":
+            payload = service.phase_report(args.run_id)
         else:
             payload = service.get_run(args.run_id)
         print(json.dumps(payload, indent=2) if args.json else payload)

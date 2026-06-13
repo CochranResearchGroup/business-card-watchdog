@@ -55,6 +55,15 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_phase_report",
+                "description": "Report batch progress by deterministic pipeline phase for one run.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"run_id": {"type": "string"}},
+                    "required": ["run_id"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_next_actions",
                 "description": "Return deterministic next actions for agent-loop batch orchestration.",
                 "input_schema": {
@@ -499,6 +508,8 @@ def call_tool(
         return service.get_run(str(args["run_id"]))
     if tool_name == "business_card_watchdog_run_summary":
         return service.run_summary(str(args["run_id"]))
+    if tool_name == "business_card_watchdog_phase_report":
+        return service.phase_report(str(args["run_id"]))
     if tool_name == "business_card_watchdog_next_actions":
         return service.next_actions(
             run_id=str(args["run_id"]) if args.get("run_id") else None,

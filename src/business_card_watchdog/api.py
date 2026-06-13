@@ -132,6 +132,10 @@ def create_app(config_path: Path | None = None):
     def get_run_summary(run_id: str) -> dict[str, object]:
         return service().run_summary(run_id)
 
+    @app.get("/runs/{run_id}/phase-report")
+    def get_run_phase_report(run_id: str) -> dict[str, object]:
+        return service().phase_report(run_id)
+
     @app.get("/runs/{run_id}/jobs")
     def list_run_jobs(run_id: str) -> list[dict[str, object]]:
         return service().list_jobs(run_id)

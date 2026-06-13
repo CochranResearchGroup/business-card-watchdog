@@ -1913,3 +1913,29 @@ Validation:
 Remaining:
 
 - Run summaries still report existing artifacts only; explicit write/readback pilots and paid/provider-backed enrichment remain separate operator-approved actions.
+
+### Slice 0004-BD | 2026-06-13 | Batch Phase Report Surface
+
+Implemented:
+
+- Added a read-only `phase_report` service method for deterministic batch progress readback.
+- Phase reports group each job by pipeline phases: ingest, normalize, review, enrichment, dedupe, route, sink lookup, apply approval, write pilot, readback pilot, and pilot report.
+- Phase reports count per-phase states and blocked/explicit-required next actions without executing work.
+- Added CLI `bcw runs phase-report`.
+- Added API `GET /runs/{run_id}/phase-report`.
+- Added MCP tool `business_card_watchdog_phase_report`.
+- Covered blocked-review and complete simulated-pilot phase states through service, CLI, API, and MCP tests.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_run_summary_and_review_queue tests/test_service.py::test_service_review_bundle_includes_sink_pilot_status tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 83 tests.
+- `.venv/bin/python -m pytest -q` passed with 172 tests.
+- `PYTHONPATH=src pytest -q` passed with 165 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+Remaining:
+
+- Phase reports are read-only; generic safe execution remains limited to zero-write/no-paid-call next actions.

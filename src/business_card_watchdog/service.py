@@ -287,6 +287,143 @@ class BusinessCardService:
             "reviewed_contact_count": artifact_counts.get("reviewed_contact", 0),
         }
 
+    def phase_report(self, run_id: str) -> dict[str, Any]:
+        run = self.get_run(run_id)
+        jobs = run["jobs"]
+        artifacts = run["artifacts"]
+        artifacts_by_job: dict[str, set[str]] = {}
+        for artifact in artifacts:
+            artifacts_by_job.setdefault(str(artifact.get("job_id") or ""), set()).add(
+                str(artifact.get("kind") or "")
+            )
+        next_by_job = {
+            str(action["job_id"]): action
+            for action in self.next_actions(run_id=run_id, limit=max(1000, int(run.get("job_count") or 0) + 10))[
+                "actions"
+            ]
+        }
+        phases = [
+            "ingest",
+            "normalize",
+            "review",
+            "enrichment",
+            "dedupe",
+            "route",
+            "sink_lookup",
+            "apply_approval",
+            "write_pilot",
+            "readback_pilot",
+            "pilot_report",
+        ]
+        phase_rows: dict[str, dict[str, Any]] = {
+            phase: {
+                "phase": phase,
+                "counts": {},
+                "blocked_action_counts": {},
+                "job_ids_by_state": {},
+            }
+            for phase in phases
+        }
+        job_rows: list[dict[str, Any]] = []
+        for job in jobs:
+            job_id = str(job.get("job_id") or "")
+            artifact_kinds = artifacts_by_job.get(job_id, set())
+            next_action = next_by_job.get(job_id)
+            phase_states = self._phase_states_for_job(
+                job=job,
+                artifact_kinds=artifact_kinds,
+                next_action=next_action,
+            )
+            for phase, state in phase_states.items():
+                row = phase_rows[phase]
+                counts = row["counts"]
+                counts[state] = counts.get(state, 0) + 1
+                row["job_ids_by_state"].setdefault(state, []).append(job_id)
+                if state in {"blocked", "explicit_required"}:
+                    action = str((next_action or {}).get("action") or "unknown")
+                    blocked_counts = row["blocked_action_counts"]
+                    blocked_counts[action] = blocked_counts.get(action, 0) + 1
+            job_rows.append(
+                {
+                    "job_id": job_id,
+                    "state": job.get("state"),
+                    "next_action": (next_action or {}).get("action"),
+                    "phase_states": phase_states,
+                }
+            )
+        return {
+            "schema": "business-card-watchdog.phase-report.v1",
+            "run_id": run_id,
+            "created_at": utc_now(),
+            "run_state": run.get("state"),
+            "job_count": len(jobs),
+            "phases": [phase_rows[phase] for phase in phases],
+            "jobs": job_rows,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+
+    def _phase_states_for_job(
+        self,
+        *,
+        job: dict[str, Any],
+        artifact_kinds: set[str],
+        next_action: dict[str, Any] | None,
+    ) -> dict[str, str]:
+        job_state = str(job.get("state") or "")
+        next_action_name = str((next_action or {}).get("action") or "")
+        failed = job_state == "failed"
+        cancelled = job_state == "cancelled"
+
+        def base_state(required_kinds: set[str], *, optional: bool = False) -> str:
+            if failed:
+                return "blocked"
+            if cancelled:
+                return "skipped"
+            if artifact_kinds.intersection(required_kinds):
+                return "complete"
+            return "not_requested" if optional else "pending"
+
+        states = {
+            "ingest": base_state({"contact_spec", "preclassification", "contact_candidate"}),
+            "normalize": base_state({"contact_candidate", "reviewed_contact"}),
+            "review": base_state({"reviewed_contact", "review_submission"}),
+            "enrichment": base_state(
+                {
+                    "enrichment_result",
+                    "enrichment_public_web_result",
+                    "enrichment_provider_result",
+                    "enrichment_merge_review",
+                },
+                optional=True,
+            ),
+            "dedupe": base_state({"duplicate_assessment", "downstream_duplicate_assessment", "duplicate_resolution"}),
+            "route": base_state({"sink_plan"}),
+            "sink_lookup": base_state({"sink_lookup_result"}),
+            "apply_approval": base_state({"sink_apply_decision"}),
+            "write_pilot": base_state({"sink_write_pilot"}, optional=True),
+            "readback_pilot": base_state({"sink_readback_pilot"}, optional=True),
+            "pilot_report": base_state({"sink_apply_pilot_report"}, optional=True),
+        }
+
+        if job_state == "needs_review":
+            states["review"] = "blocked"
+        if next_action_name == "review_enrichment":
+            states["enrichment"] = "blocked"
+        if next_action_name in {"resolve_duplicate", "review_duplicate"}:
+            states["dedupe"] = "blocked"
+        if next_action_name in {"decide_sink_apply", "await_apply_approval"}:
+            states["apply_approval"] = "explicit_required"
+        if next_action_name == "execute_sink_write_pilot":
+            states["write_pilot"] = "explicit_required"
+        if next_action_name == "execute_sink_readback_pilot":
+            states["readback_pilot"] = "explicit_required"
+        if next_action_name == "prepare_sink_apply_pilot_report":
+            states["pilot_report"] = "pending"
+        if "sink_apply_pilot_report" in artifact_kinds:
+            states["pilot_report"] = "complete"
+        return states
+
     def _summarize_enrichment_budget(self, artifacts: list[dict[str, Any]]) -> dict[str, Any]:
         public_web = {
             "request_count": 0,
