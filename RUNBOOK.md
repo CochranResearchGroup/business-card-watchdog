@@ -906,3 +906,25 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed with the index up to date.
 - `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+## Turn 51 | 2026-06-13
+
+Continued Plan 0004 execution with a static HTML review surface.
+
+Implemented:
+
+- Added a static offline `review_bundle.html` export generated from the artifact-backed review bundle.
+- Added service `review_html` with zero network calls and zero sink writes.
+- Added CLI `bcw reviews html`.
+- Added API `POST /runs/{run_id}/review-html`.
+- Added MCP tool `business_card_watchdog_review_html`.
+- The HTML review surface includes run summary context, state/action groups, job rows, local image paths, artifact kinds, next actions, and decision templates.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 69 tests.
+- `.venv/bin/python -m pytest -q` passed with 140 tests.
+- `PYTHONPATH=src pytest -q` passed with 135 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.

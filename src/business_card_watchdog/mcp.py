@@ -109,6 +109,19 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_review_html",
+                "description": "Create a run-level static HTML review surface from the review bundle.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "state": {"type": "string", "default": "all"},
+                        "write": {"type": "boolean", "default": True},
+                    },
+                    "required": ["run_id"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_apply_review_decisions",
                 "description": "Apply a batch of run-scoped review decisions through the shared review submission path.",
                 "input_schema": {
@@ -407,6 +420,12 @@ def call_tool(
         )
     if tool_name == "business_card_watchdog_review_bundle":
         return service.review_bundle(
+            run_id=str(args["run_id"]),
+            state=str(args.get("state") or "all"),
+            write=bool(args.get("write", True)),
+        )
+    if tool_name == "business_card_watchdog_review_html":
+        return service.review_html(
             run_id=str(args["run_id"]),
             state=str(args.get("state") or "all"),
             write=bool(args.get("write", True)),

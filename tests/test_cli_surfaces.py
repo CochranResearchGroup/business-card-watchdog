@@ -62,6 +62,12 @@ def test_cli_runs_and_jobs_use_recorded_runtime_state(
     assert bundle["decision_import_template"][0]["action"] == "approve_for_routing"
     assert Path(bundle["review_bundle_path"]).exists()
 
+    assert main(["--config", str(config_path), "reviews", "html", "--run-id", run_id, "--json"]) == 0
+    html = json.loads(capsys.readouterr().out)
+    assert html["schema"] == "business-card-watchdog.review-html.v1"
+    assert "Business Card Review" in html["html"]
+    assert Path(html["html_path"]).exists()
+
     assert (
         main(
             [

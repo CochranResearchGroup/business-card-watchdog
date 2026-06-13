@@ -86,6 +86,11 @@ def build_parser() -> argparse.ArgumentParser:
     reviews_bundle.add_argument("--state", default="all")
     reviews_bundle.add_argument("--no-write", action="store_true")
     reviews_bundle.add_argument("--json", action="store_true")
+    reviews_html = reviews_sub.add_parser("html")
+    reviews_html.add_argument("--run-id", required=True)
+    reviews_html.add_argument("--state", default="all")
+    reviews_html.add_argument("--no-write", action="store_true")
+    reviews_html.add_argument("--json", action="store_true")
     reviews_apply = reviews_sub.add_parser("apply-decisions")
     reviews_apply.add_argument("--run-id", required=True)
     reviews_apply.add_argument("--reviewer", default="operator")
@@ -248,6 +253,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "reviews":
         if args.reviews_command == "bundle":
             payload = service.review_bundle(run_id=args.run_id, state=args.state, write=not args.no_write)
+        elif args.reviews_command == "html":
+            payload = service.review_html(run_id=args.run_id, state=args.state, write=not args.no_write)
         elif args.reviews_command == "apply-decisions":
             decisions_body = (
                 args.decisions_file.read_text(encoding="utf-8")

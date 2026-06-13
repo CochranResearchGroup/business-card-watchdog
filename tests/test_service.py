@@ -90,6 +90,15 @@ def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
     assert bundle_path.exists()
     assert any(artifact["kind"] == "review_bundle" for artifact in service.list_artifacts(run_id))
 
+    html = service.review_html(run_id=run_id)
+    html_path = config.runs_dir / run_id / "review_bundle.html"
+    assert html["schema"] == "business-card-watchdog.review-html.v1"
+    assert html["html_path"] == str(html_path)
+    assert "Business Card Review" in html["html"]
+    assert job_id in html["html"]
+    assert html_path.exists()
+    assert any(artifact["kind"] == "review_html" for artifact in service.list_artifacts(run_id))
+
 
 def test_service_run_summary_includes_enrichment_budget(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")

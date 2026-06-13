@@ -934,6 +934,31 @@ Remaining:
 - A spreadsheet/HTML review presentation remains follow-on work.
 - Decision templates are conservative suggestions and still require operator edits/approval before import.
 
+### Slice 0004-AM | 2026-06-13 | Static HTML Review Surface
+
+Implemented:
+
+- Added a static offline `review_bundle.html` export generated from the artifact-backed review bundle.
+- Added service `review_html` with zero network calls and zero sink writes.
+- Added CLI `bcw reviews html`.
+- Added API `POST /runs/{run_id}/review-html`.
+- Added MCP tool `business_card_watchdog_review_html`.
+- The HTML review surface includes run summary context, state/action groups, job rows, local image paths, artifact kinds, next actions, and decision templates.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 69 tests.
+- `.venv/bin/python -m pytest -q` passed with 140 tests.
+- `PYTHONPATH=src pytest -q` passed with 135 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+Remaining:
+
+- Spreadsheet export remains optional follow-on work.
+- The static HTML file is read-only; decisions still flow through `reviews apply-decisions` or `jobs review`.
+
 ## Next High-Level Plan
 
 The next execution block should turn the current artifact-first scaffolding into an operator-usable review and routing system while preserving the current safety boundaries: no paid enrichment unless explicitly requested, no live sink writes without an approved pilot, and no secret values in repo artifacts or logs.

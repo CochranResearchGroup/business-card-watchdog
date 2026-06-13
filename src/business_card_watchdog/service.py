@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from html import escape
 from pathlib import Path
 from typing import Any
 
@@ -525,6 +526,37 @@ class BusinessCardService:
             )
             payload["review_bundle_path"] = str(bundle_path)
         return payload
+
+    def review_html(self, *, run_id: str, state: str = "all", write: bool = True) -> dict[str, Any]:
+        bundle = self.review_bundle(run_id=run_id, state=state, write=write)
+        html = self._render_review_html(bundle)
+        html_path = self.config.runs_dir / run_id / "review_bundle.html"
+        if write:
+            html_path.write_text(html, encoding="utf-8")
+            ledger = RunLedger(self.config.runs_dir / run_id)
+            ledger.record_artifact(job_id="__run__", kind="review_html", path=html_path)
+            ledger.record_event(
+                "review_html_created",
+                {
+                    "run_id": run_id,
+                    "html_path": str(html_path),
+                    "job_count": bundle["job_count"],
+                    "state_filter": state,
+                    "writes_attempted": 0,
+                    "network_calls_made": 0,
+                },
+            )
+        return {
+            "schema": "business-card-watchdog.review-html.v1",
+            "run_id": run_id,
+            "state_filter": state,
+            "html_path": str(html_path) if write else None,
+            "html": html,
+            "bundle_path": bundle.get("review_bundle_path"),
+            "job_count": bundle["job_count"],
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
 
     def submit_review(
         self,
@@ -1632,6 +1664,86 @@ class BusinessCardService:
             "by_state": dict(sorted(by_state.items())),
             "by_next_action": dict(sorted(by_next_action.items())),
         }
+
+    def _render_review_html(self, bundle: dict[str, Any]) -> str:
+        rows = "\n".join(self._review_html_row(entry) for entry in bundle["entries"])
+        state_groups = self._review_html_groups(bundle["groups"]["by_state"])
+        action_groups = self._review_html_groups(bundle["groups"]["by_next_action"])
+        return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Business Card Review {escape(str(bundle["run_id"]))}</title>
+  <style>
+    body {{ font-family: system-ui, sans-serif; margin: 24px; color: #1f2933; }}
+    header {{ margin-bottom: 24px; }}
+    h1 {{ font-size: 24px; margin: 0 0 8px; }}
+    h2 {{ font-size: 18px; margin: 24px 0 8px; }}
+    table {{ border-collapse: collapse; width: 100%; }}
+    th, td {{ border: 1px solid #cbd5e1; padding: 8px; vertical-align: top; text-align: left; }}
+    th {{ background: #f1f5f9; }}
+    code, pre {{ font-family: ui-monospace, monospace; font-size: 12px; }}
+    pre {{ white-space: pre-wrap; margin: 0; }}
+    .groups {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Business Card Review</h1>
+    <div>Run: <code>{escape(str(bundle["run_id"]))}</code></div>
+    <div>State filter: <code>{escape(str(bundle["state_filter"]))}</code></div>
+    <div>Jobs: {escape(str(bundle["job_count"]))}</div>
+  </header>
+  <section class="groups">
+    <div>
+      <h2>By State</h2>
+      {state_groups}
+    </div>
+    <div>
+      <h2>By Next Action</h2>
+      {action_groups}
+    </div>
+  </section>
+  <h2>Jobs</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Job</th>
+        <th>State</th>
+        <th>Image</th>
+        <th>Next Action</th>
+        <th>Artifacts</th>
+        <th>Decision Template</th>
+      </tr>
+    </thead>
+    <tbody>
+      {rows}
+    </tbody>
+  </table>
+</body>
+</html>
+"""
+
+    def _review_html_groups(self, groups: dict[str, Any]) -> str:
+        items = [
+            f"<li><code>{escape(name)}</code>: {escape(str(group['count']))}</li>"
+            for name, group in sorted(groups.items())
+        ]
+        return "<ul>" + "".join(items) + "</ul>"
+
+    def _review_html_row(self, entry: dict[str, Any]) -> str:
+        next_action = entry.get("next_action") or {}
+        artifacts = ", ".join(escape(kind) for kind in entry.get("artifact_kinds") or [])
+        decision_template = escape(json.dumps(entry["decision_template"], sort_keys=True, indent=2))
+        image_path = escape(str(entry.get("image_path") or ""))
+        return f"""<tr>
+  <td><code>{escape(str(entry["job_id"]))}</code></td>
+  <td>{escape(str(entry.get("state") or ""))}</td>
+  <td><code>{image_path}</code></td>
+  <td><code>{escape(str(next_action.get("action") or "none"))}</code><br>{escape(str(next_action.get("reason") or ""))}</td>
+  <td>{artifacts}</td>
+  <td><pre>{decision_template}</pre></td>
+</tr>"""
 
     def _record_route_refresh_if_needed(
         self,
