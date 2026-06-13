@@ -425,16 +425,70 @@ def test_mcp_call_tool_rejects_unknown_tool(tmp_path: Path) -> None:
 
 def test_mcp_jsonl_server_lists_and_calls_tools(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    run_id, job_id = make_recorded_run(config)
+    requests = [
+        {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+        {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+        {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {"name": "business_card_watchdog_status", "arguments": {}},
+        },
+        {
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {
+                "name": "business_card_watchdog_phase_report",
+                "arguments": {"run_id": run_id},
+            },
+        },
+        {
+            "jsonrpc": "2.0",
+            "id": 5,
+            "method": "tools/call",
+            "params": {
+                "name": "business_card_watchdog_reviews_list",
+                "arguments": {
+                    "run_id": run_id,
+                    "next_action": "review_contact",
+                    "artifact_kind": "contact_spec",
+                },
+            },
+        },
+        {
+            "jsonrpc": "2.0",
+            "id": 6,
+            "method": "tools/call",
+            "params": {
+                "name": "business_card_watchdog_apply_review_decisions",
+                "arguments": {
+                    "run_id": run_id,
+                    "reviewer": "mcp-jsonl",
+                    "decisions": [
+                        {
+                            "job_id": job_id,
+                            "action": "approve_for_routing",
+                            "field_corrections": {"full_name": "JSONL Transport"},
+                        }
+                    ],
+                },
+            },
+        },
+        {
+            "jsonrpc": "2.0",
+            "id": 7,
+            "method": "tools/call",
+            "params": {
+                "name": "business_card_watchdog_run_next_actions",
+                "arguments": {"run_id": run_id, "limit": 1},
+            },
+        },
+        {"jsonrpc": "2.0", "id": 8, "method": "shutdown", "params": {}},
+    ]
     input_stream = StringIO(
-        "\n".join(
-            [
-                '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}',
-                '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}',
-                '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"business_card_watchdog_status","arguments":{}}}',
-                '{"jsonrpc":"2.0","id":4,"method":"shutdown","params":{}}',
-            ]
-        )
-        + "\n"
+        "\n".join(json.dumps(request, sort_keys=True) for request in requests) + "\n"
     )
     output_stream = StringIO()
 
@@ -446,4 +500,19 @@ def test_mcp_jsonl_server_lists_and_calls_tools(tmp_path: Path) -> None:
     assert any(tool["name"] == "business_card_watchdog_status" for tool in responses[1]["result"]["tools"])
     assert responses[2]["result"]["isError"] is False
     assert responses[2]["result"]["structuredContent"]["skill_ready"] is True
-    assert responses[3]["result"]["shutdown"] is True
+    phase_report = responses[3]["result"]["structuredContent"]
+    assert phase_report["schema"] == "business-card-watchdog.phase-report.v1"
+    assert phase_report["phases"][2]["phase"] == "review"
+    assert phase_report["phases"][2]["counts"]["blocked"] == 1
+    reviews = responses[4]["result"]["structuredContent"]
+    assert [entry["job_id"] for entry in reviews] == [job_id]
+    assert reviews[0]["next_action"]["action"] == "review_contact"
+    review_import = responses[5]["result"]["structuredContent"]
+    assert review_import["import"]["schema"] == "business-card-watchdog.review-decisions-import.v1"
+    assert review_import["results"][0]["job_state"] == "ready_to_route"
+    run_next = responses[6]["result"]["structuredContent"]
+    assert run_next["executed_count"] == 1
+    assert run_next["executed"][0]["action"] == "plan_sink_lookup"
+    assert run_next["phase_report_before"]["schema"] == "business-card-watchdog.phase-report.v1"
+    assert run_next["phase_report_after"]["schema"] == "business-card-watchdog.phase-report.v1"
+    assert responses[7]["result"]["shutdown"] is True

@@ -2034,3 +2034,20 @@ Validation:
 Remaining:
 
 - The HTML review surface displays commands and decision templates only; applying decisions remains an explicit import action.
+
+### Slice 0004-BI | 2026-06-13 | MCP JSONL Phase Transport Coverage
+
+Implemented:
+
+- Hardened the MCP JSONL/stdio transport test for newer Plan 0004 surfaces.
+- The transport test now lists tools, calls `business_card_watchdog_phase_report`, calls filtered `business_card_watchdog_reviews_list`, applies an explicit review decision, and calls `business_card_watchdog_run_next_actions`.
+- The JSON-RPC path now proves phase reports and safe run-next before/after phase snapshots are returned as `structuredContent`.
+- Kept the scenario zero-write/no-network; safe run-next executes only the first deterministic sink lookup planning step after review approval.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_mcp.py::test_mcp_jsonl_server_lists_and_calls_tools -q` passed with 1 test.
+
+Remaining:
+
+- MCP JSONL coverage now exercises the newer readback/control-plane tools, but live sink lookup/write/readback and paid enrichment remain explicit operator-approved actions outside safe generic execution.

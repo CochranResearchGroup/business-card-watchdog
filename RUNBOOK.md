@@ -1381,3 +1381,18 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed with the index up to date.
 - `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+## Turn 74 | 2026-06-13
+
+Continued Plan 0004 execution with MCP JSONL transport coverage for newer batch readback tools.
+
+Implemented:
+
+- Expanded the MCP JSONL/stdio server test beyond status calls.
+- The test now verifies tool listing, phase-report calls, filtered review-list calls, explicit review-decision import, and safe run-next calls over JSON-RPC.
+- The run-next JSON-RPC response is checked for `phase_report_before` and `phase_report_after` structured content.
+- Kept the transport scenario zero-write/no-network; live sink and paid enrichment actions remain explicit operator actions.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_mcp.py::test_mcp_jsonl_server_lists_and_calls_tools -q` passed with 1 test.
