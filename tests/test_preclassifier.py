@@ -16,12 +16,13 @@ from synthetic_fixtures import (
 )
 
 
-def test_preclassifier_likely_business_card_from_aspect_ratio(tmp_path: Path) -> None:
+def test_preclassifier_treats_aspect_ratio_as_uncertain_hint(tmp_path: Path) -> None:
     image = write_synthetic_image(tmp_path / "card.png")
 
     assessment = assess_business_card_candidate(image)
 
-    assert assessment.decision == "likely_business_card"
+    assert assessment.decision == "uncertain"
+    assert assessment.score < 0.55
     assert assessment.dimensions is not None
     assert assessment.dimensions.aspect_ratio == 1.75
     assert "opencv_rectangle" in assessment.analyzers
@@ -35,6 +36,32 @@ def test_preclassifier_reports_opencv_availability_when_installed(tmp_path: Path
     assessment = assess_business_card_candidate(image)
 
     assert assessment.analyzers["opencv_rectangle"]["available"] is True
+
+
+def test_preclassifier_detects_multiple_cards_in_large_photo(tmp_path: Path) -> None:
+    pytest = __import__("pytest")
+    cv2 = pytest.importorskip("cv2")
+    import numpy as np
+
+    image = np.zeros((900, 1400, 3), dtype=np.uint8)
+    cards = [
+        ((100, 120), (520, 360)),
+        ((650, 140), (1070, 380)),
+        ((240, 520), (660, 760)),
+    ]
+    for top_left, bottom_right in cards:
+        cv2.rectangle(image, top_left, bottom_right, (255, 255, 255), thickness=-1)
+        cv2.rectangle(image, top_left, bottom_right, (0, 0, 0), thickness=4)
+    path = tmp_path / "IMG_20260511_103704.jpg"
+    assert cv2.imwrite(str(path), image)
+
+    assessment = assess_business_card_candidate(path)
+    rectangle = assessment.analyzers["opencv_rectangle"]
+
+    assert assessment.decision == "likely_business_card"
+    assert rectangle["available"] is True
+    assert rectangle["card_like_count"] >= 3
+    assert len(rectangle["boxes"]) >= 3
 
 
 def test_preclassifier_rejects_square_photo_shape(tmp_path: Path) -> None:

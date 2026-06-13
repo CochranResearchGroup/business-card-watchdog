@@ -72,14 +72,18 @@ def assess_business_card_candidate(path: Path, *, min_score: float = 0.55) -> Ca
     analyzers["opencv_rectangle"] = rectangle
     rectangle_score = float(rectangle.get("score", 0.0))
     if rectangle_score > 0:
-        reasons.append("detected a business-card-like rectangular contour")
+        count = int(rectangle.get("card_like_count", 1))
+        if count > 1:
+            reasons.append(f"detected {count} business-card-like rectangular contours")
+        else:
+            reasons.append("detected a business-card-like rectangular contour")
     elif rectangle.get("available") is False:
         reasons.append("OpenCV rectangle analyzer unavailable")
 
-    score = max(aspect_score, rectangle_score)
+    score = rectangle_score if rectangle_score >= min_score else min(aspect_score, 0.45)
     if score >= min_score:
         decision: CardCandidateDecision = "likely_business_card"
-    elif score <= 0.15:
+    elif score <= 0.05:
         decision = "not_business_card"
     else:
         decision = "uncertain"
@@ -141,11 +145,11 @@ def _read_jpeg_dimensions(data: bytes) -> ImageDimensions | None:
 
 def _score_business_card_aspect(ratio: float) -> float:
     if 1.55 <= ratio <= 1.95:
-        return 0.65
+        return 0.35
     if 1.45 <= ratio < 1.55 or 1.95 < ratio <= 2.15:
-        return 0.45
+        return 0.25
     if 1.30 <= ratio < 1.45 or 2.15 < ratio <= 2.35:
-        return 0.2
+        return 0.1
     return 0.0
 
 
@@ -162,10 +166,10 @@ def _opencv_rectangle_hint(path: Path) -> dict[str, Any]:
     edges = cv2.Canny(gray, 50, 150)
     contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     image_area = image.shape[0] * image.shape[1]
-    best: dict[str, Any] = {"available": True, "score": 0.0, "contours": len(contours)}
+    boxes: list[dict[str, Any]] = []
     for contour in contours:
         area = cv2.contourArea(contour)
-        if area < image_area * 0.05:
+        if area < image_area * 0.005:
             continue
         peri = cv2.arcLength(contour, True)
         approx = cv2.approxPolyDP(contour, 0.03 * peri, True)
@@ -174,14 +178,55 @@ def _opencv_rectangle_hint(path: Path) -> dict[str, Any]:
         x, y, width, height = cv2.boundingRect(approx)
         ratio = max(width, height) / max(1, min(width, height))
         if 1.45 <= ratio <= 2.15:
-            score = min(0.9, 0.55 + (area / max(1, image_area)))
-            if score > best["score"]:
-                best = {
-                    "available": True,
-                    "score": round(score, 4),
-                    "contours": len(contours),
-                    "box": {"x": x, "y": y, "width": width, "height": height},
+            boxes.append(
+                {
+                    "x": x,
+                    "y": y,
+                    "width": width,
+                    "height": height,
                     "area_fraction": round(area / max(1, image_area), 4),
                     "ratio": round(ratio, 4),
                 }
-    return best
+            )
+
+    boxes = _dedupe_boxes(boxes)
+    boxes.sort(key=lambda box: float(box["area_fraction"]), reverse=True)
+    count = len(boxes)
+    area_total = min(1.0, sum(float(box["area_fraction"]) for box in boxes))
+    score = 0.0
+    if count == 1:
+        score = min(0.85, 0.56 + area_total)
+    elif count > 1:
+        score = min(0.95, 0.62 + (0.08 * min(count, 4)) + min(area_total, 0.2))
+    return {
+        "available": True,
+        "score": round(score, 4),
+        "contours": len(contours),
+        "card_like_count": count,
+        "boxes": boxes[:10],
+        "area_fraction_total": round(area_total, 4),
+    }
+
+
+def _dedupe_boxes(boxes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    deduped: list[dict[str, Any]] = []
+    for box in boxes:
+        if not any(_box_iou(box, kept) > 0.75 for kept in deduped):
+            deduped.append(box)
+    return deduped
+
+
+def _box_iou(left: dict[str, Any], right: dict[str, Any]) -> float:
+    left_x2 = int(left["x"]) + int(left["width"])
+    left_y2 = int(left["y"]) + int(left["height"])
+    right_x2 = int(right["x"]) + int(right["width"])
+    right_y2 = int(right["y"]) + int(right["height"])
+    inter_x1 = max(int(left["x"]), int(right["x"]))
+    inter_y1 = max(int(left["y"]), int(right["y"]))
+    inter_x2 = min(left_x2, right_x2)
+    inter_y2 = min(left_y2, right_y2)
+    inter_area = max(0, inter_x2 - inter_x1) * max(0, inter_y2 - inter_y1)
+    left_area = int(left["width"]) * int(left["height"])
+    right_area = int(right["width"]) * int(right["height"])
+    union = left_area + right_area - inter_area
+    return inter_area / max(1, union)

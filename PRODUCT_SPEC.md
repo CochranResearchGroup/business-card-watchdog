@@ -187,6 +187,8 @@ The product is installable at user scope and uses:
 - Support common card-image extensions: JPEG, PNG, WebP, TIFF, and future HEIC where dependencies allow.
 - Avoid processing partially synced files by using file-settle checks before watcher ingestion.
 - Run deterministic preclassification before OCR/App Intelligence where possible, recording whether an image is a likely business card, not a business card, or uncertain.
+- Treat whole-image aspect ratio as a weak hint only; `likely_business_card` should require stronger deterministic evidence such as one or more OpenCV-detected card-like rectangular contours.
+- Support photos containing multiple business cards by recording multiple candidate card boxes before OCR/App Intelligence verification.
 
 ### Batch Orchestration
 
@@ -297,7 +299,7 @@ Example:
 
 ```toml
 [paths]
-sync_phone = "E:\\SyncThing\\S22 Camera Phone Storage"
+sync_phone = "/mnt/e/SyncThing/S22 Camera Phone Storage"
 
 [watch]
 inputs = ["$fsr:sync_phone"]

@@ -158,3 +158,22 @@ Validation:
 - `.venv/bin/python -m pytest -q` passed with 45 tests.
 - `.venv/bin/bcw status --json` passed and still reports the expected missing Windows SyncThing path caveat in this Linux namespace.
 - `.venv/bin/python` imported `cv2` 4.13.0 and `watchfiles` 1.2.0.
+
+## Turn 10 | 2026-06-13
+
+Implemented the SyncThing/OpenCV prefilter hardening slice.
+
+Updated:
+
+- Default config and real user config now point `$fsr:sync_phone` at `/mnt/e/SyncThing/S22 Camera Phone Storage`.
+- Watcher status scans are bounded and non-recursive by default so `bcw status --json` does not walk an entire phone-camera tree.
+- OpenCV rectangle analysis now records multiple card-like boxes and raises confidence for multi-card phone photos.
+- Aspect ratio is weak evidence only; without rectangle evidence, 16:9 phone images are `uncertain`, not `likely_business_card`.
+- CodeGraph was initialized for the repo; its local database remains ignored under `.codegraph/`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_preclassifier.py tests/test_watcher.py -q` passed with 15 tests.
+- `PYTHONPATH=src pytest tests/test_preclassifier.py tests/test_watcher.py -q` passed with 13 tests and 2 skipped OpenCV tests.
+- `.venv/bin/bcw status --json` passed against the real user config and reported 5 top-level backlog images, no unsettled files, no truncation, and no last error.
+- Real top-level SyncThing JPGs classified as `uncertain` with zero card-like contours instead of `likely_business_card`.

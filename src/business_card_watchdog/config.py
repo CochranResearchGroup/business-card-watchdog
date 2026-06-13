@@ -34,6 +34,8 @@ class SinkConfig:
 class WatchConfig:
     inputs: list[str] = field(default_factory=list)
     settle_seconds: float = 2.0
+    status_scan_limit: int = 2000
+    status_recursive: bool = False
 
 
 @dataclass(frozen=True)
@@ -99,6 +101,8 @@ def load_config(path: Path | None = None) -> AppConfig:
         watch=WatchConfig(
             inputs=[str(item) for item in watch.get("inputs", [])],
             settle_seconds=float(watch.get("settle_seconds", 2.0)),
+            status_scan_limit=int(watch.get("status_scan_limit", 2000)),
+            status_recursive=bool(watch.get("status_recursive", False)),
         ),
         prefilter=PrefilterConfig(
             enabled=bool(prefilter.get("enabled", True)),
@@ -124,12 +128,14 @@ def write_default_config(path: Path | None = None) -> Path:
 skill_root = "/home/ecochran76/.codex/shared/skills/business-card-to-contact"
 
 [paths]
-# Windows-style paths are allowed when a runtime adapter can resolve them.
-sync_phone = "E:\\\\SyncThing\\\\S22 Camera Phone Storage"
+# WSL/Linux mount for the SyncThing phone-camera directory.
+sync_phone = "/mnt/e/SyncThing/S22 Camera Phone Storage"
 
 [watch]
 inputs = ["$fsr:sync_phone"]
 settle_seconds = 2.0
+status_scan_limit = 2000
+status_recursive = false
 
 [prefilter]
 enabled = true

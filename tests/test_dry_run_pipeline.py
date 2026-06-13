@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from business_card_watchdog.config import AppConfig, SinkConfig
+from business_card_watchdog.config import AppConfig, PrefilterConfig, SinkConfig
 from business_card_watchdog.orchestrator import BatchOrchestrator
 
 from synthetic_fixtures import (
@@ -26,6 +26,7 @@ def test_batch_dry_run_uses_synthetic_adapter_without_credentials(
         config_path=tmp_path / "config.toml",
         data_dir=tmp_path / "data",
         cache_dir=tmp_path / "cache",
+        prefilter=PrefilterConfig(process_uncertain=True),
         sink=SinkConfig(google_contacts=True, odoo=True, dry_run=True),
         routing_rules=[
             {"match": "email_domain", "value": "example.test", "sinks": ["google_contacts", "odoo"]}
@@ -114,6 +115,7 @@ def test_incomplete_synthetic_spec_creates_review_packet(tmp_path: Path, monkeyp
         config_path=tmp_path / "config.toml",
         data_dir=tmp_path / "data",
         cache_dir=tmp_path / "cache",
+        prefilter=PrefilterConfig(process_uncertain=True),
         sink=SinkConfig(google_contacts=True, odoo=True, dry_run=True),
     )
     orchestrator = BatchOrchestrator(config)

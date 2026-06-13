@@ -13,11 +13,12 @@ Core analyzer:
 
 - Reads PNG, JPEG, and GIF dimensions from file headers without loading pixels.
 - Scores business-card-like aspect ratios using long-side/short-side ratio.
-- Treats ratios around common business card crops as stronger evidence.
+- Treats ratios around common business card crops as weak evidence only. Aspect ratio can make a file `uncertain`, but does not make it `likely_business_card` by itself.
 
 Optional analyzer:
 
-- If OpenCV (`cv2`) is installed, it runs a Canny/contour pass looking for a large quadrilateral with a business-card-like rectangle ratio.
+- If OpenCV (`cv2`) is installed, it runs a Canny/contour pass looking for quadrilaterals with business-card-like rectangle ratios.
+- It records up to 10 candidate boxes and raises confidence when multiple card-like rectangles are visible in one larger phone photo.
 - If OpenCV is not installed, the analyzer reports that fact and does not fail the run.
 - Install it with `uv pip install --python .venv/bin/python -e ".[vision]"`; the project uses `opencv-python-headless` to avoid GUI dependencies.
 
@@ -39,6 +40,8 @@ process_uncertain = false
 ```
 
 By default, `not_business_card` and `uncertain` images are rejected before the OCR/App Intelligence pipeline. The rejection is recorded in `events.jsonl`, the job state, and `preclassification.json`.
+
+`likely_business_card` requires deterministic rectangle evidence at or above the configured minimum score. This avoids sending ordinary 16:9 phone photos to App Intelligence just because their whole-image aspect ratio happens to be close to a business-card crop.
 
 ## Limits
 

@@ -8,6 +8,7 @@ from typing import Any
 
 from .config import AppConfig, ensure_runtime_dirs, resolve_input_path
 from .orchestrator import BatchOrchestrator, discover_images
+from .skill_adapter import is_supported_image
 
 
 _UNSET = object()
@@ -54,6 +55,7 @@ class WatchStatus:
     unsettled_count: int
     last_processed_path: str | None = None
     last_error: str | None = None
+    scan_truncated: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -114,6 +116,7 @@ class WatchStateStore:
         unsettled_count: int | None = None,
         last_processed_path: str | None | object = _UNSET,
         last_error: str | None | object = _UNSET,
+        scan_truncated: bool | None = None,
     ) -> None:
         current = self.read_status().to_dict() if self.status_path.exists() else {}
         payload = {
@@ -127,6 +130,9 @@ class WatchStateStore:
             if last_processed_path is not _UNSET
             else current.get("last_processed_path"),
             "last_error": last_error if last_error is not _UNSET else current.get("last_error"),
+            "scan_truncated": scan_truncated
+            if scan_truncated is not None
+            else current.get("scan_truncated", False),
         }
         self.status_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
@@ -141,6 +147,7 @@ class WatchStateStore:
             unsettled_count=int(payload.get("unsettled_count", 0)),
             last_processed_path=payload.get("last_processed_path"),
             last_error=payload.get("last_error"),
+            scan_truncated=bool(payload.get("scan_truncated", False)),
         )
 
     def reset(self) -> None:
@@ -214,6 +221,7 @@ class PollingWatcher:
         backlog_count = 0
         unsettled_count = 0
         last_error: str | None = None
+        scan_truncated = False
 
         for raw_input in self.config.watch_inputs:
             try:
@@ -224,7 +232,13 @@ class PollingWatcher:
             if not source.exists():
                 last_error = f"watch input not found: {source}"
                 continue
-            images = [path for path in discover_images(source) if str(_stable_path(path)) not in seen]
+            images, truncated = _discover_status_images(
+                source,
+                seen=seen,
+                limit=self.config.watch.status_scan_limit,
+                recursive=self.config.watch.status_recursive,
+            )
+            scan_truncated = scan_truncated or truncated
             backlog_count += len(images)
             now = time.time()
             unsettled_count += sum(
@@ -240,6 +254,7 @@ class PollingWatcher:
             unsettled_count=unsettled_count,
             last_processed_path=self.state.read_status().last_processed_path,
             last_error=last_error,
+            scan_truncated=scan_truncated,
         )
         self.state.write_status(**status.to_dict())
         return status
@@ -265,3 +280,31 @@ def _stable_path(path: Path) -> Path:
     if path.exists():
         return path.resolve()
     return path
+
+
+def _discover_status_images(
+    source: Path,
+    *,
+    seen: set[str],
+    limit: int,
+    recursive: bool,
+) -> tuple[list[Path], bool]:
+    if source.is_file():
+        path = _stable_path(source)
+        return ([source] if is_supported_image(source) and str(path) not in seen else []), False
+
+    images: list[Path] = []
+    truncated = False
+    paths = source.rglob("*") if recursive else source.iterdir()
+    for path in paths:
+        if not path.is_file():
+            continue
+        if str(_stable_path(path)) in seen:
+            continue
+        if not is_supported_image(path):
+            continue
+        if len(images) >= limit:
+            truncated = True
+            break
+        images.append(path)
+    return images, truncated

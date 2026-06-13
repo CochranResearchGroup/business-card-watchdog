@@ -51,7 +51,7 @@ The SyncThing source can be configured as a normal path or an alias such as:
 
 ```toml
 [paths]
-sync_phone = "E:\\SyncThing\\S22 Camera Phone Storage"
+sync_phone = "/mnt/e/SyncThing/S22 Camera Phone Storage"
 
 [watch]
 inputs = ["$fsr:sync_phone"]
@@ -62,7 +62,7 @@ inputs = ["$fsr:sync_phone"]
 Dry-run a batch:
 
 ```bash
-.venv/bin/bcw process E:\\SyncThing\\S22\ Camera\ Phone\ Storage --dry-run
+.venv/bin/bcw process "/mnt/e/SyncThing/S22 Camera Phone Storage" --dry-run
 ```
 
 Start polling watch mode:

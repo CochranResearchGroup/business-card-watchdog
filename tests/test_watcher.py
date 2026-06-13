@@ -110,6 +110,26 @@ def test_watch_status_reports_missing_input_error(tmp_path: Path) -> None:
     assert "watch input not found" in status.last_error
 
 
+def test_watch_status_scan_can_be_bounded_and_non_recursive(tmp_path: Path) -> None:
+    source = tmp_path / "cards"
+    nested = source / "nested"
+    for index in range(3):
+        write_synthetic_image(source / f"top-{index}.png")
+    write_synthetic_image(nested / "nested-card.png")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        cache_dir=tmp_path / "cache",
+        watch=WatchConfig(inputs=[str(source)], settle_seconds=0.0, status_scan_limit=2),
+    )
+
+    status = PollingWatcher(config).status()
+
+    assert status.backlog_count == 2
+    assert status.scan_truncated is True
+    assert status.last_error is None
+
+
 def test_watch_reset_cli_requires_yes(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
     config_path.write_text("[watch]\ninputs = []\n", encoding="utf-8")
