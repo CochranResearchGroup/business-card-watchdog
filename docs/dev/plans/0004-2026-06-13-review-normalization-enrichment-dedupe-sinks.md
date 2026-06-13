@@ -681,6 +681,218 @@ Remaining:
 - Real public-web search execution remains blocked until an explicit operator/search-adapter action is approved.
 - Live Google Contacts and Odoo/Odollo lookup/write/readback adapters remain blocked.
 
+## Next High-Level Plan
+
+The next execution block should turn the current artifact-first scaffolding into an operator-usable review and routing system while preserving the current safety boundaries: no paid enrichment unless explicitly requested, no live sink writes without an approved pilot, and no secret values in repo artifacts or logs.
+
+### Current Capability Baseline
+
+Already in place:
+
+- review queue and run summary readbacks through shared service, CLI, API, and MCP surfaces
+- reviewed-contact artifacts for operator corrections and approved enrichment merges
+- contact candidate normalization with observed-vs-normalized provenance
+- public-web and paid-provider enrichment request/result artifacts from caller-supplied fixture rows
+- explicit paid enrichment gate using configured key names from `~/credentials/API-keys.env`
+- local and downstream duplicate assessment artifacts
+- duplicate resolution review actions
+- dry-run sink lookup plans, sink plans, adapter request contracts, apply preflight, apply decisions, simulated apply/readback, and one-job apply pilot readiness
+- deterministic next-action readback and safe zero-network/zero-write agent-loop executor
+- local GWS and Odollo readiness evidence without live API calls
+
+Still needed before production use:
+
+- a review surface that humans can efficiently use for batches, not just JSON readback
+- route-plan freshness after reviewed contact updates and duplicate/enrichment resolution
+- stronger normalization and merge policy copied/adapted from Odollo where it is already proven
+- concrete, explicit public-web enrichment execution path
+- concrete, explicit paid API enrichment adapter path
+- live read-only lookup pilots for GWS and Odollo before any write pilot
+- live one-job write/readback pilots only after lookup, dedupe, readiness, and operator approval gates pass
+
+### NP1. Batch Review Surface
+
+Purpose:
+
+Give operators a practical way to inspect imported cards, OCR/App Intelligence output, normalized contacts, enrichment proposals, duplicate findings, and sink decisions before any live write.
+
+Deliverables:
+
+- CLI/API/MCP review readbacks remain the canonical machine surfaces.
+- Add a generated local review workbook or local web review queue that groups cards by state:
+  - needs review
+  - enrichment proposed
+  - duplicate review required
+  - ready to route
+  - apply approval required
+  - failed or skipped
+- Include image thumbnail/path, preclassification evidence, card-observed fields, normalized fields, reviewed contact, duplicate candidates, enrichment proposals, planned sinks, and next recommended action.
+- Add batch commands to export review packets and import approved review decisions.
+- Keep review decisions artifact-backed so the agent loop can resume without UI state.
+
+Acceptance:
+
+- A batch of jobs can be reviewed without opening individual artifact files.
+- Review decisions still flow through `submit_review` or equivalent shared service methods.
+- Every operator decision creates a durable artifact and ledger event.
+- No review surface stores private card data in the repo.
+
+Suggested subagent brief:
+
+```text
+You are NP1 Review Surface subagent. Build an operator-usable batch review surface on top of the existing service methods and artifacts. Prefer a generated local workbook or lightweight local web queue, but keep the shared service layer authoritative. Include cards, normalized fields, enrichment proposals, duplicate findings, sink plans, and next actions. Do not add live sink writes or paid enrichment calls. Return changed files, screenshots or sample artifacts if applicable, and tests.
+```
+
+### NP2. Route Refresh And Agent-Loop Coherency
+
+Purpose:
+
+Ensure reviewed-contact, enrichment-merge, and duplicate-resolution changes invalidate or refresh stale downstream route artifacts before the safe agent loop continues.
+
+Deliverables:
+
+- `route_refresh.json` or equivalent artifact whenever reviewed contact data changes after routing artifacts already exist.
+- Automatic zero-network refresh of sink lookup plans and sink plans from the latest reviewed contact when safe.
+- Next-action logic that does not treat stale lookup/plan/apply artifacts as current after review changes.
+- Explicit ledger events for route refresh, skipped refresh, and refresh blockers.
+- Tests for approval-after-plan, enrichment-merge-after-plan, and duplicate-resolution-after-plan cases.
+
+Acceptance:
+
+- If an operator changes email, phone, organization, name, or routing-relevant fields, the next sink lookup/plan uses the reviewed value.
+- Safe agent-loop execution can refresh zero-network route artifacts but still skips manual approval and live apply boundaries.
+- Existing artifacts are preserved as audit history rather than silently deleted.
+
+Suggested subagent brief:
+
+```text
+You are NP2 Route Refresh subagent. Inspect review submission, next-action, sink lookup planning, and sink planning code. Add artifact-backed route refresh semantics so reviewed-contact and duplicate/enrichment decisions cannot leave stale sink plans active. Preserve old artifacts as audit evidence. Do not call external services. Return tests showing corrected reviewed fields are used in refreshed route artifacts.
+```
+
+### NP3. Normalization And Merge Policy Hardening
+
+Purpose:
+
+Improve contact quality before enrichment or routing, while keeping card-observed evidence authoritative.
+
+Sources to inspect/adapt:
+
+- Odollo contact normalization and contact-point handling helpers
+- Odollo review/action semantics where useful
+- Existing `business-card-watchdog.contact` normalization functions
+
+Deliverables:
+
+- stronger phone normalization with default-country config and review fallback
+- address and organization/title normalization placeholders
+- contact-point model for email, phone, website, social/profile URLs, and source evidence
+- merge policy that distinguishes:
+  - card-observed canonical fields
+  - operator-corrected fields
+  - enrichment proposals
+  - downstream existing-contact values
+- confidence/reason fields for every proposed normalized value
+
+Acceptance:
+
+- Normalization never invents missing identity fields.
+- Enrichment can propose additional fields but cannot overwrite card-observed or operator-corrected values without explicit approval.
+- Sink plans can map contact points into GWS and Odollo payloads without destructive overwrites.
+
+Suggested subagent brief:
+
+```text
+You are NP3 Normalization subagent. Inspect Odollo contact-point and normalization helpers plus this repo's contact and sink payload code. Harden normalization and merge policy around provenance, contact points, and confidence. Keep output schema backward compatible where possible. Do not perform enrichment or sink calls. Return schema examples and tests.
+```
+
+### NP4. Explicit Enrichment Execution Paths
+
+Purpose:
+
+Make enrichment useful without letting a generic agent loop spend money or leak secrets.
+
+Rules:
+
+- API-based enrichment generally has cost and must be explicitly requested.
+- Public-web enrichment can be useful, but execution should still be an explicit operator/search-agent action with query and result artifacts.
+- API keys may be read from `~/credentials/API-keys.env` only by name and only by the adapter that needs them; never print or persist values.
+
+Deliverables:
+
+- Public-web execution adapter or browser/search-agent handoff that consumes `enrichment_public_web_request.json` and writes result fixtures back into the existing result scorer.
+- Paid provider adapter copied/adapted from Odollo Apollo tooling, behind both config `allow_paid_api = true` and request-level `allow_paid_enrichment = true`.
+- Per-job and per-batch budget/call-count limits.
+- Enrichment event log fields for provider, mode, requested_by, cost_class, call count, and result artifact path.
+- Operator command examples for public-web enrichment and paid API enrichment.
+
+Acceptance:
+
+- Default tests and safe agent-loop runs make zero network calls and zero paid API calls.
+- Public-web execution is explicit and bounded.
+- Paid API execution refuses unless both config and command/request approval are present.
+- Results still enter review as merge proposals, not direct overwrites.
+
+Suggested subagent brief:
+
+```text
+You are NP4 Enrichment Adapter subagent. Inspect Odollo Apollo and public-web enrichment code plus this repo's enrichment artifact contracts. Add explicit execution paths that consume existing request artifacts and write existing result schemas. Keep paid API calls behind config and request-level approval. Never print secrets. Default tests must use fixtures and make no network calls.
+```
+
+### NP5. Sink Lookup Pilots Before Write Pilots
+
+Purpose:
+
+Move from blocked adapter request contracts to approved read-only lookup pilots for GWS and Odollo, then use lookup evidence to improve dedupe and routing decisions.
+
+Deliverables:
+
+- GWS People read-only lookup adapter using the existing `gws` command vectors.
+- Odollo/Odoo read-only lookup adapter using tenant readiness patterns copied/adapted from Odollo.
+- Lookup pilot command that requires explicit run/job/sink selection.
+- Lookup result artifact populated from live read-only responses.
+- Downstream duplicate assessment from live lookup result.
+- Readiness evidence that distinguishes local auth presence, live read-only probe success, and write-disabled state.
+
+Acceptance:
+
+- Live lookup pilots do not write to GWS or Odollo.
+- A live lookup result can block routing as duplicate review when matches are found.
+- Lookup artifacts include enough resource IDs and match basis to support later update/noop/create planning.
+- Tests mock `gws` and Odollo clients; live pilots are manual smoke tests only.
+
+Suggested subagent brief:
+
+```text
+You are NP5 Read-Only Sink Lookup subagent. Implement explicit one-job read-only lookup pilots for GWS and Odollo using existing adapter request contracts. Mock all live calls in tests. Do not implement writes. Return readiness behavior, lookup artifacts, and duplicate-assessment evidence.
+```
+
+### NP6. One-Job Live Apply Pilot
+
+Purpose:
+
+Only after review, enrichment, dedupe, route refresh, read-only lookup, preflight, apply decision, and pilot readiness are satisfied, allow one explicitly selected contact to be written and read back.
+
+Deliverables:
+
+- per-sink live apply adapter implementation for the selected pilot sink
+- strict one-job apply command requiring `--apply`, approved `sink_apply_decision.json`, and passing `sink_apply_pilot_readiness.json`
+- readback verification artifact
+- idempotent retry behavior keyed by serialization key and downstream resource ID
+- rollback/remediation note when rollback is not feasible
+
+Acceptance:
+
+- The first live pilot cannot run from safe agent-loop execution.
+- The command must name run ID, job ID, and sink.
+- Readback proves the created/updated contact exists with expected fields.
+- Failed write/readback leaves an explicit recovery artifact and does not mark the job successfully routed.
+
+Suggested subagent brief:
+
+```text
+You are NP6 Live Apply Pilot subagent. Implement the smallest one-job live apply path for one approved sink after all readiness, duplicate, preflight, decision, and pilot-readiness gates pass. Keep tests mocked. Do not run a live write unless the primary agent provides an explicit approved run ID, job ID, and sink. Return readback schema, recovery behavior, and validation commands.
+```
+
 ## `/goal` Objective
 
 Use this as the high-level `/goal` objective:

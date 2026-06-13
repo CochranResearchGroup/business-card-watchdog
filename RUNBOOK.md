@@ -670,3 +670,19 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_enrichment.py tests/test_cli_surfaces.py tests/test_mcp.py tests/test_api.py -q` passed with 34 tests.
+
+## Turn 40 | 2026-06-13
+
+Expanded Plan 0004 into the next high-level execution block for review surface, route freshness, normalization, enrichment execution, read-only sink lookup pilots, and one-job live apply pilots.
+
+Captured:
+
+- API-based enrichment remains explicitly requested because provider calls can cost money.
+- Public-web enrichment should also execute only through an explicit bounded operator/search-agent action.
+- Odollo enrichment, contact-point, readiness, lookup, and review semantics are implementation sources to inspect or adapt.
+- `~/credentials/API-keys.env` can provide enrichment API key names/values to adapters, but secret values must not be printed or persisted.
+- Safe agent loops may continue zero-network/zero-write route refresh and planning work, but cannot trigger paid enrichment or live apply.
+
+Validation:
+
+- Documentation-only planning update; run `git diff --check` before commit.
