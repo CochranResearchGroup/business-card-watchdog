@@ -959,6 +959,27 @@ Remaining:
 - Spreadsheet export remains optional follow-on work.
 - The static HTML file is read-only; decisions still flow through `reviews apply-decisions` or `jobs review`.
 
+### Slice 0004-AN | 2026-06-13 | Duplicate Resolution Route Refresh Proof
+
+Implemented:
+
+- Added regression coverage proving duplicate-resolution decisions refresh existing route artifacts.
+- The test covers a reviewed contact with an existing `sink_plan.json`, a later duplicate resolution, `route_refresh.json` creation, next-action rerouting to `plan_sinks`, and refreshed sink plan duplicate-resolution context.
+- No runtime behavior changed; the existing shared service path already created route-refresh artifacts for non-noop duplicate resolutions.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py -q` passed with 43 tests.
+- `.venv/bin/python -m pytest -q` passed with 141 tests.
+- `PYTHONPATH=src pytest -q` passed with 136 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+Remaining:
+
+- Additional route-refresh coverage for lookup-result and apply-preflight invalidation remains useful follow-on work.
+
 ## Next High-Level Plan
 
 The next execution block should turn the current artifact-first scaffolding into an operator-usable review and routing system while preserving the current safety boundaries: no paid enrichment unless explicitly requested, no live sink writes without an approved pilot, and no secret values in repo artifacts or logs.

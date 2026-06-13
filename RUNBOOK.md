@@ -928,3 +928,22 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed with the index up to date.
 - `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+## Turn 52 | 2026-06-13
+
+Continued Plan 0004 execution with duplicate-resolution route-refresh proof.
+
+Implemented:
+
+- Added regression coverage proving duplicate-resolution decisions refresh existing route artifacts.
+- The test covers a reviewed contact with an existing `sink_plan.json`, a later duplicate resolution, `route_refresh.json` creation, next-action rerouting to `plan_sinks`, and refreshed sink plan duplicate-resolution context.
+- No runtime behavior changed; the existing shared service path already created route-refresh artifacts for non-noop duplicate resolutions.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py -q` passed with 43 tests.
+- `.venv/bin/python -m pytest -q` passed with 141 tests.
+- `PYTHONPATH=src pytest -q` passed with 136 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.

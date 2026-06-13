@@ -1037,6 +1037,59 @@ def test_service_enrichment_merge_refreshes_existing_sink_plan(tmp_path: Path) -
     assert "Public-web corroboration candidate" in refreshed["plan"]["payloads"][0]["payload"]["values"]["notes"]
 
 
+def test_service_duplicate_resolution_refreshes_existing_sink_plan(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+        field_corrections={"full_name": "Ada Lovelace", "email": "ada@example.test"},
+    )
+    service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+    (artifact_dir / "duplicate_assessment.json").write_text(
+        json.dumps(
+            {
+                "schema": "business-card-watchdog.duplicate-assessment.v1",
+                "state": "strong_duplicate",
+                "matches": [{"match_type": "email", "serialization_key": "email:ada@example.test"}],
+                "reasons": ["email match"],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    result = service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="resolve_duplicate",
+        duplicate_resolution={
+            "decision": "merge_existing",
+            "target_identity": "email:ada@example.test",
+            "reason": "same contact",
+        },
+    )
+    next_action = service.next_actions(run_id=run_id)["actions"][0]
+    refreshed = service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+    route_refresh = json.loads((artifact_dir / "route_refresh.json").read_text(encoding="utf-8"))
+
+    assert result["route_refresh"]["reason"] == "duplicate_resolution_updated_route_context"
+    assert result["route_refresh"]["pending_artifact_kinds"] == ["sink_plan"]
+    assert next_action["action"] == "plan_sinks"
+    assert route_refresh["state"] == "complete"
+    assert refreshed["plan"]["duplicate_resolution"]["decision"] == "merge_existing"
+
+
 def test_service_next_actions_recommends_live_apply_after_decision(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",
