@@ -115,7 +115,10 @@ class BatchOrchestrator:
             return
 
         spec = load_contact_spec(result.spec_path)
-        contact_candidate = build_contact_candidate(spec)
+        contact_candidate = build_contact_candidate(
+            spec,
+            default_country=self.config.normalization.default_country,
+        )
         contact_candidate_path = result.artifact_dir / "contact_candidate.json"
         contact_candidate_path.write_text(
             json.dumps(contact_candidate, indent=2, sort_keys=True) + "\n",

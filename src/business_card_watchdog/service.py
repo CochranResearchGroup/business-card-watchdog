@@ -475,6 +475,7 @@ class BusinessCardService:
                 candidate,
                 reviewer=reviewer,
                 field_corrections=field_corrections or {},
+                default_country=self.config.normalization.default_country,
             )
             reviewed_contact_path = artifact_dir / "reviewed_contact.json"
             reviewed_contact_path.write_text(
@@ -508,6 +509,7 @@ class BusinessCardService:
                 reviewer=reviewer,
                 proposals=list(enrichment_result.get("merge_proposals") or []),
                 approved_fields=approved_enrichment_fields or [],
+                default_country=self.config.normalization.default_country,
             )
             reviewed_contact_path = artifact_dir / "reviewed_contact.json"
             reviewed_contact_path.write_text(

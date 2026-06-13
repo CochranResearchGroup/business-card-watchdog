@@ -48,6 +48,21 @@ base_url = "https://apollo.example.test"
     assert config.enrichment.apollo.api_key_env == "CUSTOM_APOLLO_KEY"
 
 
+def test_load_normalization_default_country(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        """
+[normalization]
+default_country = "GB"
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(config_path)
+
+    assert config.normalization.default_country == "GB"
+
+
 def test_load_sink_apply_policy_flags(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
     config_path.write_text(

@@ -761,6 +761,33 @@ Remaining:
 - Paid API execution remains blocked behind explicit config and request approval.
 - Enrichment merge still requires review approval before changing reviewed contact data.
 
+### Slice 0004-AF | 2026-06-13 | Contact Points And Normalization Metadata
+
+Implemented:
+
+- Added `[normalization] default_country` user config with default `US`.
+- Orchestrator contact candidate creation now uses the configured normalization default country.
+- Review corrections and enrichment merge approval now use the configured normalization default country.
+- Contact candidates and reviewed contacts now include a `normalization` metadata block.
+- Normalized fields now include `confidence` and `reason` metadata.
+- Contact candidates and reviewed contacts now include `contact_points` for email, phone, and website with value, raw observed value, source, confidence, and reason.
+- Non-US/default-country phone numbers that cannot be safely normalized to E.164 are retained and marked for review instead of being over-normalized.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_contact.py tests/test_config.py tests/test_service.py tests/test_dry_run_pipeline.py -q` passed with 49 tests.
+- `.venv/bin/python -m pytest -q` passed with 134 tests.
+- `PYTHONPATH=src pytest -q` passed with 129 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+Remaining:
+
+- Address normalization and richer organization/title parsing remain follow-on work.
+- Contact-point mapping into future live adapters remains dry-run/request-contract only.
+- Odollo helper reuse remains planned for further normalization/contact-point hardening.
+
 ## Next High-Level Plan
 
 The next execution block should turn the current artifact-first scaffolding into an operator-usable review and routing system while preserving the current safety boundaries: no paid enrichment unless explicitly requested, no live sink writes without an approved pilot, and no secret values in repo artifacts or logs.

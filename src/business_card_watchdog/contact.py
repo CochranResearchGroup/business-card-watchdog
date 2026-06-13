@@ -32,8 +32,12 @@ def build_contact_candidate(
     candidate: dict[str, Any] = {
         "schema": CONTACT_CANDIDATE_SCHEMA,
         "source": source,
+        "normalization": {
+            "default_country": default_country,
+        },
         "observed": observed,
         "normalized": normalized,
+        "contact_points": _contact_points(normalized, observed),
         "name_parts": _name_parts(normalized.get("full_name", {}).get("value", "")),
         "extras": {
             key: value
@@ -73,6 +77,9 @@ def apply_review_corrections(
         "schema": REVIEWED_CONTACT_SCHEMA,
         "reviewer": reviewer,
         "base_schema": candidate.get("schema"),
+        "normalization": {
+            "default_country": default_country,
+        },
         "observed": dict(candidate.get("observed") or {}),
         "normalized": dict(candidate.get("normalized") or {}),
         "corrections": {},
@@ -92,6 +99,7 @@ def apply_review_corrections(
             "reviewer": reviewer,
         }
     reviewed["name_parts"] = _name_parts(reviewed["normalized"].get("full_name", {}).get("value", ""))
+    reviewed["contact_points"] = _contact_points(reviewed["normalized"], reviewed["observed"])
     reviewed["flat"] = contact_candidate_to_spec(reviewed)
     return reviewed
 
@@ -109,6 +117,9 @@ def apply_enrichment_proposals(
         "schema": REVIEWED_CONTACT_SCHEMA,
         "reviewer": reviewer,
         "base_schema": candidate.get("schema"),
+        "normalization": {
+            "default_country": default_country,
+        },
         "observed": dict(candidate.get("observed") or {}),
         "normalized": dict(candidate.get("normalized") or {}),
         "corrections": dict(candidate.get("corrections") or {}),
@@ -142,6 +153,7 @@ def apply_enrichment_proposals(
         reviewed["merge_approvals"].append(approval)
         applied.append(approval)
     reviewed["name_parts"] = _name_parts(reviewed["normalized"].get("full_name", {}).get("value", ""))
+    reviewed["contact_points"] = _contact_points(reviewed["normalized"], reviewed["observed"])
     reviewed["flat"] = contact_candidate_to_spec(reviewed)
     return reviewed, {
         "schema": ENRICHMENT_MERGE_REVIEW_SCHEMA,
@@ -155,13 +167,30 @@ def apply_enrichment_proposals(
 def _normalize_field(field: str, value: str, *, default_country: str) -> dict[str, Any]:
     clean = " ".join(str(value or "").strip().split())
     if field == "email":
-        return {"value": clean.lower(), "raw": value}
+        return {
+            "value": clean.lower(),
+            "raw": value,
+            "confidence": "high" if "@" in clean else "review",
+            "reason": "lowercased email address" if "@" in clean else "email-like value needs review",
+        }
     if field == "phone":
         phone = _normalize_phone(clean, default_country=default_country)
-        return {"value": phone["e164"] or phone["display"], "raw": value, **phone}
+        return {
+            "value": phone["e164"] or phone["display"],
+            "raw": value,
+            "confidence": "high" if phone["e164"] else "review",
+            "reason": "normalized to E.164" if phone["e164"] else "phone could not be normalized to E.164",
+            **phone,
+        }
     if field == "website":
-        return {"value": _normalize_website(clean), "raw": value}
-    return {"value": clean, "raw": value}
+        normalized = _normalize_website(clean)
+        return {
+            "value": normalized,
+            "raw": value,
+            "confidence": "high" if normalized.startswith("https://") else "review",
+            "reason": "normalized website host and scheme" if normalized.startswith("https://") else "website needs review",
+        }
+    return {"value": clean, "raw": value, "confidence": "observed", "reason": "trimmed whitespace"}
 
 
 def _normalize_phone(value: str, *, default_country: str) -> dict[str, Any]:
@@ -206,6 +235,27 @@ def _merge_enrichment_value(field: str, normalized: dict[str, Any], value: str) 
     if not existing_value or value in existing_value:
         return value if not existing_value else existing_value
     return f"{existing_value}\n{value}"
+
+
+def _contact_points(normalized: dict[str, Any], observed: dict[str, Any]) -> list[dict[str, Any]]:
+    points: list[dict[str, Any]] = []
+    for field, kind in (("email", "email"), ("phone", "phone"), ("website", "website")):
+        payload = normalized.get(field) if isinstance(normalized.get(field), dict) else {}
+        value = str(payload.get("value") or "").strip()
+        if not value:
+            continue
+        observed_payload = observed.get(field) if isinstance(observed.get(field), dict) else {}
+        points.append(
+            {
+                "kind": kind,
+                "value": value,
+                "source": observed_payload.get("source") or "normalized",
+                "raw": observed_payload.get("value") or payload.get("raw") or "",
+                "confidence": payload.get("confidence") or "observed",
+                "reason": payload.get("reason") or "",
+            }
+        )
+    return points
 
 
 def _name_parts(value: str) -> dict[str, str]:

@@ -50,6 +50,11 @@ class PrefilterConfig:
 
 
 @dataclass(frozen=True)
+class NormalizationConfig:
+    default_country: str = "US"
+
+
+@dataclass(frozen=True)
 class EnrichmentProviderConfig:
     enabled: bool = False
     api_key_env: str = "APOLLO_API_KEY"
@@ -76,6 +81,7 @@ class AppConfig:
     path_aliases: dict[str, str] = field(default_factory=dict)
     watch: WatchConfig = field(default_factory=WatchConfig)
     prefilter: PrefilterConfig = field(default_factory=PrefilterConfig)
+    normalization: NormalizationConfig = field(default_factory=NormalizationConfig)
     enrichment: EnrichmentConfig = field(default_factory=EnrichmentConfig)
     sink: SinkConfig = field(default_factory=SinkConfig)
     routing_rules: list[dict[str, Any]] = field(default_factory=list)
@@ -113,6 +119,7 @@ def load_config(path: Path | None = None) -> AppConfig:
     sink = raw.get("sink", {})
     watch = raw.get("watch", {})
     prefilter = raw.get("prefilter", {})
+    normalization = raw.get("normalization", {})
     enrichment = raw.get("enrichment", {})
     enrichment_providers = enrichment.get("providers", {})
     public_web_provider = enrichment_providers.get("public_web", {})
@@ -135,6 +142,9 @@ def load_config(path: Path | None = None) -> AppConfig:
             enabled=bool(prefilter.get("enabled", True)),
             min_score=float(prefilter.get("min_score", 0.55)),
             process_uncertain=bool(prefilter.get("process_uncertain", False)),
+        ),
+        normalization=NormalizationConfig(
+            default_country=str(normalization.get("default_country", "US")),
         ),
         enrichment=EnrichmentConfig(
             enabled=bool(enrichment.get("enabled", False)),
@@ -185,6 +195,9 @@ status_recursive = false
 enabled = true
 min_score = 0.55
 process_uncertain = false
+
+[normalization]
+default_country = "US"
 
 [enrichment]
 enabled = false
