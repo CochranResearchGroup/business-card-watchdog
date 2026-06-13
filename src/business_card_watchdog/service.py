@@ -1178,6 +1178,21 @@ class BusinessCardService:
             "results": applied,
         }
 
+    def apply_review_workbook_csv(
+        self,
+        *,
+        run_id: str,
+        csv_text: str,
+        reviewer: str = "operator",
+    ) -> dict[str, Any]:
+        decisions = self._review_decisions_from_workbook_csv(csv_text)
+        payload = self.apply_review_decisions(run_id=run_id, reviewer=reviewer, decisions=decisions)
+        payload["import"]["source_format"] = "csv"
+        payload["import"]["source_schema"] = "business-card-watchdog.review-workbook.v1"
+        import_path = self.config.runs_dir / run_id / "review_decisions_import.json"
+        import_path.write_text(json.dumps(payload["import"], indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        return payload
+
     def list_artifacts(self, run_id: str) -> list[dict[str, Any]]:
         artifacts_path = self.config.runs_dir / run_id / "artifacts.jsonl"
         if not artifacts_path.exists():
@@ -2835,6 +2850,47 @@ class BusinessCardService:
         for entry in bundle["entries"]:
             writer.writerow(self._review_workbook_row(entry))
         return output.getvalue()
+
+    def _review_decisions_from_workbook_csv(self, csv_text: str) -> list[dict[str, Any]]:
+        reader = csv.DictReader(StringIO(csv_text))
+        decisions: list[dict[str, Any]] = []
+        for index, row in enumerate(reader):
+            if str(row.get("skip_import") or "").strip().lower() in {"1", "true", "yes", "y"}:
+                continue
+            template_text = str(row.get("decision_template_json") or "").strip()
+            if template_text:
+                try:
+                    decision = json.loads(template_text)
+                except json.JSONDecodeError as exc:
+                    raise ValueError(f"invalid decision_template_json at CSV row {index + 2}: {exc}") from exc
+                if not isinstance(decision, dict):
+                    raise ValueError(f"decision_template_json at CSV row {index + 2} must be a JSON object")
+            else:
+                decision = {}
+            job_id = str(row.get("job_id") or decision.get("job_id") or "").strip()
+            if not job_id:
+                raise ValueError(f"review workbook CSV row {index + 2} is missing job_id")
+            decision["job_id"] = job_id
+            if row.get("run_id") and not decision.get("run_id"):
+                decision["run_id"] = str(row["run_id"])
+            if row.get("decision_action"):
+                decision["action"] = str(row["decision_action"])
+            if row.get("notes"):
+                decision["notes"] = str(row["notes"])
+            for column, key in [
+                ("field_corrections_json", "field_corrections"),
+                ("crop_selection_json", "crop_selection"),
+                ("approved_enrichment_fields_json", "approved_enrichment_fields"),
+                ("duplicate_resolution_json", "duplicate_resolution"),
+            ]:
+                value = str(row.get(column) or "").strip()
+                if value:
+                    try:
+                        decision[key] = json.loads(value)
+                    except json.JSONDecodeError as exc:
+                        raise ValueError(f"invalid {column} at CSV row {index + 2}: {exc}") from exc
+            decisions.append(decision)
+        return decisions
 
     def _review_workbook_row(self, entry: dict[str, Any]) -> dict[str, Any]:
         artifacts = entry.get("artifacts") or {}

@@ -1427,3 +1427,20 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_run_summary_and_review_queue tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+
+## Turn 77 | 2026-06-13
+
+Continued Plan 0004 execution with CSV review workbook decision import.
+
+Implemented:
+
+- Added service `apply_review_workbook_csv`.
+- CSV imports parse workbook `decision_template_json` rows and use the existing shared review-decision submission path.
+- Added CLI `bcw reviews apply-decisions --decisions-csv-file <path>`.
+- Added `decisions_csv` support to API `POST /runs/{run_id}/review-decisions`.
+- Added `decisions_csv` support to MCP `business_card_watchdog_apply_review_decisions`.
+- CSV imports write the same `review_decisions_import.json` artifact with CSV source metadata.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_apply_review_workbook_csv_uses_decision_template_json tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 4 tests.

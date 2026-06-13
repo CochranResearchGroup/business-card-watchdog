@@ -61,6 +61,24 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     workbook_rows = list(csv.DictReader(StringIO(review_workbook["csv"])))
     assert workbook_rows[0]["job_id"] == job_id
     assert workbook_rows[0]["next_action"] == "review_contact"
+    workbook_rows[0]["decision_template_json"] = json.dumps(
+        {
+            "job_id": job_id,
+            "action": "approve_for_routing",
+            "field_corrections": {"full_name": "API Workbook"},
+        },
+        sort_keys=True,
+    )
+    workbook_csv = StringIO()
+    workbook_writer = csv.DictWriter(workbook_csv, fieldnames=list(workbook_rows[0]))
+    workbook_writer.writeheader()
+    workbook_writer.writerows(workbook_rows)
+    workbook_import = client.post(
+        f"/runs/{run_id}/review-decisions",
+        json={"reviewer": "api-workbook", "decisions_csv": workbook_csv.getvalue()},
+    ).json()
+    assert workbook_import["import"]["source_format"] == "csv"
+    assert workbook_import["results"][0]["job_state"] == "ready_to_route"
     review_import = client.post(
         f"/runs/{run_id}/review-decisions",
         json={

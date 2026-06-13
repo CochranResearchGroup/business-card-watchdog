@@ -106,6 +106,7 @@ def build_parser() -> argparse.ArgumentParser:
     reviews_apply.add_argument("--reviewer", default="operator")
     reviews_apply.add_argument("--decisions-json", default="[]")
     reviews_apply.add_argument("--decisions-file", type=Path, default=None)
+    reviews_apply.add_argument("--decisions-csv-file", type=Path, default=None)
     reviews_apply.add_argument("--json", action="store_true")
 
     actions = sub.add_parser("actions")
@@ -315,16 +316,23 @@ def main(argv: list[str] | None = None) -> int:
                 print(payload["csv"], end="")
                 return 0
         elif args.reviews_command == "apply-decisions":
-            decisions_body = (
-                args.decisions_file.read_text(encoding="utf-8")
-                if args.decisions_file is not None
-                else args.decisions_json
-            )
-            payload = service.apply_review_decisions(
-                run_id=args.run_id,
-                reviewer=args.reviewer,
-                decisions=json.loads(decisions_body),
-            )
+            if args.decisions_csv_file is not None:
+                payload = service.apply_review_workbook_csv(
+                    run_id=args.run_id,
+                    reviewer=args.reviewer,
+                    csv_text=args.decisions_csv_file.read_text(encoding="utf-8"),
+                )
+            else:
+                decisions_body = (
+                    args.decisions_file.read_text(encoding="utf-8")
+                    if args.decisions_file is not None
+                    else args.decisions_json
+                )
+                payload = service.apply_review_decisions(
+                    run_id=args.run_id,
+                    reviewer=args.reviewer,
+                    decisions=json.loads(decisions_body),
+                )
         else:
             payload = service.review_queue(
                 run_id=args.run_id,

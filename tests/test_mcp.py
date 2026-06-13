@@ -244,6 +244,25 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     workbook_rows = list(csv.DictReader(StringIO(review_workbook["csv"])))
     assert workbook_rows[0]["job_id"] == job_id
     assert workbook_rows[0]["next_action"] == "review_contact"
+    workbook_rows[0]["decision_template_json"] = json.dumps(
+        {
+            "job_id": job_id,
+            "action": "approve_for_routing",
+            "field_corrections": {"full_name": "MCP Workbook"},
+        },
+        sort_keys=True,
+    )
+    workbook_csv = StringIO()
+    workbook_writer = csv.DictWriter(workbook_csv, fieldnames=list(workbook_rows[0]))
+    workbook_writer.writeheader()
+    workbook_writer.writerows(workbook_rows)
+    workbook_import = call_tool(
+        "business_card_watchdog_apply_review_decisions",
+        {"run_id": run_id, "reviewer": "mcp-workbook", "decisions_csv": workbook_csv.getvalue()},
+        config=config,
+    )
+    assert workbook_import["import"]["source_format"] == "csv"
+    assert workbook_import["results"][0]["job_state"] == "ready_to_route"
     assert review_import["import"]["schema"] == "business-card-watchdog.review-decisions-import.v1"
     assert review_import["results"][0]["job_state"] == "ready_to_route"
     assert next_actions["actions"][0]["action"] == "review_contact"

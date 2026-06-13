@@ -433,6 +433,40 @@ def test_service_apply_review_decisions_records_run_import_artifact(tmp_path: Pa
     assert any(event["event_type"] == "review_decisions_imported" for event in events)
 
 
+def test_service_apply_review_workbook_csv_uses_decision_template_json(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    workbook = service.review_workbook(run_id=run_id)
+    rows = list(csv.DictReader(StringIO(workbook["csv"])))
+    rows[0]["decision_template_json"] = json.dumps(
+        {
+            "job_id": job_id,
+            "action": "approve_for_routing",
+            "field_corrections": {"full_name": "Workbook Fixture", "email": "workbook@example.test"},
+            "notes": "csv import",
+        },
+        sort_keys=True,
+    )
+    output = StringIO()
+    writer = csv.DictWriter(output, fieldnames=list(rows[0]))
+    writer.writeheader()
+    writer.writerows(rows)
+
+    payload = service.apply_review_workbook_csv(
+        run_id=run_id,
+        reviewer="workbook-reviewer",
+        csv_text=output.getvalue(),
+    )
+    job = service.get_job(job_id, run_id=run_id)
+
+    assert payload["import"]["source_format"] == "csv"
+    assert payload["import"]["source_schema"] == "business-card-watchdog.review-workbook.v1"
+    assert payload["import"]["applied_count"] == 1
+    assert payload["results"][0]["job_state"] == "ready_to_route"
+    assert job["state"] == "ready_to_route"
+
+
 def test_service_plan_sinks_for_job_writes_dry_run_plan(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",

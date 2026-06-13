@@ -29,6 +29,7 @@ def create_app(config_path: Path | None = None):
     class ReviewDecisionsRequest(BaseModel):
         reviewer: str = "operator"
         decisions: list[dict[str, object]] = Field(default_factory=list)
+        decisions_csv: str = ""
 
     class EnrichmentRequest(BaseModel):
         run_id: str
@@ -168,6 +169,12 @@ def create_app(config_path: Path | None = None):
 
     @app.post("/runs/{run_id}/review-decisions")
     def apply_review_decisions(run_id: str, request: ReviewDecisionsRequest = Body(...)) -> dict[str, object]:
+        if request.decisions_csv:
+            return service().apply_review_workbook_csv(
+                run_id=run_id,
+                reviewer=request.reviewer,
+                csv_text=request.decisions_csv,
+            )
         return service().apply_review_decisions(
             run_id=run_id,
             reviewer=request.reviewer,

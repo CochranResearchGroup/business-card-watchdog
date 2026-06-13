@@ -2088,3 +2088,22 @@ Validation:
 Remaining:
 
 - Workbook import still flows through the existing JSON decision import path; a direct CSV decision importer remains follow-on work.
+
+### Slice 0004-BL | 2026-06-13 | CSV Review Workbook Decision Import
+
+Implemented:
+
+- Added CSV workbook decision import through the shared review-decision submission path.
+- Added service `apply_review_workbook_csv` that parses `decision_template_json` from workbook rows and calls the existing `apply_review_decisions` method.
+- Added CSV import support to CLI `bcw reviews apply-decisions --decisions-csv-file <path>`.
+- Added `decisions_csv` support to API `POST /runs/{run_id}/review-decisions`.
+- Added `decisions_csv` support to MCP `business_card_watchdog_apply_review_decisions`.
+- CSV imports record the same `review_decisions_import.json` artifact as JSON imports, with `source_format = csv` and `source_schema = business-card-watchdog.review-workbook.v1`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_apply_review_workbook_csv_uses_decision_template_json tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 4 tests.
+
+Remaining:
+
+- CSV import intentionally reuses existing decision JSON in each row; richer spreadsheet editing helpers remain follow-on work.

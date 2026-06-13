@@ -111,6 +111,42 @@ def test_cli_runs_and_jobs_use_recorded_runtime_state(
     assert "job_id,state,image_path,next_action" in csv_text
     assert job_id in csv_text
 
+    workbook_rows = list(csv.DictReader(StringIO(workbook["csv"])))
+    workbook_rows[0]["decision_template_json"] = json.dumps(
+        {
+            "job_id": job_id,
+            "action": "approve_for_routing",
+            "field_corrections": {"full_name": "CLI Workbook"},
+        },
+        sort_keys=True,
+    )
+    workbook_import_path = tmp_path / "review-workbook-import.csv"
+    with workbook_import_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(workbook_rows[0]))
+        writer.writeheader()
+        writer.writerows(workbook_rows)
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "reviews",
+                "apply-decisions",
+                "--run-id",
+                run_id,
+                "--reviewer",
+                "cli-workbook",
+                "--decisions-csv-file",
+                str(workbook_import_path),
+                "--json",
+            ]
+        )
+        == 0
+    )
+    workbook_import = json.loads(capsys.readouterr().out)
+    assert workbook_import["import"]["source_format"] == "csv"
+    assert workbook_import["results"][0]["job_state"] == "ready_to_route"
+
     assert (
         main(
             [
