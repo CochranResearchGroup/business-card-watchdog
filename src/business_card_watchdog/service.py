@@ -57,6 +57,31 @@ class BusinessCardService:
         payload["artifacts"] = self.list_artifacts(run_id)
         return payload
 
+    def run_summary(self, run_id: str) -> dict[str, Any]:
+        run = self.get_run(run_id)
+        jobs = run["jobs"]
+        artifacts = run["artifacts"]
+        state_counts: dict[str, int] = {}
+        artifact_counts: dict[str, int] = {}
+        for job in jobs:
+            state = str(job.get("state") or "unknown")
+            state_counts[state] = state_counts.get(state, 0) + 1
+        for artifact in artifacts:
+            kind = str(artifact.get("kind") or "unknown")
+            artifact_counts[kind] = artifact_counts.get(kind, 0) + 1
+        return {
+            "run_id": run_id,
+            "state": run["state"],
+            "job_count": run["job_count"],
+            "state_counts": state_counts,
+            "artifact_counts": artifact_counts,
+            "needs_review_count": state_counts.get("needs_review", 0),
+            "ready_to_route_count": state_counts.get("ready_to_route", 0),
+            "failed_count": state_counts.get("failed", 0),
+            "duplicate_assessment_count": artifact_counts.get("duplicate_assessment", 0),
+            "reviewed_contact_count": artifact_counts.get("reviewed_contact", 0),
+        }
+
     def list_jobs(self, run_id: str | None = None) -> list[dict[str, Any]]:
         run_ids = [run_id] if run_id is not None else [str(run["run_id"]) for run in self.list_runs()]
         jobs: list[dict[str, Any]] = []
@@ -81,6 +106,35 @@ class BusinessCardService:
                 ]
                 return job
         raise FileNotFoundError(f"job not found: {job_id}")
+
+    def review_queue(self, *, run_id: str | None = None, state: str = "needs_review") -> list[dict[str, Any]]:
+        jobs = self.list_jobs(run_id)
+        queue: list[dict[str, Any]] = []
+        for job in jobs:
+            if state != "all" and job.get("state") != state:
+                continue
+            artifacts = [
+                artifact
+                for artifact in self.list_artifacts(str(job["run_id"]))
+                if artifact.get("job_id") == job["job_id"]
+            ]
+            by_kind = {str(artifact.get("kind")): artifact for artifact in artifacts}
+            queue.append(
+                {
+                    "run_id": job["run_id"],
+                    "job_id": job["job_id"],
+                    "state": job["state"],
+                    "image_path": job["image_path"],
+                    "error": job.get("error"),
+                    "artifact_dir": job.get("artifact_dir"),
+                    "review_packet": by_kind.get("review_packet"),
+                    "duplicate_assessment": by_kind.get("duplicate_assessment"),
+                    "contact_candidate": by_kind.get("contact_candidate"),
+                    "reviewed_contact": by_kind.get("reviewed_contact"),
+                    "artifact_kinds": sorted(by_kind),
+                }
+            )
+        return queue
 
     def submit_review(
         self,

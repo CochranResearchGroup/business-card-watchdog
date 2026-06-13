@@ -26,10 +26,18 @@ def test_cli_runs_and_jobs_use_recorded_runtime_state(
     runs = json.loads(capsys.readouterr().out)
     assert runs[0]["run_id"] == run_id
 
+    assert main(["--config", str(config_path), "runs", "summary", run_id, "--json"]) == 0
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["needs_review_count"] == 1
+
     assert main(["--config", str(config_path), "jobs", "show", job_id, "--run-id", run_id, "--json"]) == 0
     job = json.loads(capsys.readouterr().out)
     assert job["job_id"] == job_id
     assert job["artifacts"][0]["kind"] == "contact_spec"
+
+    assert main(["--config", str(config_path), "reviews", "list", "--run-id", run_id, "--json"]) == 0
+    reviews = json.loads(capsys.readouterr().out)
+    assert reviews[0]["job_id"] == job_id
 
 
 def test_cli_jobs_review_records_submission(tmp_path: Path, capsys) -> None:

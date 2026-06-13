@@ -54,9 +54,17 @@ def create_app(config_path: Path | None = None):
     def get_run(run_id: str) -> dict[str, object]:
         return service().get_run(run_id)
 
+    @app.get("/runs/{run_id}/summary")
+    def get_run_summary(run_id: str) -> dict[str, object]:
+        return service().run_summary(run_id)
+
     @app.get("/runs/{run_id}/jobs")
     def list_run_jobs(run_id: str) -> list[dict[str, object]]:
         return service().list_jobs(run_id)
+
+    @app.get("/reviews")
+    def list_reviews(run_id: str | None = None, state: str = "needs_review") -> list[dict[str, object]]:
+        return service().review_queue(run_id=run_id, state=state)
 
     @app.get("/jobs/{job_id}")
     def get_job(job_id: str, run_id: str | None = None) -> dict[str, object]:

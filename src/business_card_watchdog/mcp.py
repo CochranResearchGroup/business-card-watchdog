@@ -41,11 +41,31 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_run_summary",
+                "description": "Summarize job states and artifact counts for one run.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"run_id": {"type": "string"}},
+                    "required": ["run_id"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_jobs_list",
                 "description": "List latest job states, optionally for one run.",
                 "input_schema": {
                     "type": "object",
                     "properties": {"run_id": {"type": "string"}},
+                },
+            },
+            {
+                "name": "business_card_watchdog_reviews_list",
+                "description": "List review queue entries with key artifact pointers.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "state": {"type": "string", "default": "needs_review"},
+                    },
                 },
             },
             {

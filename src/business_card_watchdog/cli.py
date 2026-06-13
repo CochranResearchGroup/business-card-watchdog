@@ -37,6 +37,9 @@ def build_parser() -> argparse.ArgumentParser:
     runs_show = runs_sub.add_parser("show")
     runs_show.add_argument("run_id")
     runs_show.add_argument("--json", action="store_true")
+    runs_summary = runs_sub.add_parser("summary")
+    runs_summary.add_argument("run_id")
+    runs_summary.add_argument("--json", action="store_true")
 
     jobs = sub.add_parser("jobs")
     jobs_sub = jobs.add_subparsers(dest="jobs_command", required=True)
@@ -60,6 +63,13 @@ def build_parser() -> argparse.ArgumentParser:
     jobs_review.add_argument("--crop-selection-json", default="{}")
     jobs_review.add_argument("--notes", default="")
     jobs_review.add_argument("--json", action="store_true")
+
+    reviews = sub.add_parser("reviews")
+    reviews_sub = reviews.add_subparsers(dest="reviews_command", required=True)
+    reviews_list = reviews_sub.add_parser("list")
+    reviews_list.add_argument("--run-id", default=None)
+    reviews_list.add_argument("--state", default="needs_review")
+    reviews_list.add_argument("--json", action="store_true")
 
     sinks = sub.add_parser("sinks")
     sinks_sub = sinks.add_subparsers(dest="sinks_command", required=True)
@@ -134,8 +144,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "runs":
         if args.runs_command == "list":
             payload = service.list_runs()
+        elif args.runs_command == "summary":
+            payload = service.run_summary(args.run_id)
         else:
             payload = service.get_run(args.run_id)
+        print(json.dumps(payload, indent=2) if args.json else payload)
+        return 0
+
+    if args.command == "reviews":
+        payload = service.review_queue(run_id=args.run_id, state=args.state)
         print(json.dumps(payload, indent=2) if args.json else payload)
         return 0
 

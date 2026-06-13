@@ -46,6 +46,21 @@ def test_service_lists_and_shows_runs_jobs_and_artifacts(tmp_path: Path) -> None
     assert job["artifacts"][0]["kind"] == "contact_spec"
 
 
+def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+
+    summary = service.run_summary(run_id)
+    queue = service.review_queue(run_id=run_id)
+
+    assert summary["run_id"] == run_id
+    assert summary["needs_review_count"] == 1
+    assert summary["artifact_counts"]["contact_spec"] == 1
+    assert queue[0]["job_id"] == job_id
+    assert queue[0]["artifact_kinds"] == ["contact_spec"]
+
+
 def test_service_status_and_sink_readiness_are_structured(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     service = BusinessCardService(config)

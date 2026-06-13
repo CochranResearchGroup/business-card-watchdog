@@ -217,3 +217,20 @@ Validation:
 Operational note:
 
 - `git remote -v` returned no configured remotes, so the requested push cannot be completed until a remote is added.
+
+## Turn 13 | 2026-06-13
+
+Continued Plan 0004 execution with review queue and batch summary surfaces.
+
+Implemented:
+
+- `BusinessCardService.review_queue` derived from run/job ledgers and artifact records.
+- `BusinessCardService.run_summary` with state and artifact counts.
+- CLI `bcw reviews list` and `bcw runs summary`.
+- API `GET /reviews` and `GET /runs/{run_id}/summary`.
+- MCP manifest entries for review queue and run summary tools.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 16 tests.
+- `PYTHONPATH=src pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 15 tests and 1 skipped optional API-extra test.

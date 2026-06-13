@@ -91,6 +91,28 @@ Remaining:
 - Live GWS/Odollo dry-run apply plans and explicit one-job apply/readback pilots.
 - MCP executable/server dispatcher for the new tools.
 
+### Slice 0004-B | 2026-06-13 | Review Queue And Batch Summary Surfaces
+
+Implemented:
+
+- Shared service `review_queue` readback derived from run/job ledgers and artifact records.
+- Shared service `run_summary` with job-state and artifact-kind counts.
+- CLI `bcw reviews list` and `bcw runs summary`.
+- API `GET /reviews` and `GET /runs/{run_id}/summary`.
+- MCP manifest entries for review queue and run summary tools.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 16 tests.
+- `PYTHONPATH=src pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 15 tests and 1 skipped optional API-extra test.
+
+Remaining:
+
+- Review queue filtering beyond job state.
+- Review queue rendering/workbook/local UI.
+- Batch next-action recommendations for agent loops.
+- Automatic re-routing after reviewed-contact approval.
+
 ## `/goal` Objective
 
 Use this as the high-level `/goal` objective:
