@@ -636,3 +636,20 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_enrichment.py tests/test_cli_surfaces.py tests/test_mcp.py tests/test_api.py -q` passed with 32 tests.
+
+## Turn 38 | 2026-06-13
+
+Continued Plan 0004 execution with explicit apply pilot readiness artifacts.
+
+Implemented:
+
+- Added `sink_apply_pilot_readiness.json` artifacts for one-job live apply pilot readiness.
+- Pilot readiness artifacts summarize preflight, apply decision, write adapter request, sink readiness, readback adapter availability, missing requirements, and operator commands.
+- Pilot readiness artifacts record `can_apply_pilot = false`, `writes_attempted = 0`, and `network_calls_made = 0`.
+- Service, CLI, API, and MCP surfaces can create the readiness artifact through shared service logic.
+- Agent next actions recommend `sinks apply-pilot-readiness` after an approved sink apply decision and before the manual `sinks apply --apply` boundary.
+- Safe agent-loop execution can create the readiness artifact but still skips manual apply approval and live apply.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 60 tests.

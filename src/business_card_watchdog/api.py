@@ -172,6 +172,13 @@ def create_app(config_path: Path | None = None):
             simulate=request.simulate,
         )
 
+    @app.post("/jobs/{job_id}/sink-apply-pilot-readiness")
+    def create_sink_apply_pilot_readiness(
+        job_id: str,
+        request: SinkApplyPreflightRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().build_sink_apply_pilot_readiness_for_job(job_id=job_id, run_id=request.run_id)
+
     @app.post("/jobs/{job_id}/sink-adapter-request")
     def create_sink_adapter_request(job_id: str, request: SinkAdapterRequest = Body(...)) -> dict[str, object]:
         return service().build_sink_adapter_request_for_job(

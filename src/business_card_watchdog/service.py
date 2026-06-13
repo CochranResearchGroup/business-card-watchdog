@@ -47,6 +47,7 @@ _SAFE_NEXT_ACTIONS = {
     "plan_sinks",
     "prepare_sink_write_adapter",
     "preflight_sink_apply",
+    "prepare_sink_apply_pilot_readiness",
     "prepare_sink_readback_adapter",
 }
 
@@ -747,6 +748,85 @@ class BusinessCardService:
         )
         return {"result_path": str(result_path), "result": result}
 
+    def build_sink_apply_pilot_readiness_for_job(self, *, job_id: str, run_id: str) -> dict[str, Any]:
+        job = self.get_job(job_id, run_id=run_id)
+        artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
+        preflight_path = artifact_dir / "sink_apply_preflight.json"
+        decision_path = artifact_dir / "sink_apply_decision.json"
+        write_adapter_path = artifact_dir / "sink_adapter_request_write.json"
+        readback_adapter_path = artifact_dir / "sink_adapter_request_readback.json"
+
+        preflight = json.loads(preflight_path.read_text(encoding="utf-8")) if preflight_path.exists() else None
+        decision = json.loads(decision_path.read_text(encoding="utf-8")) if decision_path.exists() else None
+        write_adapter = json.loads(write_adapter_path.read_text(encoding="utf-8")) if write_adapter_path.exists() else None
+        readback_adapter = json.loads(readback_adapter_path.read_text(encoding="utf-8")) if readback_adapter_path.exists() else None
+        readiness = self.sink_readiness()
+        requirements = [
+            {
+                "name": "preflight_exists",
+                "ok": preflight is not None,
+                "detail": str(preflight_path),
+            },
+            {
+                "name": "apply_decision_approved",
+                "ok": bool(decision and decision.get("decision") == "approve"),
+                "detail": str(decision_path),
+            },
+            {
+                "name": "write_adapter_request_exists",
+                "ok": write_adapter is not None,
+                "detail": str(write_adapter_path),
+            },
+            {
+                "name": "live_sink_readiness_ready",
+                "ok": all(check.get("status") == "ready" for check in readiness["sinks"]),
+                "detail": "all configured sink readiness checks must be ready",
+            },
+            {
+                "name": "readback_adapter_available_after_apply",
+                "ok": readback_adapter is not None,
+                "detail": str(readback_adapter_path),
+            },
+        ]
+        payload = {
+            "schema": "business-card-watchdog.sink-apply-pilot-readiness.v1",
+            "state": "blocked",
+            "status": "blocked",
+            "reason": "live apply pilot remains blocked until all readiness checks pass and a live adapter is explicitly implemented",
+            "job_id": job_id,
+            "run_id": run_id,
+            "can_apply_pilot": False,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "preflight_state": preflight.get("state") if preflight else "missing",
+            "decision_state": decision.get("state") if decision else "missing",
+            "decision": decision.get("decision") if decision else "",
+            "sink_readiness": readiness,
+            "requirements": requirements,
+            "missing_requirements": [item["name"] for item in requirements if not item["ok"]],
+            "commands": {
+                "prepare": "sinks apply-pilot-readiness",
+                "manual_apply": "sinks apply --apply",
+                "readback": "sinks adapter-request --phase readback",
+            },
+        }
+        readiness_path = artifact_dir / "sink_apply_pilot_readiness.json"
+        readiness_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        ledger.record_artifact(job_id=job_id, kind="sink_apply_pilot_readiness", path=readiness_path)
+        ledger.record_event(
+            "sink_apply_pilot_readiness_created",
+            {
+                "job_id": job_id,
+                "run_id": run_id,
+                "readiness_path": str(readiness_path),
+                "state": payload["state"],
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        return {"readiness_path": str(readiness_path), "readiness": payload}
+
     def build_sink_adapter_request_for_job(
         self,
         *,
@@ -956,6 +1036,8 @@ class BusinessCardService:
             return self.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="write")
         if action_name == "preflight_sink_apply":
             return self.preflight_sink_apply(job_id=job_id, run_id=run_id)
+        if action_name == "prepare_sink_apply_pilot_readiness":
+            return self.build_sink_apply_pilot_readiness_for_job(job_id=job_id, run_id=run_id)
         if action_name == "prepare_sink_readback_adapter":
             return self.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="readback")
         raise ValueError(f"next action is not safe to execute automatically: {action_name}")
@@ -1037,6 +1119,12 @@ class BusinessCardService:
                         "command": "sinks adapter-request --phase readback",
                     }
                 return None
+            if "sink_apply_pilot_readiness" not in artifact_kinds:
+                return {
+                    "action": "prepare_sink_apply_pilot_readiness",
+                    "reason": "sink apply decision exists; prepare explicit one-job live apply pilot readiness artifact",
+                    "command": "sinks apply-pilot-readiness",
+                }
             return {
                 "action": "await_apply_approval",
                 "reason": "sink apply decision exists; live apply remains explicit and gated",

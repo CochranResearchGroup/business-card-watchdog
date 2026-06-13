@@ -749,8 +749,19 @@ def test_service_next_actions_recommends_live_apply_after_decision(tmp_path: Pat
 
     payload = service.next_actions(run_id=run_id)
 
-    assert payload["actions"][0]["action"] == "await_apply_approval"
-    assert payload["actions"][0]["command"] == "sinks apply --apply"
+    assert payload["actions"][0]["action"] == "prepare_sink_apply_pilot_readiness"
+    assert payload["actions"][0]["command"] == "sinks apply-pilot-readiness"
+
+    readiness = service.build_sink_apply_pilot_readiness_for_job(job_id=job_id, run_id=run_id)
+    next_payload = service.next_actions(run_id=run_id)
+
+    assert readiness["readiness"]["schema"] == "business-card-watchdog.sink-apply-pilot-readiness.v1"
+    assert readiness["readiness"]["can_apply_pilot"] is False
+    assert readiness["readiness"]["writes_attempted"] == 0
+    assert readiness["readiness"]["network_calls_made"] == 0
+    assert "readback_adapter_available_after_apply" in readiness["readiness"]["missing_requirements"]
+    assert next_payload["actions"][0]["action"] == "await_apply_approval"
+    assert next_payload["actions"][0]["command"] == "sinks apply --apply"
 
 
 def test_service_next_actions_recommends_readback_adapter_request_after_apply_result(tmp_path: Path) -> None:

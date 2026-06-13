@@ -49,6 +49,12 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     ).json()
     assert apply_decision["decision"]["schema"] == "business-card-watchdog.sink-apply-decision.v1"
     assert apply_decision["decision"]["network_calls_made"] == 0
+    pilot_readiness = client.post(
+        f"/jobs/{job_id}/sink-apply-pilot-readiness",
+        json={"run_id": run_id},
+    ).json()
+    assert pilot_readiness["readiness"]["schema"] == "business-card-watchdog.sink-apply-pilot-readiness.v1"
+    assert pilot_readiness["readiness"]["network_calls_made"] == 0
     apply_result = client.post(
         f"/jobs/{job_id}/sink-apply",
         json={"run_id": run_id, "apply": True, "simulate": True},

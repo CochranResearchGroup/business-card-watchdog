@@ -639,6 +639,27 @@ Remaining:
 - Apollo live API calls remain blocked behind explicit operator request and future adapter implementation.
 - Live Google Contacts and Odoo/Odollo lookup/write/readback adapters remain blocked.
 
+### Slice 0004-AA | 2026-06-13 | Apply Pilot Readiness Artifact
+
+Implemented:
+
+- Added `sink_apply_pilot_readiness.json` artifacts for explicit one-job live apply pilot readiness.
+- Pilot readiness artifacts summarize preflight, apply decision, write adapter request, sink readiness, readback adapter availability, missing requirements, and operator commands.
+- Pilot readiness artifacts record `can_apply_pilot = false`, `writes_attempted = 0`, and `network_calls_made = 0`.
+- Service, CLI, API, and MCP surfaces can create the pilot readiness artifact through shared service logic.
+- Agent next actions now recommend `sinks apply-pilot-readiness` after an approved sink apply decision and before the manual `sinks apply --apply` boundary.
+- Safe agent-loop execution can create the readiness artifact but still skips manual apply approval and live apply.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 60 tests.
+
+Remaining:
+
+- Live apply pilots remain blocked until live adapters and an explicit operator-approved pilot are implemented.
+- Live Google Contacts and Odoo/Odollo lookup/write/readback adapters remain blocked.
+- Non-simulated live apply remains blocked until adapters are implemented and explicitly approved.
+
 ## `/goal` Objective
 
 Use this as the high-level `/goal` objective:

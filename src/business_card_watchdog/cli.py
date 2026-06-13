@@ -114,6 +114,10 @@ def build_parser() -> argparse.ArgumentParser:
     sinks_apply.add_argument("--apply", action=argparse.BooleanOptionalAction, default=False)
     sinks_apply.add_argument("--simulate", action=argparse.BooleanOptionalAction, default=False)
     sinks_apply.add_argument("--json", action="store_true")
+    sinks_apply_pilot_readiness = sinks_sub.add_parser("apply-pilot-readiness")
+    sinks_apply_pilot_readiness.add_argument("job_id")
+    sinks_apply_pilot_readiness.add_argument("--run-id", required=True)
+    sinks_apply_pilot_readiness.add_argument("--json", action="store_true")
     sinks_apply_decision = sinks_sub.add_parser("apply-decision")
     sinks_apply_decision.add_argument("job_id")
     sinks_apply_decision.add_argument("--run-id", required=True)
@@ -288,6 +292,11 @@ def main(argv: list[str] | None = None) -> int:
                 run_id=args.run_id,
                 apply=args.apply,
                 simulate=args.simulate,
+            )
+        elif args.sinks_command == "apply-pilot-readiness":
+            payload = service.build_sink_apply_pilot_readiness_for_job(
+                job_id=args.job_id,
+                run_id=args.run_id,
             )
         elif args.sinks_command == "adapter-request":
             payload = service.build_sink_adapter_request_for_job(
