@@ -76,6 +76,16 @@ def test_cli_sinks_check_is_dry_run_and_non_mutating(tmp_path: Path, capsys) -> 
     assert {sink["status"] for sink in payload["sinks"]} == {"ready"}
 
 
+def test_cli_enrichment_check_blocks_when_not_enabled(tmp_path: Path, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    write_config(config_path, tmp_path / "data")
+
+    assert main(["--config", str(config_path), "enrichment", "check", "--mode", "api", "--json"]) == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["checks"][0]["status"] == "blocked"
+    assert "disabled" in payload["checks"][0]["reason"]
+
+
 def test_cli_doctor_reports_user_scope_checks(tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.toml"
     write_config(config_path, tmp_path / "data")

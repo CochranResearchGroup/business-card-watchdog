@@ -87,6 +87,20 @@ def tool_manifest() -> dict[str, object]:
                 "input_schema": {"type": "object", "properties": {}},
             },
             {
+                "name": "business_card_watchdog_enrichment_check",
+                "description": "Report enrichment readiness and paid-provider gates without making provider calls.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "mode": {
+                            "type": "string",
+                            "enum": ["none", "public_web", "api", "all"],
+                        },
+                        "allow_paid_enrichment": {"type": "boolean", "default": False},
+                    },
+                },
+            },
+            {
                 "name": "business_card_watchdog_watch_status",
                 "description": "Report watched inputs, seen-file count, backlog, unsettled files, and last error.",
                 "input_schema": {"type": "object", "properties": {}},

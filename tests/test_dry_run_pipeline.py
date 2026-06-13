@@ -58,10 +58,14 @@ def test_batch_dry_run_uses_synthetic_adapter_without_credentials(
         assert (artifact_dir / "review.md").exists()
         assert (artifact_dir / "crop_manifest.json").exists()
         assert (artifact_dir / "ocr.txt").exists()
+        assert (artifact_dir / "contact_candidate.json").exists()
         assert (artifact_dir / "sink_payloads.json").exists()
         spec = json.loads((artifact_dir / "spec.json").read_text(encoding="utf-8"))
         assert spec["email"].endswith("@example.test")
         assert spec["notes"].startswith("Synthetic privacy-safe")
+        contact_candidate = json.loads((artifact_dir / "contact_candidate.json").read_text(encoding="utf-8"))
+        assert contact_candidate["schema"] == "business-card-watchdog.contact-candidate.v1"
+        assert contact_candidate["normalized"]["email"]["value"].endswith("@example.test")
         sink_payloads = json.loads((artifact_dir / "sink_payloads.json").read_text(encoding="utf-8"))
         assert sink_payloads["schema"] == "business-card-watchdog.sink-payloads.v1"
         assert [payload["sink"] for payload in sink_payloads["payloads"]] == [
@@ -89,6 +93,8 @@ def test_batch_dry_run_uses_synthetic_adapter_without_credentials(
         "review_report",
         "ocr_text",
         "crop_manifest",
+        "contact_candidate",
+        "duplicate_assessment",
         "sink_payloads",
         "preclassification",
         "artifact_dir",
@@ -96,6 +102,8 @@ def test_batch_dry_run_uses_synthetic_adapter_without_credentials(
         "review_report",
         "ocr_text",
         "crop_manifest",
+        "contact_candidate",
+        "duplicate_assessment",
         "sink_payloads",
     ]
 
@@ -134,4 +142,5 @@ def test_incomplete_synthetic_spec_creates_review_packet(tmp_path: Path, monkeyp
 
     assert final_job["state"] == "needs_review"
     assert review_packet["assessment"]["status"] == "needs_review"
+    assert review_packet["contact_candidate"]["schema"] == "business-card-watchdog.contact-candidate.v1"
     assert any(event["event_type"] == "job_needs_review" for event in events)

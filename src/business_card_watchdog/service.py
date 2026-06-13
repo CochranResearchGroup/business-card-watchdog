@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Any
 
 from .config import AppConfig, ensure_runtime_dirs
+from .contact import apply_review_corrections, build_contact_candidate
+from .enrichment import check_enrichment_readiness
 from .ledger import RunLedger
 from .models import CardJob
 from .orchestrator import BatchOrchestrator
@@ -110,6 +112,22 @@ class BusinessCardService:
         ledger = RunLedger(self.config.runs_dir / run_id)
         ledger.record_artifact(job_id=job_id, kind="review_submission", path=submission_path)
         if action == "approve_for_routing":
+            candidate_path = artifact_dir / "contact_candidate.json"
+            if candidate_path.exists():
+                candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+            else:
+                candidate = build_contact_candidate({})
+            reviewed_contact = apply_review_corrections(
+                candidate,
+                reviewer=reviewer,
+                field_corrections=field_corrections or {},
+            )
+            reviewed_contact_path = artifact_dir / "reviewed_contact.json"
+            reviewed_contact_path.write_text(
+                json.dumps(reviewed_contact, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            ledger.record_artifact(job_id=job_id, kind="reviewed_contact", path=reviewed_contact_path)
             job.transition_to("ready_to_route")
             ledger.record_job(job)
         ledger.record_event(
@@ -148,6 +166,24 @@ class BusinessCardService:
                 check_sink_readiness(sink, dry_run=self.config.sink.dry_run).to_dict()
                 for sink in sinks
             ],
+        }
+
+    def enrichment_readiness(
+        self,
+        *,
+        mode: str | None = None,
+        allow_paid_enrichment: bool = False,
+    ) -> dict[str, Any]:
+        checks = check_enrichment_readiness(
+            self.config,
+            mode=mode,
+            allow_paid_enrichment=allow_paid_enrichment,
+        )
+        return {
+            "enabled": self.config.enrichment.enabled,
+            "default_mode": self.config.enrichment.default_mode,
+            "allow_paid_api": self.config.enrichment.allow_paid_api,
+            "checks": [check.to_dict() for check in checks],
         }
 
     def doctor(self) -> dict[str, Any]:

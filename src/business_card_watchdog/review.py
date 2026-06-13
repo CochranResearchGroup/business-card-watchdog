@@ -54,6 +54,7 @@ def write_review_packet(
     image_path: Path,
     spec: dict[str, Any],
     assessment: ReviewAssessment,
+    contact_candidate: dict[str, Any] | None = None,
 ) -> Path:
     packet_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -65,6 +66,7 @@ def write_review_packet(
             for key in ("full_name", "organization", "title", "email", "phone", "website", "notes")
             if spec.get(key)
         },
+        "contact_candidate": contact_candidate or {},
         "instructions": [
             "Keep only fields visible on the card unless an enrichment policy explicitly permits more.",
             "Put uncertain leftovers in notes with provenance.",

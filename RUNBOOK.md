@@ -192,3 +192,28 @@ Updated:
 Validation:
 
 - Planning-only change; run `git diff --check` before commit.
+
+## Turn 12 | 2026-06-13
+
+Started executing Plan 0004.
+
+Implemented:
+
+- Contact candidate normalization contract and `contact_candidate.json` artifacts.
+- Review approval now writes `reviewed_contact.json` with normalized operator corrections.
+- Review packets include the contact candidate.
+- Enrichment config/readiness with default-off behavior, public-web readiness, and paid API gating for Apollo-style providers using key names from `~/credentials/API-keys.env` without exposing values.
+- CLI/MCP enrichment readiness surface.
+- Local identity index and `duplicate_assessment.json` artifacts.
+- Strong duplicate jobs move to `needs_review` before sink routing.
+
+Validation:
+
+- `.venv/bin/python -m pytest -q` passed with 57 tests.
+- `PYTHONPATH=src pytest -q` passed with 54 tests and 3 skipped optional-extra tests.
+- `.venv/bin/bcw enrichment check --json` passed and reported default no-op readiness.
+- `.venv/bin/bcw enrichment check --mode api --json` reported blocked readiness because enrichment is disabled in the current user config.
+
+Operational note:
+
+- `git remote -v` returned no configured remotes, so the requested push cannot be completed until a remote is added.

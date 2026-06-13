@@ -1,6 +1,6 @@
 # Plan 0004 | Review, Normalization, Enrichment, Dedupe, And Sink Routing
 
-State: PLANNED
+State: IN_PROGRESS
 Product authority: `PRODUCT_SPEC.md`
 Predecessors:
 
@@ -53,6 +53,43 @@ Important gaps:
 - no cross-run duplicate index
 - no downstream Google Contacts/Odoo lookup before routing
 - no live write/readback adapters
+
+## Execution Log
+
+### Slice 0004-A | 2026-06-13 | Schema, Review Approval, Enrichment Gates, Local Dedupe
+
+Implemented:
+
+- `contact_candidate.json` artifact generation from current skill `spec.json`.
+- Observed vs normalized contact fields for `full_name`, `organization`, `title`, `email`, `phone`, `website`, and `notes`.
+- Basic email, phone, website, and person-name normalization.
+- Routing now uses normalized contact candidates instead of raw `spec.json`.
+- Review approval writes `reviewed_contact.json` with operator corrections and normalized values.
+- Review packets embed the contact candidate for operator/agent inspection.
+- Enrichment config and readiness checks with default `enabled = false`.
+- Explicit paid API gate for Apollo-style enrichment using key names from `~/credentials/API-keys.env` without printing secret values.
+- Public-web enrichment readiness surface without provider calls.
+- Local identity index under user data for duplicate assessment.
+- `duplicate_assessment.json` artifacts and duplicate events.
+- Strong duplicate jobs are moved to `needs_review` before sink routing.
+- CLI and MCP manifest exposure for enrichment readiness.
+
+Validation:
+
+- `.venv/bin/python -m pytest -q` passed with 57 tests.
+- `PYTHONPATH=src pytest -q` passed with 54 tests and 3 skipped optional-extra tests.
+- `.venv/bin/bcw enrichment check --json` reports no enrichment requested by default.
+- `.venv/bin/bcw enrichment check --mode api --json` blocks because enrichment is disabled in current user config.
+
+Remaining:
+
+- Review queue filtering and batch summary surfaces.
+- Actual enrichment request/result artifacts and fixture-backed provider adapters.
+- Public-web query/result scoring integration.
+- Apollo adapter integration behind the paid API gate.
+- Sink-backed duplicate lookup against Google Contacts and Odoo/Odollo.
+- Live GWS/Odollo dry-run apply plans and explicit one-job apply/readback pilots.
+- MCP executable/server dispatcher for the new tools.
 
 ## `/goal` Objective
 

@@ -66,6 +66,13 @@ def build_parser() -> argparse.ArgumentParser:
     sinks_check = sinks_sub.add_parser("check")
     sinks_check.add_argument("--json", action="store_true")
 
+    enrichment = sub.add_parser("enrichment")
+    enrichment_sub = enrichment.add_subparsers(dest="enrichment_command", required=True)
+    enrichment_check = enrichment_sub.add_parser("check")
+    enrichment_check.add_argument("--mode", choices=["none", "public_web", "api", "all"], default=None)
+    enrichment_check.add_argument("--allow-paid-enrichment", action="store_true")
+    enrichment_check.add_argument("--json", action="store_true")
+
     watch = sub.add_parser("watch")
     watch.add_argument("--once", action="store_true")
     watch.add_argument("--dry-run", action=argparse.BooleanOptionalAction, default=True)
@@ -154,6 +161,14 @@ def main(argv: list[str] | None = None) -> int:
         payload = service.sink_readiness()
         print(json.dumps(payload, indent=2) if args.json else payload)
         return 0
+
+    if args.command == "enrichment":
+        payload = service.enrichment_readiness(
+            mode=args.mode,
+            allow_paid_enrichment=args.allow_paid_enrichment,
+        )
+        print(json.dumps(payload, indent=2) if args.json else payload)
+        return 0 if all(check["status"] == "ready" for check in payload["checks"]) else 2
 
     if args.command == "watch":
         PollingWatcher(

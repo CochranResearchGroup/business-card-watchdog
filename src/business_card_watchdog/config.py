@@ -46,6 +46,24 @@ class PrefilterConfig:
 
 
 @dataclass(frozen=True)
+class EnrichmentProviderConfig:
+    enabled: bool = False
+    api_key_env: str = "APOLLO_API_KEY"
+    base_url: str = "https://api.apollo.io"
+
+
+@dataclass(frozen=True)
+class EnrichmentConfig:
+    enabled: bool = False
+    default_mode: str = "none"
+    allow_paid_api: bool = False
+    api_keys_env: Path = field(default_factory=lambda: Path("~/credentials/API-keys.env"))
+    public_web_enabled: bool = True
+    max_public_web_queries_per_contact: int = 8
+    apollo: EnrichmentProviderConfig = field(default_factory=EnrichmentProviderConfig)
+
+
+@dataclass(frozen=True)
 class AppConfig:
     config_path: Path
     skill_root: Path = DEFAULT_SKILL_ROOT
@@ -54,6 +72,7 @@ class AppConfig:
     path_aliases: dict[str, str] = field(default_factory=dict)
     watch: WatchConfig = field(default_factory=WatchConfig)
     prefilter: PrefilterConfig = field(default_factory=PrefilterConfig)
+    enrichment: EnrichmentConfig = field(default_factory=EnrichmentConfig)
     sink: SinkConfig = field(default_factory=SinkConfig)
     routing_rules: list[dict[str, Any]] = field(default_factory=list)
 
@@ -90,6 +109,10 @@ def load_config(path: Path | None = None) -> AppConfig:
     sink = raw.get("sink", {})
     watch = raw.get("watch", {})
     prefilter = raw.get("prefilter", {})
+    enrichment = raw.get("enrichment", {})
+    enrichment_providers = enrichment.get("providers", {})
+    public_web_provider = enrichment_providers.get("public_web", {})
+    apollo_provider = enrichment_providers.get("apollo", {})
     routing = raw.get("routing", {})
 
     return AppConfig(
@@ -108,6 +131,19 @@ def load_config(path: Path | None = None) -> AppConfig:
             enabled=bool(prefilter.get("enabled", True)),
             min_score=float(prefilter.get("min_score", 0.55)),
             process_uncertain=bool(prefilter.get("process_uncertain", False)),
+        ),
+        enrichment=EnrichmentConfig(
+            enabled=bool(enrichment.get("enabled", False)),
+            default_mode=str(enrichment.get("default_mode", "none")),
+            allow_paid_api=bool(enrichment.get("allow_paid_api", False)),
+            api_keys_env=Path(str(enrichment.get("api_keys_env", "~/credentials/API-keys.env"))).expanduser(),
+            public_web_enabled=bool(public_web_provider.get("enabled", True)),
+            max_public_web_queries_per_contact=int(public_web_provider.get("max_queries_per_contact", 8)),
+            apollo=EnrichmentProviderConfig(
+                enabled=bool(apollo_provider.get("enabled", False)),
+                api_key_env=str(apollo_provider.get("api_key_env", "APOLLO_API_KEY")),
+                base_url=str(apollo_provider.get("base_url", "https://api.apollo.io")),
+            ),
         ),
         sink=SinkConfig(
             google_contacts=bool(sink.get("google_contacts", False)),
@@ -141,6 +177,21 @@ status_recursive = false
 enabled = true
 min_score = 0.55
 process_uncertain = false
+
+[enrichment]
+enabled = false
+default_mode = "none"
+allow_paid_api = false
+api_keys_env = "~/credentials/API-keys.env"
+
+[enrichment.providers.public_web]
+enabled = true
+max_queries_per_contact = 8
+
+[enrichment.providers.apollo]
+enabled = false
+api_key_env = "APOLLO_API_KEY"
+base_url = "https://api.apollo.io"
 
 [sink]
 dry_run = true

@@ -5,6 +5,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from .config import AppConfig, ensure_runtime_dirs, resolve_input_path
+from .contact import build_contact_candidate, contact_candidate_to_spec
+from .dedupe import assess_duplicate, remember_identity
 from .ledger import RunLedger
 from .models import CardJob, utc_now
 from .preclassifier import assess_business_card_candidate
@@ -113,13 +115,27 @@ class BatchOrchestrator:
             return
 
         spec = load_contact_spec(result.spec_path)
-        assessment = assess_contact_spec(spec)
+        contact_candidate = build_contact_candidate(spec)
+        contact_candidate_path = result.artifact_dir / "contact_candidate.json"
+        contact_candidate_path.write_text(
+            json.dumps(contact_candidate, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        ledger.record_artifact(job_id=job.job_id, kind="contact_candidate", path=contact_candidate_path)
+        ledger.record_event(
+            "contact_candidate_normalized",
+            {"job": job.to_dict(), "contact_candidate_path": str(contact_candidate_path)},
+        )
+
+        contact_spec = contact_candidate_to_spec(contact_candidate)
+        assessment = assess_contact_spec(contact_spec)
         if assessment.needs_review:
             review_packet = write_review_packet(
                 packet_path=result.artifact_dir / "review_packet.json",
                 image_path=Path(job.image_path),
-                spec=spec,
+                spec=contact_spec,
                 assessment=assessment,
+                contact_candidate=contact_candidate,
             )
             ledger.record_artifact(job_id=job.job_id, kind="review_packet", path=review_packet)
             job.transition_to("needs_review")
@@ -130,10 +146,36 @@ class BatchOrchestrator:
             )
             return
 
-        decision = decide_sinks(self.config, spec)
+        duplicate = assess_duplicate(
+            self.config,
+            spec=contact_spec,
+            job_id=job.job_id,
+            run_id=ledger.run_dir.name,
+            image_path=job.image_path,
+        )
+        duplicate_path = result.artifact_dir / "duplicate_assessment.json"
+        duplicate_path.write_text(
+            json.dumps(duplicate.to_dict(), indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        ledger.record_artifact(job_id=job.job_id, kind="duplicate_assessment", path=duplicate_path)
+        ledger.record_event(
+            "duplicate_assessed",
+            {"job": job.to_dict(), "assessment": duplicate.to_dict()},
+        )
+        if duplicate.blocks_routing:
+            job.transition_to("needs_review")
+            ledger.record_job(job)
+            ledger.record_event(
+                "job_duplicate_needs_review",
+                {"job": job.to_dict(), "assessment": duplicate.to_dict()},
+            )
+            return
+
+        decision = decide_sinks(self.config, contact_spec)
         payloads = build_sink_payloads(
             sinks=decision.sinks,
-            spec=spec,
+            spec=contact_spec,
             dry_run=dry_run or decision.dry_run,
         )
         if payloads:
@@ -159,6 +201,13 @@ class BatchOrchestrator:
                     "payloads": [payload.to_dict() for payload in payloads],
                 },
             )
+        remember_identity(
+            self.config,
+            spec=contact_spec,
+            job_id=job.job_id,
+            run_id=ledger.run_dir.name,
+            image_path=job.image_path,
+        )
         ledger.record_job(job)
 
 
