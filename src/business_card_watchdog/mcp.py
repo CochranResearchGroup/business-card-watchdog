@@ -187,6 +187,19 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_sink_apply",
+                "description": "Attempt gated sink apply and write zero-write result/readback artifact while live adapters are blocked.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "job_id": {"type": "string"},
+                        "run_id": {"type": "string"},
+                        "apply": {"type": "boolean", "default": False},
+                    },
+                    "required": ["job_id", "run_id"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_enrichment_check",
                 "description": "Report enrichment readiness and paid-provider gates without making provider calls.",
                 "input_schema": {
@@ -317,6 +330,12 @@ def call_tool(
             decision=str(args["decision"]),
             reviewer=str(args.get("reviewer") or "operator"),
             reason=str(args.get("reason") or ""),
+        )
+    if tool_name == "business_card_watchdog_sink_apply":
+        return service.apply_sinks_for_job(
+            job_id=str(args["job_id"]),
+            run_id=str(args["run_id"]),
+            apply=bool(args.get("apply", False)),
         )
     if tool_name == "business_card_watchdog_enrichment_check":
         return service.enrichment_readiness(

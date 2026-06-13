@@ -319,6 +319,30 @@ Remaining:
 - Live sink-backed duplicate lookup execution remains follow-on work.
 - Live apply after approved decision remains follow-on work.
 
+### Slice 0004-L | 2026-06-13 | Gated Sink Apply Result Artifacts
+
+Implemented:
+
+- `sink_apply_result.json` artifacts for gated apply attempts.
+- CLI `bcw sinks apply` with explicit `--apply`.
+- API `POST /jobs/{job_id}/sink-apply`.
+- MCP manifest and dispatcher entry for `business_card_watchdog_sink_apply`.
+- Approved decisions are required before live apply can advance.
+- Live apply currently writes a blocked result artifact because live sink write/readback adapters are not implemented.
+- Apply result artifacts record `writes_attempted = 0`, `network_calls_made = 0`, and empty readback evidence.
+- `sink_apply_attempted` ledger events for agent-loop readback.
+- Agent next-action command now points to `sinks apply --apply` after an apply decision exists.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 52 tests.
+
+Remaining:
+
+- Live Google Contacts and Odoo/Odollo lookup/write/readback adapters remain blocked.
+- Live sink-backed duplicate lookup execution remains follow-on work.
+- Live apply result remains blocked until adapters are implemented and explicitly approved.
+
 ## `/goal` Objective
 
 Use this as the high-level `/goal` objective:

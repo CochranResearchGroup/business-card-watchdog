@@ -100,6 +100,11 @@ def build_parser() -> argparse.ArgumentParser:
     sinks_apply_preflight.add_argument("--run-id", required=True)
     sinks_apply_preflight.add_argument("--apply", action=argparse.BooleanOptionalAction, default=False)
     sinks_apply_preflight.add_argument("--json", action="store_true")
+    sinks_apply = sinks_sub.add_parser("apply")
+    sinks_apply.add_argument("job_id")
+    sinks_apply.add_argument("--run-id", required=True)
+    sinks_apply.add_argument("--apply", action=argparse.BooleanOptionalAction, default=False)
+    sinks_apply.add_argument("--json", action="store_true")
     sinks_apply_decision = sinks_sub.add_parser("apply-decision")
     sinks_apply_decision.add_argument("job_id")
     sinks_apply_decision.add_argument("--run-id", required=True)
@@ -240,13 +245,19 @@ def main(argv: list[str] | None = None) -> int:
                 run_id=args.run_id,
                 apply=args.apply,
             )
-        else:
+        elif args.sinks_command == "apply-decision":
             payload = service.decide_sink_apply(
                 job_id=args.job_id,
                 run_id=args.run_id,
                 decision=args.decision,
                 reviewer=args.reviewer,
                 reason=args.reason,
+            )
+        else:
+            payload = service.apply_sinks_for_job(
+                job_id=args.job_id,
+                run_id=args.run_id,
+                apply=args.apply,
             )
         print(json.dumps(payload, indent=2) if args.json else payload)
         return 0

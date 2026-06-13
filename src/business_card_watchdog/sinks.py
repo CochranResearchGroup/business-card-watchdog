@@ -14,6 +14,7 @@ SINK_PLAN_SCHEMA = "business-card-watchdog.sink-plan.v1"
 SINK_APPLY_PREFLIGHT_SCHEMA = "business-card-watchdog.sink-apply-preflight.v1"
 SINK_LOOKUP_PLAN_SCHEMA = "business-card-watchdog.sink-lookup-plan.v1"
 SINK_APPLY_DECISION_SCHEMA = "business-card-watchdog.sink-apply-decision.v1"
+SINK_APPLY_RESULT_SCHEMA = "business-card-watchdog.sink-apply-result.v1"
 
 
 FINGERPRINT_FIELDS = (
@@ -247,6 +248,53 @@ def build_sink_apply_decision(
                 "planned_action": action.get("planned_action"),
                 "serialization_key": action.get("serialization_key"),
                 "match_keys": action.get("match_keys", {}),
+            }
+            for action in list(preflight.get("actions") or [])
+        ],
+    }
+
+
+def build_sink_apply_result(
+    *,
+    preflight: dict[str, Any],
+    decision: dict[str, Any],
+    apply: bool,
+) -> dict[str, Any]:
+    decision_value = str(decision.get("decision") or "")
+    reasons: list[str] = []
+    if not apply:
+        state = "preview"
+        reasons.append("apply flag not set; no live write attempted")
+    elif decision_value != "approve":
+        state = "blocked"
+        reasons.append("sink apply requires an approved sink apply decision")
+    else:
+        state = "blocked"
+        reasons.append("live sink write/readback adapters are not implemented yet")
+    return {
+        "schema": SINK_APPLY_RESULT_SCHEMA,
+        "state": state,
+        "apply_requested": apply,
+        "decision": decision_value,
+        "writes_attempted": 0,
+        "network_calls_made": 0,
+        "reason": "; ".join(reasons),
+        "preflight_schema": preflight.get("schema"),
+        "preflight_state": preflight.get("state"),
+        "decision_schema": decision.get("schema"),
+        "decision_state": decision.get("state"),
+        "job_id": preflight.get("job_id") or decision.get("job_id"),
+        "run_id": preflight.get("run_id") or decision.get("run_id"),
+        "readback": [],
+        "actions": [
+            {
+                "sink": action.get("sink"),
+                "state": state,
+                "decision": decision_value,
+                "planned_action": action.get("planned_action"),
+                "serialization_key": action.get("serialization_key"),
+                "write_attempted": False,
+                "readback_attempted": False,
             }
             for action in list(preflight.get("actions") or [])
         ],

@@ -265,6 +265,35 @@ def test_service_decide_sink_apply_noop_cancels_job(tmp_path: Path) -> None:
     assert result["job"]["error"] == "sink apply resolved as no-op"
 
 
+def test_service_apply_sinks_for_job_writes_blocked_zero_write_result(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+    service.preflight_sink_apply(job_id=job_id, run_id=run_id)
+    service.decide_sink_apply(job_id=job_id, run_id=run_id, decision="approve", reviewer="tester")
+
+    result = service.apply_sinks_for_job(job_id=job_id, run_id=run_id, apply=True)
+    job = service.get_job(job_id, run_id=run_id)
+    events = [
+        json.loads(line)
+        for line in (config.runs_dir / run_id / "events.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+
+    assert result["result"]["schema"] == "business-card-watchdog.sink-apply-result.v1"
+    assert result["result"]["state"] == "blocked"
+    assert result["result"]["writes_attempted"] == 0
+    assert result["result"]["network_calls_made"] == 0
+    assert result["result"]["readback"] == []
+    assert any(artifact["kind"] == "sink_apply_result" for artifact in job["artifacts"])
+    assert any(event["event_type"] == "sink_apply_attempted" for event in events)
+
+
 def test_service_next_actions_recommends_sink_lookup_for_ready_job(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, job_id = make_recorded_run(config)
@@ -348,6 +377,32 @@ def test_service_next_actions_recommends_apply_decision_after_preflight(tmp_path
 
     assert payload["actions"][0]["action"] == "decide_sink_apply"
     assert payload["actions"][0]["command"] == "sinks apply-decision"
+
+
+def test_service_next_actions_recommends_live_apply_after_decision(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+        field_corrections={"full_name": "Reviewed Fixture", "email": "fixture@example.test"},
+    )
+    service.plan_sink_lookup_for_job(job_id=job_id, run_id=run_id)
+    service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+    service.preflight_sink_apply(job_id=job_id, run_id=run_id)
+    service.decide_sink_apply(job_id=job_id, run_id=run_id, decision="approve", reviewer="tester")
+
+    payload = service.next_actions(run_id=run_id)
+
+    assert payload["actions"][0]["action"] == "await_apply_approval"
+    assert payload["actions"][0]["command"] == "sinks apply --apply"
 
 
 def test_service_submit_review_rejects_unknown_fields(tmp_path: Path) -> None:

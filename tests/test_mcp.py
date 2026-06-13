@@ -22,6 +22,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_sink_lookup_plan" in names
     assert "business_card_watchdog_sink_apply_preflight" in names
     assert "business_card_watchdog_sink_apply_decision" in names
+    assert "business_card_watchdog_sink_apply" in names
     assert "business_card_watchdog_enrichment_check" in names
     assert "business_card_watchdog_enrichment_request" in names
     assert "business_card_watchdog_doctor" in names
@@ -75,6 +76,11 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
         {"job_id": job_id, "run_id": run_id, "decision": "approve", "reviewer": "mcp-test"},
         config=config,
     )
+    apply_result = call_tool(
+        "business_card_watchdog_sink_apply",
+        {"job_id": job_id, "run_id": run_id, "apply": True},
+        config=config,
+    )
     merge = call_tool(
         "business_card_watchdog_job_review",
         {
@@ -104,6 +110,8 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert preflight["preflight"]["writes_attempted"] == 0
     assert apply_decision["decision"]["state"] == "approved_for_apply"
     assert apply_decision["decision"]["network_calls_made"] == 0
+    assert apply_result["result"]["state"] == "blocked"
+    assert apply_result["result"]["writes_attempted"] == 0
     assert merge["submission"]["approved_enrichment_fields"] == ["notes"]
     assert duplicate["submission"]["duplicate_resolution"]["decision"] == "create_new"
 

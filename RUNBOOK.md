@@ -385,3 +385,21 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 49 tests.
+
+## Turn 23 | 2026-06-13
+
+Continued Plan 0004 execution with gated zero-write sink apply results.
+
+Implemented:
+
+- Added `sink_apply_result.json` artifacts for gated apply attempts.
+- Added CLI `bcw sinks apply --apply`.
+- Added API and MCP dispatcher surfaces for sink apply attempts.
+- Apply requires the existing preflight/decision artifacts and remains blocked until live adapters exist.
+- Apply result artifacts record `writes_attempted = 0`, `network_calls_made = 0`, and empty readback evidence.
+- Added `sink_apply_attempted` events for agent-loop readback.
+- Agent next-action command now points to `sinks apply --apply` after an apply decision exists.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 52 tests.

@@ -20,6 +20,7 @@ from .routing import decide_sinks
 from .sinks import (
     build_sink_apply_decision,
     build_sink_apply_preflight,
+    build_sink_apply_result,
     build_sink_lookup_plan,
     build_sink_plan,
     check_sink_readiness,
@@ -586,6 +587,44 @@ class BusinessCardService:
             "decision": decision_payload,
         }
 
+    def apply_sinks_for_job(self, *, job_id: str, run_id: str, apply: bool = False) -> dict[str, Any]:
+        job = self.get_job(job_id, run_id=run_id)
+        artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
+        preflight_path = artifact_dir / "sink_apply_preflight.json"
+        decision_path = artifact_dir / "sink_apply_decision.json"
+        if preflight_path.exists():
+            preflight = json.loads(preflight_path.read_text(encoding="utf-8"))
+        else:
+            preflight = self.preflight_sink_apply(job_id=job_id, run_id=run_id)["preflight"]
+        if decision_path.exists():
+            decision = json.loads(decision_path.read_text(encoding="utf-8"))
+        else:
+            decision = {
+                "schema": None,
+                "state": "missing",
+                "decision": "",
+                "job_id": job_id,
+                "run_id": run_id,
+            }
+        result = build_sink_apply_result(preflight=preflight, decision=decision, apply=apply)
+        result_path = artifact_dir / "sink_apply_result.json"
+        result_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        ledger.record_artifact(job_id=job_id, kind="sink_apply_result", path=result_path)
+        ledger.record_event(
+            "sink_apply_attempted",
+            {
+                "job_id": job_id,
+                "run_id": run_id,
+                "apply_requested": apply,
+                "state": result["state"],
+                "result_path": str(result_path),
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        return {"result_path": str(result_path), "result": result}
+
     def doctor(self) -> dict[str, Any]:
         status = self.status()
         checks = [
@@ -676,7 +715,7 @@ class BusinessCardService:
             return {
                 "action": "await_apply_approval",
                 "reason": "sink apply decision exists; live apply remains explicit and gated",
-                "command": "sinks apply-preflight --apply",
+                "command": "sinks apply --apply",
             }
         if state == "failed":
             return {
