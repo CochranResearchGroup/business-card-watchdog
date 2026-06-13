@@ -1,5 +1,6 @@
 from business_card_watchdog.sinks import (
     build_sink_apply_preflight,
+    build_sink_lookup_plan,
     build_sink_plan,
     build_sink_payloads,
     canonical_contact_fingerprint,
@@ -67,6 +68,23 @@ def test_build_sink_plan_is_dry_run_and_action_oriented() -> None:
     assert plan["state"] == "dry_run"
     assert [action["sink"] for action in plan["actions"]] == ["google_contacts", "odoo"]
     assert all(action["action"] == "plan_upsert" for action in plan["actions"])
+
+
+def test_build_sink_lookup_plan_is_zero_network_and_keyed() -> None:
+    plan = build_sink_lookup_plan(
+        sinks=["google_contacts", "odoo"],
+        spec={"full_name": "Ada Lovelace", "email": "ada@example.test", "phone": "+15550101234"},
+        dry_run=True,
+        reason="matched email_domain=*",
+    )
+
+    assert plan["schema"] == "business-card-watchdog.sink-lookup-plan.v1"
+    assert plan["state"] == "dry_run"
+    assert plan["network_calls_made"] == 0
+    assert {lookup["sink"] for lookup in plan["lookups"]} == {"google_contacts", "odoo"}
+    assert all(lookup["readiness"]["status"] == "ready" for lookup in plan["lookups"])
+    assert plan["lookups"][0]["match_keys"]["email"] == "ada@example.test"
+    assert any(query["field"] == "email" for query in plan["lookups"][0]["queries"])
 
 
 def test_build_sink_apply_preflight_is_zero_write_and_explicitly_gated() -> None:

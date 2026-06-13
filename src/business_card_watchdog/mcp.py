@@ -146,6 +146,19 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_sink_lookup_plan",
+                "description": "Create a zero-network downstream sink lookup plan artifact for one job.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "job_id": {"type": "string"},
+                        "run_id": {"type": "string"},
+                        "dry_run": {"type": "boolean", "default": True},
+                    },
+                    "required": ["job_id", "run_id"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_sink_apply_preflight",
                 "description": "Create a zero-write sink apply preflight artifact for one planned job.",
                 "input_schema": {
@@ -266,6 +279,12 @@ def call_tool(
         return service.sink_readiness()
     if tool_name == "business_card_watchdog_sink_plan":
         return service.plan_sinks_for_job(
+            job_id=str(args["job_id"]),
+            run_id=str(args["run_id"]),
+            dry_run=bool(args.get("dry_run", True)),
+        )
+    if tool_name == "business_card_watchdog_sink_lookup_plan":
+        return service.plan_sink_lookup_for_job(
             job_id=str(args["job_id"]),
             run_id=str(args["run_id"]),
             dry_run=bool(args.get("dry_run", True)),

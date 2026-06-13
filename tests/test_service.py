@@ -162,6 +162,33 @@ def test_service_plan_sinks_for_job_writes_dry_run_plan(tmp_path: Path) -> None:
     assert any(artifact["kind"] == "sink_plan" for artifact in job["artifacts"])
 
 
+def test_service_plan_sink_lookup_for_job_writes_zero_network_plan(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, odoo=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts", "odoo"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+    candidate = build_contact_candidate({"full_name": "Ada Lovelace", "email": "ada@example.test"})
+    (artifact_dir / "contact_candidate.json").write_text(json.dumps(candidate, indent=2), encoding="utf-8")
+
+    result = BusinessCardService(config).plan_sink_lookup_for_job(job_id=job_id, run_id=run_id)
+    job = BusinessCardService(config).get_job(job_id, run_id=run_id)
+    events = [
+        json.loads(line)
+        for line in (config.runs_dir / run_id / "events.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+
+    assert result["lookup_plan"]["schema"] == "business-card-watchdog.sink-lookup-plan.v1"
+    assert result["lookup_plan"]["network_calls_made"] == 0
+    assert [lookup["sink"] for lookup in result["lookup_plan"]["lookups"]] == ["google_contacts", "odoo"]
+    assert result["lookup_plan"]["lookups"][0]["match_keys"]["email"] == "ada@example.test"
+    assert any(artifact["kind"] == "sink_lookup_plan" for artifact in job["artifacts"])
+    assert any(event["event_type"] == "sink_lookup_plan_created" for event in events)
+
+
 def test_service_preflight_sink_apply_writes_zero_write_artifact(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",
@@ -190,7 +217,7 @@ def test_service_preflight_sink_apply_writes_zero_write_artifact(tmp_path: Path)
     assert any(event["event_type"] == "sink_apply_preflight_created" for event in events)
 
 
-def test_service_next_actions_recommends_sink_plan_for_ready_job(tmp_path: Path) -> None:
+def test_service_next_actions_recommends_sink_lookup_for_ready_job(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, job_id = make_recorded_run(config)
     service = BusinessCardService(config)
@@ -201,6 +228,25 @@ def test_service_next_actions_recommends_sink_plan_for_ready_job(tmp_path: Path)
         action="approve_for_routing",
         field_corrections={"full_name": "Reviewed Fixture", "email": "fixture@example.test"},
     )
+
+    payload = service.next_actions(run_id=run_id)
+
+    assert payload["actions"][0]["action"] == "plan_sink_lookup"
+    assert payload["actions"][0]["command"] == "sinks lookup-plan"
+
+
+def test_service_next_actions_recommends_sink_plan_after_lookup_plan(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+        field_corrections={"full_name": "Reviewed Fixture", "email": "fixture@example.test"},
+    )
+    service.plan_sink_lookup_for_job(job_id=job_id, run_id=run_id)
 
     payload = service.next_actions(run_id=run_id)
 
@@ -222,6 +268,7 @@ def test_service_next_actions_recommends_apply_preflight_after_sink_plan(tmp_pat
         action="approve_for_routing",
         field_corrections={"full_name": "Reviewed Fixture", "email": "fixture@example.test"},
     )
+    service.plan_sink_lookup_for_job(job_id=job_id, run_id=run_id)
     service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
 
     payload = service.next_actions(run_id=run_id)

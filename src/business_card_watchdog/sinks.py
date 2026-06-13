@@ -12,6 +12,7 @@ SinkName = Literal["google_contacts", "odoo"]
 ReadinessStatus = Literal["ready", "blocked"]
 SINK_PLAN_SCHEMA = "business-card-watchdog.sink-plan.v1"
 SINK_APPLY_PREFLIGHT_SCHEMA = "business-card-watchdog.sink-apply-preflight.v1"
+SINK_LOOKUP_PLAN_SCHEMA = "business-card-watchdog.sink-lookup-plan.v1"
 
 
 FINGERPRINT_FIELDS = (
@@ -129,6 +130,37 @@ def build_sink_plan(
     }
 
 
+def build_sink_lookup_plan(
+    *,
+    sinks: list[str],
+    spec: dict[str, Any],
+    dry_run: bool,
+    reason: str,
+) -> dict[str, Any]:
+    fingerprint = canonical_contact_fingerprint(spec)
+    match_keys = _match_keys(spec, fingerprint)
+    lookups = [
+        {
+            "sink": sink,
+            "state": "dry_run" if dry_run else "blocked",
+            "readiness": check_sink_lookup_readiness(sink, dry_run=dry_run).to_dict(),
+            "match_keys": match_keys,
+            "queries": _lookup_queries_for_sink(sink, match_keys),
+        }
+        for sink in sinks
+    ]
+    blocked = [lookup for lookup in lookups if lookup["readiness"]["status"] != "ready"]
+    return {
+        "schema": SINK_LOOKUP_PLAN_SCHEMA,
+        "state": "dry_run" if dry_run else ("blocked" if blocked else "ready"),
+        "reason": reason,
+        "dry_run": dry_run,
+        "network_calls_made": 0,
+        "fingerprint": fingerprint,
+        "lookups": lookups,
+    }
+
+
 def build_sink_apply_preflight(
     *,
     plan: dict[str, Any],
@@ -212,6 +244,34 @@ def check_sink_readiness(sink: str, *, dry_run: bool) -> SinkReadiness:
     return SinkReadiness(sink=sink, status="blocked", reason=f"unknown sink: {sink}")
 
 
+def check_sink_lookup_readiness(sink: str, *, dry_run: bool) -> SinkReadiness:
+    if dry_run:
+        return SinkReadiness(
+            sink=sink,
+            status="ready",
+            reason="dry-run lookup planning does not call downstream sinks",
+        )
+    if sink == "google_contacts":
+        if shutil.which("gws") is None:
+            return SinkReadiness(
+                sink=sink,
+                status="blocked",
+                reason="gws CLI not found; cannot perform Google Contacts lookup",
+            )
+        return SinkReadiness(
+            sink=sink,
+            status="blocked",
+            reason="live Google Contacts lookup adapter is not implemented yet",
+        )
+    if sink == "odoo":
+        return SinkReadiness(
+            sink=sink,
+            status="blocked",
+            reason="live Odoo/Odollo lookup adapter is not implemented yet",
+        )
+    return SinkReadiness(sink=sink, status="blocked", reason=f"unknown sink: {sink}")
+
+
 def contact_serialization_key(spec: dict[str, Any], fingerprint: str | None = None) -> str:
     fingerprint = fingerprint or canonical_contact_fingerprint(spec)
     for field in ("email", "phone", "full_name"):
@@ -251,6 +311,29 @@ def _match_keys(spec: dict[str, Any], fingerprint: str) -> dict[str, str]:
         if value:
             keys[field] = value
     return keys
+
+
+def _lookup_queries_for_sink(sink: str, match_keys: dict[str, str]) -> list[dict[str, Any]]:
+    if sink == "odoo":
+        return [
+            {
+                "model": "res.partner",
+                "operation": "search_read",
+                "field": field,
+                "value": value,
+            }
+            for field, value in match_keys.items()
+            if field in {"email", "phone", "full_name", "fingerprint"}
+        ]
+    return [
+        {
+            "operation": "lookup_contact",
+            "field": field,
+            "value": value,
+        }
+        for field, value in match_keys.items()
+        if field in {"email", "phone", "full_name", "fingerprint"}
+    ]
 
 
 def _normalize_value(value: Any) -> str:

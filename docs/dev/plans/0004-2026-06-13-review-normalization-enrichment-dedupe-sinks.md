@@ -267,7 +267,31 @@ Validation:
 Remaining:
 
 - Live Google Contacts and Odoo/Odollo write/readback adapters remain blocked.
-- Sink-backed duplicate lookup remains follow-on work.
+- Live sink-backed duplicate lookup execution remains follow-on work.
+- Automatic apply/reject/noop sink apply actions remain follow-on work.
+
+### Slice 0004-J | 2026-06-13 | Sink Lookup Plan Artifacts
+
+Implemented:
+
+- `sink_lookup_plan.json` artifacts for selected jobs.
+- Zero-network downstream lookup planning with `network_calls_made = 0`.
+- Google Contacts and Odoo lookup query descriptors built from fingerprint, email, phone, and name keys.
+- Sink lookup readiness that remains dry-run ready and blocks live lookup execution until adapters exist.
+- Service `plan_sink_lookup_for_job` method.
+- CLI `bcw sinks lookup-plan`.
+- API `POST /jobs/{job_id}/sink-lookup-plan`.
+- MCP manifest and dispatcher entry for `business_card_watchdog_sink_lookup_plan`.
+- Agent next-action ordering now recommends lookup planning before sink payload planning.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 44 tests.
+
+Remaining:
+
+- Live Google Contacts and Odoo/Odollo lookup/write/readback adapters remain blocked.
+- Live sink-backed duplicate lookup execution remains follow-on work.
 - Automatic apply/reject/noop sink apply actions remain follow-on work.
 
 ## `/goal` Objective

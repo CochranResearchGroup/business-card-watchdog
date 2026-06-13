@@ -351,3 +351,19 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_review.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 38 tests.
+
+## Turn 21 | 2026-06-13
+
+Continued Plan 0004 execution with zero-network sink lookup planning.
+
+Implemented:
+
+- Added `sink_lookup_plan.json` artifacts for selected jobs.
+- Added dry-run Google Contacts and Odoo lookup query descriptors from fingerprint, email, phone, and name keys.
+- Added lookup readiness that remains zero-network and blocks live lookup execution until adapters exist.
+- Added service, CLI, API, and MCP dispatcher surfaces for sink lookup planning.
+- Agent next-action ordering now recommends `sinks lookup-plan` before `sinks plan`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 44 tests.

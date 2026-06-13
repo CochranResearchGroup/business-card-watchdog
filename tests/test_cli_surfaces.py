@@ -236,6 +236,25 @@ def test_cli_sinks_plan_writes_artifact(tmp_path: Path, capsys) -> None:
     assert payload["plan"]["state"] == "dry_run"
 
 
+def test_cli_sinks_lookup_plan_writes_zero_network_artifact(tmp_path: Path, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    config_path.write_text(
+        f'data_dir = "{data_dir}"\n'
+        "[watch]\ninputs = []\n"
+        "[sink]\ndry_run = true\ngoogle_contacts = true\n"
+        "[routing]\nrules = [{ match = \"email_domain\", value = \"*\", sinks = [\"google_contacts\"] }]\n",
+        encoding="utf-8",
+    )
+    run_id, job_id = make_recorded_run(AppConfig(config_path=config_path, data_dir=data_dir))
+
+    assert main(["--config", str(config_path), "sinks", "lookup-plan", job_id, "--run-id", run_id, "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["lookup_plan"]["schema"] == "business-card-watchdog.sink-lookup-plan.v1"
+    assert payload["lookup_plan"]["network_calls_made"] == 0
+    assert payload["lookup_plan"]["lookups"][0]["sink"] == "google_contacts"
+
+
 def test_cli_sinks_apply_preflight_is_zero_write(tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.toml"
     data_dir = tmp_path / "data"

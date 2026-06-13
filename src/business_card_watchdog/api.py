@@ -116,6 +116,10 @@ def create_app(config_path: Path | None = None):
     def create_sink_plan(job_id: str, run_id: str, dry_run: bool = True) -> dict[str, object]:
         return service().plan_sinks_for_job(job_id=job_id, run_id=run_id, dry_run=dry_run)
 
+    @app.post("/jobs/{job_id}/sink-lookup-plan")
+    def create_sink_lookup_plan(job_id: str, run_id: str, dry_run: bool = True) -> dict[str, object]:
+        return service().plan_sink_lookup_for_job(job_id=job_id, run_id=run_id, dry_run=dry_run)
+
     @app.post("/jobs/{job_id}/sink-apply-preflight")
     def create_sink_apply_preflight(
         job_id: str,

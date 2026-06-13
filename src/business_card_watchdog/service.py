@@ -17,7 +17,7 @@ from .models import CardJob
 from .orchestrator import BatchOrchestrator
 from .review import build_review_submission, write_review_submission
 from .routing import decide_sinks
-from .sinks import build_sink_apply_preflight, build_sink_plan, check_sink_readiness
+from .sinks import build_sink_apply_preflight, build_sink_lookup_plan, build_sink_plan, check_sink_readiness
 from .skill_adapter import BusinessCardSkillAdapter
 from .watcher import PollingWatcher
 
@@ -474,6 +474,37 @@ class BusinessCardService:
         )
         return {"plan_path": str(plan_path), "plan": plan}
 
+    def plan_sink_lookup_for_job(self, *, job_id: str, run_id: str, dry_run: bool = True) -> dict[str, Any]:
+        job = self.get_job(job_id, run_id=run_id)
+        artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
+        spec = self._contact_spec_for_artifact_dir(artifact_dir)
+        decision = decide_sinks(self.config, spec)
+        plan = build_sink_lookup_plan(
+            sinks=decision.sinks,
+            spec=spec,
+            dry_run=dry_run or decision.dry_run,
+            reason=decision.reason,
+        )
+        plan["job_id"] = job_id
+        plan["run_id"] = run_id
+        plan["decision"] = decision.to_dict()
+        lookup_plan_path = artifact_dir / "sink_lookup_plan.json"
+        lookup_plan_path.write_text(json.dumps(plan, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        ledger.record_artifact(job_id=job_id, kind="sink_lookup_plan", path=lookup_plan_path)
+        ledger.record_event(
+            "sink_lookup_plan_created",
+            {
+                "job_id": job_id,
+                "run_id": run_id,
+                "lookup_plan_path": str(lookup_plan_path),
+                "state": plan["state"],
+                "sinks": decision.sinks,
+                "network_calls_made": 0,
+            },
+        )
+        return {"lookup_plan_path": str(lookup_plan_path), "lookup_plan": plan}
+
     def preflight_sink_apply(self, *, job_id: str, run_id: str, apply: bool = False) -> dict[str, Any]:
         job = self.get_job(job_id, run_id=run_id)
         artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
@@ -564,6 +595,12 @@ class BusinessCardService:
                 "command": "jobs review",
             }
         if state == "ready_to_route":
+            if "sink_lookup_plan" not in artifact_kinds:
+                return {
+                    "action": "plan_sink_lookup",
+                    "reason": "reviewed/normalized job is ready for downstream duplicate lookup planning",
+                    "command": "sinks lookup-plan",
+                }
             if "sink_plan" not in artifact_kinds:
                 return {
                     "action": "plan_sinks",

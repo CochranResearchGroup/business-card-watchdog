@@ -85,6 +85,11 @@ def build_parser() -> argparse.ArgumentParser:
     sinks_sub = sinks.add_subparsers(dest="sinks_command", required=True)
     sinks_check = sinks_sub.add_parser("check")
     sinks_check.add_argument("--json", action="store_true")
+    sinks_lookup_plan = sinks_sub.add_parser("lookup-plan")
+    sinks_lookup_plan.add_argument("job_id")
+    sinks_lookup_plan.add_argument("--run-id", required=True)
+    sinks_lookup_plan.add_argument("--dry-run", action=argparse.BooleanOptionalAction, default=True)
+    sinks_lookup_plan.add_argument("--json", action="store_true")
     sinks_plan = sinks_sub.add_parser("plan")
     sinks_plan.add_argument("job_id")
     sinks_plan.add_argument("--run-id", required=True)
@@ -210,6 +215,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "sinks":
         if args.sinks_command == "check":
             payload = service.sink_readiness()
+        elif args.sinks_command == "lookup-plan":
+            payload = service.plan_sink_lookup_for_job(
+                job_id=args.job_id,
+                run_id=args.run_id,
+                dry_run=args.dry_run,
+            )
         elif args.sinks_command == "plan":
             payload = service.plan_sinks_for_job(
                 job_id=args.job_id,
