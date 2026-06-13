@@ -1444,3 +1444,19 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_apply_review_workbook_csv_uses_decision_template_json tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 4 tests.
+
+## Turn 78 | 2026-06-13
+
+Continued Plan 0004 execution with editable review workbook decision columns.
+
+Implemented:
+
+- Added workbook columns for `review_action`, corrected contact fields, `review_notes`, and `skip_import`.
+- CSV workbook import now converts edited contact columns into shared `field_corrections`.
+- Kept `decision_template_json` as the advanced fallback.
+- Service, CLI, API, and MCP tests now import decisions from editable workbook columns.
+- No new external calls or write behavior was added.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_run_summary_and_review_queue tests/test_service.py::test_service_apply_review_workbook_csv_uses_decision_template_json tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.

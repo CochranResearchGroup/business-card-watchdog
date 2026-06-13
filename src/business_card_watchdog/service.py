@@ -2843,6 +2843,15 @@ class BusinessCardService:
             "artifact_kinds",
             "review_command",
             "decision_action",
+            "review_action",
+            "corrected_full_name",
+            "corrected_organization",
+            "corrected_title",
+            "corrected_email",
+            "corrected_phone",
+            "corrected_website",
+            "review_notes",
+            "skip_import",
             "decision_template_json",
         ]
         writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore", lineterminator="\n")
@@ -2875,8 +2884,26 @@ class BusinessCardService:
                 decision["run_id"] = str(row["run_id"])
             if row.get("decision_action"):
                 decision["action"] = str(row["decision_action"])
+            if row.get("review_action"):
+                decision["action"] = str(row["review_action"])
             if row.get("notes"):
                 decision["notes"] = str(row["notes"])
+            if row.get("review_notes"):
+                decision["notes"] = str(row["review_notes"])
+            field_corrections = dict(decision.get("field_corrections") or {})
+            for column, field in [
+                ("corrected_full_name", "full_name"),
+                ("corrected_organization", "organization"),
+                ("corrected_title", "title"),
+                ("corrected_email", "email"),
+                ("corrected_phone", "phone"),
+                ("corrected_website", "website"),
+            ]:
+                value = str(row.get(column) or "").strip()
+                if value:
+                    field_corrections[field] = value
+            if field_corrections:
+                decision["field_corrections"] = field_corrections
             for column, key in [
                 ("field_corrections_json", "field_corrections"),
                 ("crop_selection_json", "crop_selection"),
@@ -2929,6 +2956,15 @@ class BusinessCardService:
             "artifact_kinds": ";".join(str(kind) for kind in entry.get("artifact_kinds") or []),
             "review_command": (entry.get("commands") or {}).get("review"),
             "decision_action": decision_template.get("action"),
+            "review_action": decision_template.get("action"),
+            "corrected_full_name": self._review_contact_value(contact, "full_name"),
+            "corrected_organization": self._review_contact_value(contact, "organization"),
+            "corrected_title": self._review_contact_value(contact, "title"),
+            "corrected_email": self._review_contact_value(contact, "email"),
+            "corrected_phone": self._review_contact_value(contact, "phone"),
+            "corrected_website": self._review_contact_value(contact, "website"),
+            "review_notes": "",
+            "skip_import": "",
             "decision_template_json": json.dumps(decision_template, sort_keys=True),
         }
 

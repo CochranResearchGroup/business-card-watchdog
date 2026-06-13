@@ -105,6 +105,8 @@ def test_cli_runs_and_jobs_use_recorded_runtime_state(
     rows = list(csv.DictReader(StringIO(workbook["csv"])))
     assert rows[0]["job_id"] == job_id
     assert rows[0]["next_action"] == "review_contact"
+    assert rows[0]["review_action"] == "approve_for_routing"
+    assert "corrected_email" in rows[0]
 
     assert main(["--config", str(config_path), "reviews", "workbook", "--run-id", run_id, "--no-write"]) == 0
     csv_text = capsys.readouterr().out
@@ -112,14 +114,8 @@ def test_cli_runs_and_jobs_use_recorded_runtime_state(
     assert job_id in csv_text
 
     workbook_rows = list(csv.DictReader(StringIO(workbook["csv"])))
-    workbook_rows[0]["decision_template_json"] = json.dumps(
-        {
-            "job_id": job_id,
-            "action": "approve_for_routing",
-            "field_corrections": {"full_name": "CLI Workbook"},
-        },
-        sort_keys=True,
-    )
+    workbook_rows[0]["review_action"] = "approve_for_routing"
+    workbook_rows[0]["corrected_full_name"] = "CLI Workbook"
     workbook_import_path = tmp_path / "review-workbook-import.csv"
     with workbook_import_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(workbook_rows[0]))

@@ -141,6 +141,9 @@ def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
     assert rows[0]["state"] == "needs_review"
     assert rows[0]["next_action"] == "review_contact"
     assert rows[0]["decision_action"] == "approve_for_routing"
+    assert rows[0]["review_action"] == "approve_for_routing"
+    assert "corrected_full_name" in rows[0]
+    assert "corrected_email" in rows[0]
     assert "contact_spec" in rows[0]["artifact_kinds"]
     assert workbook_path.exists()
     assert any(artifact["kind"] == "review_workbook" for artifact in service.list_artifacts(run_id))
@@ -439,15 +442,10 @@ def test_service_apply_review_workbook_csv_uses_decision_template_json(tmp_path:
     service = BusinessCardService(config)
     workbook = service.review_workbook(run_id=run_id)
     rows = list(csv.DictReader(StringIO(workbook["csv"])))
-    rows[0]["decision_template_json"] = json.dumps(
-        {
-            "job_id": job_id,
-            "action": "approve_for_routing",
-            "field_corrections": {"full_name": "Workbook Fixture", "email": "workbook@example.test"},
-            "notes": "csv import",
-        },
-        sort_keys=True,
-    )
+    rows[0]["review_action"] = "approve_for_routing"
+    rows[0]["corrected_full_name"] = "Workbook Fixture"
+    rows[0]["corrected_email"] = "workbook@example.test"
+    rows[0]["review_notes"] = "csv import"
     output = StringIO()
     writer = csv.DictWriter(output, fieldnames=list(rows[0]))
     writer.writeheader()
@@ -464,6 +462,12 @@ def test_service_apply_review_workbook_csv_uses_decision_template_json(tmp_path:
     assert payload["import"]["source_schema"] == "business-card-watchdog.review-workbook.v1"
     assert payload["import"]["applied_count"] == 1
     assert payload["results"][0]["job_state"] == "ready_to_route"
+    reviewed = json.loads(
+        (config.runs_dir / run_id / "artifacts" / job_id / "reviewed_contact.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert reviewed["flat"]["email"] == "workbook@example.test"
     assert job["state"] == "ready_to_route"
 
 

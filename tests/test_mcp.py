@@ -244,14 +244,9 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     workbook_rows = list(csv.DictReader(StringIO(review_workbook["csv"])))
     assert workbook_rows[0]["job_id"] == job_id
     assert workbook_rows[0]["next_action"] == "review_contact"
-    workbook_rows[0]["decision_template_json"] = json.dumps(
-        {
-            "job_id": job_id,
-            "action": "approve_for_routing",
-            "field_corrections": {"full_name": "MCP Workbook"},
-        },
-        sort_keys=True,
-    )
+    assert workbook_rows[0]["review_action"] == "approve_for_routing"
+    workbook_rows[0]["review_action"] = "approve_for_routing"
+    workbook_rows[0]["corrected_full_name"] = "MCP Workbook"
     workbook_csv = StringIO()
     workbook_writer = csv.DictWriter(workbook_csv, fieldnames=list(workbook_rows[0]))
     workbook_writer.writeheader()

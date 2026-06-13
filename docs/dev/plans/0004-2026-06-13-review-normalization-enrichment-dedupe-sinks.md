@@ -2107,3 +2107,21 @@ Validation:
 Remaining:
 
 - CSV import intentionally reuses existing decision JSON in each row; richer spreadsheet editing helpers remain follow-on work.
+
+### Slice 0004-BM | 2026-06-13 | Editable Workbook Decision Columns
+
+Implemented:
+
+- Added human-editable workbook columns for `review_action`, corrected contact fields, `review_notes`, and `skip_import`.
+- CSV imports now translate edited contact columns into the existing `field_corrections` review decision object.
+- `decision_template_json` remains supported as the fallback/advanced path, but routine approve-and-correct review can be done without editing JSON in a spreadsheet cell.
+- Added service, CLI, API, and MCP tests that import decisions from editable workbook columns.
+- Kept the import path on the shared `submit_review` behavior, preserving validation, artifacts, ledger events, route refresh, and zero-network/zero-write boundaries.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_run_summary_and_review_queue tests/test_service.py::test_service_apply_review_workbook_csv_uses_decision_template_json tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+
+Remaining:
+
+- More specialized workbook helpers for duplicate resolution and enrichment approval can be added later without changing the shared review-decision importer.
