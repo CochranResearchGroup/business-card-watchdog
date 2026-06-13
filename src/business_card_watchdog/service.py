@@ -29,7 +29,7 @@ from .models import CardJob, utc_now
 from .orchestrator import BatchOrchestrator
 from .review import build_review_submission, write_review_submission
 from .routing import decide_sinks
-from .sink_apply_adapters import execute_sink_readback_adapter
+from .sink_apply_adapters import execute_sink_readback_adapter, execute_sink_write_adapter
 from .sink_lookup_adapters import execute_sink_lookup_adapter
 from .sinks import (
     SinkAdapterPhase,
@@ -70,6 +70,7 @@ _ROUTE_ARTIFACT_FILES = {
     "sink_apply_preflight": "sink_apply_preflight.json",
     "sink_apply_decision": "sink_apply_decision.json",
     "sink_apply_pilot_readiness": "sink_apply_pilot_readiness.json",
+    "sink_write_pilot": "sink_write_pilot.json",
     "sink_apply_result": "sink_apply_result.json",
     "sink_adapter_request_readback": "sink_adapter_request_readback.json",
     "sink_readback_pilot": "sink_readback_pilot.json",
@@ -137,6 +138,12 @@ _ROUTE_REFRESH_STEPS = [
         "reason": "review changed routing-relevant contact data; refresh live apply pilot readiness",
     },
     {
+        "kind": "sink_write_pilot",
+        "action": "execute_sink_write_pilot",
+        "command": "sinks write-pilot",
+        "reason": "review changed routing-relevant contact data; refresh explicit write pilot evidence",
+    },
+    {
         "kind": "sink_apply_result",
         "action": "await_apply_approval",
         "command": "sinks apply --apply",
@@ -183,6 +190,7 @@ _REVIEW_BUNDLE_ARTIFACT_KINDS = {
     "sink_apply_preflight",
     "sink_apply_decision",
     "sink_apply_pilot_readiness",
+    "sink_write_pilot",
     "sink_apply_result",
     "sink_adapter_request_readback",
     "sink_readback_pilot",
@@ -1928,6 +1936,170 @@ class BusinessCardService:
             "assessment": assessment,
         }
 
+    def execute_sink_write_pilot_for_job(
+        self,
+        *,
+        job_id: str,
+        run_id: str,
+        sink: str,
+        approved_by: str,
+        simulate: bool = True,
+    ) -> dict[str, Any]:
+        job = self.get_job(job_id, run_id=run_id)
+        artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
+        decision_path = artifact_dir / "sink_apply_decision.json"
+        if decision_path.exists():
+            decision = json.loads(decision_path.read_text(encoding="utf-8"))
+        else:
+            decision = {
+                "schema": None,
+                "state": "missing",
+                "decision": "",
+                "job_id": job_id,
+                "run_id": run_id,
+            }
+        if decision.get("decision") != "approve":
+            raise ValueError("sink write pilot requires an approved sink apply decision")
+        request_path = artifact_dir / "sink_adapter_request_write.json"
+        if request_path.exists():
+            adapter_request = json.loads(request_path.read_text(encoding="utf-8"))
+        else:
+            adapter_request = self.build_sink_adapter_request_for_job(
+                job_id=job_id,
+                run_id=run_id,
+                phase="write",
+            )["request"]
+        requests = [
+            request
+            for request in list(adapter_request.get("requests") or [])
+            if request.get("phase") == "write" and request.get("sink") == sink
+        ]
+        if not requests:
+            raise ValueError(f"sink write pilot request not found for sink: {sink}")
+        request = requests[0]
+        execution = None
+        if simulate:
+            write = {
+                "sink": sink,
+                "resource_id": f"mock:{sink}:{request.get('serialization_key') or 'unknown'}",
+                "serialization_key": request.get("serialization_key"),
+                "planned_action": request.get("planned_action"),
+            }
+            network_calls_made = 0
+            writes_attempted = 0
+            status = "mock_write_completed"
+        else:
+            if self.sink_write_executor is None:
+                readiness_path = artifact_dir / "sink_apply_pilot_readiness.json"
+                readiness = (
+                    json.loads(readiness_path.read_text(encoding="utf-8"))
+                    if readiness_path.exists()
+                    else self.build_sink_apply_pilot_readiness_for_job(job_id=job_id, run_id=run_id)["readiness"]
+                )
+                if not readiness.get("can_live_apply_pilot"):
+                    raise ValueError("live sink write pilot requires ready sink_apply_pilot_readiness.json")
+                execution = execute_sink_write_adapter(request)
+            else:
+                execution = self.sink_write_executor(request)
+            write = dict(execution.get("write") or {})
+            network_calls_made = int(execution.get("network_calls_made") or 0)
+            writes_attempted = int(execution.get("writes_attempted") or 0)
+            status = str(execution.get("status") or "live_write_completed")
+        state = "mock_written" if simulate else "live_written"
+        pilot = {
+            "schema": "business-card-watchdog.sink-write-pilot.v1",
+            "state": state,
+            "status": status,
+            "job_id": job_id,
+            "run_id": run_id,
+            "sink": sink,
+            "approved_by": approved_by,
+            "simulated": simulate,
+            "writes_attempted": writes_attempted,
+            "network_calls_made": network_calls_made,
+            "request": request,
+            "write": write,
+            "execution": execution,
+        }
+        pilot_path = artifact_dir / "sink_write_pilot.json"
+        pilot_path.write_text(json.dumps(pilot, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+        preflight_path = artifact_dir / "sink_apply_preflight.json"
+        if preflight_path.exists():
+            preflight = json.loads(preflight_path.read_text(encoding="utf-8"))
+        else:
+            preflight = self.preflight_sink_apply(job_id=job_id, run_id=run_id)["preflight"]
+        result = build_sink_apply_result(
+            preflight=preflight,
+            decision=decision,
+            apply=True,
+            simulate=simulate,
+        )
+        result["state"] = "mock_applied" if simulate else "live_applied"
+        result["reason"] = (
+            "explicit simulated sink write pilot completed; no live write attempted"
+            if simulate
+            else "explicit sink write pilot completed; readback adapter still requires explicit request"
+        )
+        result["writes_attempted"] = writes_attempted
+        result["network_calls_made"] = network_calls_made
+        result["source_write_pilot_schema"] = pilot["schema"]
+        result["source_write_pilot_path"] = str(pilot_path)
+        result["write_executions"] = [] if execution is None else [execution]
+        result["readback"] = []
+        for action in result["actions"]:
+            if action.get("sink") != sink:
+                continue
+            action["state"] = result["state"]
+            action["write_attempted"] = bool(writes_attempted)
+            action["resource_id"] = write.get("resource_id")
+            result["readback"].append(
+                {
+                    "sink": sink,
+                    "resource_id": write.get("resource_id"),
+                    "serialization_key": action.get("serialization_key"),
+                    "matched": bool(write.get("resource_id")),
+                    "simulated": simulate,
+                }
+            )
+        result_path = artifact_dir / "sink_apply_result.json"
+        result_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        ledger.record_artifact(job_id=job_id, kind="sink_write_pilot", path=pilot_path)
+        ledger.record_artifact(job_id=job_id, kind="sink_apply_result", path=result_path)
+        ledger.record_event(
+            "sink_write_pilot_executed",
+            {
+                "job_id": job_id,
+                "run_id": run_id,
+                "sink": sink,
+                "approved_by": approved_by,
+                "pilot_path": str(pilot_path),
+                "result_path": str(result_path),
+                "state": state,
+                "writes_attempted": writes_attempted,
+                "network_calls_made": network_calls_made,
+            },
+        )
+        self._mark_route_artifact_refreshed(
+            artifact_dir,
+            job_id=job_id,
+            run_id=run_id,
+            kind="sink_write_pilot",
+        )
+        self._mark_route_artifact_refreshed(
+            artifact_dir,
+            job_id=job_id,
+            run_id=run_id,
+            kind="sink_apply_result",
+        )
+        return {
+            "pilot_path": str(pilot_path),
+            "result_path": str(result_path),
+            "pilot": pilot,
+            "result": result,
+        }
+
     def execute_sink_readback_pilot_for_job(
         self,
         *,
@@ -2442,6 +2614,12 @@ class BusinessCardService:
                     "action": "prepare_sink_apply_pilot_readiness",
                     "reason": "sink apply decision exists; prepare explicit one-job live apply pilot readiness artifact",
                     "command": "sinks apply-pilot-readiness",
+                }
+            if "sink_write_pilot" not in artifact_kinds:
+                return {
+                    "action": "execute_sink_write_pilot",
+                    "reason": "sink apply pilot readiness exists; execute explicit one-job write pilot",
+                    "command": "sinks write-pilot",
                 }
             return {
                 "action": "await_apply_approval",

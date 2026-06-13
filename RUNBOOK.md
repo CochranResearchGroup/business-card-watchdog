@@ -1175,3 +1175,27 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed with the index up to date.
 - `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+## Turn 64 | 2026-06-13
+
+Continued Plan 0004 execution with an explicit write pilot surface.
+
+Implemented:
+
+- Added `sink_write_pilot.json` artifacts for explicit one-job sink write pilot evidence.
+- Added service write-pilot execution with simulated writes by default and live execution only on explicit non-simulated invocation.
+- Write pilots require job, run, sink, reviewer approval metadata, and an approved sink apply decision.
+- Simulated write pilots record zero writes while producing `sink_apply_result.json` for the existing readback adapter/pilot path.
+- Non-simulated default execution refuses unless live pilot readiness is ready; injected tests exercise live-shaped writes offline.
+- Added CLI, API, and MCP surfaces for the shared write-pilot service method.
+- Next-action readback now recommends explicit write pilot after apply pilot readiness, while safe agent-loop execution still skips it.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py tests/test_sink_apply_adapters.py -q` passed with 89 tests.
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_sinks.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py tests/test_sink_apply_adapters.py -q` passed with 107 tests.
+- `.venv/bin/python -m pytest -q` passed with 170 tests.
+- `PYTHONPATH=src pytest -q` passed with 163 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.

@@ -1811,3 +1811,32 @@ Remaining:
 
 - Live readback still requires explicit `--no-simulate`/API/MCP request and local sink auth; default tests remain offline.
 - Live write execution remains available only through injected service proof pending a public one-job write pilot command.
+
+### Slice 0004-AZ | 2026-06-13 | Explicit Write Pilot Surface
+
+Implemented:
+
+- Added `sink_write_pilot.json` artifacts for explicit one-job sink write pilot evidence.
+- Added `BusinessCardService.execute_sink_write_pilot_for_job`, simulated by default and live only on explicit non-simulated execution.
+- Write pilots require `job_id`, `run_id`, `sink`, `approved_by`, and an approved sink apply decision.
+- Simulated write pilots record zero writes and still produce a `sink_apply_result.json` so readback adapter requests and readback pilots can continue through the existing path.
+- Non-simulated default execution refuses unless `sink_apply_pilot_readiness.json` reports live pilot readiness; injected tests can exercise live-shaped writes offline.
+- Added CLI `bcw sinks write-pilot`.
+- Added API `POST /jobs/{job_id}/sink-write-pilot`.
+- Added MCP tool `business_card_watchdog_sink_write_pilot`.
+- Next-action readback now recommends explicit write pilot after apply pilot readiness; safe agent-loop execution still skips it.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py tests/test_sink_apply_adapters.py -q` passed with 89 tests.
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_sinks.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py tests/test_sink_apply_adapters.py -q` passed with 107 tests.
+- `.venv/bin/python -m pytest -q` passed with 170 tests.
+- `PYTHONPATH=src pytest -q` passed with 163 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+Remaining:
+
+- Real live write pilots still require explicit non-simulated invocation plus local sink readiness and auth.
+- Readback remains a separate explicit pilot step after write evidence exists.

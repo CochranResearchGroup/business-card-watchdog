@@ -447,6 +447,30 @@ def test_cli_sinks_apply_decision_writes_zero_write_artifact(tmp_path: Path, cap
                 "--config",
                 str(config_path),
                 "sinks",
+                "write-pilot",
+                job_id,
+                "--run-id",
+                run_id,
+                "--sink",
+                "google_contacts",
+                "--approved-by",
+                "cli-test",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    write_pilot = json.loads(capsys.readouterr().out)
+    assert write_pilot["pilot"]["schema"] == "business-card-watchdog.sink-write-pilot.v1"
+    assert write_pilot["pilot"]["writes_attempted"] == 0
+    assert write_pilot["result"]["state"] == "mock_applied"
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "sinks",
                 "adapter-request",
                 job_id,
                 "--run-id",

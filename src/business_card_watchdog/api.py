@@ -81,6 +81,12 @@ def create_app(config_path: Path | None = None):
         matches: list[dict[str, object]] = Field(default_factory=list)
         simulate: bool = True
 
+    class SinkWritePilotRequest(BaseModel):
+        run_id: str
+        sink: str
+        approved_by: str
+        simulate: bool = True
+
     class SinkReadbackPilotRequest(BaseModel):
         run_id: str
         sink: str
@@ -289,6 +295,16 @@ def create_app(config_path: Path | None = None):
             sink=request.sink,
             approved_by=request.approved_by,
             matches=[dict(match) for match in request.matches],
+            simulate=request.simulate,
+        )
+
+    @app.post("/jobs/{job_id}/sink-write-pilot")
+    def create_sink_write_pilot(job_id: str, request: SinkWritePilotRequest = Body(...)) -> dict[str, object]:
+        return service().execute_sink_write_pilot_for_job(
+            job_id=job_id,
+            run_id=request.run_id,
+            sink=request.sink,
+            approved_by=request.approved_by,
             simulate=request.simulate,
         )
 

@@ -608,6 +608,88 @@ def test_service_apply_sinks_for_job_uses_injected_write_executor(tmp_path: Path
     assert readback["request"]["requests"][0]["resource_id"] == "people/live123"
 
 
+def test_service_write_pilot_writes_simulated_apply_result(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="write")
+    service.preflight_sink_apply(job_id=job_id, run_id=run_id)
+    service.decide_sink_apply(job_id=job_id, run_id=run_id, decision="approve", reviewer="tester")
+
+    pilot = service.execute_sink_write_pilot_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        approved_by="tester",
+    )
+    readback = service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="readback")
+    job = service.get_job(job_id, run_id=run_id)
+
+    assert pilot["pilot"]["schema"] == "business-card-watchdog.sink-write-pilot.v1"
+    assert pilot["pilot"]["state"] == "mock_written"
+    assert pilot["pilot"]["simulated"] is True
+    assert pilot["pilot"]["writes_attempted"] == 0
+    assert pilot["pilot"]["network_calls_made"] == 0
+    assert pilot["result"]["source_write_pilot_schema"] == "business-card-watchdog.sink-write-pilot.v1"
+    assert pilot["result"]["state"] == "mock_applied"
+    assert pilot["result"]["readback"][0]["resource_id"].startswith("mock:google_contacts:")
+    assert readback["request"]["requests"][0]["resource_id"].startswith("mock:google_contacts:")
+    assert any(artifact["kind"] == "sink_write_pilot" for artifact in job["artifacts"])
+
+
+def test_service_write_pilot_uses_injected_executor(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    calls: list[dict[str, object]] = []
+
+    def execute(request: dict[str, object]) -> dict[str, object]:
+        calls.append(request)
+        return {
+            "sink": "google_contacts",
+            "status": "live_write_completed",
+            "network_calls_made": 1,
+            "writes_attempted": 1,
+            "write": {
+                "sink": "google_contacts",
+                "resource_id": "people/live123",
+                "serialization_key": request.get("serialization_key"),
+            },
+        }
+
+    service = BusinessCardService(config, sink_write_executor=execute)
+    service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="write")
+    service.preflight_sink_apply(job_id=job_id, run_id=run_id)
+    service.decide_sink_apply(job_id=job_id, run_id=run_id, decision="approve", reviewer="tester")
+
+    pilot = service.execute_sink_write_pilot_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        approved_by="tester",
+        simulate=False,
+    )
+
+    assert calls[0]["sink"] == "google_contacts"
+    assert pilot["pilot"]["state"] == "live_written"
+    assert pilot["pilot"]["simulated"] is False
+    assert pilot["pilot"]["writes_attempted"] == 1
+    assert pilot["pilot"]["network_calls_made"] == 1
+    assert pilot["result"]["state"] == "live_applied"
+    assert pilot["result"]["readback"][0]["resource_id"] == "people/live123"
+
+
 def test_service_readback_pilot_writes_simulated_evidence(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",
@@ -1409,8 +1491,8 @@ def test_service_next_actions_recommends_live_apply_after_decision(tmp_path: Pat
     assert "readback_adapter_available_after_apply" in readiness["readiness"]["missing_requirements"]
     assert readiness["readiness"]["mock_missing_requirements"] == []
     assert "readback_adapter_available_after_apply" in readiness["readiness"]["live_missing_requirements"]
-    assert next_payload["actions"][0]["action"] == "await_apply_approval"
-    assert next_payload["actions"][0]["command"] == "sinks apply --apply"
+    assert next_payload["actions"][0]["action"] == "execute_sink_write_pilot"
+    assert next_payload["actions"][0]["command"] == "sinks write-pilot"
 
 
 def test_service_next_actions_recommends_readback_adapter_request_after_apply_result(tmp_path: Path) -> None:
