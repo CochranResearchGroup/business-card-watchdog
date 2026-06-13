@@ -1396,3 +1396,18 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_mcp.py::test_mcp_jsonl_server_lists_and_calls_tools -q` passed with 1 test.
+
+## Turn 75 | 2026-06-13
+
+Continued Plan 0004 execution with full pilot-chain route-refresh safety coverage.
+
+Implemented:
+
+- Added regression coverage for a review update after lookup, write, readback, and pilot-report artifacts already exist.
+- The test proves `route_refresh.json` marks the full pilot chain stale.
+- Safe run-next refreshes only the safe zero-network prefix and stops at explicit lookup-pilot evidence.
+- No runtime behavior changed; this locks in the existing safety boundary.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_review_update_stales_full_pilot_chain_and_safe_refresh_stops_at_pilot -q` passed with 1 test.

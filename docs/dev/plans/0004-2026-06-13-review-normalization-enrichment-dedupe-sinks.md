@@ -2051,3 +2051,21 @@ Validation:
 Remaining:
 
 - MCP JSONL coverage now exercises the newer readback/control-plane tools, but live sink lookup/write/readback and paid enrichment remain explicit operator-approved actions outside safe generic execution.
+
+### Slice 0004-BJ | 2026-06-13 | Full Pilot Route-Refresh Safety Coverage
+
+Implemented:
+
+- Added regression coverage for review updates after a full simulated pilot chain exists.
+- The test proves `route_refresh.json` marks lookup plans, lookup adapter requests, lookup pilot evidence, lookup results, downstream duplicate assessment, sink plans, write adapter requests, apply preflight, apply decisions, pilot readiness, write pilot, apply result, readback adapter request, readback pilot, and pilot report as stale.
+- The test proves safe `run_next_actions` refreshes only the zero-network safe prefix after the review update.
+- The test proves safe execution stops before refreshing explicit lookup-pilot evidence, leaving later write/readback pilot artifacts pending for operator action.
+- No runtime behavior changed; this locks in the existing full-chain route-refresh safety boundary.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_review_update_stales_full_pilot_chain_and_safe_refresh_stops_at_pilot -q` passed with 1 test.
+
+Remaining:
+
+- Explicit lookup/write/readback pilot evidence still requires operator-approved commands after route-refresh invalidation.

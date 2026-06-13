@@ -1466,6 +1466,100 @@ def test_service_review_update_refreshes_stale_route_artifacts(tmp_path: Path) -
     assert any(event["event_type"] == "route_refresh_updated" for event in events)
 
 
+def test_service_review_update_stales_full_pilot_chain_and_safe_refresh_stops_at_pilot(
+    tmp_path: Path,
+) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+        field_corrections={"full_name": "Old Fixture", "email": "old@example.test"},
+    )
+    service.plan_sink_lookup_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
+    service.execute_sink_lookup_pilot_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        approved_by="tester",
+        matches=[],
+    )
+    service.assess_downstream_duplicates_for_job(job_id=job_id, run_id=run_id)
+    service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="write")
+    service.preflight_sink_apply(job_id=job_id, run_id=run_id)
+    service.decide_sink_apply(job_id=job_id, run_id=run_id, decision="approve", reviewer="tester")
+    service.build_sink_apply_pilot_readiness_for_job(job_id=job_id, run_id=run_id)
+    service.execute_sink_write_pilot_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        approved_by="tester",
+    )
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="readback")
+    service.execute_sink_readback_pilot_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        approved_by="tester",
+    )
+    service.build_sink_apply_pilot_report_for_job(job_id=job_id, run_id=run_id)
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+
+    result = service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+        field_corrections={"full_name": "Reviewed Fixture", "email": "new@example.test"},
+    )
+    safe_refresh = service.run_next_actions(run_id=run_id, limit=10)
+    route_refresh = json.loads((artifact_dir / "route_refresh.json").read_text(encoding="utf-8"))
+    lookup_plan = json.loads((artifact_dir / "sink_lookup_plan.json").read_text(encoding="utf-8"))
+
+    assert result["route_refresh"]["stale_artifact_kinds"] == [
+        "sink_lookup_plan",
+        "sink_adapter_request_lookup",
+        "sink_lookup_pilot",
+        "sink_lookup_result",
+        "downstream_duplicate_assessment",
+        "sink_plan",
+        "sink_adapter_request_write",
+        "sink_apply_preflight",
+        "sink_apply_decision",
+        "sink_apply_pilot_readiness",
+        "sink_write_pilot",
+        "sink_apply_result",
+        "sink_adapter_request_readback",
+        "sink_readback_pilot",
+        "sink_apply_pilot_report",
+    ]
+    assert [item["action"] for item in safe_refresh["executed"]] == [
+        "plan_sink_lookup",
+        "prepare_sink_lookup_adapter",
+    ]
+    assert safe_refresh["skipped"][0]["action"] == "execute_sink_lookup_pilot"
+    assert safe_refresh["skipped"][0]["route_refresh_path"].endswith("route_refresh.json")
+    assert route_refresh["state"] == "pending"
+    assert route_refresh["refreshed_artifact_kinds"] == [
+        "sink_lookup_plan",
+        "sink_adapter_request_lookup",
+    ]
+    assert route_refresh["pending_artifact_kinds"][0] == "sink_lookup_pilot"
+    assert "sink_write_pilot" in route_refresh["pending_artifact_kinds"]
+    assert "sink_readback_pilot" in route_refresh["pending_artifact_kinds"]
+    assert lookup_plan["lookups"][0]["match_keys"]["email"] == "new@example.test"
+
+
 def test_service_enrichment_merge_refreshes_existing_sink_plan(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",
