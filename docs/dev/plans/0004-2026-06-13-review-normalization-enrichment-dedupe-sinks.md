@@ -660,6 +660,27 @@ Remaining:
 - Live Google Contacts and Odoo/Odollo lookup/write/readback adapters remain blocked.
 - Non-simulated live apply remains blocked until adapters are implemented and explicitly approved.
 
+### Slice 0004-AB | 2026-06-13 | Paid Provider Result Artifacts
+
+Implemented:
+
+- Added Apollo-style paid provider result scoring for caller-supplied fixture/provider rows.
+- Added `enrichment_provider_result.json` artifacts with normalized person/company fields, confidence signals, merge proposals, and raw fixture rows.
+- API-only enrichment requests now also write `enrichment_result.json` from provider results so the existing enrichment merge review path remains shared.
+- Provider result artifacts record `network_calls_made = 0` and `paid_api_calls_attempted = 0`.
+- Service, CLI, API, and MCP enrichment request surfaces accept `provider_results` / `--provider-results-json`.
+- Provider result tests cover service, CLI, API, MCP, and secret-free payload behavior.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_enrichment.py tests/test_cli_surfaces.py tests/test_mcp.py tests/test_api.py -q` passed with 34 tests.
+
+Remaining:
+
+- Apollo live API calls remain blocked behind explicit operator request and future adapter implementation.
+- Real public-web search execution remains blocked until an explicit operator/search-adapter action is approved.
+- Live Google Contacts and Odoo/Odollo lookup/write/readback adapters remain blocked.
+
 ## `/goal` Objective
 
 Use this as the high-level `/goal` objective:

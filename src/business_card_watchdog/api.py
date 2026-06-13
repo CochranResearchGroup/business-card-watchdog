@@ -32,6 +32,7 @@ def create_app(config_path: Path | None = None):
         requested_by: str = "operator"
         allow_paid_enrichment: bool = False
         public_web_results: list[dict[str, object]] = Field(default_factory=list)
+        provider_results: list[dict[str, object]] = Field(default_factory=list)
 
     class SinkApplyPreflightRequest(BaseModel):
         run_id: str
@@ -129,6 +130,7 @@ def create_app(config_path: Path | None = None):
             requested_by=request.requested_by,
             allow_paid_enrichment=request.allow_paid_enrichment,
             public_web_results=[dict(row) for row in request.public_web_results],
+            provider_results=[dict(row) for row in request.provider_results],
         )
 
     @app.post("/sinks/check")

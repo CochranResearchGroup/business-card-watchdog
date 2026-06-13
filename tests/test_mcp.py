@@ -200,6 +200,16 @@ def test_mcp_enrichment_request_can_prepare_paid_provider_without_call(tmp_path:
             "run_id": run_id,
             "mode": "api",
             "allow_paid_enrichment": True,
+            "provider_results": [
+                {
+                    "person": {
+                        "name": "Ada Lovelace",
+                        "email": "ada@example.test",
+                        "title": "Principal",
+                    },
+                    "organization": {"name": "Example Labs"},
+                }
+            ],
         },
         config=config,
     )
@@ -207,6 +217,8 @@ def test_mcp_enrichment_request_can_prepare_paid_provider_without_call(tmp_path:
     assert payload["status"] == "ok"
     assert payload["provider_request"]["status"] == "prepared"
     assert payload["provider_request"]["network_calls_made"] == 0
+    assert payload["provider_result"]["schema"] == "business-card-watchdog.enrichment-provider-result.v1"
+    assert payload["provider_result"]["network_calls_made"] == 0
     assert "secret" not in json.dumps(payload)
 
 

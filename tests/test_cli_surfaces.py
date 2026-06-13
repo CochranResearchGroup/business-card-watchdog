@@ -603,6 +603,8 @@ def test_cli_enrichment_request_writes_paid_provider_request_without_call(tmp_pa
                 "--mode",
                 "api",
                 "--allow-paid-enrichment",
+                "--provider-results-json",
+                '[{"person":{"name":"Ada Lovelace","email":"ada@example.test","title":"Principal"},"organization":{"name":"Example Labs"}}]',
                 "--json",
             ]
         )
@@ -612,6 +614,8 @@ def test_cli_enrichment_request_writes_paid_provider_request_without_call(tmp_pa
     assert payload["provider_request"]["schema"] == "business-card-watchdog.enrichment-provider-request.v1"
     assert payload["provider_request"]["status"] == "prepared"
     assert payload["provider_request"]["network_calls_made"] == 0
+    assert payload["provider_result"]["schema"] == "business-card-watchdog.enrichment-provider-result.v1"
+    assert payload["provider_result"]["paid_api_calls_attempted"] == 0
     assert "secret" not in json.dumps(payload)
 
 

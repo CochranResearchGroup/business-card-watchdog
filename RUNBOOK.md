@@ -653,3 +653,20 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 60 tests.
+
+## Turn 39 | 2026-06-13
+
+Continued Plan 0004 execution with paid provider result artifacts.
+
+Implemented:
+
+- Added Apollo-style paid provider result scoring for caller-supplied fixture/provider rows.
+- Added `enrichment_provider_result.json` artifacts with normalized person/company fields, confidence signals, merge proposals, and raw fixture rows.
+- API-only enrichment requests also write `enrichment_result.json` from provider results so the existing enrichment merge review path remains shared.
+- Provider result artifacts record `network_calls_made = 0` and `paid_api_calls_attempted = 0`.
+- Service, CLI, API, and MCP enrichment request surfaces accept `provider_results` / `--provider-results-json`.
+- Provider result tests cover service, CLI, API, MCP, and secret-free payload behavior.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_enrichment.py tests/test_cli_surfaces.py tests/test_mcp.py tests/test_api.py -q` passed with 34 tests.

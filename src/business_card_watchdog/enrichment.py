@@ -15,6 +15,7 @@ ENRICHMENT_REQUEST_SCHEMA = "business-card-watchdog.enrichment-request.v1"
 ENRICHMENT_RESULT_SCHEMA = "business-card-watchdog.enrichment-result.v1"
 ENRICHMENT_PROVIDER_REQUEST_SCHEMA = "business-card-watchdog.enrichment-provider-request.v1"
 ENRICHMENT_PUBLIC_WEB_REQUEST_SCHEMA = "business-card-watchdog.enrichment-public-web-request.v1"
+ENRICHMENT_PROVIDER_RESULT_SCHEMA = "business-card-watchdog.enrichment-provider-result.v1"
 
 
 @dataclass(frozen=True)
@@ -212,6 +213,27 @@ def build_paid_api_provider_request(
     }
 
 
+def score_paid_api_provider_results(
+    contact_candidate: dict[str, Any],
+    *,
+    provider: str,
+    results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    spec = contact_candidate_to_spec(contact_candidate)
+    normalized = [_normalize_provider_result(spec, result, index=index) for index, result in enumerate(results)]
+    normalized.sort(key=lambda row: int(row["score"]), reverse=True)
+    return {
+        "schema": ENRICHMENT_PROVIDER_RESULT_SCHEMA,
+        "result_schema": ENRICHMENT_RESULT_SCHEMA,
+        "provider": provider,
+        "cost_class": "paid_api",
+        "network_calls_made": 0,
+        "paid_api_calls_attempted": 0,
+        "results": normalized,
+        "merge_proposals": _provider_merge_proposals(provider, normalized),
+    }
+
+
 def build_public_web_queries(spec: dict[str, Any], *, max_queries: int = 8) -> list[dict[str, Any]]:
     queries: list[dict[str, Any]] = []
     email = str(spec.get("email") or "").strip().lower()
@@ -314,6 +336,77 @@ def _merge_proposals(spec: dict[str, Any], scored: list[dict[str, Any]]) -> list
             "requires_review": True,
         }
     ]
+
+
+def _normalize_provider_result(spec: dict[str, Any], result: dict[str, Any], *, index: int) -> dict[str, Any]:
+    person = dict(result.get("person") or result)
+    organization = dict(result.get("organization") or result.get("account") or {})
+    email = str(person.get("email") or result.get("email") or "").strip().lower()
+    full_name = str(person.get("name") or result.get("name") or "").strip()
+    title = str(person.get("title") or result.get("title") or "").strip()
+    org_name = str(
+        organization.get("name")
+        or result.get("organization_name")
+        or result.get("company")
+        or ""
+    ).strip()
+    website = str(organization.get("website_url") or organization.get("domain") or result.get("website") or "").strip()
+    score = 0
+    signals: list[str] = []
+    for field, value, points in (
+        ("email", email, 45),
+        ("full_name", full_name, 20),
+        ("organization", org_name, 15),
+    ):
+        observed = str(spec.get(field) or "").strip()
+        if observed and value and observed.casefold() == value.casefold():
+            score += points
+            signals.append(field)
+    if title:
+        score += 5
+        signals.append("title_present")
+    if website:
+        score += 5
+        signals.append("website_present")
+    return {
+        "rank": index + 1,
+        "score": score,
+        "signals": signals,
+        "email": email,
+        "full_name": full_name,
+        "title": title,
+        "organization": org_name,
+        "website": website,
+        "raw": result,
+    }
+
+
+def _provider_merge_proposals(provider: str, scored: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not scored or int(scored[0].get("score") or 0) < 45:
+        return []
+    top = scored[0]
+    proposals: list[dict[str, Any]] = []
+    for field in ("title", "organization", "website"):
+        value = str(top.get(field) or "").strip()
+        if value:
+            proposals.append(
+                {
+                    "field": field,
+                    "value": value,
+                    "source": provider,
+                    "requires_review": True,
+                }
+            )
+    if top.get("email"):
+        proposals.append(
+            {
+                "field": "notes",
+                "value": f"{provider} corroboration candidate for {top['email']}",
+                "source": provider,
+                "requires_review": True,
+            }
+        )
+    return proposals
 
 
 def _host(url: str) -> str:

@@ -302,6 +302,7 @@ def tool_manifest() -> dict[str, object]:
                         "requested_by": {"type": "string", "default": "operator"},
                         "allow_paid_enrichment": {"type": "boolean", "default": False},
                         "public_web_results": {"type": "array", "items": {"type": "object"}},
+                        "provider_results": {"type": "array", "items": {"type": "object"}},
                     },
                     "required": ["job_id", "run_id"],
                 },
@@ -451,6 +452,7 @@ def call_tool(
             requested_by=str(args.get("requested_by") or "operator"),
             allow_paid_enrichment=bool(args.get("allow_paid_enrichment", False)),
             public_web_results=list(args.get("public_web_results") or []),
+            provider_results=list(args.get("provider_results") or []),
         )
     if tool_name == "business_card_watchdog_watch_status":
         return service.watch_status()

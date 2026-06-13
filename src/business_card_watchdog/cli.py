@@ -153,6 +153,7 @@ def build_parser() -> argparse.ArgumentParser:
     enrichment_request.add_argument("--requested-by", default="operator")
     enrichment_request.add_argument("--allow-paid-enrichment", action="store_true")
     enrichment_request.add_argument("--public-web-results-json", default="[]")
+    enrichment_request.add_argument("--provider-results-json", default="[]")
     enrichment_request.add_argument("--json", action="store_true")
 
     watch = sub.add_parser("watch")
@@ -332,6 +333,7 @@ def main(argv: list[str] | None = None) -> int:
                 requested_by=args.requested_by,
                 allow_paid_enrichment=args.allow_paid_enrichment,
                 public_web_results=json.loads(args.public_web_results_json),
+                provider_results=json.loads(args.provider_results_json),
             )
         print(json.dumps(payload, indent=2) if args.json else payload)
         checks = payload.get("checks") or payload.get("readiness", {}).get("checks", [])

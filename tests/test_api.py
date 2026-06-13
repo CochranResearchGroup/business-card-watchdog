@@ -5,7 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from business_card_watchdog.config import AppConfig
+from business_card_watchdog.config import AppConfig, EnrichmentConfig, EnrichmentProviderConfig
+from business_card_watchdog.contact import build_contact_candidate
 
 from test_service import make_recorded_run
 
@@ -143,5 +144,71 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     run_next = client.post("/actions/run-next", json={"run_id": run_id, "limit": 2}).json()
     assert run_next["executed_count"] >= 1
     assert run_next["executed"][0]["action"].startswith(("plan_", "prepare_", "record_", "assess_"))
+
+
+def test_api_enrichment_request_accepts_paid_provider_results(tmp_path: Path) -> None:
+    from business_card_watchdog.api import create_app
+
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    keys_path = tmp_path / "API-keys.env"
+    keys_path.write_text("APOLLO_API_KEY=secret-value-not-printed\n", encoding="utf-8")
+    config_path.write_text(
+        f'data_dir = "{data_dir}"\n'
+        "[watch]\ninputs = []\n"
+        "[enrichment]\nenabled = true\nallow_paid_api = true\n"
+        f'api_keys_env = "{keys_path}"\n'
+        "[enrichment.providers.apollo]\nenabled = true\napi_key_env = \"APOLLO_API_KEY\"\n",
+        encoding="utf-8",
+    )
+    config = AppConfig(
+        config_path=config_path,
+        data_dir=data_dir,
+        enrichment=EnrichmentConfig(
+            enabled=True,
+            allow_paid_api=True,
+            api_keys_env=keys_path,
+            apollo=EnrichmentProviderConfig(enabled=True),
+        ),
+    )
+    run_id, job_id = make_recorded_run(config)
+    artifact_dir = data_dir / "runs" / run_id / "artifacts" / job_id
+    (artifact_dir / "contact_candidate.json").write_text(
+        json.dumps(
+            build_contact_candidate(
+                {
+                    "full_name": "Ada Lovelace",
+                    "organization": "Example Labs",
+                    "email": "ada@example.test",
+                }
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    client = TestClient(create_app(config_path))
+
+    payload = client.post(
+        f"/jobs/{job_id}/enrichment",
+        json={
+            "run_id": run_id,
+            "mode": "api",
+            "allow_paid_enrichment": True,
+            "provider_results": [
+                {
+                    "person": {
+                        "name": "Ada Lovelace",
+                        "email": "ada@example.test",
+                        "title": "Principal",
+                    },
+                    "organization": {"name": "Example Labs"},
+                }
+            ],
+        },
+    ).json()
+
+    assert payload["status"] == "ok"
+    assert payload["provider_result"]["schema"] == "business-card-watchdog.enrichment-provider-result.v1"
+    assert payload["provider_result"]["network_calls_made"] == 0
     assert client.post("/sinks/check").json()["dry_run"] is True
     assert client.get("/watch/status").json()["seen_count"] == 0

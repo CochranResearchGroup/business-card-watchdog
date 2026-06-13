@@ -17,6 +17,7 @@ from .enrichment import (
     build_paid_api_provider_request,
     build_public_web_search_request,
     check_enrichment_readiness,
+    score_paid_api_provider_results,
     score_public_web_results,
 )
 from .ledger import RunLedger
@@ -459,6 +460,7 @@ class BusinessCardService:
         requested_by: str = "operator",
         allow_paid_enrichment: bool = False,
         public_web_results: list[dict[str, Any]] | None = None,
+        provider_results: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         readiness = self.enrichment_readiness(
             mode=mode,
@@ -491,6 +493,8 @@ class BusinessCardService:
         public_web_request_path = None
         provider_request_payload = None
         provider_request_path = None
+        provider_result_payload = None
+        provider_result_path = None
         if mode in {"public_web", "all"}:
             public_web_request_payload = build_public_web_search_request(
                 self.config,
@@ -528,8 +532,32 @@ class BusinessCardService:
                 kind="enrichment_provider_request",
                 path=provider_request_path,
             )
+            if provider_results:
+                provider_result_payload = score_paid_api_provider_results(
+                    candidate,
+                    provider="apollo",
+                    results=provider_results,
+                )
+                provider_result_path = artifact_dir / "enrichment_provider_result.json"
+                provider_result_path.write_text(
+                    json.dumps(provider_result_payload, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+                ledger.record_artifact(
+                    job_id=job_id,
+                    kind="enrichment_provider_result",
+                    path=provider_result_path,
+                )
         if mode in {"public_web", "all"}:
             result_payload = score_public_web_results(candidate, results=public_web_results or [])
+            result_path = artifact_dir / "enrichment_result.json"
+            result_path.write_text(
+                json.dumps(result_payload, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            ledger.record_artifact(job_id=job_id, kind="enrichment_result", path=result_path)
+        elif provider_result_payload is not None:
+            result_payload = provider_result_payload
             result_path = artifact_dir / "enrichment_result.json"
             result_path.write_text(
                 json.dumps(result_payload, indent=2, sort_keys=True) + "\n",
@@ -547,6 +575,7 @@ class BusinessCardService:
                     "result_path": str(result_path) if result_path else None,
                     "public_web_request_path": str(public_web_request_path) if public_web_request_path else None,
                     "provider_request_path": str(provider_request_path) if provider_request_path else None,
+                    "provider_result_path": str(provider_result_path) if provider_result_path else None,
                 },
             )
         return {
@@ -556,10 +585,12 @@ class BusinessCardService:
             "result_path": str(result_path) if result_path else None,
             "public_web_request_path": str(public_web_request_path) if public_web_request_path else None,
             "provider_request_path": str(provider_request_path) if provider_request_path else None,
+            "provider_result_path": str(provider_result_path) if provider_result_path else None,
             "request": request,
             "result": result_payload,
             "public_web_request": public_web_request_payload,
             "provider_request": provider_request_payload,
+            "provider_result": provider_result_payload,
         }
 
     def plan_sinks_for_job(self, *, job_id: str, run_id: str, dry_run: bool = True) -> dict[str, Any]:

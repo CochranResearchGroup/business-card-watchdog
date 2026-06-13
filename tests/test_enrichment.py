@@ -2,11 +2,13 @@ import json
 from pathlib import Path
 
 from business_card_watchdog.config import AppConfig, EnrichmentConfig, EnrichmentProviderConfig, PrefilterConfig
+from business_card_watchdog.contact import build_contact_candidate
 from business_card_watchdog.enrichment import (
     build_enrichment_request,
     build_paid_api_provider_request,
     build_public_web_search_request,
     check_enrichment_readiness,
+    score_paid_api_provider_results,
 )
 from business_card_watchdog.orchestrator import BatchOrchestrator
 from business_card_watchdog.service import BusinessCardService
@@ -161,6 +163,40 @@ def test_paid_api_provider_request_is_zero_network_and_secret_free(tmp_path: Pat
     assert "secret" not in str(request)
 
 
+def test_paid_api_provider_results_are_reviewable_without_call() -> None:
+    result = score_paid_api_provider_results(
+        build_contact_candidate(
+            {
+                "full_name": "Ada Lovelace",
+                "organization": "Example Labs",
+                "email": "ada@example.test",
+            }
+        ),
+        provider="apollo",
+        results=[
+            {
+                "person": {
+                    "name": "Ada Lovelace",
+                    "email": "ada@example.test",
+                    "title": "Principal",
+                },
+                "organization": {
+                    "name": "Example Labs",
+                    "website_url": "https://example.test",
+                },
+            }
+        ],
+    )
+
+    assert result["schema"] == "business-card-watchdog.enrichment-provider-result.v1"
+    assert result["result_schema"] == "business-card-watchdog.enrichment-result.v1"
+    assert result["provider"] == "apollo"
+    assert result["network_calls_made"] == 0
+    assert result["paid_api_calls_attempted"] == 0
+    assert result["results"][0]["score"] >= 80
+    assert any(proposal["field"] == "title" for proposal in result["merge_proposals"])
+
+
 def test_service_request_enrichment_writes_request_and_fixture_result(tmp_path: Path, monkeypatch) -> None:
     source_dir = tmp_path / "synthetic-cards"
     write_synthetic_image(source_dir / "card.png")
@@ -237,16 +273,29 @@ def test_service_request_api_enrichment_writes_provider_request_without_call(tmp
         mode="api",
         requested_by="tester",
         allow_paid_enrichment=True,
+        provider_results=[
+            {
+                "person": {
+                    "name": "Ada Lovelace",
+                    "email": "ada@example.test",
+                    "title": "Principal",
+                },
+                "organization": {"name": "Example Labs"},
+            }
+        ],
     )
     artifacts = read_jsonl(config.runs_dir / run_id / "artifacts.jsonl")
 
     assert payload["status"] == "ok"
-    assert payload["result"] is None
+    assert payload["result"]["schema"] == "business-card-watchdog.enrichment-provider-result.v1"
     assert payload["provider_request"]["status"] == "prepared"
+    assert payload["provider_result"]["paid_api_calls_attempted"] == 0
     assert payload["provider_request"]["network_calls_made"] == 0
     assert payload["provider_request"]["paid_api_calls_attempted"] == 0
     assert "secret" not in Path(payload["provider_request_path"]).read_text(encoding="utf-8")
     assert any(artifact["kind"] == "enrichment_provider_request" for artifact in artifacts)
+    assert any(artifact["kind"] == "enrichment_provider_result" for artifact in artifacts)
+    assert any(artifact["kind"] == "enrichment_result" for artifact in artifacts)
 
 
 def _record_candidate(config: AppConfig) -> tuple[str, str]:
