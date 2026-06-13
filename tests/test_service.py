@@ -691,6 +691,54 @@ def test_service_lookup_pilot_writes_result_and_blocks_duplicate_review(tmp_path
     assert any(event["event_type"] == "sink_lookup_pilot_executed" for event in events)
 
 
+def test_service_lookup_pilot_uses_injected_read_only_executor(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    calls: list[dict[str, object]] = []
+
+    def execute(request: dict[str, object]) -> dict[str, object]:
+        calls.append(request)
+        return {
+            "sink": "google_contacts",
+            "status": "read_only_lookup_completed",
+            "network_calls_made": 1,
+            "writes_attempted": 0,
+            "matches": [
+                {
+                    "resource_id": "people/live123",
+                    "confidence": 0.91,
+                    "basis": ["email"],
+                    "display": "Live Fixture",
+                }
+            ],
+        }
+
+    service = BusinessCardService(config, sink_lookup_executor=execute)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
+
+    payload = service.execute_sink_lookup_pilot_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        approved_by="operator",
+        simulate=False,
+    )
+
+    assert calls[0]["sink"] == "google_contacts"
+    assert payload["pilot"]["status"] == "read_only_lookup_completed"
+    assert payload["pilot"]["simulated"] is False
+    assert payload["pilot"]["network_calls_made"] == 1
+    assert payload["pilot"]["writes_attempted"] == 0
+    assert payload["result"]["status"] == "read_only_lookup_matches"
+    assert payload["result"]["network_calls_made"] == 1
+    assert payload["result"]["results"][0]["matches"][0]["resource_id"] == "people/live123"
+
+
 def test_service_assess_downstream_duplicates_blocks_review_and_can_resolve(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",

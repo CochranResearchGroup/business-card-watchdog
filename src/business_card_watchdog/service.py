@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from html import escape
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .config import AppConfig, ensure_runtime_dirs
 from .contact import (
@@ -29,6 +29,7 @@ from .models import CardJob, utc_now
 from .orchestrator import BatchOrchestrator
 from .review import build_review_submission, write_review_submission
 from .routing import decide_sinks
+from .sink_lookup_adapters import execute_sink_lookup_adapter
 from .sinks import (
     SinkAdapterPhase,
     build_sink_adapter_request,
@@ -181,8 +182,14 @@ _REVIEW_BUNDLE_ARTIFACT_KINDS = {
 
 
 class BusinessCardService:
-    def __init__(self, config: AppConfig) -> None:
+    def __init__(
+        self,
+        config: AppConfig,
+        *,
+        sink_lookup_executor: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+    ) -> None:
         self.config = config
+        self.sink_lookup_executor = sink_lookup_executor
 
     def status(self) -> dict[str, Any]:
         ready, message = BusinessCardSkillAdapter(self.config).check_ready()
@@ -1704,12 +1711,27 @@ class BusinessCardService:
                 run_id=run_id,
                 phase="lookup",
             )["request"]
+        execution = None
+        if not simulate:
+            requests = [
+                request
+                for request in list(adapter_request.get("requests") or [])
+                if request.get("phase") == "lookup" and request.get("sink") == sink
+            ]
+            if not requests:
+                raise ValueError(f"sink lookup pilot request not found for sink: {sink}")
+            if self.sink_lookup_executor is not None:
+                execution = self.sink_lookup_executor(requests[0])
+            else:
+                execution = execute_sink_lookup_adapter(requests[0])
+            matches = list(execution.get("matches") or [])
         pilot = build_sink_lookup_pilot(
             adapter_request=adapter_request,
             sink=sink,
             approved_by=approved_by,
             matches=matches or [],
             simulate=simulate,
+            execution=execution,
         )
         pilot_path = artifact_dir / "sink_lookup_pilot.json"
         pilot_path.write_text(json.dumps(pilot, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -1719,8 +1741,21 @@ class BusinessCardService:
         )
         result["source_pilot_schema"] = pilot["schema"]
         result["source_pilot_path"] = str(pilot_path)
-        result["status"] = "mock_lookup_matches" if result["match_count"] else "mock_lookup_no_match"
-        result["reason"] = "mock read-only lookup pilot result; no downstream writes attempted"
+        result["status"] = (
+            ("mock_lookup_matches" if result["match_count"] else "mock_lookup_no_match")
+            if simulate
+            else ("read_only_lookup_matches" if result["match_count"] else "read_only_lookup_no_match")
+        )
+        result["reason"] = (
+            "mock read-only lookup pilot result; no downstream writes attempted"
+            if simulate
+            else "read-only lookup adapter result; no downstream writes attempted"
+        )
+        result["network_calls_made"] = pilot["network_calls_made"]
+        for row in result["results"]:
+            if row.get("sink") == sink:
+                row["status"] = "mock_lookup_matches" if simulate else "read_only_lookup_completed"
+                row["network_calls_made"] = pilot["network_calls_made"]
         result_path = artifact_dir / "sink_lookup_result.json"
         result_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         ledger = RunLedger(self.config.runs_dir / run_id)
@@ -1737,7 +1772,7 @@ class BusinessCardService:
                 "result_path": str(result_path),
                 "match_count": pilot["match_count"],
                 "writes_attempted": 0,
-                "network_calls_made": 0,
+                "network_calls_made": pilot["network_calls_made"],
             },
         )
         self._mark_route_artifact_refreshed(

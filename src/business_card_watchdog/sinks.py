@@ -416,6 +416,7 @@ def build_sink_lookup_pilot(
     approved_by: str,
     matches: list[dict[str, Any]] | None = None,
     simulate: bool = True,
+    execution: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if not approved_by.strip():
         raise ValueError("sink lookup pilot requires approved_by")
@@ -426,27 +427,35 @@ def build_sink_lookup_pilot(
     ]
     if not requests:
         raise ValueError(f"sink lookup pilot request not found for sink: {sink}")
-    if not simulate:
-        raise ValueError("live sink lookup execution is not implemented; use simulate with mocked read-only responses")
+    if not simulate and execution is None:
+        raise ValueError("live sink lookup execution requires adapter execution evidence")
     matches = matches or []
+    network_calls_made = int((execution or {}).get("network_calls_made") or 0)
     return {
         "schema": SINK_LOOKUP_PILOT_SCHEMA,
-        "state": "simulated_match" if matches else "simulated_no_match",
-        "status": "mock_read_only_lookup_completed",
-        "reason": "mock read-only lookup pilot completed; no downstream writes attempted",
+        "state": ("simulated_match" if matches else "simulated_no_match")
+        if simulate
+        else ("read_only_match" if matches else "read_only_no_match"),
+        "status": "mock_read_only_lookup_completed" if simulate else "read_only_lookup_completed",
+        "reason": (
+            "mock read-only lookup pilot completed; no downstream writes attempted"
+            if simulate
+            else "read-only lookup adapter completed; no downstream writes attempted"
+        ),
         "source_schema": adapter_request.get("schema"),
         "source_phase": adapter_request.get("phase"),
         "job_id": adapter_request.get("job_id"),
         "run_id": adapter_request.get("run_id"),
         "sink": sink,
         "approved_by": approved_by,
-        "simulated": True,
+        "simulated": bool(simulate),
         "read_only": True,
         "requires_live_adapter": True,
-        "network_calls_made": 0,
+        "network_calls_made": network_calls_made,
         "writes_attempted": 0,
         "request": requests[0],
         "match_count": len(matches),
+        "execution": execution or {},
         "matches": [
             {
                 "resource_id": str(match.get("resource_id") or ""),

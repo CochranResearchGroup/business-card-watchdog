@@ -1119,6 +1119,29 @@ Remaining:
 
 - Live GWS/Odollo read-only adapter execution remains manual follow-on work; default tests continue to use mocked rows and make no network calls.
 
+### Slice 0004-AU | 2026-06-13 | Read-Only Lookup Adapter Boundary
+
+Implemented:
+
+- Added `sink_lookup_adapters.py` with explicit read-only lookup adapter execution boundaries.
+- GWS People lookup responses are normalized into existing match rows with `resource_id`, confidence, basis, display, and raw evidence.
+- Odollo/Odoo `res.partner` lookup rows are normalized into the same match-row shape using `odoo:res.partner:{id}` resource IDs.
+- `BusinessCardService.execute_sink_lookup_pilot_for_job(..., simulate=False)` can now use an injected read-only lookup executor and records adapter execution evidence in `sink_lookup_pilot.json`.
+- Non-simulated pilot results update `sink_lookup_result.json` with read-only status and network-call count while keeping `writes_attempted = 0`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sink_lookup_adapters.py tests/test_sinks.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 94 tests.
+- `.venv/bin/python -m pytest -q` passed with 153 tests.
+- `PYTHONPATH=src pytest -q` passed with 147 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+Remaining:
+
+- Real GWS and Odollo runner construction remains manual follow-on work; this slice establishes the adapter boundary and mocked execution proof without invoking live services.
+
 ## Next High-Level Plan
 
 The next execution block should turn the current artifact-first scaffolding into an operator-usable review and routing system while preserving the current safety boundaries: no paid enrichment unless explicitly requested, no live sink writes without an approved pilot, and no secret values in repo artifacts or logs.

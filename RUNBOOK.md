@@ -1070,3 +1070,24 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed with the index up to date.
 - `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+## Turn 59 | 2026-06-13
+
+Continued Plan 0004 execution with the read-only sink lookup adapter boundary.
+
+Implemented:
+
+- Added explicit GWS/Odollo read-only lookup adapter execution helpers that normalize downstream responses into existing match rows.
+- GWS People responses normalize `resourceName`, names, emails, and phones into duplicate-review evidence.
+- Odollo/Odoo `res.partner` rows normalize IDs into `odoo:res.partner:{id}` resources with match basis and raw evidence.
+- Non-simulated lookup pilots can now use an injected read-only executor and record adapter execution evidence while keeping writes at zero.
+- Existing `sink_lookup_result.json` output now carries read-only status and network-call count when produced by a non-simulated pilot.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sink_lookup_adapters.py tests/test_sinks.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 94 tests.
+- `.venv/bin/python -m pytest -q` passed with 153 tests.
+- `PYTHONPATH=src pytest -q` passed with 147 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
