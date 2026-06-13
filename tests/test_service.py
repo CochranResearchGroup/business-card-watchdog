@@ -723,6 +723,117 @@ def test_service_run_next_actions_executes_safe_steps_until_manual_decision(tmp_
     }
 
 
+def test_service_review_update_refreshes_stale_route_artifacts(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+        field_corrections={"full_name": "Old Fixture", "email": "old@example.test"},
+    )
+    service.run_next_actions(run_id=run_id, limit=10)
+
+    result = service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+        field_corrections={"full_name": "Reviewed Fixture", "email": "new@example.test"},
+    )
+    next_action = service.next_actions(run_id=run_id)["actions"][0]
+    rerun = service.run_next_actions(run_id=run_id, limit=10)
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+    route_refresh = json.loads((artifact_dir / "route_refresh.json").read_text(encoding="utf-8"))
+    lookup_plan = json.loads((artifact_dir / "sink_lookup_plan.json").read_text(encoding="utf-8"))
+    sink_plan = json.loads((artifact_dir / "sink_plan.json").read_text(encoding="utf-8"))
+    events = [
+        json.loads(line)
+        for line in (config.runs_dir / run_id / "events.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+
+    assert result["route_refresh"]["schema"] == "business-card-watchdog.route-refresh.v1"
+    assert "sink_lookup_plan" in result["route_refresh"]["pending_artifact_kinds"]
+    assert next_action["action"] == "plan_sink_lookup"
+    assert next_action["route_refresh_path"].endswith("route_refresh.json")
+    assert [item["action"] for item in rerun["executed"]] == [
+        "plan_sink_lookup",
+        "prepare_sink_lookup_adapter",
+        "record_sink_lookup_result",
+        "assess_downstream_duplicates",
+        "plan_sinks",
+        "prepare_sink_write_adapter",
+        "preflight_sink_apply",
+    ]
+    assert route_refresh["state"] == "complete"
+    assert route_refresh["pending_artifact_kinds"] == []
+    assert lookup_plan["lookups"][0]["match_keys"]["email"] == "new@example.test"
+    assert sink_plan["actions"][0]["match_keys"]["email"] == "new@example.test"
+    assert any(event["event_type"] == "route_refresh_requested" for event in events)
+    assert any(event["event_type"] == "route_refresh_updated" for event in events)
+
+
+def test_service_enrichment_merge_refreshes_existing_sink_plan(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+        field_corrections={"full_name": "Ada Lovelace", "email": "ada@example.test", "notes": "Card note"},
+    )
+    service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+    (artifact_dir / "enrichment_result.json").write_text(
+        json.dumps(
+            {
+                "schema": "business-card-watchdog.enrichment-result.v1",
+                "merge_proposals": [
+                    {
+                        "field": "notes",
+                        "value": "Public-web corroboration candidate: https://example.test/ada",
+                        "source": "public_web",
+                        "requires_review": True,
+                    }
+                ],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    result = service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_enrichment_merge",
+        approved_enrichment_fields=["notes"],
+    )
+    next_action = service.next_actions(run_id=run_id)["actions"][0]
+    refreshed = service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+    route_refresh = json.loads((artifact_dir / "route_refresh.json").read_text(encoding="utf-8"))
+
+    assert result["route_refresh"]["reason"] == "enrichment_merge_updated_reviewed_contact"
+    assert result["route_refresh"]["pending_artifact_kinds"] == ["sink_plan"]
+    assert next_action["action"] == "plan_sinks"
+    assert route_refresh["state"] == "complete"
+    assert "Public-web corroboration candidate" in refreshed["plan"]["payloads"][0]["payload"]["values"]["notes"]
+
+
 def test_service_next_actions_recommends_live_apply_after_decision(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",

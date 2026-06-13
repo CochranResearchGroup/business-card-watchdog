@@ -686,3 +686,25 @@ Captured:
 Validation:
 
 - Documentation-only planning update; run `git diff --check` before commit.
+
+## Turn 41 | 2026-06-13
+
+Continued Plan 0004 execution with route-refresh handling after review changes.
+
+Implemented:
+
+- Added `route_refresh.json` artifacts when reviewed contact changes, enrichment merge approvals, or duplicate resolution decisions make existing route artifacts stale.
+- Route refresh artifacts track stale, refreshed, and pending route artifact kinds with zero-write and zero-network counters.
+- `next_actions` now checks pending route refresh before trusting existing lookup, duplicate, sink plan, preflight, decision, readiness, apply, or readback artifacts.
+- Safe next-action execution can replay stale zero-network/zero-write route phases from the first stale artifact.
+- Stale manual apply decisions are not reused after a route refresh; the agent loop stops again at the manual decision boundary.
+- Ledger events now record `route_refresh_requested` and `route_refresh_updated`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py -q` passed with 38 tests.
+- `.venv/bin/python -m pytest -q` passed with 128 tests.
+- `PYTHONPATH=src pytest -q` passed with 124 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.

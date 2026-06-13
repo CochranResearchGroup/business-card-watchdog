@@ -52,6 +52,89 @@ _SAFE_NEXT_ACTIONS = {
     "prepare_sink_readback_adapter",
 }
 
+_ROUTE_ARTIFACT_FILES = {
+    "sink_lookup_plan": "sink_lookup_plan.json",
+    "sink_adapter_request_lookup": "sink_adapter_request_lookup.json",
+    "sink_lookup_result": "sink_lookup_result.json",
+    "downstream_duplicate_assessment": "downstream_duplicate_assessment.json",
+    "sink_plan": "sink_plan.json",
+    "sink_adapter_request_write": "sink_adapter_request_write.json",
+    "sink_apply_preflight": "sink_apply_preflight.json",
+    "sink_apply_decision": "sink_apply_decision.json",
+    "sink_apply_pilot_readiness": "sink_apply_pilot_readiness.json",
+    "sink_apply_result": "sink_apply_result.json",
+    "sink_adapter_request_readback": "sink_adapter_request_readback.json",
+}
+
+_ROUTE_REFRESH_STEPS = [
+    {
+        "kind": "sink_lookup_plan",
+        "action": "plan_sink_lookup",
+        "command": "sinks lookup-plan",
+        "reason": "review changed routing-relevant contact data; refresh sink lookup plan",
+    },
+    {
+        "kind": "sink_adapter_request_lookup",
+        "action": "prepare_sink_lookup_adapter",
+        "command": "sinks adapter-request --phase lookup",
+        "reason": "review changed routing-relevant contact data; refresh lookup adapter request",
+    },
+    {
+        "kind": "sink_lookup_result",
+        "action": "record_sink_lookup_result",
+        "command": "sinks lookup-result",
+        "reason": "review changed routing-relevant contact data; refresh lookup result from the new lookup request",
+    },
+    {
+        "kind": "downstream_duplicate_assessment",
+        "action": "assess_downstream_duplicates",
+        "command": "sinks assess-duplicates",
+        "reason": "review changed routing-relevant contact data; reassess downstream duplicates",
+    },
+    {
+        "kind": "sink_plan",
+        "action": "plan_sinks",
+        "command": "sinks plan",
+        "reason": "review changed routing-relevant contact data; refresh sink plan",
+    },
+    {
+        "kind": "sink_adapter_request_write",
+        "action": "prepare_sink_write_adapter",
+        "command": "sinks adapter-request --phase write",
+        "reason": "review changed routing-relevant contact data; refresh write adapter request",
+    },
+    {
+        "kind": "sink_apply_preflight",
+        "action": "preflight_sink_apply",
+        "command": "sinks apply-preflight",
+        "reason": "review changed routing-relevant contact data; refresh apply preflight",
+    },
+    {
+        "kind": "sink_apply_decision",
+        "action": "decide_sink_apply",
+        "command": "sinks apply-decision",
+        "reason": "review changed routing-relevant contact data; previous apply decision must be reviewed again",
+    },
+    {
+        "kind": "sink_apply_pilot_readiness",
+        "action": "prepare_sink_apply_pilot_readiness",
+        "command": "sinks apply-pilot-readiness",
+        "reason": "review changed routing-relevant contact data; refresh live apply pilot readiness",
+    },
+    {
+        "kind": "sink_apply_result",
+        "action": "await_apply_approval",
+        "command": "sinks apply --apply",
+        "reason": "review changed routing-relevant contact data; live apply remains explicit and gated",
+    },
+    {
+        "kind": "sink_adapter_request_readback",
+        "action": "prepare_sink_readback_adapter",
+        "command": "sinks adapter-request --phase readback",
+        "reason": "review changed routing-relevant contact data; refresh readback adapter request after apply",
+    },
+]
+
 
 class BusinessCardService:
     def __init__(self, config: AppConfig) -> None:
@@ -276,6 +359,7 @@ class BusinessCardService:
 
         ledger = RunLedger(self.config.runs_dir / run_id)
         ledger.record_artifact(job_id=job_id, kind="review_submission", path=submission_path)
+        route_refresh = None
         if action == "approve_for_routing":
             candidate_path = artifact_dir / "contact_candidate.json"
             if candidate_path.exists():
@@ -295,6 +379,13 @@ class BusinessCardService:
             ledger.record_artifact(job_id=job_id, kind="reviewed_contact", path=reviewed_contact_path)
             job.transition_to("ready_to_route")
             ledger.record_job(job)
+            route_refresh = self._record_route_refresh_if_needed(
+                artifact_dir,
+                job_id=job_id,
+                run_id=run_id,
+                reviewer=reviewer,
+                reason="reviewed_contact_updated",
+            )
         elif action == "approve_enrichment_merge":
             candidate_path = artifact_dir / "reviewed_contact.json"
             if not candidate_path.exists():
@@ -338,6 +429,14 @@ class BusinessCardService:
                     "merge_review_path": str(merge_review_path),
                 },
             )
+            if merge_review["applied"]:
+                route_refresh = self._record_route_refresh_if_needed(
+                    artifact_dir,
+                    job_id=job_id,
+                    run_id=run_id,
+                    reviewer=reviewer,
+                    reason="enrichment_merge_updated_reviewed_contact",
+                )
         elif action == "request_enrichment":
             if job.state != "needs_review":
                 job.transition_to("needs_review")
@@ -383,6 +482,14 @@ class BusinessCardService:
                     "resolution_path": str(resolution_path),
                 },
             )
+            if decision != "noop":
+                route_refresh = self._record_route_refresh_if_needed(
+                    artifact_dir,
+                    job_id=job_id,
+                    run_id=run_id,
+                    reviewer=reviewer,
+                    reason="duplicate_resolution_updated_route_context",
+                )
         elif action == "reject_not_card":
             job.transition_to("failed", error="review rejected image as not a business card")
             ledger.record_job(job)
@@ -399,11 +506,15 @@ class BusinessCardService:
                 "submission_path": str(submission_path),
             },
         )
-        return {
+        response = {
             "job": job.to_dict(),
             "submission": submission,
             "submission_path": str(submission_path),
         }
+        if route_refresh is not None:
+            response["route_refresh"] = route_refresh["route_refresh"]
+            response["route_refresh_path"] = route_refresh["route_refresh_path"]
+        return response
 
     def list_artifacts(self, run_id: str) -> list[dict[str, Any]]:
         artifacts_path = self.config.runs_dir / run_id / "artifacts.jsonl"
@@ -625,6 +736,12 @@ class BusinessCardService:
                 "sinks": decision.sinks,
             },
         )
+        self._mark_route_artifact_refreshed(
+            artifact_dir,
+            job_id=job_id,
+            run_id=run_id,
+            kind="sink_plan",
+        )
         return {"plan_path": str(plan_path), "plan": plan}
 
     def plan_sink_lookup_for_job(self, *, job_id: str, run_id: str, dry_run: bool = True) -> dict[str, Any]:
@@ -656,6 +773,12 @@ class BusinessCardService:
                 "network_calls_made": 0,
             },
         )
+        self._mark_route_artifact_refreshed(
+            artifact_dir,
+            job_id=job_id,
+            run_id=run_id,
+            kind="sink_lookup_plan",
+        )
         return {"lookup_plan_path": str(lookup_plan_path), "lookup_plan": plan}
 
     def preflight_sink_apply(self, *, job_id: str, run_id: str, apply: bool = False) -> dict[str, Any]:
@@ -682,6 +805,12 @@ class BusinessCardService:
                 "writes_attempted": 0,
                 "network_calls_made": 0,
             },
+        )
+        self._mark_route_artifact_refreshed(
+            artifact_dir,
+            job_id=job_id,
+            run_id=run_id,
+            kind="sink_apply_preflight",
         )
         return {"preflight_path": str(preflight_path), "preflight": preflight}
 
@@ -726,6 +855,12 @@ class BusinessCardService:
                 "writes_attempted": 0,
                 "network_calls_made": 0,
             },
+        )
+        self._mark_route_artifact_refreshed(
+            artifact_dir,
+            job_id=job_id,
+            run_id=run_id,
+            kind="sink_apply_decision",
         )
         return {
             "job": job.to_dict(),
@@ -776,6 +911,12 @@ class BusinessCardService:
                 "writes_attempted": 0,
                 "network_calls_made": 0,
             },
+        )
+        self._mark_route_artifact_refreshed(
+            artifact_dir,
+            job_id=job_id,
+            run_id=run_id,
+            kind="sink_apply_result",
         )
         return {"result_path": str(result_path), "result": result}
 
@@ -856,6 +997,12 @@ class BusinessCardService:
                 "network_calls_made": 0,
             },
         )
+        self._mark_route_artifact_refreshed(
+            artifact_dir,
+            job_id=job_id,
+            run_id=run_id,
+            kind="sink_apply_pilot_readiness",
+        )
         return {"readiness_path": str(readiness_path), "readiness": payload}
 
     def build_sink_adapter_request_for_job(
@@ -919,6 +1066,12 @@ class BusinessCardService:
                 "network_calls_made": 0,
             },
         )
+        self._mark_route_artifact_refreshed(
+            artifact_dir,
+            job_id=job_id,
+            run_id=run_id,
+            kind=f"sink_adapter_request_{phase}",
+        )
         return {"request_path": str(request_path), "request": request}
 
     def record_sink_lookup_result_for_job(
@@ -959,6 +1112,12 @@ class BusinessCardService:
                 "network_calls_made": 0,
             },
         )
+        self._mark_route_artifact_refreshed(
+            artifact_dir,
+            job_id=job_id,
+            run_id=run_id,
+            kind="sink_lookup_result",
+        )
         return {"result_path": str(result_path), "result": result}
 
     def assess_downstream_duplicates_for_job(self, *, job_id: str, run_id: str) -> dict[str, Any]:
@@ -987,6 +1146,12 @@ class BusinessCardService:
                 "state": assessment["state"],
                 "match_count": len(assessment["matches"]),
             },
+        )
+        self._mark_route_artifact_refreshed(
+            artifact_dir,
+            job_id=job_id,
+            run_id=run_id,
+            kind="downstream_duplicate_assessment",
         )
         return {
             "job": job.to_dict(),
@@ -1049,6 +1214,110 @@ class BusinessCardService:
             "odoo": {"tenant": self.config.sink.odollo_tenant},
         }
 
+    def _record_route_refresh_if_needed(
+        self,
+        artifact_dir: Path,
+        *,
+        job_id: str,
+        run_id: str,
+        reviewer: str,
+        reason: str,
+    ) -> dict[str, Any] | None:
+        stale_kinds = [
+            kind
+            for kind, filename in _ROUTE_ARTIFACT_FILES.items()
+            if (artifact_dir / filename).exists()
+        ]
+        if not stale_kinds:
+            return None
+        payload = {
+            "schema": "business-card-watchdog.route-refresh.v1",
+            "state": "pending",
+            "job_id": job_id,
+            "run_id": run_id,
+            "reviewer": reviewer,
+            "reason": reason,
+            "stale_artifact_kinds": stale_kinds,
+            "refreshed_artifact_kinds": [],
+            "pending_artifact_kinds": stale_kinds,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+        refresh_path = artifact_dir / "route_refresh.json"
+        refresh_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        ledger.record_artifact(job_id=job_id, kind="route_refresh", path=refresh_path)
+        ledger.record_event(
+            "route_refresh_requested",
+            {
+                "job_id": job_id,
+                "run_id": run_id,
+                "reason": reason,
+                "refresh_path": str(refresh_path),
+                "stale_artifact_kinds": stale_kinds,
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        return {"route_refresh_path": str(refresh_path), "route_refresh": payload}
+
+    def _mark_route_artifact_refreshed(
+        self,
+        artifact_dir: Path,
+        *,
+        job_id: str,
+        run_id: str,
+        kind: str,
+    ) -> None:
+        refresh_path = artifact_dir / "route_refresh.json"
+        if not refresh_path.exists():
+            return
+        payload = json.loads(refresh_path.read_text(encoding="utf-8"))
+        pending = list(payload.get("pending_artifact_kinds") or [])
+        if kind not in pending:
+            return
+        refreshed = list(payload.get("refreshed_artifact_kinds") or [])
+        refreshed.append(kind)
+        pending = [item for item in pending if item != kind]
+        payload["refreshed_artifact_kinds"] = refreshed
+        payload["pending_artifact_kinds"] = pending
+        payload["state"] = "complete" if not pending else "pending"
+        refresh_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        RunLedger(self.config.runs_dir / run_id).record_event(
+            "route_refresh_updated",
+            {
+                "job_id": job_id,
+                "run_id": run_id,
+                "refresh_path": str(refresh_path),
+                "refreshed_kind": kind,
+                "pending_artifact_kinds": pending,
+                "state": payload["state"],
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+
+    def _next_route_refresh_action(self, artifact_dir: Path) -> dict[str, Any] | None:
+        refresh_path = artifact_dir / "route_refresh.json"
+        if not refresh_path.exists():
+            return None
+        payload = json.loads(refresh_path.read_text(encoding="utf-8"))
+        if payload.get("state") != "pending":
+            return None
+        pending = set(str(kind) for kind in payload.get("pending_artifact_kinds") or [])
+        if not pending:
+            return None
+        for step in _ROUTE_REFRESH_STEPS:
+            if step["kind"] in pending:
+                return {
+                    "action": step["action"],
+                    "reason": step["reason"],
+                    "command": step["command"],
+                    "route_refresh_path": str(refresh_path),
+                    "pending_artifact_kinds": [kind for kind in payload["pending_artifact_kinds"]],
+                }
+        return None
+
     def _execute_safe_next_action(self, action: dict[str, Any]) -> dict[str, Any]:
         action_name = str(action.get("action") or "")
         job_id = str(action["job_id"])
@@ -1094,6 +1363,11 @@ class BusinessCardService:
                 "command": "jobs review",
             }
         if state == "ready_to_route":
+            artifact_dir_value = str(job.get("artifact_dir") or "")
+            if artifact_dir_value:
+                route_refresh_action = self._next_route_refresh_action(Path(artifact_dir_value))
+                if route_refresh_action is not None:
+                    return route_refresh_action
             if "sink_lookup_plan" not in artifact_kinds:
                 return {
                     "action": "plan_sink_lookup",

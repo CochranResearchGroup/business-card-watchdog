@@ -681,6 +681,32 @@ Remaining:
 - Real public-web search execution remains blocked until an explicit operator/search-adapter action is approved.
 - Live Google Contacts and Odoo/Odollo lookup/write/readback adapters remain blocked.
 
+### Slice 0004-AC | 2026-06-13 | Route Refresh After Review Changes
+
+Implemented:
+
+- Added `route_refresh.json` artifacts when reviewed contact data, approved enrichment merges, or duplicate resolution decisions make existing route artifacts stale.
+- Route refresh artifacts preserve the stale artifact kinds, refreshed artifact kinds, pending artifact kinds, reason, reviewer, and zero-write/zero-network counters.
+- Next-action readback now honors pending route refresh state before trusting existing lookup, duplicate, sink plan, preflight, decision, readiness, apply, or readback artifacts.
+- Safe agent-loop execution can replay zero-network/zero-write route phases from the first stale artifact.
+- Manual apply decisions are not reused after route-refresh invalidation; the next-action engine stops again at `decide_sink_apply` when a previous decision was stale.
+- Refresh updates are ledgered with `route_refresh_requested` and `route_refresh_updated` events.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py -q` passed with 38 tests.
+- `.venv/bin/python -m pytest -q` passed with 128 tests.
+- `PYTHONPATH=src pytest -q` passed with 124 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+Remaining:
+
+- Route refresh does not delete old route artifacts; it relies on the refresh artifact and latest file contents for current-state readback.
+- Live GWS/Odollo lookup/write/readback adapters remain blocked pending explicit pilot work.
+- Public-web and paid API enrichment execution remain explicit follow-on actions.
+
 ## Next High-Level Plan
 
 The next execution block should turn the current artifact-first scaffolding into an operator-usable review and routing system while preserving the current safety boundaries: no paid enrichment unless explicitly requested, no live sink writes without an approved pilot, and no secret values in repo artifacts or logs.
