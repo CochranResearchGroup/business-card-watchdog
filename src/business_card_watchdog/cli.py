@@ -177,6 +177,10 @@ def build_parser() -> argparse.ArgumentParser:
     enrichment_public_web_results.add_argument("--searched-by", default="operator")
     enrichment_public_web_results.add_argument("--results-json", default="[]")
     enrichment_public_web_results.add_argument("--json", action="store_true")
+    enrichment_public_web_handoff = enrichment_sub.add_parser("public-web-handoff")
+    enrichment_public_web_handoff.add_argument("job_id")
+    enrichment_public_web_handoff.add_argument("--run-id", required=True)
+    enrichment_public_web_handoff.add_argument("--json", action="store_true")
 
     watch = sub.add_parser("watch")
     watch.add_argument("--once", action="store_true")
@@ -373,12 +377,17 @@ def main(argv: list[str] | None = None) -> int:
                 public_web_results=json.loads(args.public_web_results_json),
                 provider_results=json.loads(args.provider_results_json),
             )
-        else:
+        elif args.enrichment_command == "public-web-results":
             payload = service.record_public_web_enrichment_results(
                 job_id=args.job_id,
                 run_id=args.run_id,
                 searched_by=args.searched_by,
                 results=json.loads(args.results_json),
+            )
+        else:
+            payload = service.build_public_web_enrichment_handoff(
+                job_id=args.job_id,
+                run_id=args.run_id,
             )
         print(json.dumps(payload, indent=2) if args.json else payload)
         checks = payload.get("checks") or payload.get("readiness", {}).get("checks", [])

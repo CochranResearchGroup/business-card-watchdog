@@ -361,6 +361,18 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_public_web_enrichment_handoff",
+                "description": "Create a zero-network public-web search handoff from an existing enrichment request artifact.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "job_id": {"type": "string"},
+                        "run_id": {"type": "string"},
+                    },
+                    "required": ["job_id", "run_id"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_watch_status",
                 "description": "Report watched inputs, seen-file count, backlog, unsettled files, and last error.",
                 "input_schema": {"type": "object", "properties": {}},
@@ -531,6 +543,11 @@ def call_tool(
             run_id=str(args["run_id"]),
             searched_by=str(args.get("searched_by") or "operator"),
             results=list(args.get("results") or []),
+        )
+    if tool_name == "business_card_watchdog_public_web_enrichment_handoff":
+        return service.build_public_web_enrichment_handoff(
+            job_id=str(args["job_id"]),
+            run_id=str(args["run_id"]),
         )
     if tool_name == "business_card_watchdog_watch_status":
         return service.watch_status()

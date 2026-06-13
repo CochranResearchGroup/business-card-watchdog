@@ -592,6 +592,26 @@ def test_cli_enrichment_request_writes_public_web_artifacts(tmp_path: Path, monk
                 "--config",
                 str(config_path),
                 "enrichment",
+                "public-web-handoff",
+                job["job_id"],
+                "--run-id",
+                run_dir.name,
+                "--json",
+            ]
+        )
+        == 0
+    )
+    handoff_payload = json.loads(capsys.readouterr().out)
+    assert handoff_payload["handoff"]["schema"] == "business-card-watchdog.enrichment-public-web-search-handoff.v1"
+    assert handoff_payload["handoff"]["network_calls_made"] == 0
+    assert handoff_payload["handoff"]["result_import"]["mcp_tool"] == "business_card_watchdog_public_web_enrichment_results"
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "enrichment",
                 "public-web-results",
                 job["job_id"],
                 "--run-id",

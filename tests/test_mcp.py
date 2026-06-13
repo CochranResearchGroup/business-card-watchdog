@@ -36,6 +36,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_downstream_duplicate_assessment" in names
     assert "business_card_watchdog_enrichment_check" in names
     assert "business_card_watchdog_enrichment_request" in names
+    assert "business_card_watchdog_public_web_enrichment_handoff" in names
     assert "business_card_watchdog_public_web_enrichment_results" in names
     assert "business_card_watchdog_doctor" in names
     review_tool = next(tool for tool in manifest["tools"] if tool["name"] == "business_card_watchdog_job_review")
@@ -278,6 +279,11 @@ def test_mcp_public_web_enrichment_results_are_explicit(tmp_path: Path) -> None:
         {"job_id": job_id, "run_id": run_id, "mode": "public_web"},
         config=config,
     )
+    handoff = call_tool(
+        "business_card_watchdog_public_web_enrichment_handoff",
+        {"job_id": job_id, "run_id": run_id},
+        config=config,
+    )
     payload = call_tool(
         "business_card_watchdog_public_web_enrichment_results",
         {
@@ -296,6 +302,8 @@ def test_mcp_public_web_enrichment_results_are_explicit(tmp_path: Path) -> None:
     )
 
     assert request["public_web_request"]["network_calls_made"] == 0
+    assert handoff["handoff"]["schema"] == "business-card-watchdog.enrichment-public-web-search-handoff.v1"
+    assert handoff["handoff"]["search_calls_attempted"] == 0
     assert payload["public_web_result"]["schema"] == "business-card-watchdog.enrichment-public-web-result.v1"
     assert payload["public_web_result"]["searched_by"] == "mcp-search"
     assert payload["public_web_result"]["network_calls_made"] == 0

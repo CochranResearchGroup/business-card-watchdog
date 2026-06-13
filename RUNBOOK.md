@@ -1008,3 +1008,23 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed with the index up to date.
 - `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+## Turn 56 | 2026-06-13
+
+Continued Plan 0004 execution with public-web search handoff artifacts.
+
+Implemented:
+
+- Added deterministic `enrichment_public_web_search_handoff.json` artifacts from existing public-web enrichment request artifacts.
+- Handoffs carry source request status, query budget, zero-network counters, operator/search-agent instructions, and explicit result-import commands for CLI/API/MCP.
+- Added service, CLI, API, and MCP surfaces for creating the handoff without making live search calls.
+- Added the handoff artifact kind to review bundle indexing.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_enrichment.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 42 tests.
+- `.venv/bin/python -m pytest -q` passed with 145 tests.
+- `PYTHONPATH=src pytest -q` passed with 140 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.

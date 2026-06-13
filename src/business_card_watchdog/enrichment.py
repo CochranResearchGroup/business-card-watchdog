@@ -15,6 +15,7 @@ ENRICHMENT_REQUEST_SCHEMA = "business-card-watchdog.enrichment-request.v1"
 ENRICHMENT_RESULT_SCHEMA = "business-card-watchdog.enrichment-result.v1"
 ENRICHMENT_PROVIDER_REQUEST_SCHEMA = "business-card-watchdog.enrichment-provider-request.v1"
 ENRICHMENT_PUBLIC_WEB_REQUEST_SCHEMA = "business-card-watchdog.enrichment-public-web-request.v1"
+ENRICHMENT_PUBLIC_WEB_SEARCH_HANDOFF_SCHEMA = "business-card-watchdog.enrichment-public-web-search-handoff.v1"
 ENRICHMENT_PUBLIC_WEB_RESULT_SCHEMA = "business-card-watchdog.enrichment-public-web-result.v1"
 ENRICHMENT_PROVIDER_RESULT_SCHEMA = "business-card-watchdog.enrichment-provider-result.v1"
 
@@ -152,6 +153,46 @@ def build_public_web_result_artifact(
         "search_calls_attempted": 0,
         "results": scored_result["results"],
         "merge_proposals": scored_result["merge_proposals"],
+    }
+
+
+def build_public_web_search_handoff(
+    public_web_request: dict[str, Any],
+    *,
+    run_id: str,
+    job_id: str,
+) -> dict[str, Any]:
+    queries = list(public_web_request.get("queries") or [])
+    max_queries = int(public_web_request.get("max_queries") or len(queries))
+    return {
+        "schema": ENRICHMENT_PUBLIC_WEB_SEARCH_HANDOFF_SCHEMA,
+        "source_request_schema": public_web_request.get("schema"),
+        "source_request_status": public_web_request.get("status"),
+        "run_id": run_id,
+        "job_id": job_id,
+        "provider": "public_web",
+        "mode": public_web_request.get("mode") or "public_web",
+        "cost_class": "operator_search",
+        "network_calls_made": 0,
+        "search_calls_attempted": 0,
+        "max_queries": max_queries,
+        "query_count": len(queries),
+        "queries": queries,
+        "instructions": [
+            "Run only the listed public-web searches or narrower variants derived from the observed card fields.",
+            "Collect title, url, snippet, and any observed matching fields for results that appear to describe the same person or organization.",
+            "Do not use paid APIs or authenticated data sources for this handoff.",
+            "Submit the collected rows through the result import surface for scoring and review.",
+        ],
+        "result_import": {
+            "cli": (
+                "bcw enrichment public-web-results "
+                f"{job_id} --run-id {run_id} --results-json '<json-array>' --searched-by <operator> --json"
+            ),
+            "api": f"POST /jobs/{job_id}/enrichment/public-web-results",
+            "mcp_tool": "business_card_watchdog_public_web_enrichment_results",
+            "result_schema": ENRICHMENT_PUBLIC_WEB_RESULT_SCHEMA,
+        },
     }
 
 

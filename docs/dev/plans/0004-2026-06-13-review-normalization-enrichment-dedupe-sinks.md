@@ -1020,10 +1020,6 @@ Validation:
 - `codegraph sync && codegraph status` passed with the index up to date.
 - `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
 
-Remaining:
-
-- Sink payload mapping for profile URLs remains follow-on work and should be gated per sink field support.
-
 ### Slice 0004-AQ | 2026-06-13 | Profile URL Sink Mapping
 
 Implemented:
@@ -1046,6 +1042,31 @@ Validation:
 Remaining:
 
 - Live sink adapters still need explicit read-only lookup pilots before any write behavior can use these mapped fields.
+
+### Slice 0004-AR | 2026-06-13 | Public-Web Search Handoff
+
+Implemented:
+
+- Added `enrichment_public_web_search_handoff.json` artifacts generated from existing `enrichment_public_web_request.json` artifacts.
+- Handoff artifacts preserve source request status, query count, max query budget, zero-network counters, operator instructions, and explicit CLI/API/MCP result-import surfaces.
+- Added service `build_public_web_enrichment_handoff`.
+- Added CLI `bcw enrichment public-web-handoff`.
+- Added API `POST /jobs/{job_id}/enrichment/public-web-handoff`.
+- Added MCP tool `business_card_watchdog_public_web_enrichment_handoff`.
+- Review bundle indexing now includes the handoff artifact kind.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_enrichment.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 42 tests.
+- `.venv/bin/python -m pytest -q` passed with 145 tests.
+- `PYTHONPATH=src pytest -q` passed with 140 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+Remaining:
+
+- Live public-web search execution remains explicit follow-on work; this slice only prepares a deterministic handoff for an operator or search agent.
 
 ## Next High-Level Plan
 

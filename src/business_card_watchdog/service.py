@@ -17,6 +17,7 @@ from .enrichment import (
     build_public_web_result_artifact,
     build_enrichment_request,
     build_paid_api_provider_request,
+    build_public_web_search_handoff,
     build_public_web_search_request,
     check_enrichment_readiness,
     score_paid_api_provider_results,
@@ -145,6 +146,7 @@ _REVIEW_BUNDLE_ARTIFACT_KINDS = {
     "review_submission",
     "enrichment_request",
     "enrichment_public_web_request",
+    "enrichment_public_web_search_handoff",
     "enrichment_public_web_result",
     "enrichment_provider_request",
     "enrichment_result",
@@ -1089,6 +1091,47 @@ class BusinessCardService:
             "result_path": str(result_path),
             "public_web_result": public_web_result,
             "result": result_payload,
+        }
+
+    def build_public_web_enrichment_handoff(
+        self,
+        *,
+        job_id: str,
+        run_id: str,
+    ) -> dict[str, Any]:
+        job = self.get_job(job_id, run_id=run_id)
+        artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
+        request_path = artifact_dir / "enrichment_public_web_request.json"
+        if not request_path.exists():
+            raise FileNotFoundError(f"public web enrichment request not found for job: {job_id}")
+        public_web_request = json.loads(request_path.read_text(encoding="utf-8"))
+        handoff = build_public_web_search_handoff(
+            public_web_request,
+            run_id=run_id,
+            job_id=job_id,
+        )
+        handoff_path = artifact_dir / "enrichment_public_web_search_handoff.json"
+        handoff_path.write_text(
+            json.dumps(handoff, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        ledger.record_artifact(job_id=job_id, kind="enrichment_public_web_search_handoff", path=handoff_path)
+        ledger.record_event(
+            "enrichment_public_web_search_handoff_created",
+            {
+                "job_id": job_id,
+                "run_id": run_id,
+                "handoff_path": str(handoff_path),
+                "query_count": handoff["query_count"],
+                "network_calls_made": 0,
+                "search_calls_attempted": 0,
+            },
+        )
+        return {
+            "status": "ok",
+            "handoff_path": str(handoff_path),
+            "handoff": handoff,
         }
 
     def plan_sinks_for_job(self, *, job_id: str, run_id: str, dry_run: bool = True) -> dict[str, Any]:

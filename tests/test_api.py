@@ -276,6 +276,14 @@ def test_api_records_public_web_enrichment_results(tmp_path: Path) -> None:
     ).json()
     assert request["public_web_request"]["schema"] == "business-card-watchdog.enrichment-public-web-request.v1"
 
+    handoff = client.post(
+        f"/jobs/{job_id}/enrichment/public-web-handoff",
+        json={"run_id": run_id},
+    ).json()
+    assert handoff["handoff"]["schema"] == "business-card-watchdog.enrichment-public-web-search-handoff.v1"
+    assert handoff["handoff"]["network_calls_made"] == 0
+    assert handoff["handoff"]["result_import"]["api"] == f"POST /jobs/{job_id}/enrichment/public-web-results"
+
     payload = client.post(
         f"/jobs/{job_id}/enrichment/public-web-results",
         json={

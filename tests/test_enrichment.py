@@ -7,6 +7,7 @@ from business_card_watchdog.enrichment import (
     build_enrichment_request,
     build_paid_api_provider_request,
     build_public_web_result_artifact,
+    build_public_web_search_handoff,
     build_public_web_search_request,
     check_enrichment_readiness,
     score_paid_api_provider_results,
@@ -159,6 +160,35 @@ def test_public_web_result_artifact_scores_explicit_operator_results(tmp_path: P
     assert result["search_calls_attempted"] == 0
     assert result["results"][0]["score"] >= 75
     assert result["merge_proposals"][0]["field"] == "notes"
+
+
+def test_public_web_search_handoff_is_zero_network_and_import_scoped() -> None:
+    request = {
+        "schema": "business-card-watchdog.enrichment-public-web-request.v1",
+        "mode": "public_web",
+        "status": "prepared",
+        "max_queries": 2,
+        "queries": [
+            {
+                "kind": "person_org",
+                "query": '"Ada Lovelace" "Example Labs"',
+                "search_url": "https://www.google.com/search?q=%22Ada+Lovelace%22+%22Example+Labs%22",
+            }
+        ],
+    }
+
+    handoff = build_public_web_search_handoff(request, run_id="run-1", job_id="job-1")
+
+    assert handoff["schema"] == "business-card-watchdog.enrichment-public-web-search-handoff.v1"
+    assert handoff["source_request_schema"] == request["schema"]
+    assert handoff["source_request_status"] == "prepared"
+    assert handoff["cost_class"] == "operator_search"
+    assert handoff["network_calls_made"] == 0
+    assert handoff["search_calls_attempted"] == 0
+    assert handoff["query_count"] == 1
+    assert handoff["max_queries"] == 2
+    assert handoff["result_import"]["mcp_tool"] == "business_card_watchdog_public_web_enrichment_results"
+    assert "public-web-results job-1 --run-id run-1" in handoff["result_import"]["cli"]
 
 
 def test_paid_api_provider_request_is_zero_network_and_secret_free(tmp_path: Path) -> None:
@@ -350,6 +380,30 @@ def test_service_records_public_web_results_after_request(tmp_path: Path) -> Non
     assert any(artifact["kind"] == "enrichment_public_web_result" for artifact in artifacts)
     assert any(artifact["kind"] == "enrichment_result" for artifact in artifacts)
     assert any(event["event_type"] == "enrichment_public_web_results_recorded" for event in events)
+
+
+def test_service_creates_public_web_search_handoff_after_request(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        enrichment=EnrichmentConfig(enabled=True, max_public_web_queries_per_contact=2),
+    )
+    run_id, job_id = _record_candidate(config)
+    service = BusinessCardService(config)
+    service.request_enrichment(job_id=job_id, run_id=run_id, mode="public_web", requested_by="tester")
+
+    payload = service.build_public_web_enrichment_handoff(job_id=job_id, run_id=run_id)
+    artifacts = read_jsonl(config.runs_dir / run_id / "artifacts.jsonl")
+    events = read_jsonl(config.runs_dir / run_id / "events.jsonl")
+
+    assert payload["status"] == "ok"
+    assert Path(payload["handoff_path"]).exists()
+    assert payload["handoff"]["schema"] == "business-card-watchdog.enrichment-public-web-search-handoff.v1"
+    assert payload["handoff"]["network_calls_made"] == 0
+    assert payload["handoff"]["search_calls_attempted"] == 0
+    assert payload["handoff"]["max_queries"] == 2
+    assert any(artifact["kind"] == "enrichment_public_web_search_handoff" for artifact in artifacts)
+    assert any(event["event_type"] == "enrichment_public_web_search_handoff_created" for event in events)
 
 
 def test_service_public_web_result_import_enforces_request_limit(tmp_path: Path) -> None:
