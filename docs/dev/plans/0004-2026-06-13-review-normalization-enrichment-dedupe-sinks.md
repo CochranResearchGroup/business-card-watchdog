@@ -579,6 +579,26 @@ Remaining:
 - Live Google Contacts and Odoo/Odollo lookup/write/readback adapters remain blocked.
 - Non-simulated live apply remains blocked until adapters are implemented and explicitly approved.
 
+### Slice 0004-X | 2026-06-13 | GWS Local Readiness Evidence
+
+Implemented:
+
+- Google Contacts live readiness now reports local `gws` readiness evidence without making Google API calls.
+- Readiness distinguishes missing `gws`, missing Google Workspace auth evidence, missing People API discovery cache, and the still-blocked live write/readback gate.
+- Readiness details include the configured profile, `gws` path, config directory, boolean auth evidence file presence, People discovery cache presence, required contact scopes, and a note that scope evidence is not verified without a live API call.
+- Google adapter request contracts now include deterministic `gws` command vectors for lookup, write, and readback.
+- Tests isolate `GOOGLE_WORKSPACE_CLI_CONFIG_DIR` to prove missing-auth behavior without depending on the workstation's real auth state.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py tests/test_config.py -q` passed with 55 tests.
+
+Remaining:
+
+- Live Google scope verification remains blocked until an explicitly approved read-only/pilot call is allowed.
+- Live Google Contacts and Odoo/Odollo lookup/write/readback adapters remain blocked.
+- Non-simulated live apply remains blocked until adapters are implemented and explicitly approved.
+
 ## `/goal` Objective
 
 Use this as the high-level `/goal` objective:

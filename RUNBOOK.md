@@ -588,3 +588,19 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_config.py tests/test_service.py tests/test_sinks.py -q` passed with 54 tests.
+
+## Turn 35 | 2026-06-13
+
+Continued Plan 0004 execution with Google Workspace local readiness evidence.
+
+Implemented:
+
+- Google Contacts live readiness now reports local `gws` evidence without making Google API calls.
+- Readiness distinguishes missing `gws`, missing auth evidence, missing People API discovery cache, and the still-blocked live write/readback gate.
+- Readiness details include profile, `gws` path, config directory, auth evidence booleans, People discovery cache presence, required contact scopes, and an explicit note that scopes are not verified without a live call.
+- Google adapter request contracts now include deterministic `gws` command vectors for lookup, write, and readback.
+- Tests isolate `GOOGLE_WORKSPACE_CLI_CONFIG_DIR` for missing-auth behavior.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py tests/test_config.py -q` passed with 55 tests.

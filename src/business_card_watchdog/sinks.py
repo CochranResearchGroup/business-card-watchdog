@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -444,11 +445,26 @@ def check_sink_readiness(
                 reason="gws CLI not found; cannot verify Google Contacts readiness",
                 details={"profile": google_contacts_profile},
             )
+        gws_details = _gws_local_readiness_details(profile=google_contacts_profile)
+        if not gws_details["auth_evidence_present"]:
+            return SinkReadiness(
+                sink=sink,
+                status="blocked",
+                reason="missing Google Workspace auth evidence for live Contacts apply",
+                details=gws_details,
+            )
+        if not gws_details["people_discovery_cache_present"]:
+            return SinkReadiness(
+                sink=sink,
+                status="blocked",
+                reason="missing gws People API discovery cache for live Contacts apply",
+                details=gws_details,
+            )
         return SinkReadiness(
             sink=sink,
             status="blocked",
-            reason="live Google Contacts write/readback gate is not implemented yet",
-            details={"profile": google_contacts_profile},
+            reason="gws local readiness evidence exists; live Google Contacts write/readback gate is not implemented yet",
+            details=gws_details,
         )
 
     if sink == "odoo":
@@ -467,6 +483,34 @@ def check_sink_readiness(
         )
 
     return SinkReadiness(sink=sink, status="blocked", reason=f"unknown sink: {sink}")
+
+
+def _gws_local_readiness_details(*, profile: str) -> dict[str, Any]:
+    config_dir = Path(os.environ.get("GOOGLE_WORKSPACE_CLI_CONFIG_DIR", Path.home() / ".config" / "gws")).expanduser()
+    auth_files = {
+        "credentials": config_dir / "credentials.enc",
+        "token_cache": config_dir / "token_cache.json",
+        "auth_state": config_dir / "auth_state.json",
+    }
+    discovery_cache = config_dir / "cache" / "people_v1.json"
+    return {
+        "profile": profile,
+        "gws_path": shutil.which("gws"),
+        "config_dir": str(config_dir),
+        "auth_evidence_present": any(path.exists() for path in auth_files.values()),
+        "auth_evidence_files": {name: path.exists() for name, path in auth_files.items()},
+        "people_discovery_cache_present": discovery_cache.exists(),
+        "required_scopes": [
+            "https://www.googleapis.com/auth/contacts",
+            "https://www.googleapis.com/auth/contacts.readonly",
+        ],
+        "scope_evidence": "not verified without a live Google API call",
+        "dry_run_probe": {
+            "lookup": "gws people people searchContacts --dry-run --params ...",
+            "write": "gws people people createContact --dry-run --json ...",
+            "network_calls_made": 0,
+        },
+    }
 
 
 def check_sink_lookup_readiness(sink: str, *, dry_run: bool) -> SinkReadiness:
@@ -643,6 +687,7 @@ def _gws_lookup_contract(*, match_keys: dict[str, str], profile: str) -> dict[st
         "api": "people.googleapis.com",
         "resource": "people.connections",
         "method": "people.searchContacts",
+        "gws_command": ["gws", "people", "people", "searchContacts"],
         "request_body": {
             "query": " ".join(query_terms),
             "readMask": "names,emailAddresses,phoneNumbers,organizations,metadata,biographies",
@@ -665,6 +710,7 @@ def _gws_write_contract(*, values: dict[str, Any], profile: str) -> dict[str, An
         "api": "people.googleapis.com",
         "resource": "people.connections",
         "method": "people.createContact_or_people.updateContact",
+        "gws_command": ["gws", "people", "people", "createContact"],
         "request_body": {
             "names": [{"displayName": values.get("full_name")}] if values.get("full_name") else [],
             "emailAddresses": [{"value": values.get("email")}] if values.get("email") else [],
@@ -699,6 +745,7 @@ def _gws_readback_contract(*, resource_id: Any, profile: str) -> dict[str, Any]:
         "api": "people.googleapis.com",
         "resource": "people.connections",
         "method": "people.get",
+        "gws_command": ["gws", "people", "people", "get"],
         "request_body": {
             "resourceName": resource_id,
             "personFields": "names,emailAddresses,phoneNumbers,organizations,metadata,biographies",

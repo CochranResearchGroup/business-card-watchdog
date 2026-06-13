@@ -55,6 +55,25 @@ def test_live_odoo_readiness_is_blocked_until_implemented_when_apply_enabled() -
     assert "not implemented" in readiness.reason
 
 
+def test_live_google_readiness_reports_missing_auth_evidence(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("GOOGLE_WORKSPACE_CLI_CONFIG_DIR", str(tmp_path / "gws"))
+
+    readiness = check_sink_readiness(
+        "google_contacts",
+        dry_run=False,
+        apply_enabled=True,
+        google_contacts_profile="codex",
+    )
+
+    assert not readiness.ready
+    assert readiness.status == "blocked"
+    assert "auth evidence" in readiness.reason or "gws CLI not found" in readiness.reason
+    if readiness.details.get("gws_path"):
+        assert readiness.details["auth_evidence_present"] is False
+        assert readiness.details["config_dir"] == str(tmp_path / "gws")
+        assert readiness.details["dry_run_probe"]["network_calls_made"] == 0
+
+
 def test_build_sink_payloads_include_match_keys_and_readiness() -> None:
     payloads = build_sink_payloads(
         sinks=["google_contacts", "odoo"],
@@ -141,6 +160,7 @@ def test_build_sink_adapter_request_prepares_lookup_write_and_readback_contracts
     assert lookup["writes_attempted"] == 0
     assert lookup["requests"][0]["adapter"] == "gws.people"
     assert lookup["requests"][0]["api"] == "people.googleapis.com"
+    assert lookup["requests"][0]["gws_command"] == ["gws", "people", "people", "searchContacts"]
     assert lookup["requests"][0]["profile"]["config_key"] == "sink.google_contacts_profile"
     assert lookup["requests"][0]["request_body"]["query"] == "ada@example.test +15550101234 Ada Lovelace"
     assert "emailAddresses" in lookup["requests"][0]["request_body"]["readMask"]
@@ -152,6 +172,7 @@ def test_build_sink_adapter_request_prepares_lookup_write_and_readback_contracts
     assert write["phase"] == "write"
     assert write["requests"][0]["payload"]["values"]["email"] == "ada@example.test"
     assert write["requests"][0]["method"] == "people.createContact_or_people.updateContact"
+    assert write["requests"][0]["gws_command"] == ["gws", "people", "people", "createContact"]
     assert write["requests"][0]["request_body"]["organizations"][0]["name"] == "Analytical Engines"
     assert write["requests"][0]["idempotency"]["lookup_required_before_write"] is True
     assert write["requests"][1]["method"] == "create_or_write"
@@ -161,6 +182,7 @@ def test_build_sink_adapter_request_prepares_lookup_write_and_readback_contracts
     assert readback["phase"] == "readback"
     assert readback["requests"][0]["simulated_readback"] is True
     assert readback["requests"][0]["method"] == "people.get"
+    assert readback["requests"][0]["gws_command"] == ["gws", "people", "people", "get"]
     assert readback["requests"][1]["method"] == "read"
 
 
