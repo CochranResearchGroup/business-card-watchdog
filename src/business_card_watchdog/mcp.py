@@ -300,6 +300,22 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_sink_lookup_pilot",
+                "description": "Execute an explicit read-only sink lookup pilot with mocked/live-supplied result rows and no writes.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "job_id": {"type": "string"},
+                        "run_id": {"type": "string"},
+                        "sink": {"type": "string", "enum": ["google_contacts", "odoo"]},
+                        "approved_by": {"type": "string"},
+                        "matches": {"type": "array", "items": {"type": "object"}},
+                        "simulate": {"type": "boolean", "default": True},
+                    },
+                    "required": ["job_id", "run_id", "sink", "approved_by"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_downstream_duplicate_assessment",
                 "description": "Assess sink lookup results into a review-blocking downstream duplicate artifact.",
                 "input_schema": {
@@ -543,6 +559,15 @@ def call_tool(
             job_id=str(args["job_id"]),
             run_id=str(args["run_id"]),
             matches_by_sink=dict(args.get("matches_by_sink") or {}),
+        )
+    if tool_name == "business_card_watchdog_sink_lookup_pilot":
+        return service.execute_sink_lookup_pilot_for_job(
+            job_id=str(args["job_id"]),
+            run_id=str(args["run_id"]),
+            sink=str(args["sink"]),
+            approved_by=str(args["approved_by"]),
+            matches=list(args.get("matches") or []),
+            simulate=bool(args.get("simulate", True)),
         )
     if tool_name == "business_card_watchdog_downstream_duplicate_assessment":
         return service.assess_downstream_duplicates_for_job(

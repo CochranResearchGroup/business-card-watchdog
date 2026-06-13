@@ -18,6 +18,7 @@ SINK_LOOKUP_PLAN_SCHEMA = "business-card-watchdog.sink-lookup-plan.v1"
 SINK_APPLY_DECISION_SCHEMA = "business-card-watchdog.sink-apply-decision.v1"
 SINK_APPLY_RESULT_SCHEMA = "business-card-watchdog.sink-apply-result.v1"
 SINK_ADAPTER_REQUEST_SCHEMA = "business-card-watchdog.sink-adapter-request.v1"
+SINK_LOOKUP_PILOT_SCHEMA = "business-card-watchdog.sink-lookup-pilot.v1"
 SINK_LOOKUP_RESULT_SCHEMA = "business-card-watchdog.sink-lookup-result.v1"
 
 
@@ -405,6 +406,58 @@ def build_sink_lookup_result(
         "writes_attempted": 0,
         "match_count": match_count,
         "results": results,
+    }
+
+
+def build_sink_lookup_pilot(
+    *,
+    adapter_request: dict[str, Any],
+    sink: str,
+    approved_by: str,
+    matches: list[dict[str, Any]] | None = None,
+    simulate: bool = True,
+) -> dict[str, Any]:
+    if not approved_by.strip():
+        raise ValueError("sink lookup pilot requires approved_by")
+    requests = [
+        request
+        for request in list(adapter_request.get("requests") or [])
+        if request.get("phase") == "lookup" and request.get("sink") == sink
+    ]
+    if not requests:
+        raise ValueError(f"sink lookup pilot request not found for sink: {sink}")
+    if not simulate:
+        raise ValueError("live sink lookup execution is not implemented; use simulate with mocked read-only responses")
+    matches = matches or []
+    return {
+        "schema": SINK_LOOKUP_PILOT_SCHEMA,
+        "state": "simulated_match" if matches else "simulated_no_match",
+        "status": "mock_read_only_lookup_completed",
+        "reason": "mock read-only lookup pilot completed; no downstream writes attempted",
+        "source_schema": adapter_request.get("schema"),
+        "source_phase": adapter_request.get("phase"),
+        "job_id": adapter_request.get("job_id"),
+        "run_id": adapter_request.get("run_id"),
+        "sink": sink,
+        "approved_by": approved_by,
+        "simulated": True,
+        "read_only": True,
+        "requires_live_adapter": True,
+        "network_calls_made": 0,
+        "writes_attempted": 0,
+        "request": requests[0],
+        "match_count": len(matches),
+        "matches": [
+            {
+                "resource_id": str(match.get("resource_id") or ""),
+                "confidence": float(match.get("confidence", 0)),
+                "basis": list(match.get("basis") or []),
+                "display": str(match.get("display") or ""),
+                "raw": dict(match.get("raw") or {}),
+            }
+            for match in matches
+        ],
+        "result_schema": SINK_LOOKUP_RESULT_SCHEMA,
     }
 
 

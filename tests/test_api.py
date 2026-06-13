@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from business_card_watchdog.config import AppConfig, EnrichmentConfig, EnrichmentProviderConfig
+from business_card_watchdog.config import AppConfig, EnrichmentConfig, EnrichmentProviderConfig, SinkConfig
 from business_card_watchdog.contact import build_contact_candidate
 
 from test_service import make_recorded_run
@@ -265,6 +265,47 @@ def test_api_enrichment_request_accepts_paid_provider_results(tmp_path: Path) ->
     assert result["provider_result"]["paid_api_calls_attempted"] == 0
     assert client.post("/sinks/check").json()["dry_run"] is True
     assert client.get("/watch/status").json()["seen_count"] == 0
+
+
+def test_api_executes_sink_lookup_pilot_with_mocked_matches(tmp_path: Path) -> None:
+    from business_card_watchdog.api import create_app
+
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    config_path.write_text(
+        f'data_dir = "{data_dir}"\n'
+        "[watch]\ninputs = []\n"
+        "[sink]\ndry_run = true\ngoogle_contacts = true\n",
+        encoding="utf-8",
+    )
+    config = AppConfig(
+        config_path=config_path,
+        data_dir=data_dir,
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    client = TestClient(create_app(config_path))
+    client.post(f"/jobs/{job_id}/sink-lookup-plan", params={"run_id": run_id})
+    client.post(f"/jobs/{job_id}/sink-adapter-request", json={"run_id": run_id, "phase": "lookup"})
+
+    payload = client.post(
+        f"/jobs/{job_id}/sink-lookup-pilot",
+        json={
+            "run_id": run_id,
+            "sink": "google_contacts",
+            "approved_by": "api-operator",
+            "matches": [
+                {"resource_id": "people/c456", "confidence": 0.93, "basis": ["email"]}
+            ],
+        },
+    ).json()
+
+    assert payload["pilot"]["schema"] == "business-card-watchdog.sink-lookup-pilot.v1"
+    assert payload["pilot"]["approved_by"] == "api-operator"
+    assert payload["pilot"]["network_calls_made"] == 0
+    assert payload["pilot"]["writes_attempted"] == 0
+    assert payload["result"]["state"] == "possible_duplicate"
 
 
 def test_api_records_public_web_enrichment_results(tmp_path: Path) -> None:

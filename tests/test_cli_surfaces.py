@@ -517,6 +517,33 @@ def test_cli_sinks_lookup_result_writes_zero_network_artifact(tmp_path: Path, ca
                 "--config",
                 str(config_path),
                 "sinks",
+                "lookup-pilot",
+                job_id,
+                "--run-id",
+                run_id,
+                "--sink",
+                "google_contacts",
+                "--approved-by",
+                "cli-operator",
+                "--matches-json",
+                '[{"resource_id": "people/c456", "confidence": 0.93, "basis": ["email"]}]',
+                "--json",
+            ]
+        )
+        == 0
+    )
+    pilot = json.loads(capsys.readouterr().out)
+    assert pilot["pilot"]["schema"] == "business-card-watchdog.sink-lookup-pilot.v1"
+    assert pilot["pilot"]["approved_by"] == "cli-operator"
+    assert pilot["pilot"]["network_calls_made"] == 0
+    assert pilot["pilot"]["writes_attempted"] == 0
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "sinks",
                 "assess-duplicates",
                 job_id,
                 "--run-id",

@@ -36,6 +36,7 @@ from .sinks import (
     build_sink_apply_preflight,
     build_sink_apply_result,
     build_sink_lookup_plan,
+    build_sink_lookup_pilot,
     build_sink_lookup_result,
     build_sink_plan,
     check_sink_readiness,
@@ -59,6 +60,7 @@ _SAFE_NEXT_ACTIONS = {
 _ROUTE_ARTIFACT_FILES = {
     "sink_lookup_plan": "sink_lookup_plan.json",
     "sink_adapter_request_lookup": "sink_adapter_request_lookup.json",
+    "sink_lookup_pilot": "sink_lookup_pilot.json",
     "sink_lookup_result": "sink_lookup_result.json",
     "downstream_duplicate_assessment": "downstream_duplicate_assessment.json",
     "sink_plan": "sink_plan.json",
@@ -82,6 +84,12 @@ _ROUTE_REFRESH_STEPS = [
         "action": "prepare_sink_lookup_adapter",
         "command": "sinks adapter-request --phase lookup",
         "reason": "review changed routing-relevant contact data; refresh lookup adapter request",
+    },
+    {
+        "kind": "sink_lookup_pilot",
+        "action": "execute_sink_lookup_pilot",
+        "command": "sinks lookup-pilot",
+        "reason": "review changed routing-relevant contact data; refresh explicit read-only lookup pilot evidence",
     },
     {
         "kind": "sink_lookup_result",
@@ -159,6 +167,7 @@ _REVIEW_BUNDLE_ARTIFACT_KINDS = {
     "duplicate_resolution",
     "sink_lookup_plan",
     "sink_adapter_request_lookup",
+    "sink_lookup_pilot",
     "sink_lookup_result",
     "sink_plan",
     "sink_adapter_request_write",
@@ -1673,6 +1682,82 @@ class BusinessCardService:
             kind="sink_lookup_result",
         )
         return {"result_path": str(result_path), "result": result}
+
+    def execute_sink_lookup_pilot_for_job(
+        self,
+        *,
+        job_id: str,
+        run_id: str,
+        sink: str,
+        approved_by: str,
+        matches: list[dict[str, Any]] | None = None,
+        simulate: bool = True,
+    ) -> dict[str, Any]:
+        job = self.get_job(job_id, run_id=run_id)
+        artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
+        request_path = artifact_dir / "sink_adapter_request_lookup.json"
+        if request_path.exists():
+            adapter_request = json.loads(request_path.read_text(encoding="utf-8"))
+        else:
+            adapter_request = self.build_sink_adapter_request_for_job(
+                job_id=job_id,
+                run_id=run_id,
+                phase="lookup",
+            )["request"]
+        pilot = build_sink_lookup_pilot(
+            adapter_request=adapter_request,
+            sink=sink,
+            approved_by=approved_by,
+            matches=matches or [],
+            simulate=simulate,
+        )
+        pilot_path = artifact_dir / "sink_lookup_pilot.json"
+        pilot_path.write_text(json.dumps(pilot, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        result = build_sink_lookup_result(
+            adapter_request=adapter_request,
+            matches_by_sink={sink: matches or []},
+        )
+        result["source_pilot_schema"] = pilot["schema"]
+        result["source_pilot_path"] = str(pilot_path)
+        result["status"] = "mock_lookup_matches" if result["match_count"] else "mock_lookup_no_match"
+        result["reason"] = "mock read-only lookup pilot result; no downstream writes attempted"
+        result_path = artifact_dir / "sink_lookup_result.json"
+        result_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        ledger.record_artifact(job_id=job_id, kind="sink_lookup_pilot", path=pilot_path)
+        ledger.record_artifact(job_id=job_id, kind="sink_lookup_result", path=result_path)
+        ledger.record_event(
+            "sink_lookup_pilot_executed",
+            {
+                "job_id": job_id,
+                "run_id": run_id,
+                "sink": sink,
+                "approved_by": approved_by,
+                "pilot_path": str(pilot_path),
+                "result_path": str(result_path),
+                "match_count": pilot["match_count"],
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        self._mark_route_artifact_refreshed(
+            artifact_dir,
+            job_id=job_id,
+            run_id=run_id,
+            kind="sink_lookup_pilot",
+        )
+        self._mark_route_artifact_refreshed(
+            artifact_dir,
+            job_id=job_id,
+            run_id=run_id,
+            kind="sink_lookup_result",
+        )
+        return {
+            "pilot_path": str(pilot_path),
+            "result_path": str(result_path),
+            "pilot": pilot,
+            "result": result,
+        }
 
     def assess_downstream_duplicates_for_job(self, *, job_id: str, run_id: str) -> dict[str, Any]:
         job_payload = self.get_job(job_id, run_id=run_id)

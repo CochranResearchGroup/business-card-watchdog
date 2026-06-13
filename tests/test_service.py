@@ -647,6 +647,50 @@ def test_service_record_sink_lookup_result_writes_zero_network_artifact(tmp_path
     assert any(event["event_type"] == "sink_lookup_result_recorded" for event in events)
 
 
+def test_service_lookup_pilot_writes_result_and_blocks_duplicate_review(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
+
+    pilot = service.execute_sink_lookup_pilot_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        approved_by="operator",
+        matches=[
+            {
+                "resource_id": "people/c123",
+                "confidence": 0.92,
+                "basis": ["email"],
+                "display": "Reviewed Fixture",
+            }
+        ],
+    )
+    assessment = service.assess_downstream_duplicates_for_job(job_id=job_id, run_id=run_id)
+    job = service.get_job(job_id, run_id=run_id)
+    events = [
+        json.loads(line)
+        for line in (config.runs_dir / run_id / "events.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+
+    assert pilot["pilot"]["schema"] == "business-card-watchdog.sink-lookup-pilot.v1"
+    assert pilot["pilot"]["sink"] == "google_contacts"
+    assert pilot["pilot"]["network_calls_made"] == 0
+    assert pilot["pilot"]["writes_attempted"] == 0
+    assert pilot["result"]["source_pilot_schema"] == "business-card-watchdog.sink-lookup-pilot.v1"
+    assert pilot["result"]["state"] == "possible_duplicate"
+    assert assessment["assessment"]["state"] == "strong_duplicate"
+    assert any(artifact["kind"] == "sink_lookup_pilot" for artifact in job["artifacts"])
+    assert any(artifact["kind"] == "sink_lookup_result" for artifact in job["artifacts"])
+    assert any(event["event_type"] == "sink_lookup_pilot_executed" for event in events)
+
+
 def test_service_assess_downstream_duplicates_blocks_review_and_can_resolve(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",

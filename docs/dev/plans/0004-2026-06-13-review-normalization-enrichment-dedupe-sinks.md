@@ -1094,6 +1094,31 @@ Remaining:
 
 - Live paid-provider API execution remains explicit follow-on work and must stay behind config plus request-level approval.
 
+### Slice 0004-AT | 2026-06-13 | Read-Only Sink Lookup Pilot
+
+Implemented:
+
+- Added `sink_lookup_pilot.json` artifacts for explicit one-job read-only lookup pilots.
+- Lookup pilots require `run_id`, `job_id`, `sink`, and `approved_by` and currently accept mocked/read-only match rows without invoking live adapters.
+- Lookup pilots write the existing `sink_lookup_result.json` schema so downstream duplicate assessment and routing review continue to use the shared path.
+- Added CLI `bcw sinks lookup-pilot`.
+- Added API `POST /jobs/{job_id}/sink-lookup-pilot`.
+- Added MCP tool `business_card_watchdog_sink_lookup_pilot`.
+- Review bundle and route-refresh artifact registries now include `sink_lookup_pilot`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 91 tests.
+- `.venv/bin/python -m pytest -q` passed with 150 tests.
+- `PYTHONPATH=src pytest -q` passed with 144 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+Remaining:
+
+- Live GWS/Odollo read-only adapter execution remains manual follow-on work; default tests continue to use mocked rows and make no network calls.
+
 ## Next High-Level Plan
 
 The next execution block should turn the current artifact-first scaffolding into an operator-usable review and routing system while preserving the current safety boundaries: no paid enrichment unless explicitly requested, no live sink writes without an approved pilot, and no secret values in repo artifacts or logs.

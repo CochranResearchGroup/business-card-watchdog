@@ -4,6 +4,7 @@ from business_card_watchdog.sinks import (
     build_sink_apply_preflight,
     build_sink_apply_result,
     build_sink_lookup_plan,
+    build_sink_lookup_pilot,
     build_sink_lookup_result,
     build_sink_plan,
     build_sink_payloads,
@@ -291,6 +292,40 @@ def test_build_sink_lookup_result_records_zero_network_matches() -> None:
     assert matched["duplicate_review_required"] is True
     assert matched["match_count"] == 1
     assert matched["results"][0]["matches"][0]["resource_id"] == "people/c123"
+
+
+def test_build_sink_lookup_pilot_requires_explicit_sink_and_approval() -> None:
+    lookup_plan = build_sink_lookup_plan(
+        sinks=["google_contacts"],
+        spec={"full_name": "Ada Lovelace", "email": "ada@example.test"},
+        dry_run=True,
+        reason="matched email_domain=*",
+    )
+    adapter_request = build_sink_adapter_request(phase="lookup", lookup_plan=lookup_plan)
+
+    pilot = build_sink_lookup_pilot(
+        adapter_request=adapter_request,
+        sink="google_contacts",
+        approved_by="operator",
+        matches=[
+            {
+                "resource_id": "people/c123",
+                "confidence": 0.94,
+                "basis": ["email"],
+                "display": "Ada Lovelace",
+            }
+        ],
+    )
+
+    assert pilot["schema"] == "business-card-watchdog.sink-lookup-pilot.v1"
+    assert pilot["state"] == "simulated_match"
+    assert pilot["sink"] == "google_contacts"
+    assert pilot["approved_by"] == "operator"
+    assert pilot["read_only"] is True
+    assert pilot["network_calls_made"] == 0
+    assert pilot["writes_attempted"] == 0
+    assert pilot["match_count"] == 1
+    assert pilot["request"]["adapter"] == "gws.people"
 
 
 def test_build_sink_apply_preflight_is_zero_write_and_explicitly_gated() -> None:

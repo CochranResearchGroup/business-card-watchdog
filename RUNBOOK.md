@@ -1049,3 +1049,24 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed with the index up to date.
 - `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+## Turn 58 | 2026-06-13
+
+Continued Plan 0004 execution with explicit read-only sink lookup pilots.
+
+Implemented:
+
+- Added deterministic `sink_lookup_pilot.json` artifacts that require explicit job, run, sink, and reviewer approval metadata.
+- Lookup pilots currently consume mocked/read-only match rows and make no network calls or writes.
+- Lookup pilots also write the existing `sink_lookup_result.json` schema so downstream duplicate assessment can block routing through the shared path.
+- Added service, CLI, API, and MCP surfaces for the lookup pilot.
+- Added `sink_lookup_pilot` to review bundle and route-refresh artifact registries.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 91 tests.
+- `.venv/bin/python -m pytest -q` passed with 150 tests.
+- `PYTHONPATH=src pytest -q` passed with 144 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.

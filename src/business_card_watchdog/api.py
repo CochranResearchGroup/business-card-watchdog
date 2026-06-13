@@ -74,6 +74,13 @@ def create_app(config_path: Path | None = None):
         run_id: str
         matches_by_sink: dict[str, list[dict[str, object]]] = Field(default_factory=dict)
 
+    class SinkLookupPilotRequest(BaseModel):
+        run_id: str
+        sink: str
+        approved_by: str
+        matches: list[dict[str, object]] = Field(default_factory=list)
+        simulate: bool = True
+
     class RunNextActionsRequest(BaseModel):
         run_id: str | None = None
         limit: int = 10
@@ -265,6 +272,17 @@ def create_app(config_path: Path | None = None):
             job_id=job_id,
             run_id=request.run_id,
             matches_by_sink={sink: [dict(match) for match in matches] for sink, matches in request.matches_by_sink.items()},
+        )
+
+    @app.post("/jobs/{job_id}/sink-lookup-pilot")
+    def create_sink_lookup_pilot(job_id: str, request: SinkLookupPilotRequest = Body(...)) -> dict[str, object]:
+        return service().execute_sink_lookup_pilot_for_job(
+            job_id=job_id,
+            run_id=request.run_id,
+            sink=request.sink,
+            approved_by=request.approved_by,
+            matches=[dict(match) for match in request.matches],
+            simulate=request.simulate,
         )
 
     @app.post("/jobs/{job_id}/downstream-duplicate-assessment")
