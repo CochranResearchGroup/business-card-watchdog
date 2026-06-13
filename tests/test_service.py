@@ -1347,6 +1347,11 @@ def test_service_run_next_actions_executes_safe_steps_until_manual_decision(tmp_
     ]
     assert payload["skipped"][0]["action"] == "decide_sink_apply"
     assert payload["skipped"][0]["status"] == "skipped"
+    assert payload["phase_report_before"]["schema"] == "business-card-watchdog.phase-report.v1"
+    assert payload["phase_report_before"]["phases"][5]["phase"] == "route"
+    assert payload["phase_report_after"]["schema"] == "business-card-watchdog.phase-report.v1"
+    assert payload["phase_report_after"]["phases"][5]["counts"]["complete"] == 1
+    assert payload["phase_report_after"]["phases"][7]["counts"]["explicit_required"] == 1
     assert {artifact["kind"] for artifact in job["artifacts"]} >= {
         "sink_lookup_plan",
         "sink_adapter_request_lookup",

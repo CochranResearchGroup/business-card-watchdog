@@ -602,6 +602,7 @@ class BusinessCardService:
     def run_next_actions(self, *, run_id: str | None = None, limit: int = 10) -> dict[str, Any]:
         executed: list[dict[str, Any]] = []
         skipped: list[dict[str, Any]] = []
+        phase_report_before = self.phase_report(run_id) if run_id else None
         for _ in range(max(0, limit)):
             candidates = self.next_actions(run_id=run_id, limit=max(1, limit))["actions"]
             executable = next(
@@ -626,6 +627,7 @@ class BusinessCardService:
                     "result": result,
                 }
             )
+        phase_report_after = self.phase_report(run_id) if run_id else None
         return {
             "run_id": run_id,
             "limit": limit,
@@ -633,6 +635,8 @@ class BusinessCardService:
             "skipped": skipped,
             "executed_count": len(executed),
             "skipped_count": len(skipped),
+            "phase_report_before": phase_report_before,
+            "phase_report_after": phase_report_after,
         }
 
     def list_jobs(self, run_id: str | None = None) -> list[dict[str, Any]]:

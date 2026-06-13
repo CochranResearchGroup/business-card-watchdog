@@ -167,6 +167,8 @@ def test_cli_jobs_review_records_submission(tmp_path: Path, capsys) -> None:
         "plan_sink_lookup",
         "prepare_sink_lookup_adapter",
     ]
+    assert actions["phase_report_before"]["schema"] == "business-card-watchdog.phase-report.v1"
+    assert actions["phase_report_after"]["schema"] == "business-card-watchdog.phase-report.v1"
 
 
 def test_cli_jobs_review_supports_request_enrichment_action(tmp_path: Path, capsys) -> None:

@@ -1939,3 +1939,26 @@ Validation:
 Remaining:
 
 - Phase reports are read-only; generic safe execution remains limited to zero-write/no-paid-call next actions.
+
+### Slice 0004-BE | 2026-06-13 | Run-Next Phase Snapshot Readback
+
+Implemented:
+
+- Added `phase_report_before` and `phase_report_after` to safe `run_next_actions` execution results when scoped to a run.
+- CLI `bcw actions run-next`, API `POST /actions/run-next`, and MCP `business_card_watchdog_run_next_actions` now return the same before/after phase snapshots through the shared service method.
+- Phase snapshots remain read-only and do not broaden the set of safe auto-executed actions.
+- Added tests proving service, CLI, API, and MCP run-next surfaces expose the phase snapshots.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_run_next_actions_executes_safe_steps_until_manual_decision tests/test_cli_surfaces.py::test_cli_jobs_review_records_submission tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 4 tests.
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 83 tests.
+- `.venv/bin/python -m pytest -q` passed with 172 tests.
+- `PYTHONPATH=src pytest -q` passed with 165 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+Remaining:
+
+- Run-next still executes only zero-write/no-paid-call safe actions and skips review, paid enrichment, write pilots, readback pilots, and live apply.

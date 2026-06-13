@@ -261,6 +261,8 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert duplicate["submission"]["duplicate_resolution"]["decision"] == "create_new"
     assert run_next["executed_count"] == 1
     assert run_next["executed"][0]["action"].startswith(("plan_", "prepare_", "record_", "assess_"))
+    assert run_next["phase_report_before"]["schema"] == "business-card-watchdog.phase-report.v1"
+    assert run_next["phase_report_after"]["schema"] == "business-card-watchdog.phase-report.v1"
 
 
 def test_mcp_enrichment_request_can_prepare_paid_provider_without_call(tmp_path: Path) -> None:

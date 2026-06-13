@@ -172,6 +172,8 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     run_next = client.post("/actions/run-next", json={"run_id": run_id, "limit": 2}).json()
     assert run_next["executed_count"] >= 1
     assert run_next["executed"][0]["action"].startswith(("plan_", "prepare_", "record_", "assess_"))
+    assert run_next["phase_report_before"]["schema"] == "business-card-watchdog.phase-report.v1"
+    assert run_next["phase_report_after"]["schema"] == "business-card-watchdog.phase-report.v1"
 
 
 def test_api_sink_readback_pilot_writes_zero_write_artifact(tmp_path: Path) -> None:

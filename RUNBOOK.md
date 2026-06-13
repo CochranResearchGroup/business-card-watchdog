@@ -1300,3 +1300,23 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed with the index up to date.
 - `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+## Turn 70 | 2026-06-13
+
+Continued Plan 0004 execution with run-next phase snapshot readback.
+
+Implemented:
+
+- Added `phase_report_before` and `phase_report_after` to run-scoped safe next-action execution results.
+- CLI, API, and MCP run-next surfaces now expose the same snapshots through the shared service method.
+- Kept run-next execution limited to zero-write/no-paid-call safe actions.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_run_next_actions_executes_safe_steps_until_manual_decision tests/test_cli_surfaces.py::test_cli_jobs_review_records_submission tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 4 tests.
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 83 tests.
+- `.venv/bin/python -m pytest -q` passed with 172 tests.
+- `PYTHONPATH=src pytest -q` passed with 165 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
