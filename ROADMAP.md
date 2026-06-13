@@ -5,7 +5,8 @@
 Build a robust, installable business-card ingestion system that can process arbitrary-size batches from watched folders and route reviewed contact data to Google Contacts and/or Odoo/Odollo tenants.
 
 Product authority: `PRODUCT_SPEC.md`.
-High-level implementation plan: `docs/dev/plans/0004-2026-06-13-review-normalization-enrichment-dedupe-sinks.md`.
+Active implementation plan: `docs/dev/plans/0004-2026-06-13-review-normalization-enrichment-dedupe-sinks.md`.
+Next high-level plan: `docs/dev/plans/0005-2026-06-13-review-routing-normalization-enrichment-dedupe.md`.
 
 ## Milestones
 

@@ -1220,3 +1220,20 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed with the index up to date.
 - `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+## Turn 66 | 2026-06-13
+
+Captured the next high-level implementation plan for review, routing, normalization, enrichment, and dedupe hardening.
+
+Planned:
+
+- Added Plan 0005 as the repo-backed handoff for the next workstream after the current Plan 0004 sink-pilot surfaces.
+- Made the review surface, canonical normalization, enrichment provider boundaries, duplicate resolution, routing policy, and agent-loop batch reporting separate workstreams.
+- Documented that API-backed enrichment must remain explicitly requested, config-enabled, key-ready, and budget-limited.
+- Documented that public-web enrichment is useful but still an explicit enrichment action, while generic safe agent loops remain no-paid-call and zero-write.
+- Added Odollo adaptation guidance for copying reusable enrichment/contact helpers without importing broad tenant runtime coupling.
+- Updated the roadmap to point at Plan 0005 as the next high-level plan.
+
+Validation:
+
+- `git diff --check` passed.
