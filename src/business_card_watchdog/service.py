@@ -13,6 +13,7 @@ from .contact import (
 )
 from .dedupe import assess_downstream_lookup_result
 from .enrichment import (
+    build_public_web_result_artifact,
     build_enrichment_request,
     build_paid_api_provider_request,
     build_public_web_search_request,
@@ -143,6 +144,7 @@ _REVIEW_BUNDLE_ARTIFACT_KINDS = {
     "review_submission",
     "enrichment_request",
     "enrichment_public_web_request",
+    "enrichment_public_web_result",
     "enrichment_provider_request",
     "enrichment_result",
     "enrichment_provider_result",
@@ -805,6 +807,73 @@ class BusinessCardService:
             "public_web_request": public_web_request_payload,
             "provider_request": provider_request_payload,
             "provider_result": provider_result_payload,
+        }
+
+    def record_public_web_enrichment_results(
+        self,
+        *,
+        job_id: str,
+        run_id: str,
+        results: list[dict[str, Any]],
+        searched_by: str = "operator",
+    ) -> dict[str, Any]:
+        job = self.get_job(job_id, run_id=run_id)
+        artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
+        candidate_path = artifact_dir / "contact_candidate.json"
+        request_path = artifact_dir / "enrichment_public_web_request.json"
+        if not candidate_path.exists():
+            raise FileNotFoundError(f"contact candidate not found for job: {job_id}")
+        if not request_path.exists():
+            raise FileNotFoundError(f"public web enrichment request not found for job: {job_id}")
+        candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+        public_web_request = json.loads(request_path.read_text(encoding="utf-8"))
+        public_web_result = build_public_web_result_artifact(
+            candidate,
+            public_web_request=public_web_request,
+            results=results,
+            searched_by=searched_by,
+        )
+        public_web_result_path = artifact_dir / "enrichment_public_web_result.json"
+        public_web_result_path.write_text(
+            json.dumps(public_web_result, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        result_payload = {
+            "schema": public_web_result["result_schema"],
+            "provider": public_web_result["provider"],
+            "cost_class": public_web_result["cost_class"],
+            "network_calls_made": public_web_result["network_calls_made"],
+            "results": public_web_result["results"],
+            "merge_proposals": public_web_result["merge_proposals"],
+        }
+        result_path = artifact_dir / "enrichment_result.json"
+        result_path.write_text(
+            json.dumps(result_payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        ledger.record_artifact(job_id=job_id, kind="enrichment_public_web_result", path=public_web_result_path)
+        ledger.record_artifact(job_id=job_id, kind="enrichment_result", path=result_path)
+        ledger.record_event(
+            "enrichment_public_web_results_recorded",
+            {
+                "job_id": job_id,
+                "run_id": run_id,
+                "searched_by": searched_by,
+                "public_web_result_path": str(public_web_result_path),
+                "result_path": str(result_path),
+                "submitted_result_count": len(results),
+                "merge_proposal_count": len(result_payload["merge_proposals"]),
+                "network_calls_made": 0,
+                "search_calls_attempted": 0,
+            },
+        )
+        return {
+            "status": "ok",
+            "public_web_result_path": str(public_web_result_path),
+            "result_path": str(result_path),
+            "public_web_result": public_web_result,
+            "result": result_payload,
         }
 
     def plan_sinks_for_job(self, *, job_id: str, run_id: str, dry_run: bool = True) -> dict[str, Any]:

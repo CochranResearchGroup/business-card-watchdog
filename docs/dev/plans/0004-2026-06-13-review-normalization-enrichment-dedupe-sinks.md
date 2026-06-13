@@ -733,6 +733,34 @@ Remaining:
 - Review decision import from a workbook remains follow-on work.
 - Live sink adapters and enrichment execution remain blocked behind explicit pilot work.
 
+### Slice 0004-AE | 2026-06-13 | Explicit Public-Web Result Import
+
+Implemented:
+
+- Added `enrichment_public_web_result.json` artifacts for explicit operator/search-agent public-web result submission.
+- Public-web result artifacts consume an existing `enrichment_public_web_request.json`, preserve source request metadata, score submitted results, and emit reviewable merge proposals.
+- Shared `enrichment_result.json` is written from the public-web result artifact so the existing enrichment merge review path remains shared.
+- Added service `record_public_web_enrichment_results`.
+- Added CLI `bcw enrichment public-web-results`.
+- Added API `POST /jobs/{job_id}/enrichment/public-web-results`.
+- Added MCP tool `business_card_watchdog_public_web_enrichment_results`.
+- Result import records `network_calls_made = 0` and `search_calls_attempted = 0`; actual web search remains an explicit external/operator action.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_enrichment.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 38 tests.
+- `.venv/bin/python -m pytest -q` passed with 132 tests.
+- `PYTHONPATH=src pytest -q` passed with 127 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+Remaining:
+
+- No live browser/search provider is invoked by this slice.
+- Paid API execution remains blocked behind explicit config and request approval.
+- Enrichment merge still requires review approval before changing reviewed contact data.
+
 ## Next High-Level Plan
 
 The next execution block should turn the current artifact-first scaffolding into an operator-usable review and routing system while preserving the current safety boundaries: no paid enrichment unless explicitly requested, no live sink writes without an approved pilot, and no secret values in repo artifacts or logs.

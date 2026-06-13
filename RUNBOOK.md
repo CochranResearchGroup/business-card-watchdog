@@ -732,3 +732,27 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed with the index up to date.
 - `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+## Turn 43 | 2026-06-13
+
+Continued Plan 0004 execution with explicit public-web enrichment result import.
+
+Implemented:
+
+- Added `enrichment_public_web_result.json` artifacts for operator/search-agent submitted public-web results.
+- Public-web result artifacts consume an existing `enrichment_public_web_request.json`, preserve source request metadata, score submitted results, and emit merge proposals.
+- Shared `enrichment_result.json` is written from public-web result imports so enrichment merge review stays on the existing path.
+- Added service `record_public_web_enrichment_results`.
+- Added CLI `bcw enrichment public-web-results`.
+- Added API `POST /jobs/{job_id}/enrichment/public-web-results`.
+- Added MCP tool `business_card_watchdog_public_web_enrichment_results`.
+- Result import records zero network calls and zero search calls attempted; actual search remains an explicit external/operator action.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_enrichment.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 38 tests.
+- `.venv/bin/python -m pytest -q` passed with 132 tests.
+- `PYTHONPATH=src pytest -q` passed with 127 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.

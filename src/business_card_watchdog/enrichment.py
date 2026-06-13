@@ -15,6 +15,7 @@ ENRICHMENT_REQUEST_SCHEMA = "business-card-watchdog.enrichment-request.v1"
 ENRICHMENT_RESULT_SCHEMA = "business-card-watchdog.enrichment-result.v1"
 ENRICHMENT_PROVIDER_REQUEST_SCHEMA = "business-card-watchdog.enrichment-provider-request.v1"
 ENRICHMENT_PUBLIC_WEB_REQUEST_SCHEMA = "business-card-watchdog.enrichment-public-web-request.v1"
+ENRICHMENT_PUBLIC_WEB_RESULT_SCHEMA = "business-card-watchdog.enrichment-public-web-result.v1"
 ENRICHMENT_PROVIDER_RESULT_SCHEMA = "business-card-watchdog.enrichment-provider-result.v1"
 
 
@@ -123,6 +124,32 @@ def score_public_web_results(
         "network_calls_made": 0,
         "results": scored,
         "merge_proposals": _merge_proposals(spec, scored),
+    }
+
+
+def build_public_web_result_artifact(
+    contact_candidate: dict[str, Any],
+    *,
+    public_web_request: dict[str, Any],
+    results: list[dict[str, Any]],
+    searched_by: str = "operator",
+) -> dict[str, Any]:
+    scored_result = score_public_web_results(contact_candidate, results=results)
+    return {
+        "schema": ENRICHMENT_PUBLIC_WEB_RESULT_SCHEMA,
+        "result_schema": ENRICHMENT_RESULT_SCHEMA,
+        "provider": "public_web",
+        "mode": public_web_request.get("mode") or "public_web",
+        "searched_by": searched_by,
+        "source_request_schema": public_web_request.get("schema"),
+        "source_request_status": public_web_request.get("status"),
+        "source_query_count": len(public_web_request.get("queries") or []),
+        "submitted_result_count": len(results),
+        "cost_class": "operator_search",
+        "network_calls_made": 0,
+        "search_calls_attempted": 0,
+        "results": scored_result["results"],
+        "merge_proposals": scored_result["merge_proposals"],
     }
 
 

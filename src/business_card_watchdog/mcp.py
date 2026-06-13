@@ -321,6 +321,20 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_public_web_enrichment_results",
+                "description": "Record explicit public-web search results for one job and create reviewable enrichment result artifacts.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "job_id": {"type": "string"},
+                        "run_id": {"type": "string"},
+                        "searched_by": {"type": "string", "default": "operator"},
+                        "results": {"type": "array", "items": {"type": "object"}},
+                    },
+                    "required": ["job_id", "run_id"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_watch_status",
                 "description": "Report watched inputs, seen-file count, backlog, unsettled files, and last error.",
                 "input_schema": {"type": "object", "properties": {}},
@@ -472,6 +486,13 @@ def call_tool(
             allow_paid_enrichment=bool(args.get("allow_paid_enrichment", False)),
             public_web_results=list(args.get("public_web_results") or []),
             provider_results=list(args.get("provider_results") or []),
+        )
+    if tool_name == "business_card_watchdog_public_web_enrichment_results":
+        return service.record_public_web_enrichment_results(
+            job_id=str(args["job_id"]),
+            run_id=str(args["run_id"]),
+            searched_by=str(args.get("searched_by") or "operator"),
+            results=list(args.get("results") or []),
         )
     if tool_name == "business_card_watchdog_watch_status":
         return service.watch_status()

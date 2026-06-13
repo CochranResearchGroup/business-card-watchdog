@@ -6,6 +6,7 @@ from business_card_watchdog.contact import build_contact_candidate
 from business_card_watchdog.enrichment import (
     build_enrichment_request,
     build_paid_api_provider_request,
+    build_public_web_result_artifact,
     build_public_web_search_request,
     check_enrichment_readiness,
     score_paid_api_provider_results,
@@ -117,6 +118,45 @@ def test_public_web_search_request_is_zero_network_and_operator_scoped(tmp_path:
     assert len(request["queries"]) == 2
     assert request["queries"][0]["search_url"].startswith("https://www.google.com/search?q=")
     assert "paid API" in request["instructions"][2]
+
+
+def test_public_web_result_artifact_scores_explicit_operator_results(tmp_path: Path) -> None:
+    candidate = build_contact_candidate(
+        {
+            "full_name": "Ada Lovelace",
+            "organization": "Example Labs",
+            "email": "ada@example.test",
+        }
+    )
+    public_web_request = {
+        "schema": "business-card-watchdog.enrichment-public-web-request.v1",
+        "mode": "public_web",
+        "status": "prepared",
+        "queries": [{"query": '"ada@example.test"'}],
+    }
+
+    result = build_public_web_result_artifact(
+        candidate,
+        public_web_request=public_web_request,
+        searched_by="tester",
+        results=[
+            {
+                "title": "Ada Lovelace - Example Labs",
+                "url": "https://example.test/team/ada",
+                "snippet": "Contact Ada at ada@example.test",
+            }
+        ],
+    )
+
+    assert result["schema"] == "business-card-watchdog.enrichment-public-web-result.v1"
+    assert result["result_schema"] == "business-card-watchdog.enrichment-result.v1"
+    assert result["searched_by"] == "tester"
+    assert result["source_query_count"] == 1
+    assert result["submitted_result_count"] == 1
+    assert result["network_calls_made"] == 0
+    assert result["search_calls_attempted"] == 0
+    assert result["results"][0]["score"] >= 75
+    assert result["merge_proposals"][0]["field"] == "notes"
 
 
 def test_paid_api_provider_request_is_zero_network_and_secret_free(tmp_path: Path) -> None:
@@ -249,6 +289,62 @@ def test_service_request_enrichment_writes_request_and_fixture_result(tmp_path: 
     assert any(artifact["kind"] == "enrichment_request" for artifact in artifacts)
     assert any(artifact["kind"] == "enrichment_public_web_request" for artifact in artifacts)
     assert any(artifact["kind"] == "enrichment_result" for artifact in artifacts)
+
+
+def test_service_records_public_web_results_after_request(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        enrichment=EnrichmentConfig(enabled=True),
+    )
+    run_id = "run-public-web-results"
+    job_id = "job-public-web-results"
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    from business_card_watchdog.ledger import RunLedger
+    from business_card_watchdog.models import CardJob
+
+    ledger = RunLedger(config.runs_dir / run_id)
+    ledger.initialize(source="/tmp/cards", dry_run=True)
+    job = CardJob(image_path="/tmp/cards/card.png", job_id=job_id)
+    job.transition_to("processing")
+    job.artifact_dir = str(artifact_dir)
+    job.transition_to("needs_review")
+    ledger.record_job(job)
+    candidate = build_contact_candidate(
+        {
+            "full_name": "Ada Lovelace",
+            "organization": "Example Labs",
+            "email": "ada@example.test",
+        }
+    )
+    (artifact_dir / "contact_candidate.json").write_text(json.dumps(candidate, indent=2), encoding="utf-8")
+    service = BusinessCardService(config)
+    service.request_enrichment(job_id=job_id, run_id=run_id, mode="public_web", requested_by="tester")
+
+    payload = service.record_public_web_enrichment_results(
+        job_id=job_id,
+        run_id=run_id,
+        searched_by="search-agent",
+        results=[
+            {
+                "title": "Ada Lovelace - Example Labs",
+                "url": "https://example.test/team/ada",
+                "snippet": "Contact Ada at ada@example.test",
+            }
+        ],
+    )
+    artifacts = read_jsonl(config.runs_dir / run_id / "artifacts.jsonl")
+    events = read_jsonl(config.runs_dir / run_id / "events.jsonl")
+
+    assert payload["public_web_result"]["schema"] == "business-card-watchdog.enrichment-public-web-result.v1"
+    assert payload["public_web_result"]["searched_by"] == "search-agent"
+    assert payload["public_web_result"]["network_calls_made"] == 0
+    assert payload["result"]["schema"] == "business-card-watchdog.enrichment-result.v1"
+    assert payload["result"]["merge_proposals"][0]["field"] == "notes"
+    assert any(artifact["kind"] == "enrichment_public_web_result" for artifact in artifacts)
+    assert any(artifact["kind"] == "enrichment_result" for artifact in artifacts)
+    assert any(event["event_type"] == "enrichment_public_web_results_recorded" for event in events)
 
 
 def test_service_request_api_enrichment_writes_provider_request_without_call(tmp_path: Path) -> None:

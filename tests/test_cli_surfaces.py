@@ -556,6 +556,30 @@ def test_cli_enrichment_request_writes_public_web_artifacts(tmp_path: Path, monk
     assert payload["status"] == "ok"
     assert payload["result"]["network_calls_made"] == 0
 
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "enrichment",
+                "public-web-results",
+                job["job_id"],
+                "--run-id",
+                run_dir.name,
+                "--searched-by",
+                "cli-search",
+                "--results-json",
+                '[{"title":"Fixture Labs","url":"https://example.test","snippet":"fixture@example.test"}]',
+                "--json",
+            ]
+        )
+        == 0
+    )
+    result_payload = json.loads(capsys.readouterr().out)
+    assert result_payload["public_web_result"]["schema"] == "business-card-watchdog.enrichment-public-web-result.v1"
+    assert result_payload["public_web_result"]["searched_by"] == "cli-search"
+    assert result_payload["public_web_result"]["network_calls_made"] == 0
+
 
 def test_cli_enrichment_request_writes_paid_provider_request_without_call(tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.toml"

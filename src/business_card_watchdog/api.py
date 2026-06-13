@@ -34,6 +34,11 @@ def create_app(config_path: Path | None = None):
         public_web_results: list[dict[str, object]] = Field(default_factory=list)
         provider_results: list[dict[str, object]] = Field(default_factory=list)
 
+    class PublicWebResultsRequest(BaseModel):
+        run_id: str
+        searched_by: str = "operator"
+        results: list[dict[str, object]] = Field(default_factory=list)
+
     class SinkApplyPreflightRequest(BaseModel):
         run_id: str
         apply: bool = False
@@ -135,6 +140,15 @@ def create_app(config_path: Path | None = None):
             allow_paid_enrichment=request.allow_paid_enrichment,
             public_web_results=[dict(row) for row in request.public_web_results],
             provider_results=[dict(row) for row in request.provider_results],
+        )
+
+    @app.post("/jobs/{job_id}/enrichment/public-web-results")
+    def record_public_web_results(job_id: str, request: PublicWebResultsRequest = Body(...)) -> dict[str, object]:
+        return service().record_public_web_enrichment_results(
+            job_id=job_id,
+            run_id=request.run_id,
+            searched_by=request.searched_by,
+            results=[dict(row) for row in request.results],
         )
 
     @app.post("/sinks/check")

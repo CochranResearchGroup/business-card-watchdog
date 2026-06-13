@@ -216,3 +216,62 @@ def test_api_enrichment_request_accepts_paid_provider_results(tmp_path: Path) ->
     assert payload["provider_result"]["network_calls_made"] == 0
     assert client.post("/sinks/check").json()["dry_run"] is True
     assert client.get("/watch/status").json()["seen_count"] == 0
+
+
+def test_api_records_public_web_enrichment_results(tmp_path: Path) -> None:
+    from business_card_watchdog.api import create_app
+
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    config_path.write_text(
+        f'data_dir = "{data_dir}"\n'
+        "[watch]\ninputs = []\n"
+        "[enrichment]\nenabled = true\n",
+        encoding="utf-8",
+    )
+    config = AppConfig(
+        config_path=config_path,
+        data_dir=data_dir,
+        enrichment=EnrichmentConfig(enabled=True),
+    )
+    run_id, job_id = make_recorded_run(config)
+    artifact_dir = data_dir / "runs" / run_id / "artifacts" / job_id
+    (artifact_dir / "contact_candidate.json").write_text(
+        json.dumps(
+            build_contact_candidate(
+                {
+                    "full_name": "Ada Lovelace",
+                    "organization": "Example Labs",
+                    "email": "ada@example.test",
+                }
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    client = TestClient(create_app(config_path))
+    request = client.post(
+        f"/jobs/{job_id}/enrichment",
+        json={"run_id": run_id, "mode": "public_web", "requested_by": "api-test"},
+    ).json()
+    assert request["public_web_request"]["schema"] == "business-card-watchdog.enrichment-public-web-request.v1"
+
+    payload = client.post(
+        f"/jobs/{job_id}/enrichment/public-web-results",
+        json={
+            "run_id": run_id,
+            "searched_by": "api-search",
+            "results": [
+                {
+                    "title": "Ada Lovelace - Example Labs",
+                    "url": "https://example.test/team/ada",
+                    "snippet": "Contact Ada at ada@example.test",
+                }
+            ],
+        },
+    ).json()
+
+    assert payload["public_web_result"]["schema"] == "business-card-watchdog.enrichment-public-web-result.v1"
+    assert payload["public_web_result"]["searched_by"] == "api-search"
+    assert payload["public_web_result"]["network_calls_made"] == 0
+    assert payload["result"]["schema"] == "business-card-watchdog.enrichment-result.v1"

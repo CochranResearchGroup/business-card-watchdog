@@ -34,6 +34,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_downstream_duplicate_assessment" in names
     assert "business_card_watchdog_enrichment_check" in names
     assert "business_card_watchdog_enrichment_request" in names
+    assert "business_card_watchdog_public_web_enrichment_results" in names
     assert "business_card_watchdog_doctor" in names
     review_tool = next(tool for tool in manifest["tools"] if tool["name"] == "business_card_watchdog_job_review")
     assert "approve_enrichment_merge" in review_tool["input_schema"]["properties"]["action"]["enum"]
@@ -225,6 +226,56 @@ def test_mcp_enrichment_request_can_prepare_paid_provider_without_call(tmp_path:
     assert payload["provider_result"]["schema"] == "business-card-watchdog.enrichment-provider-result.v1"
     assert payload["provider_result"]["network_calls_made"] == 0
     assert "secret" not in json.dumps(payload)
+
+
+def test_mcp_public_web_enrichment_results_are_explicit(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        enrichment=EnrichmentConfig(enabled=True),
+    )
+    run_id, job_id = make_recorded_run(config)
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+    (artifact_dir / "contact_candidate.json").write_text(
+        json.dumps(
+            build_contact_candidate(
+                {
+                    "full_name": "Ada Lovelace",
+                    "organization": "Example Labs",
+                    "email": "ada@example.test",
+                }
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    request = call_tool(
+        "business_card_watchdog_enrichment_request",
+        {"job_id": job_id, "run_id": run_id, "mode": "public_web"},
+        config=config,
+    )
+    payload = call_tool(
+        "business_card_watchdog_public_web_enrichment_results",
+        {
+            "job_id": job_id,
+            "run_id": run_id,
+            "searched_by": "mcp-search",
+            "results": [
+                {
+                    "title": "Ada Lovelace - Example Labs",
+                    "url": "https://example.test/team/ada",
+                    "snippet": "Contact Ada at ada@example.test",
+                }
+            ],
+        },
+        config=config,
+    )
+
+    assert request["public_web_request"]["network_calls_made"] == 0
+    assert payload["public_web_result"]["schema"] == "business-card-watchdog.enrichment-public-web-result.v1"
+    assert payload["public_web_result"]["searched_by"] == "mcp-search"
+    assert payload["public_web_result"]["network_calls_made"] == 0
+    assert payload["result"]["merge_proposals"][0]["field"] == "notes"
 
 
 def test_mcp_call_tool_rejects_unknown_tool(tmp_path: Path) -> None:
