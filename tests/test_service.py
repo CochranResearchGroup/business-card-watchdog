@@ -79,7 +79,12 @@ def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
     assert bundle["review_bundle_path"] == str(bundle_path)
     assert bundle["entries"][0]["job_id"] == job_id
     assert bundle["entries"][0]["next_action"]["action"] == "review_contact"
+    assert bundle["entries"][0]["decision_template"]["action"] == "approve_for_routing"
     assert bundle["entries"][0]["commands"]["review"] == f"jobs review {job_id} --run-id {run_id}"
+    assert bundle["groups"]["by_state"]["needs_review"]["job_ids"] == [job_id]
+    assert bundle["groups"]["by_next_action"]["review_contact"]["count"] == 1
+    assert bundle["decision_import_template"][0]["job_id"] == job_id
+    assert bundle["commands"]["apply_decisions"] == f"reviews apply-decisions --run-id {run_id} --decisions-file <path>"
     assert bundle["writes_attempted"] == 0
     assert bundle["network_calls_made"] == 0
     assert bundle_path.exists()

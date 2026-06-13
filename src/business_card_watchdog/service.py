@@ -459,6 +459,7 @@ class BusinessCardService:
             if state != "all" and job.get("state") != state:
                 continue
             by_kind = artifacts_by_job.get(str(job["job_id"]), {})
+            next_action = next_by_job.get(str(job["job_id"]))
             entries.append(
                 {
                     "run_id": run_id,
@@ -467,19 +468,25 @@ class BusinessCardService:
                     "image_path": job["image_path"],
                     "error": job.get("error"),
                     "artifact_dir": job.get("artifact_dir"),
-                    "next_action": next_by_job.get(str(job["job_id"])),
+                    "next_action": next_action,
                     "artifact_kinds": sorted(by_kind),
                     "artifacts": {
                         kind: self._artifact_bundle_entry(record)
                         for kind, record in sorted(by_kind.items())
                     },
+                    "decision_template": self._review_decision_template(
+                        run_id=run_id,
+                        job_id=str(job["job_id"]),
+                        next_action=next_action,
+                    ),
                     "commands": {
                         "show_job": f"jobs show {job['job_id']} --run-id {run_id}",
                         "review": f"jobs review {job['job_id']} --run-id {run_id}",
-                        "next": next_by_job.get(str(job["job_id"]), {}).get("command"),
+                        "next": (next_action or {}).get("command"),
                     },
                 }
             )
+        groups = self._review_bundle_groups(entries)
         payload = {
             "schema": "business-card-watchdog.review-bundle.v1",
             "run_id": run_id,
@@ -488,10 +495,13 @@ class BusinessCardService:
             "job_count": len(entries),
             "run_state": run.get("state"),
             "summary": self.run_summary(run_id),
+            "groups": groups,
+            "decision_import_template": [entry["decision_template"] for entry in entries],
             "entries": entries,
             "commands": {
                 "refresh": f"reviews bundle --run-id {run_id} --state {state}",
                 "list": f"reviews list --run-id {run_id} --state {state}",
+                "apply_decisions": f"reviews apply-decisions --run-id {run_id} --decisions-file <path>",
                 "next_actions": f"mcp-call business_card_watchdog_next_actions --arguments-json '{{\"run_id\":\"{run_id}\"}}'",
             },
             "writes_attempted": 0,
@@ -1577,6 +1587,51 @@ class BusinessCardService:
             entry["payload"] = None
             entry["error"] = f"artifact is not JSON: {exc}"
         return entry
+
+    def _review_decision_template(
+        self,
+        *,
+        run_id: str,
+        job_id: str,
+        next_action: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        action = str((next_action or {}).get("action") or "")
+        suggested_action = "keep_needs_review"
+        if action == "review_contact":
+            suggested_action = "approve_for_routing"
+        elif action == "review_duplicate":
+            suggested_action = "resolve_duplicate"
+        elif action == "review_enrichment":
+            suggested_action = "approve_enrichment_merge"
+        elif action == "inspect_failure":
+            suggested_action = "skip"
+        return {
+            "run_id": run_id,
+            "job_id": job_id,
+            "action": suggested_action,
+            "field_corrections": {},
+            "crop_selection": {},
+            "approved_enrichment_fields": [],
+            "duplicate_resolution": {},
+            "notes": "",
+        }
+
+    def _review_bundle_groups(self, entries: list[dict[str, Any]]) -> dict[str, Any]:
+        by_state: dict[str, dict[str, Any]] = {}
+        by_next_action: dict[str, dict[str, Any]] = {}
+        for entry in entries:
+            state = str(entry.get("state") or "unknown")
+            state_group = by_state.setdefault(state, {"count": 0, "job_ids": []})
+            state_group["count"] += 1
+            state_group["job_ids"].append(entry["job_id"])
+            action = str((entry.get("next_action") or {}).get("action") or "none")
+            action_group = by_next_action.setdefault(action, {"count": 0, "job_ids": []})
+            action_group["count"] += 1
+            action_group["job_ids"].append(entry["job_id"])
+        return {
+            "by_state": dict(sorted(by_state.items())),
+            "by_next_action": dict(sorted(by_next_action.items())),
+        }
 
     def _record_route_refresh_if_needed(
         self,

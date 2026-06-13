@@ -171,6 +171,8 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert review_bundle["schema"] == "business-card-watchdog.review-bundle.v1"
     assert review_bundle["entries"][0]["job_id"] == job_id
     assert review_bundle["entries"][0]["next_action"]["action"] == "review_contact"
+    assert review_bundle["groups"]["by_next_action"]["review_contact"]["count"] == 1
+    assert review_bundle["decision_import_template"][0]["job_id"] == job_id
     assert review_import["import"]["schema"] == "business-card-watchdog.review-decisions-import.v1"
     assert review_import["results"][0]["job_state"] == "ready_to_route"
     assert next_actions["actions"][0]["action"] == "review_contact"

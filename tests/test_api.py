@@ -40,6 +40,8 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert review_bundle["schema"] == "business-card-watchdog.review-bundle.v1"
     assert review_bundle["entries"][0]["job_id"] == job_id
     assert review_bundle["entries"][0]["next_action"]["action"] == "review_contact"
+    assert review_bundle["groups"]["by_state"]["needs_review"]["count"] == 1
+    assert review_bundle["decision_import_template"][0]["action"] == "approve_for_routing"
     review_import = client.post(
         f"/runs/{run_id}/review-decisions",
         json={

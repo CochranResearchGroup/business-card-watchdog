@@ -910,6 +910,30 @@ Remaining:
 - Live public-web and paid-provider execution adapters remain explicit follow-on work.
 - Budget policy is currently per-run and per-job; cross-run/user-scope spend limits remain follow-on work.
 
+### Slice 0004-AL | 2026-06-13 | Batch Review Bundle Indexing
+
+Implemented:
+
+- Review bundles now include `groups.by_state` for batch triage.
+- Review bundles now include `groups.by_next_action` for agent-loop and operator prioritization.
+- Each review bundle entry now includes a `decision_template` shaped for `reviews apply-decisions`.
+- Review bundles now include a run-level `decision_import_template` array that can be copied into a decision import file.
+- Existing CLI/API/MCP review-bundle surfaces expose the richer bundle without adding new orchestration paths.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 69 tests.
+- `.venv/bin/python -m pytest -q` passed with 140 tests.
+- `PYTHONPATH=src pytest -q` passed with 135 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+Remaining:
+
+- A spreadsheet/HTML review presentation remains follow-on work.
+- Decision templates are conservative suggestions and still require operator edits/approval before import.
+
 ## Next High-Level Plan
 
 The next execution block should turn the current artifact-first scaffolding into an operator-usable review and routing system while preserving the current safety boundaries: no paid enrichment unless explicitly requested, no live sink writes without an approved pilot, and no secret values in repo artifacts or logs.

@@ -58,6 +58,8 @@ def test_cli_runs_and_jobs_use_recorded_runtime_state(
     assert bundle["schema"] == "business-card-watchdog.review-bundle.v1"
     assert bundle["entries"][0]["job_id"] == job_id
     assert bundle["entries"][0]["next_action"]["action"] == "review_contact"
+    assert bundle["groups"]["by_state"]["needs_review"]["count"] == 1
+    assert bundle["decision_import_template"][0]["action"] == "approve_for_routing"
     assert Path(bundle["review_bundle_path"]).exists()
 
     assert (
