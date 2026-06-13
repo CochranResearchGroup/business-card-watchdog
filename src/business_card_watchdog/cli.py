@@ -113,6 +113,11 @@ def build_parser() -> argparse.ArgumentParser:
     sinks_apply_decision.add_argument("--reviewer", default="operator")
     sinks_apply_decision.add_argument("--reason", default="")
     sinks_apply_decision.add_argument("--json", action="store_true")
+    sinks_adapter_request = sinks_sub.add_parser("adapter-request")
+    sinks_adapter_request.add_argument("job_id")
+    sinks_adapter_request.add_argument("--run-id", required=True)
+    sinks_adapter_request.add_argument("--phase", choices=["lookup", "write", "readback"], default="lookup")
+    sinks_adapter_request.add_argument("--json", action="store_true")
 
     enrichment = sub.add_parser("enrichment")
     enrichment_sub = enrichment.add_subparsers(dest="enrichment_command", required=True)
@@ -254,12 +259,18 @@ def main(argv: list[str] | None = None) -> int:
                 reviewer=args.reviewer,
                 reason=args.reason,
             )
-        else:
+        elif args.sinks_command == "apply":
             payload = service.apply_sinks_for_job(
                 job_id=args.job_id,
                 run_id=args.run_id,
                 apply=args.apply,
                 simulate=args.simulate,
+            )
+        else:
+            payload = service.build_sink_adapter_request_for_job(
+                job_id=args.job_id,
+                run_id=args.run_id,
+                phase=args.phase,
             )
         print(json.dumps(payload, indent=2) if args.json else payload)
         return 0

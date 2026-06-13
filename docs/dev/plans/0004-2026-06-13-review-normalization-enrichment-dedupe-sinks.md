@@ -385,6 +385,28 @@ Remaining:
 - Live sink-backed duplicate lookup execution remains follow-on work.
 - Non-simulated live apply remains blocked until adapters are implemented and explicitly approved.
 
+### Slice 0004-O | 2026-06-13 | Sink Adapter Request Artifacts
+
+Implemented:
+
+- Added `sink_adapter_request_{phase}.json` artifacts for `lookup`, `write`, and `readback` phases.
+- Added adapter request descriptors for Google Contacts and Odoo/Odollo live lookup/write/readback calls.
+- Adapter requests record intended adapter, method/model, match keys, payloads, serialization keys, and mock readback IDs where available.
+- Adapter request artifacts remain blocked by default and record `writes_attempted = 0` and `network_calls_made = 0`.
+- Service method auto-creates prerequisite dry-run lookup plans, sink plans, or preview apply results when the source artifact is missing.
+- Added CLI `bcw sinks adapter-request`.
+- Added API and MCP dispatcher surfaces for adapter request creation.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 59 tests.
+
+Remaining:
+
+- Live Google Contacts and Odoo/Odollo lookup/write/readback adapters remain blocked.
+- Live sink-backed duplicate lookup execution remains follow-on work.
+- Non-simulated live apply remains blocked until adapters are implemented and explicitly approved.
+
 ## `/goal` Objective
 
 Use this as the high-level `/goal` objective:

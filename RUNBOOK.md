@@ -437,3 +437,20 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 56 tests.
+
+## Turn 26 | 2026-06-13
+
+Continued Plan 0004 execution with blocked live adapter request artifacts.
+
+Implemented:
+
+- Added `sink_adapter_request_{phase}.json` artifacts for `lookup`, `write`, and `readback`.
+- Added Google Contacts and Odoo/Odollo adapter request descriptors for lookup/write/readback phases.
+- Adapter request artifacts document intended live methods, payloads, match keys, serialization keys, and readback IDs without invoking adapters.
+- Service, CLI, API, and MCP surfaces can create adapter request artifacts.
+- Adapter request creation auto-creates prerequisite dry-run artifacts when needed.
+- Adapter requests remain blocked and record `writes_attempted = 0` and `network_calls_made = 0`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 59 tests.

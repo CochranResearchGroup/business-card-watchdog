@@ -9,12 +9,14 @@ from typing import Any, Literal
 
 
 SinkName = Literal["google_contacts", "odoo"]
+SinkAdapterPhase = Literal["lookup", "write", "readback"]
 ReadinessStatus = Literal["ready", "blocked"]
 SINK_PLAN_SCHEMA = "business-card-watchdog.sink-plan.v1"
 SINK_APPLY_PREFLIGHT_SCHEMA = "business-card-watchdog.sink-apply-preflight.v1"
 SINK_LOOKUP_PLAN_SCHEMA = "business-card-watchdog.sink-lookup-plan.v1"
 SINK_APPLY_DECISION_SCHEMA = "business-card-watchdog.sink-apply-decision.v1"
 SINK_APPLY_RESULT_SCHEMA = "business-card-watchdog.sink-apply-result.v1"
+SINK_ADAPTER_REQUEST_SCHEMA = "business-card-watchdog.sink-adapter-request.v1"
 
 
 FINGERPRINT_FIELDS = (
@@ -311,6 +313,53 @@ def build_sink_apply_result(
     }
 
 
+def build_sink_adapter_request(
+    *,
+    phase: SinkAdapterPhase,
+    lookup_plan: dict[str, Any] | None = None,
+    sink_plan: dict[str, Any] | None = None,
+    apply_result: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if phase == "lookup":
+        source = lookup_plan or {}
+        source_schema = source.get("schema")
+        requests = [_lookup_adapter_request(lookup) for lookup in list(source.get("lookups") or [])]
+    elif phase == "write":
+        source = sink_plan or {}
+        source_schema = source.get("schema")
+        payloads = {payload.get("sink"): payload for payload in list(source.get("payloads") or [])}
+        requests = [
+            _write_adapter_request(action, payloads.get(action.get("sink"), {}))
+            for action in list(source.get("actions") or [])
+        ]
+    elif phase == "readback":
+        source = apply_result or {}
+        source_schema = source.get("schema")
+        readback_by_sink = {row.get("sink"): row for row in list(source.get("readback") or [])}
+        requests = [
+            _readback_adapter_request(action, readback_by_sink.get(action.get("sink"), {}))
+            for action in list(source.get("actions") or [])
+        ]
+    else:
+        raise ValueError("sink adapter phase must be lookup, write, or readback")
+
+    return {
+        "schema": SINK_ADAPTER_REQUEST_SCHEMA,
+        "phase": phase,
+        "state": "blocked",
+        "status": "blocked",
+        "reason": "live sink adapters require explicit implementation and operator approval",
+        "requires_live_adapter": True,
+        "network_calls_made": 0,
+        "writes_attempted": 0,
+        "source_schema": source_schema,
+        "job_id": source.get("job_id"),
+        "run_id": source.get("run_id"),
+        "request_count": len(requests),
+        "requests": requests,
+    }
+
+
 def check_sink_readiness(sink: str, *, dry_run: bool, apply_enabled: bool = False) -> SinkReadiness:
     if dry_run:
         return SinkReadiness(
@@ -439,6 +488,72 @@ def _lookup_queries_for_sink(sink: str, match_keys: dict[str, str]) -> list[dict
         for field, value in match_keys.items()
         if field in {"email", "phone", "full_name", "fingerprint"}
     ]
+
+
+def _lookup_adapter_request(lookup: dict[str, Any]) -> dict[str, Any]:
+    sink = str(lookup.get("sink") or "")
+    request = _adapter_base(sink=sink, phase="lookup")
+    request.update(
+        {
+            "operation": "lookup_contact",
+            "match_keys": lookup.get("match_keys", {}),
+            "queries": list(lookup.get("queries") or []),
+        }
+    )
+    if sink == "odoo":
+        request.update({"adapter": "odollo.odoo", "model": "res.partner", "method": "search_read"})
+    else:
+        request.update({"adapter": "gws.people", "method": "people.searchContacts"})
+    return request
+
+
+def _write_adapter_request(action: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+    sink = str(action.get("sink") or "")
+    request = _adapter_base(sink=sink, phase="write")
+    request.update(
+        {
+            "operation": "upsert_contact",
+            "planned_action": action.get("action"),
+            "serialization_key": action.get("serialization_key"),
+            "match_keys": action.get("match_keys", {}),
+            "payload": payload.get("payload", {}),
+        }
+    )
+    if sink == "odoo":
+        request.update({"adapter": "odollo.odoo", "model": "res.partner", "method": "upsert"})
+    else:
+        request.update({"adapter": "gws.people", "method": "people.createOrUpdateContact"})
+    return request
+
+
+def _readback_adapter_request(action: dict[str, Any], readback: dict[str, Any]) -> dict[str, Any]:
+    sink = str(action.get("sink") or "")
+    request = _adapter_base(sink=sink, phase="readback")
+    request.update(
+        {
+            "operation": "readback_contact",
+            "serialization_key": action.get("serialization_key"),
+            "resource_id": readback.get("resource_id"),
+            "simulated_readback": bool(readback.get("simulated", False)),
+        }
+    )
+    if sink == "odoo":
+        request.update({"adapter": "odollo.odoo", "model": "res.partner", "method": "read"})
+    else:
+        request.update({"adapter": "gws.people", "method": "people.get"})
+    return request
+
+
+def _adapter_base(*, sink: str, phase: SinkAdapterPhase) -> dict[str, Any]:
+    return {
+        "sink": sink,
+        "phase": phase,
+        "status": "blocked",
+        "requires_live_adapter": True,
+        "network_calls_made": 0,
+        "writes_attempted": 0,
+        "reason": "adapter request prepared only; no live adapter invoked",
+    }
 
 
 def _mock_readback(actions: list[dict[str, Any]]) -> list[dict[str, Any]]:

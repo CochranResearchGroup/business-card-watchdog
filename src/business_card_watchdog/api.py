@@ -44,6 +44,10 @@ def create_app(config_path: Path | None = None):
         reviewer: str = "operator"
         reason: str = ""
 
+    class SinkAdapterRequest(BaseModel):
+        run_id: str
+        phase: str = "lookup"
+
     app = FastAPI(title="Business Card Watchdog")
 
     def service() -> BusinessCardService:
@@ -154,6 +158,14 @@ def create_app(config_path: Path | None = None):
             run_id=request.run_id,
             apply=request.apply,
             simulate=request.simulate,
+        )
+
+    @app.post("/jobs/{job_id}/sink-adapter-request")
+    def create_sink_adapter_request(job_id: str, request: SinkAdapterRequest = Body(...)) -> dict[str, object]:
+        return service().build_sink_adapter_request_for_job(
+            job_id=job_id,
+            run_id=request.run_id,
+            phase=request.phase,  # type: ignore[arg-type]
         )
 
     @app.post("/enrichment/check")

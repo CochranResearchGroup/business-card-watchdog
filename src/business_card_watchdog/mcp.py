@@ -196,6 +196,24 @@ def tool_manifest() -> dict[str, object]:
                         "job_id": {"type": "string"},
                         "run_id": {"type": "string"},
                         "apply": {"type": "boolean", "default": False},
+                        "simulate": {"type": "boolean", "default": False},
+                    },
+                    "required": ["job_id", "run_id"],
+                },
+            },
+            {
+                "name": "business_card_watchdog_sink_adapter_request",
+                "description": "Create a blocked live-adapter request artifact for lookup, write, or readback.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "job_id": {"type": "string"},
+                        "run_id": {"type": "string"},
+                        "phase": {
+                            "type": "string",
+                            "enum": ["lookup", "write", "readback"],
+                            "default": "lookup",
+                        },
                     },
                     "required": ["job_id", "run_id"],
                 },
@@ -338,6 +356,12 @@ def call_tool(
             run_id=str(args["run_id"]),
             apply=bool(args.get("apply", False)),
             simulate=bool(args.get("simulate", False)),
+        )
+    if tool_name == "business_card_watchdog_sink_adapter_request":
+        return service.build_sink_adapter_request_for_job(
+            job_id=str(args["job_id"]),
+            run_id=str(args["run_id"]),
+            phase=str(args.get("phase") or "lookup"),  # type: ignore[arg-type]
         )
     if tool_name == "business_card_watchdog_enrichment_check":
         return service.enrichment_readiness(

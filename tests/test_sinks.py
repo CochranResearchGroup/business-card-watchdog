@@ -1,4 +1,5 @@
 from business_card_watchdog.sinks import (
+    build_sink_adapter_request,
     build_sink_apply_decision,
     build_sink_apply_preflight,
     build_sink_apply_result,
@@ -96,6 +97,39 @@ def test_build_sink_lookup_plan_is_zero_network_and_keyed() -> None:
     assert all(lookup["readiness"]["status"] == "ready" for lookup in plan["lookups"])
     assert plan["lookups"][0]["match_keys"]["email"] == "ada@example.test"
     assert any(query["field"] == "email" for query in plan["lookups"][0]["queries"])
+
+
+def test_build_sink_adapter_request_prepares_lookup_write_and_readback_contracts() -> None:
+    lookup_plan = build_sink_lookup_plan(
+        sinks=["google_contacts", "odoo"],
+        spec={"full_name": "Ada Lovelace", "email": "ada@example.test"},
+        dry_run=True,
+        reason="matched email_domain=*",
+    )
+    sink_plan = build_sink_plan(
+        sinks=["google_contacts", "odoo"],
+        spec={"full_name": "Ada Lovelace", "email": "ada@example.test"},
+        dry_run=True,
+        reason="matched email_domain=*",
+    )
+    preflight = build_sink_apply_preflight(plan=sink_plan, apply=False)
+    decision = build_sink_apply_decision(preflight=preflight, decision="approve", reviewer="operator")
+    apply_result = build_sink_apply_result(preflight=preflight, decision=decision, apply=True, simulate=True)
+
+    lookup = build_sink_adapter_request(phase="lookup", lookup_plan=lookup_plan)
+    write = build_sink_adapter_request(phase="write", sink_plan=sink_plan)
+    readback = build_sink_adapter_request(phase="readback", apply_result=apply_result)
+
+    assert lookup["schema"] == "business-card-watchdog.sink-adapter-request.v1"
+    assert lookup["phase"] == "lookup"
+    assert lookup["network_calls_made"] == 0
+    assert lookup["writes_attempted"] == 0
+    assert lookup["requests"][0]["adapter"] == "gws.people"
+    assert lookup["requests"][1]["adapter"] == "odollo.odoo"
+    assert write["phase"] == "write"
+    assert write["requests"][0]["payload"]["values"]["email"] == "ada@example.test"
+    assert readback["phase"] == "readback"
+    assert readback["requests"][0]["simulated_readback"] is True
 
 
 def test_build_sink_apply_preflight_is_zero_write_and_explicitly_gated() -> None:

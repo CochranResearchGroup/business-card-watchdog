@@ -340,6 +340,36 @@ def test_service_apply_sinks_for_job_can_emit_mock_readback(tmp_path: Path) -> N
     assert any(event["payload"]["simulated"] is True for event in events if event["event_type"] == "sink_apply_attempted")
 
 
+def test_service_build_sink_adapter_request_writes_phase_artifact(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+
+    lookup = service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
+    write = service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="write")
+    readback = service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="readback")
+    job = service.get_job(job_id, run_id=run_id)
+    events = [
+        json.loads(line)
+        for line in (config.runs_dir / run_id / "events.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+
+    assert lookup["request"]["schema"] == "business-card-watchdog.sink-adapter-request.v1"
+    assert lookup["request"]["phase"] == "lookup"
+    assert lookup["request"]["network_calls_made"] == 0
+    assert write["request"]["phase"] == "write"
+    assert readback["request"]["phase"] == "readback"
+    assert any(artifact["kind"] == "sink_adapter_request_lookup" for artifact in job["artifacts"])
+    assert any(artifact["kind"] == "sink_adapter_request_write" for artifact in job["artifacts"])
+    assert any(artifact["kind"] == "sink_adapter_request_readback" for artifact in job["artifacts"])
+    assert any(event["event_type"] == "sink_adapter_request_created" for event in events)
+
+
 def test_service_next_actions_recommends_sink_lookup_for_ready_job(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, job_id = make_recorded_run(config)

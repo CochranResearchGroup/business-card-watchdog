@@ -18,6 +18,8 @@ from .orchestrator import BatchOrchestrator
 from .review import build_review_submission, write_review_submission
 from .routing import decide_sinks
 from .sinks import (
+    SinkAdapterPhase,
+    build_sink_adapter_request,
     build_sink_apply_decision,
     build_sink_apply_preflight,
     build_sink_apply_result,
@@ -637,6 +639,57 @@ class BusinessCardService:
             },
         )
         return {"result_path": str(result_path), "result": result}
+
+    def build_sink_adapter_request_for_job(
+        self,
+        *,
+        job_id: str,
+        run_id: str,
+        phase: SinkAdapterPhase = "lookup",
+    ) -> dict[str, Any]:
+        job = self.get_job(job_id, run_id=run_id)
+        artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
+        if phase == "lookup":
+            lookup_plan_path = artifact_dir / "sink_lookup_plan.json"
+            if lookup_plan_path.exists():
+                lookup_plan = json.loads(lookup_plan_path.read_text(encoding="utf-8"))
+            else:
+                lookup_plan = self.plan_sink_lookup_for_job(job_id=job_id, run_id=run_id)["lookup_plan"]
+            request = build_sink_adapter_request(phase=phase, lookup_plan=lookup_plan)
+        elif phase == "write":
+            sink_plan_path = artifact_dir / "sink_plan.json"
+            if sink_plan_path.exists():
+                sink_plan = json.loads(sink_plan_path.read_text(encoding="utf-8"))
+            else:
+                sink_plan = self.plan_sinks_for_job(job_id=job_id, run_id=run_id)["plan"]
+            request = build_sink_adapter_request(phase=phase, sink_plan=sink_plan)
+        elif phase == "readback":
+            result_path = artifact_dir / "sink_apply_result.json"
+            if result_path.exists():
+                apply_result = json.loads(result_path.read_text(encoding="utf-8"))
+            else:
+                apply_result = self.apply_sinks_for_job(job_id=job_id, run_id=run_id)["result"]
+            request = build_sink_adapter_request(phase=phase, apply_result=apply_result)
+        else:
+            raise ValueError("sink adapter phase must be lookup, write, or readback")
+
+        request_path = artifact_dir / f"sink_adapter_request_{phase}.json"
+        request_path.write_text(json.dumps(request, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        ledger.record_artifact(job_id=job_id, kind=f"sink_adapter_request_{phase}", path=request_path)
+        ledger.record_event(
+            "sink_adapter_request_created",
+            {
+                "job_id": job_id,
+                "run_id": run_id,
+                "phase": phase,
+                "request_path": str(request_path),
+                "request_count": request["request_count"],
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        return {"request_path": str(request_path), "request": request}
 
     def doctor(self) -> dict[str, Any]:
         status = self.status()
