@@ -815,6 +815,29 @@ Remaining:
 - Batch imports are run-scoped; cross-run review imports should be split by run.
 - Live sink writes remain explicit and blocked behind apply gates.
 
+### Slice 0004-AH | 2026-06-13 | Public-Web Result Import Budget Guard
+
+Implemented:
+
+- Public-web result imports now enforce the originating `enrichment_public_web_request.json` `max_queries` limit.
+- Oversized public-web result imports fail before writing result artifacts.
+- `enrichment_public_web_result.json` artifacts now include `max_results` alongside submitted result count and source query count.
+- The bound is enforced at the shared service layer used by CLI, API, and MCP.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_enrichment.py -q` passed with 12 tests.
+- `.venv/bin/python -m pytest -q` passed with 136 tests.
+- `PYTHONPATH=src pytest -q` passed with 131 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+Remaining:
+
+- Live browser/search execution remains explicit follow-on work.
+- Per-batch aggregate enrichment budgets remain follow-on work.
+
 ## Next High-Level Plan
 
 The next execution block should turn the current artifact-first scaffolding into an operator-usable review and routing system while preserving the current safety boundaries: no paid enrichment unless explicitly requested, no live sink writes without an approved pilot, and no secret values in repo artifacts or logs.

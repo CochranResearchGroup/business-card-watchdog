@@ -802,3 +802,23 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed with the index up to date.
 - `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+## Turn 46 | 2026-06-13
+
+Continued Plan 0004 execution with a public-web result import budget guard.
+
+Implemented:
+
+- Public-web result imports now enforce the originating `enrichment_public_web_request.json` `max_queries` limit.
+- Oversized public-web result imports fail before writing result artifacts.
+- `enrichment_public_web_result.json` artifacts now include `max_results` alongside submitted result count and source query count.
+- The bound is enforced at the shared service layer used by CLI, API, and MCP.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_enrichment.py -q` passed with 12 tests.
+- `.venv/bin/python -m pytest -q` passed with 136 tests.
+- `PYTHONPATH=src pytest -q` passed with 131 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.

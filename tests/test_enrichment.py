@@ -132,6 +132,7 @@ def test_public_web_result_artifact_scores_explicit_operator_results(tmp_path: P
         "schema": "business-card-watchdog.enrichment-public-web-request.v1",
         "mode": "public_web",
         "status": "prepared",
+        "max_queries": 1,
         "queries": [{"query": '"ada@example.test"'}],
     }
 
@@ -152,6 +153,7 @@ def test_public_web_result_artifact_scores_explicit_operator_results(tmp_path: P
     assert result["result_schema"] == "business-card-watchdog.enrichment-result.v1"
     assert result["searched_by"] == "tester"
     assert result["source_query_count"] == 1
+    assert result["max_results"] == 1
     assert result["submitted_result_count"] == 1
     assert result["network_calls_made"] == 0
     assert result["search_calls_attempted"] == 0
@@ -345,6 +347,32 @@ def test_service_records_public_web_results_after_request(tmp_path: Path) -> Non
     assert any(artifact["kind"] == "enrichment_public_web_result" for artifact in artifacts)
     assert any(artifact["kind"] == "enrichment_result" for artifact in artifacts)
     assert any(event["event_type"] == "enrichment_public_web_results_recorded" for event in events)
+
+
+def test_service_public_web_result_import_enforces_request_limit(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        enrichment=EnrichmentConfig(enabled=True, max_public_web_queries_per_contact=1),
+    )
+    run_id, job_id = _record_candidate(config)
+    service = BusinessCardService(config)
+    service.request_enrichment(job_id=job_id, run_id=run_id, mode="public_web", requested_by="tester")
+
+    try:
+        service.record_public_web_enrichment_results(
+            job_id=job_id,
+            run_id=run_id,
+            searched_by="search-agent",
+            results=[
+                {"title": "one", "url": "https://one.example.test", "snippet": "one"},
+                {"title": "two", "url": "https://two.example.test", "snippet": "two"},
+            ],
+        )
+    except ValueError as exc:
+        assert "exceeds request limit" in str(exc)
+    else:
+        raise AssertionError("expected oversized public-web result import to fail")
 
 
 def test_service_request_api_enrichment_writes_provider_request_without_call(tmp_path: Path) -> None:

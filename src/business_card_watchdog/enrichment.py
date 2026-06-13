@@ -135,6 +135,7 @@ def build_public_web_result_artifact(
     searched_by: str = "operator",
 ) -> dict[str, Any]:
     scored_result = score_public_web_results(contact_candidate, results=results)
+    max_results = int(public_web_request.get("max_queries") or len(public_web_request.get("queries") or []))
     return {
         "schema": ENRICHMENT_PUBLIC_WEB_RESULT_SCHEMA,
         "result_schema": ENRICHMENT_RESULT_SCHEMA,
@@ -144,6 +145,7 @@ def build_public_web_result_artifact(
         "source_request_schema": public_web_request.get("schema"),
         "source_request_status": public_web_request.get("status"),
         "source_query_count": len(public_web_request.get("queries") or []),
+        "max_results": max_results,
         "submitted_result_count": len(results),
         "cost_class": "operator_search",
         "network_calls_made": 0,

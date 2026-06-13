@@ -894,6 +894,11 @@ class BusinessCardService:
             raise FileNotFoundError(f"public web enrichment request not found for job: {job_id}")
         candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
         public_web_request = json.loads(request_path.read_text(encoding="utf-8"))
+        max_results = int(public_web_request.get("max_queries") or self.config.enrichment.max_public_web_queries_per_contact)
+        if len(results) > max_results:
+            raise ValueError(
+                f"public web result import exceeds request limit: {len(results)} results for max {max_results}"
+            )
         public_web_result = build_public_web_result_artifact(
             candidate,
             public_web_request=public_web_request,
