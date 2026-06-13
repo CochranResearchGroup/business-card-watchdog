@@ -43,6 +43,12 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     preflight = client.post(f"/jobs/{job_id}/sink-apply-preflight", json={"run_id": run_id}).json()
     assert preflight["preflight"]["schema"] == "business-card-watchdog.sink-apply-preflight.v1"
     assert preflight["preflight"]["writes_attempted"] == 0
+    apply_decision = client.post(
+        f"/jobs/{job_id}/sink-apply-decision",
+        json={"run_id": run_id, "decision": "approve", "reviewer": "api-test"},
+    ).json()
+    assert apply_decision["decision"]["schema"] == "business-card-watchdog.sink-apply-decision.v1"
+    assert apply_decision["decision"]["network_calls_made"] == 0
     artifact_dir = data_dir / "runs" / run_id / "artifacts" / job_id
     (artifact_dir / "enrichment_result.json").write_text(
         json.dumps(

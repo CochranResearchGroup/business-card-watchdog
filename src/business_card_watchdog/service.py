@@ -17,7 +17,13 @@ from .models import CardJob
 from .orchestrator import BatchOrchestrator
 from .review import build_review_submission, write_review_submission
 from .routing import decide_sinks
-from .sinks import build_sink_apply_preflight, build_sink_lookup_plan, build_sink_plan, check_sink_readiness
+from .sinks import (
+    build_sink_apply_decision,
+    build_sink_apply_preflight,
+    build_sink_lookup_plan,
+    build_sink_plan,
+    check_sink_readiness,
+)
 from .skill_adapter import BusinessCardSkillAdapter
 from .watcher import PollingWatcher
 
@@ -532,6 +538,54 @@ class BusinessCardService:
         )
         return {"preflight_path": str(preflight_path), "preflight": preflight}
 
+    def decide_sink_apply(
+        self,
+        *,
+        job_id: str,
+        run_id: str,
+        decision: str,
+        reviewer: str = "operator",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        job_payload = self.get_job(job_id, run_id=run_id)
+        job = CardJob.from_dict(job_payload)
+        artifact_dir = Path(job.artifact_dir) if job.artifact_dir else self.config.runs_dir / run_id / "artifacts" / job_id
+        preflight_path = artifact_dir / "sink_apply_preflight.json"
+        if preflight_path.exists():
+            preflight = json.loads(preflight_path.read_text(encoding="utf-8"))
+        else:
+            preflight = self.preflight_sink_apply(job_id=job_id, run_id=run_id)["preflight"]
+        decision_payload = build_sink_apply_decision(
+            preflight=preflight,
+            decision=decision,
+            reviewer=reviewer,
+            reason=reason,
+        )
+        decision_path = artifact_dir / "sink_apply_decision.json"
+        decision_path.write_text(json.dumps(decision_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        ledger.record_artifact(job_id=job_id, kind="sink_apply_decision", path=decision_path)
+        if decision == "noop":
+            job.transition_to("cancelled", error="sink apply resolved as no-op")
+            ledger.record_job(job)
+        ledger.record_event(
+            "sink_apply_decided",
+            {
+                "job_id": job_id,
+                "run_id": run_id,
+                "decision": decision,
+                "reviewer": reviewer,
+                "decision_path": str(decision_path),
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        return {
+            "job": job.to_dict(),
+            "decision_path": str(decision_path),
+            "decision": decision_payload,
+        }
+
     def doctor(self) -> dict[str, Any]:
         status = self.status()
         checks = [
@@ -607,10 +661,22 @@ class BusinessCardService:
                     "reason": "reviewed/normalized job is ready for dry-run sink planning",
                     "command": "sinks plan",
                 }
+            if "sink_apply_preflight" not in artifact_kinds:
+                return {
+                    "action": "preflight_sink_apply",
+                    "reason": "sink plan exists; create zero-write apply preflight",
+                    "command": "sinks apply-preflight",
+                }
+            if "sink_apply_decision" not in artifact_kinds:
+                return {
+                    "action": "decide_sink_apply",
+                    "reason": "sink apply preflight exists; approve, reject, or mark no-op",
+                    "command": "sinks apply-decision",
+                }
             return {
                 "action": "await_apply_approval",
-                "reason": "sink plan exists; live apply remains explicit and gated",
-                "command": "sinks apply-preflight",
+                "reason": "sink apply decision exists; live apply remains explicit and gated",
+                "command": "sinks apply-preflight --apply",
             }
         if state == "failed":
             return {

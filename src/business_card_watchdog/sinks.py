@@ -13,6 +13,7 @@ ReadinessStatus = Literal["ready", "blocked"]
 SINK_PLAN_SCHEMA = "business-card-watchdog.sink-plan.v1"
 SINK_APPLY_PREFLIGHT_SCHEMA = "business-card-watchdog.sink-apply-preflight.v1"
 SINK_LOOKUP_PLAN_SCHEMA = "business-card-watchdog.sink-lookup-plan.v1"
+SINK_APPLY_DECISION_SCHEMA = "business-card-watchdog.sink-apply-decision.v1"
 
 
 FINGERPRINT_FIELDS = (
@@ -209,6 +210,45 @@ def build_sink_apply_preflight(
                 "match_keys": action.get("match_keys", {}),
             }
             for action in actions
+        ],
+    }
+
+
+def build_sink_apply_decision(
+    *,
+    preflight: dict[str, Any],
+    decision: str,
+    reviewer: str,
+    reason: str = "",
+) -> dict[str, Any]:
+    if decision not in {"approve", "reject", "noop"}:
+        raise ValueError("sink apply decision must be approve, reject, or noop")
+    state = {
+        "approve": "approved_for_apply",
+        "reject": "rejected",
+        "noop": "noop",
+    }[decision]
+    return {
+        "schema": SINK_APPLY_DECISION_SCHEMA,
+        "state": state,
+        "decision": decision,
+        "reviewer": reviewer,
+        "reason": reason,
+        "writes_attempted": 0,
+        "network_calls_made": 0,
+        "preflight_schema": preflight.get("schema"),
+        "preflight_state": preflight.get("state"),
+        "job_id": preflight.get("job_id"),
+        "run_id": preflight.get("run_id"),
+        "actions": [
+            {
+                "sink": action.get("sink"),
+                "decision": decision,
+                "planned_action": action.get("planned_action"),
+                "serialization_key": action.get("serialization_key"),
+                "match_keys": action.get("match_keys", {}),
+            }
+            for action in list(preflight.get("actions") or [])
         ],
     }
 

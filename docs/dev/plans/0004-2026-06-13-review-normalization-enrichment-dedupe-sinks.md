@@ -294,6 +294,31 @@ Remaining:
 - Live sink-backed duplicate lookup execution remains follow-on work.
 - Automatic apply/reject/noop sink apply actions remain follow-on work.
 
+### Slice 0004-K | 2026-06-13 | Sink Apply Decision Artifacts
+
+Implemented:
+
+- `sink_apply_decision.json` artifacts for apply approval, rejection, and no-op decisions.
+- Explicit apply decisions: `approve`, `reject`, and `noop`.
+- Zero-write decision artifacts with `writes_attempted = 0` and `network_calls_made = 0`.
+- `noop` decisions transition jobs to `cancelled`.
+- `sink_apply_decided` ledger events for agent-loop readback.
+- Service `decide_sink_apply` method.
+- CLI `bcw sinks apply-decision`.
+- API `POST /jobs/{job_id}/sink-apply-decision`.
+- MCP manifest and dispatcher entry for `business_card_watchdog_sink_apply_decision`.
+- Agent next-action ordering now recommends apply preflight before apply decision.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 49 tests.
+
+Remaining:
+
+- Live Google Contacts and Odoo/Odollo lookup/write/readback adapters remain blocked.
+- Live sink-backed duplicate lookup execution remains follow-on work.
+- Live apply after approved decision remains follow-on work.
+
 ## `/goal` Objective
 
 Use this as the high-level `/goal` objective:

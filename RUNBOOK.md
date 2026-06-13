@@ -367,3 +367,21 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 44 tests.
+
+## Turn 22 | 2026-06-13
+
+Continued Plan 0004 execution with zero-write sink apply decisions.
+
+Implemented:
+
+- Added `sink_apply_decision.json` artifacts for apply approval, rejection, and no-op decisions.
+- Added decisions `approve`, `reject`, and `noop`.
+- Decision artifacts record `writes_attempted = 0` and `network_calls_made = 0`.
+- `noop` decisions transition jobs to `cancelled`.
+- Added `sink_apply_decided` events for agent-loop readback.
+- Added service, CLI, API, and MCP dispatcher surfaces for sink apply decisions.
+- Agent next-action ordering now recommends apply preflight before apply decision.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sinks.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py -q` passed with 49 tests.

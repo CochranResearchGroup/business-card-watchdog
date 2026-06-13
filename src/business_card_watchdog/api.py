@@ -37,6 +37,12 @@ def create_app(config_path: Path | None = None):
         run_id: str
         apply: bool = False
 
+    class SinkApplyDecisionRequest(BaseModel):
+        run_id: str
+        decision: str
+        reviewer: str = "operator"
+        reason: str = ""
+
     app = FastAPI(title="Business Card Watchdog")
 
     def service() -> BusinessCardService:
@@ -126,6 +132,19 @@ def create_app(config_path: Path | None = None):
         request: SinkApplyPreflightRequest = Body(...),
     ) -> dict[str, object]:
         return service().preflight_sink_apply(job_id=job_id, run_id=request.run_id, apply=request.apply)
+
+    @app.post("/jobs/{job_id}/sink-apply-decision")
+    def create_sink_apply_decision(
+        job_id: str,
+        request: SinkApplyDecisionRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().decide_sink_apply(
+            job_id=job_id,
+            run_id=request.run_id,
+            decision=request.decision,
+            reviewer=request.reviewer,
+            reason=request.reason,
+        )
 
     @app.post("/enrichment/check")
     def enrichment_check(request: EnrichmentRequest = Body(default=EnrichmentRequest(run_id=""))) -> dict[str, object]:

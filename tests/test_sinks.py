@@ -1,5 +1,6 @@
 from business_card_watchdog.sinks import (
     build_sink_apply_preflight,
+    build_sink_apply_decision,
     build_sink_lookup_plan,
     build_sink_plan,
     build_sink_payloads,
@@ -105,6 +106,29 @@ def test_build_sink_apply_preflight_is_zero_write_and_explicitly_gated() -> None
     assert preview["network_calls_made"] == 0
     assert blocked["state"] == "blocked"
     assert "not implemented" in blocked["reason"]
+
+
+def test_build_sink_apply_decision_is_zero_write_and_decision_oriented() -> None:
+    plan = build_sink_plan(
+        sinks=["google_contacts"],
+        spec={"full_name": "Ada Lovelace", "email": "ada@example.test"},
+        dry_run=True,
+        reason="matched email_domain=*",
+    )
+    preflight = build_sink_apply_preflight(plan=plan, apply=False)
+
+    decision = build_sink_apply_decision(
+        preflight=preflight,
+        decision="approve",
+        reviewer="operator",
+        reason="pilot approved",
+    )
+
+    assert decision["schema"] == "business-card-watchdog.sink-apply-decision.v1"
+    assert decision["state"] == "approved_for_apply"
+    assert decision["writes_attempted"] == 0
+    assert decision["network_calls_made"] == 0
+    assert decision["actions"][0]["decision"] == "approve"
 
 
 def test_contact_serialization_key_prefers_email_then_phone_then_name() -> None:

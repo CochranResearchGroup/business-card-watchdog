@@ -100,6 +100,13 @@ def build_parser() -> argparse.ArgumentParser:
     sinks_apply_preflight.add_argument("--run-id", required=True)
     sinks_apply_preflight.add_argument("--apply", action=argparse.BooleanOptionalAction, default=False)
     sinks_apply_preflight.add_argument("--json", action="store_true")
+    sinks_apply_decision = sinks_sub.add_parser("apply-decision")
+    sinks_apply_decision.add_argument("job_id")
+    sinks_apply_decision.add_argument("--run-id", required=True)
+    sinks_apply_decision.add_argument("--decision", choices=["approve", "reject", "noop"], required=True)
+    sinks_apply_decision.add_argument("--reviewer", default="operator")
+    sinks_apply_decision.add_argument("--reason", default="")
+    sinks_apply_decision.add_argument("--json", action="store_true")
 
     enrichment = sub.add_parser("enrichment")
     enrichment_sub = enrichment.add_subparsers(dest="enrichment_command", required=True)
@@ -227,11 +234,19 @@ def main(argv: list[str] | None = None) -> int:
                 run_id=args.run_id,
                 dry_run=args.dry_run,
             )
-        else:
+        elif args.sinks_command == "apply-preflight":
             payload = service.preflight_sink_apply(
                 job_id=args.job_id,
                 run_id=args.run_id,
                 apply=args.apply,
+            )
+        else:
+            payload = service.decide_sink_apply(
+                job_id=args.job_id,
+                run_id=args.run_id,
+                decision=args.decision,
+                reviewer=args.reviewer,
+                reason=args.reason,
             )
         print(json.dumps(payload, indent=2) if args.json else payload)
         return 0

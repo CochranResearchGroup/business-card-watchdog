@@ -172,6 +172,21 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_sink_apply_decision",
+                "description": "Record a zero-write operator decision for sink apply: approve, reject, or noop.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "job_id": {"type": "string"},
+                        "run_id": {"type": "string"},
+                        "decision": {"type": "string", "enum": ["approve", "reject", "noop"]},
+                        "reviewer": {"type": "string", "default": "operator"},
+                        "reason": {"type": "string"},
+                    },
+                    "required": ["job_id", "run_id", "decision"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_enrichment_check",
                 "description": "Report enrichment readiness and paid-provider gates without making provider calls.",
                 "input_schema": {
@@ -294,6 +309,14 @@ def call_tool(
             job_id=str(args["job_id"]),
             run_id=str(args["run_id"]),
             apply=bool(args.get("apply", False)),
+        )
+    if tool_name == "business_card_watchdog_sink_apply_decision":
+        return service.decide_sink_apply(
+            job_id=str(args["job_id"]),
+            run_id=str(args["run_id"]),
+            decision=str(args["decision"]),
+            reviewer=str(args.get("reviewer") or "operator"),
+            reason=str(args.get("reason") or ""),
         )
     if tool_name == "business_card_watchdog_enrichment_check":
         return service.enrichment_readiness(

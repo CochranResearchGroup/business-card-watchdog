@@ -292,6 +292,44 @@ def test_cli_sinks_apply_preflight_is_zero_write(tmp_path: Path, capsys) -> None
     assert blocked["preflight"]["state"] == "blocked"
 
 
+def test_cli_sinks_apply_decision_writes_zero_write_artifact(tmp_path: Path, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    config_path.write_text(
+        f'data_dir = "{data_dir}"\n'
+        "[watch]\ninputs = []\n"
+        "[sink]\ndry_run = true\ngoogle_contacts = true\n",
+        encoding="utf-8",
+    )
+    run_id, job_id = make_recorded_run(AppConfig(config_path=config_path, data_dir=data_dir))
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "sinks",
+                "apply-decision",
+                job_id,
+                "--run-id",
+                run_id,
+                "--decision",
+                "approve",
+                "--reviewer",
+                "cli-test",
+                "--reason",
+                "pilot approved",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["decision"]["schema"] == "business-card-watchdog.sink-apply-decision.v1"
+    assert payload["decision"]["state"] == "approved_for_apply"
+    assert payload["decision"]["writes_attempted"] == 0
+
+
 def test_cli_enrichment_check_blocks_when_not_enabled(tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.toml"
     write_config(config_path, tmp_path / "data")
