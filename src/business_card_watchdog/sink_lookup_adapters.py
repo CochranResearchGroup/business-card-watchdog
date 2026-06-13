@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import json
+import subprocess
 from typing import Any
 
 
@@ -19,12 +21,12 @@ def execute_sink_lookup_adapter(
         raise ValueError("sink lookup adapter execution requires a lookup request")
     if sink == "google_contacts":
         if gws_runner is None:
-            raise RuntimeError("Google Contacts lookup runner is not configured")
+            gws_runner = run_gws_lookup
         raw = gws_runner(request)
         matches = _matches_from_gws_response(raw)
     elif sink == "odoo":
         if odollo_runner is None:
-            raise RuntimeError("Odollo/Odoo lookup runner is not configured")
+            odollo_runner = run_odollo_lookup
         raw = odollo_runner(request)
         matches = _matches_from_odoo_response(raw)
     else:
@@ -37,6 +39,47 @@ def execute_sink_lookup_adapter(
         "raw": raw,
         "matches": matches,
     }
+
+
+def run_gws_lookup(
+    request: dict[str, Any],
+    *,
+    command_runner: Callable[..., Any] | None = None,
+) -> Any:
+    command_runner = command_runner or subprocess.run
+    command = list(request.get("gws_command") or ["gws", "people", "people", "searchContacts"])
+    params = dict(request.get("request_body") or {})
+    completed = command_runner(
+        [*command, "--params", json.dumps(params, sort_keys=True), "--format", "json"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if int(getattr(completed, "returncode", 1)) != 0:
+        stderr = str(getattr(completed, "stderr", "") or "").strip()
+        raise RuntimeError(f"gws lookup failed with exit {completed.returncode}: {stderr[:500]}")
+    stdout = str(getattr(completed, "stdout", "") or "").strip()
+    return json.loads(stdout) if stdout else {}
+
+
+def run_odollo_lookup(request: dict[str, Any], *, client: Any | None = None) -> Any:
+    if client is None:
+        try:
+            from odollo.adapters.odoo_json2 import OdooClient
+            from odollo.config import default_config_path, load_profile
+        except ImportError as exc:
+            raise RuntimeError("Odollo lookup requires odollo to be importable") from exc
+        tenant = str((request.get("tenant") or {}).get("name") or "")
+        if not tenant:
+            raise RuntimeError("Odollo lookup requires sink.odollo_tenant")
+        profile = load_profile(default_config_path(), tenant)
+        client = OdooClient(profile.odoo, timeout=profile.odoo.timeout)
+    return client.search_read(
+        model=str(request.get("model") or "res.partner"),
+        domain=list(request.get("domain") or []),
+        fields=list(request.get("fields") or []),
+        limit=int(request.get("limit") or 10),
+    )
 
 
 def _matches_from_gws_response(raw: Any) -> list[dict[str, Any]]:

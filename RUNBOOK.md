@@ -1091,3 +1091,22 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed with the index up to date.
 - `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+## Turn 60 | 2026-06-13
+
+Continued Plan 0004 execution with default read-only lookup runner construction.
+
+Implemented:
+
+- Added default GWS runner behavior for explicit non-simulated lookup pilots using adapter request command vectors, `--params`, and JSON output.
+- Added default Odollo runner behavior for explicit non-simulated lookup pilots using the configured Odollo tenant profile and `OdooClient.search_read`.
+- Kept default validation offline with mocked command/client tests.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sink_lookup_adapters.py tests/test_service.py tests/test_sinks.py -q` passed with 68 tests.
+- `.venv/bin/python -m pytest -q` passed with 155 tests.
+- `PYTHONPATH=src pytest -q` passed with 149 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.

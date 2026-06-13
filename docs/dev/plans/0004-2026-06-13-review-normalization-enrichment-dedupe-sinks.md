@@ -1142,6 +1142,29 @@ Remaining:
 
 - Real GWS and Odollo runner construction remains manual follow-on work; this slice establishes the adapter boundary and mocked execution proof without invoking live services.
 
+### Slice 0004-AV | 2026-06-13 | Read-Only Lookup Runner Construction
+
+Implemented:
+
+- Added default GWS lookup runner construction for explicit non-simulated lookup pilots.
+- GWS lookup runner uses the existing adapter request `gws_command` plus `--params <json>` and `--format json`, then parses the returned JSON.
+- Added default Odollo/Odoo lookup runner construction for explicit non-simulated lookup pilots.
+- Odollo runner loads the configured tenant profile via Odollo config and performs `OdooClient.search_read` only.
+- Added offline tests that mock the GWS command runner and Odollo client, proving command/search parameters without making network calls.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sink_lookup_adapters.py tests/test_service.py tests/test_sinks.py -q` passed with 68 tests.
+- `.venv/bin/python -m pytest -q` passed with 155 tests.
+- `PYTHONPATH=src pytest -q` passed with 149 tests and 3 skipped optional-extra tests.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed with the index up to date.
+- `.venv/bin/bcw mcp-call business_card_watchdog_status --arguments-json '{}'` passed against the user config.
+
+Remaining:
+
+- Live smoke execution still requires explicit `lookup-pilot --no-simulate` on a selected run/job/sink and local GWS/Odollo auth.
+
 ## Next High-Level Plan
 
 The next execution block should turn the current artifact-first scaffolding into an operator-usable review and routing system while preserving the current safety boundaries: no paid enrichment unless explicitly requested, no live sink writes without an approved pilot, and no secret values in repo artifacts or logs.
