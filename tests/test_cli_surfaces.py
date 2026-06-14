@@ -86,6 +86,18 @@ def test_cli_runs_and_jobs_use_recorded_runtime_state(
     assert "Blocked phases: review=1" in phase_text
     assert "{" not in phase_text
 
+    assert main(["--config", str(config_path), "runs", "pilot-readiness", run_id, "--json"]) == 0
+    readiness_report = json.loads(capsys.readouterr().out)
+    assert readiness_report["schema"] == "business-card-watchdog.pilot-readiness-report.v1"
+    assert readiness_report["state"] == "explicit_operator_required"
+    assert readiness_report["blocked_job_ids"] == [job_id]
+    assert main(["--config", str(config_path), "runs", "pilot-readiness", run_id]) == 0
+    readiness_text = capsys.readouterr().out
+    assert f"Run: {run_id}" in readiness_text
+    assert "Readiness: ready_for_write_pilot=0 safe_auto_available=0 explicit_operator_required=1" in readiness_text
+    assert "Pilot evidence: write_complete=0 readback_complete=0 pilot_report_complete=0" in readiness_text
+    assert "{" not in readiness_text
+
     assert main(["--config", str(config_path), "jobs", "show", job_id, "--run-id", run_id, "--json"]) == 0
     job = json.loads(capsys.readouterr().out)
     assert job["job_id"] == job_id

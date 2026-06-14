@@ -291,6 +291,33 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed and reported the index is up to date.
 
+### Slice 0005-G | 2026-06-14 | Pilot Readiness Report
+
+Implemented:
+
+- Added `business-card-watchdog.pilot-readiness-report.v1` as a run-level readiness report.
+- Combined phase report, review bundle, review matrix, next actions, enrichment budget, and sink pilot summary into one operator/agent readback.
+- Added per-job readiness states for blocked work, safe auto-continue work, explicit operator actions, write-pilot readiness, readback readiness, pilot-report readiness, and complete pilot evidence.
+- Added per-job blocking reasons that cite the blocked or explicit-required phase and the current deterministic next action.
+- Added artifact path evidence for each job so operators can jump from the readiness report to source artifacts.
+- Exposed the report through CLI `bcw runs pilot-readiness`, API `GET /runs/{run_id}/pilot-readiness`, and MCP `business_card_watchdog_pilot_readiness_report`.
+
+Safety:
+
+- This slice is readback-only.
+- No public-web search, paid enrichment provider, GWS, Odollo/Odoo, or live sink calls are made.
+- The report can identify jobs ready for explicit write/readback pilots, but it does not approve or execute those pilots.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_run_summary_and_review_queue tests/test_service.py::test_service_review_bundle_includes_sink_pilot_status tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service tests/test_mcp.py::test_mcp_jsonl_server_lists_and_calls_tools -q` passed with 7 tests.
+- `.venv/bin/python -m pytest -q` passed with 186 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed and reported the index is up to date.
+
 ## Workstreams
 
 ### WS1. Review Surface And Operator Queue

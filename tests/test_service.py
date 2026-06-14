@@ -69,6 +69,7 @@ def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
 
     summary = service.run_summary(run_id)
     phase_report = service.phase_report(run_id)
+    readiness_report = service.pilot_readiness_report(run_id)
     queue = service.review_queue(run_id=run_id)
     bundle = service.review_bundle(run_id=run_id)
     bundle_path = config.runs_dir / run_id / "review_bundle.json"
@@ -103,6 +104,16 @@ def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
     assert phase_report["stop_rules"]["phase_actions"]["write_pilot"]["explicit_operator_actions"] == [
         "execute_sink_write_pilot"
     ]
+    assert readiness_report["schema"] == "business-card-watchdog.pilot-readiness-report.v1"
+    assert readiness_report["state"] == "explicit_operator_required"
+    assert readiness_report["counts"]["blocked"] == 1
+    assert readiness_report["blocked_job_ids"] == [job_id]
+    assert readiness_report["explicit_action_job_ids"] == [job_id]
+    assert readiness_report["jobs"][0]["readiness_state"] == "explicit_operator_required"
+    assert readiness_report["jobs"][0]["blocking_reasons"][0]["phase"] == "review"
+    assert readiness_report["jobs"][0]["review_matrix"]["contact_source"] == "missing"
+    assert readiness_report["writes_attempted"] == 0
+    assert readiness_report["network_calls_made"] == 0
     assert queue[0]["job_id"] == job_id
     assert queue[0]["artifact_kinds"] == ["contact_spec"]
     assert queue[0]["next_action"]["action"] == "review_contact"
@@ -1172,6 +1183,7 @@ def test_service_review_bundle_includes_sink_pilot_status(tmp_path: Path) -> Non
     assert pilot_summary["jobs"][0]["job_id"] == job_id
     assert pilot_summary["jobs"][0]["state"] == "pilot_report_complete"
     phase_report = service.phase_report(run_id)
+    readiness_report = service.pilot_readiness_report(run_id)
     phase_counts = {phase["phase"]: phase["counts"] for phase in phase_report["phases"]}
     assert phase_counts["pilot_report"]["complete"] == 1
     assert phase_counts["write_pilot"]["complete"] == 1
@@ -1179,6 +1191,16 @@ def test_service_review_bundle_includes_sink_pilot_status(tmp_path: Path) -> Non
     assert phase_report["jobs"][0]["phase_states"]["pilot_report"] == "complete"
     assert phase_report["dashboard_summary"]["complete_phase_count"] >= 3
     assert phase_report["dashboard_summary"]["explicit_required_phase_count"] == 0
+    assert readiness_report["schema"] == "business-card-watchdog.pilot-readiness-report.v1"
+    assert readiness_report["state"] == "complete"
+    assert readiness_report["counts"]["complete"] == 1
+    assert readiness_report["counts"]["pilot_report_complete"] == 1
+    assert readiness_report["pilot_complete_job_ids"] == [job_id]
+    assert readiness_report["jobs"][0]["readiness_state"] == "complete"
+    assert readiness_report["jobs"][0]["artifact_paths"]["sink_apply_pilot_report"].endswith(
+        "sink_apply_pilot_report.json"
+    )
+    assert readiness_report["sink_pilot_summary"]["complete_report_count"] == 1
     assert "By Sink Pilot State" in html["html"]
     assert "By Route State" in html["html"]
     assert "pilot_report_complete" in html["html"]

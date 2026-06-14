@@ -2058,3 +2058,29 @@ Validation:
 Safety:
 
 - This recorded explicit operator enrichment-review decisions only. It made no public-web search, paid enrichment, GWS, Odollo/Odoo, or live sink calls.
+
+## Turn 112 | 2026-06-14
+
+Continued Plan 0005 execution with the pilot readiness report slice.
+
+Implemented:
+
+- Added `business-card-watchdog.pilot-readiness-report.v1`.
+- Combined phase report, review bundle, review matrix, next actions, enrichment budget, and sink pilot summary into one run-level readiness readback.
+- Added per-job readiness states, blocking reasons, artifact paths, and commands.
+- Exposed the report through CLI `bcw runs pilot-readiness`, API `GET /runs/{run_id}/pilot-readiness`, and MCP `business_card_watchdog_pilot_readiness_report`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_run_summary_and_review_queue tests/test_service.py::test_service_review_bundle_includes_sink_pilot_status tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service tests/test_mcp.py::test_mcp_jsonl_server_lists_and_calls_tools -q` passed with 7 tests.
+- `.venv/bin/python -m pytest -q` passed with 186 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed and reported the index is up to date.
+
+Safety:
+
+- This was readback-only. It made no public-web search, paid enrichment, GWS, Odollo/Odoo, or live sink calls.
+- The report identifies explicit write/readback pilot readiness but does not approve or execute pilots.
