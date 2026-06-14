@@ -29,6 +29,11 @@ Prepare lookup artifacts:
 ```bash
 .venv/bin/bcw sinks lookup-plan <job-id> --run-id <run-id> --json
 .venv/bin/bcw sinks adapter-request <job-id> --run-id <run-id> --phase lookup --json
+.venv/bin/bcw sinks lookup-readiness \
+  <job-id> \
+  --run-id <run-id> \
+  --sink google_contacts \
+  --json
 ```
 
 Run one explicit read-only lookup pilot:

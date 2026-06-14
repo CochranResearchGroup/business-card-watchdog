@@ -339,6 +339,11 @@ def build_parser() -> argparse.ArgumentParser:
     sinks_lookup_pilot.add_argument("--matches-json", default="[]")
     sinks_lookup_pilot.add_argument("--simulate", action=argparse.BooleanOptionalAction, default=True)
     sinks_lookup_pilot.add_argument("--json", action="store_true")
+    sinks_lookup_readiness = sinks_sub.add_parser("lookup-readiness")
+    sinks_lookup_readiness.add_argument("job_id")
+    sinks_lookup_readiness.add_argument("--run-id", required=True)
+    sinks_lookup_readiness.add_argument("--sink", choices=["google_contacts", "odoo"], required=True)
+    sinks_lookup_readiness.add_argument("--json", action="store_true")
     sinks_write_pilot = sinks_sub.add_parser("write-pilot")
     sinks_write_pilot.add_argument("job_id")
     sinks_write_pilot.add_argument("--run-id", required=True)
@@ -644,6 +649,12 @@ def main(argv: list[str] | None = None) -> int:
                 approved_by=args.approved_by,
                 matches=json.loads(args.matches_json),
                 simulate=args.simulate,
+            )
+        elif args.sinks_command == "lookup-readiness":
+            payload = service.live_lookup_readiness_report(
+                job_id=args.job_id,
+                run_id=args.run_id,
+                sink=args.sink,
             )
         elif args.sinks_command == "write-pilot":
             payload = service.execute_sink_write_pilot_for_job(

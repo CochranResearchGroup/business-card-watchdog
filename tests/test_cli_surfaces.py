@@ -98,6 +98,29 @@ def test_cli_runs_and_jobs_use_recorded_runtime_state(
     assert "Pilot evidence: write_complete=0 readback_complete=0 pilot_report_complete=0" in readiness_text
     assert "{" not in readiness_text
 
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "sinks",
+                "lookup-readiness",
+                job_id,
+                "--run-id",
+                run_id,
+                "--sink",
+                "google_contacts",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    lookup_readiness = json.loads(capsys.readouterr().out)
+    assert lookup_readiness["schema"] == "business-card-watchdog.live-lookup-readiness.v1"
+    assert lookup_readiness["state"] == "blocked"
+    assert lookup_readiness["writes_attempted"] == 0
+    assert lookup_readiness["network_calls_made"] == 0
+
     assert main(["--config", str(config_path), "jobs", "show", job_id, "--run-id", run_id, "--json"]) == 0
     job = json.loads(capsys.readouterr().out)
     assert job["job_id"] == job_id

@@ -46,6 +46,7 @@ from .sinks import (
     build_sink_lookup_result,
     build_sink_plan,
     check_sink_readiness,
+    check_sink_lookup_readiness,
 )
 from .skill_adapter import BusinessCardSkillAdapter
 from .watcher import PollingWatcher
@@ -1683,6 +1684,124 @@ class BusinessCardService:
                 ).to_dict()
                 for sink in sinks
             ],
+        }
+
+    def live_lookup_readiness_report(self, *, job_id: str, run_id: str, sink: str) -> dict[str, Any]:
+        if sink not in {"google_contacts", "odoo"}:
+            raise ValueError(f"unsupported live lookup sink: {sink}")
+        job = self.get_job(job_id, run_id=run_id)
+        artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
+        reviewed_path = artifact_dir / "reviewed_contact.json"
+        lookup_plan_path = artifact_dir / "sink_lookup_plan.json"
+        adapter_request_path = artifact_dir / "sink_adapter_request_lookup.json"
+        downstream_assessment_path = artifact_dir / "downstream_duplicate_assessment.json"
+        reviewed = _read_json_file(reviewed_path)
+        lookup_plan = _read_json_file(lookup_plan_path)
+        adapter_request = _read_json_file(adapter_request_path)
+        downstream_assessment = _read_json_file(downstream_assessment_path)
+        lookup_plan_sinks = [
+            str(row.get("sink") or "")
+            for row in list((lookup_plan or {}).get("lookups") or [])
+            if isinstance(row, dict)
+        ]
+        adapter_request_sinks = [
+            str(row.get("sink") or "")
+            for row in list((adapter_request or {}).get("requests") or [])
+            if isinstance(row, dict) and row.get("phase") == "lookup"
+        ]
+        selected_sink_enabled = (
+            bool(self.config.sink.google_contacts)
+            if sink == "google_contacts"
+            else bool(self.config.sink.odoo)
+        )
+        live_readiness = check_sink_lookup_readiness(
+            sink,
+            dry_run=False,
+            google_contacts_profile=self.config.sink.google_contacts_profile,
+            odollo_tenant=self.config.sink.odollo_tenant,
+        ).to_dict()
+        requirements = [
+            {
+                "name": "job_ready_to_route",
+                "ok": job.get("state") == "ready_to_route",
+                "detail": f"job state is {job.get('state')}",
+            },
+            {
+                "name": "reviewed_contact_exists",
+                "ok": reviewed is not None,
+                "detail": str(reviewed_path),
+            },
+            {
+                "name": "selected_sink_enabled",
+                "ok": selected_sink_enabled,
+                "detail": f"sink.{sink} enabled in user config",
+            },
+            {
+                "name": "lookup_plan_exists",
+                "ok": lookup_plan is not None,
+                "detail": str(lookup_plan_path),
+            },
+            {
+                "name": "lookup_plan_includes_sink",
+                "ok": sink in lookup_plan_sinks,
+                "detail": ",".join(sorted(lookup_plan_sinks)) or "no lookup plan sinks",
+            },
+            {
+                "name": "lookup_adapter_request_exists",
+                "ok": adapter_request is not None,
+                "detail": str(adapter_request_path),
+            },
+            {
+                "name": "lookup_adapter_request_includes_sink",
+                "ok": sink in adapter_request_sinks,
+                "detail": ",".join(sorted(adapter_request_sinks)) or "no lookup adapter request sinks",
+            },
+            {
+                "name": "live_lookup_readiness_ready",
+                "ok": live_readiness.get("status") == "ready",
+                "detail": str(live_readiness.get("reason") or ""),
+            },
+        ]
+        requirement_by_name = {str(item["name"]): bool(item["ok"]) for item in requirements}
+        ready = all(requirement_by_name.values())
+        return {
+            "schema": "business-card-watchdog.live-lookup-readiness.v1",
+            "state": "ready" if ready else "blocked",
+            "status": "ready" if ready else "blocked",
+            "reason": (
+                "selected job and sink are ready for an explicit read-only live lookup pilot"
+                if ready
+                else "selected job and sink are not ready for live lookup"
+            ),
+            "run_id": run_id,
+            "job_id": job_id,
+            "sink": sink,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "requirements": requirements,
+            "missing_requirements": [
+                str(item["name"]) for item in requirements if not item["ok"]
+            ],
+            "live_lookup_readiness": live_readiness,
+            "job_state": job.get("state"),
+            "lookup_plan_state": (lookup_plan or {}).get("state", "missing"),
+            "downstream_duplicate_state": (downstream_assessment or {}).get("state", "missing"),
+            "artifact_paths": {
+                "reviewed_contact": str(reviewed_path),
+                "sink_lookup_plan": str(lookup_plan_path),
+                "sink_adapter_request_lookup": str(adapter_request_path),
+                "downstream_duplicate_assessment": str(downstream_assessment_path),
+            },
+            "commands": {
+                "review": f"jobs review {job_id} --run-id {run_id}",
+                "run_next_safe": f"actions run-next --run-id {run_id}",
+                "lookup_plan": f"sinks lookup-plan {job_id} --run-id {run_id}",
+                "lookup_adapter_request": f"sinks adapter-request {job_id} --run-id {run_id} --phase lookup",
+                "live_lookup_pilot": (
+                    f"sinks lookup-pilot {job_id} --run-id {run_id} "
+                    f"--sink {sink} --approved-by <operator> --no-simulate"
+                ),
+            },
         }
 
     def enrichment_readiness(

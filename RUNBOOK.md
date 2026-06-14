@@ -2109,3 +2109,30 @@ Validation:
 Safety:
 
 - This was fixture-backed validation only. It made no public-web search, paid enrichment, GWS, Odollo/Odoo, or live sink calls.
+
+## Turn 114 | 2026-06-14
+
+Opened Plan 0007 for live pilot readiness and implemented the read-only lookup readiness slice.
+
+Implemented:
+
+- Added `docs/dev/plans/0007-2026-06-14-live-pilot-readiness-and-evidence.md`.
+- Added `business-card-watchdog.live-lookup-readiness.v1`.
+- Added service `live_lookup_readiness_report`.
+- Added CLI `bcw sinks lookup-readiness`, API `POST /jobs/{job_id}/sink-lookup-readiness`, and MCP `business_card_watchdog_sink_lookup_readiness`.
+- Tightened live lookup readiness so Google Contacts requires a configured profile plus local GWS auth evidence, and Odollo/Odoo requires configured tenant/local state evidence.
+- Updated README and live-pilot checklist with the new readiness command.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_live_lookup_readiness_blocks_until_requirements_exist tests/test_service.py::test_service_live_lookup_readiness_ready_with_local_gws_evidence tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
+- `.venv/bin/python -m pytest -q` passed with 189 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed and reported the index is up to date.
+
+Safety:
+
+- This was read-only readiness reporting only. It made no public-web search, paid enrichment, GWS, Odollo/Odoo, or live sink calls.

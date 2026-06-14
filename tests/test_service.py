@@ -2243,6 +2243,65 @@ def test_service_safe_loop_and_manual_steps_complete_simulated_pilot_chain(tmp_p
     }
 
 
+def test_service_live_lookup_readiness_blocks_until_requirements_exist(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    run_id, job_id = make_recorded_run(config)
+    report = BusinessCardService(config).live_lookup_readiness_report(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+    )
+
+    assert report["schema"] == "business-card-watchdog.live-lookup-readiness.v1"
+    assert report["state"] == "blocked"
+    assert report["writes_attempted"] == 0
+    assert report["network_calls_made"] == 0
+    assert "job_ready_to_route" in report["missing_requirements"]
+    assert "reviewed_contact_exists" in report["missing_requirements"]
+    assert "selected_sink_enabled" in report["missing_requirements"]
+    assert "lookup_adapter_request_exists" in report["missing_requirements"]
+    assert report["commands"]["live_lookup_pilot"].endswith("--no-simulate")
+
+
+def test_service_live_lookup_readiness_ready_with_local_gws_evidence(tmp_path: Path, monkeypatch) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    gws = bin_dir / "gws"
+    gws.write_text("#!/bin/sh\nprintf '{}\\n'\n", encoding="utf-8")
+    gws.chmod(0o755)
+    gws_config = tmp_path / "gws-config"
+    gws_config.mkdir()
+    (gws_config / "credentials.enc").write_text("fixture\n", encoding="utf-8")
+    monkeypatch.setenv("PATH", f"{bin_dir}:{str(Path('/usr/bin'))}")
+    monkeypatch.setenv("GOOGLE_WORKSPACE_CLI_CONFIG_DIR", str(gws_config))
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, google_contacts_profile="codex", dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+        field_corrections={"full_name": "Reviewed Fixture", "email": "fixture@example.test"},
+    )
+    service.run_next_actions(run_id=run_id, limit=2)
+
+    report = service.live_lookup_readiness_report(job_id=job_id, run_id=run_id, sink="google_contacts")
+
+    assert report["state"] == "ready"
+    assert report["missing_requirements"] == []
+    assert report["live_lookup_readiness"]["status"] == "ready"
+    assert report["live_lookup_readiness"]["details"]["auth_evidence_present"] is True
+    assert report["lookup_plan_state"] == "dry_run"
+    assert report["writes_attempted"] == 0
+    assert report["network_calls_made"] == 0
+
+
 def test_service_submit_review_rejects_unknown_fields(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, job_id = make_recorded_run(config)

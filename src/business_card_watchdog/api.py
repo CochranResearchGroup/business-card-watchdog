@@ -84,6 +84,10 @@ def create_app(config_path: Path | None = None):
         matches: list[dict[str, object]] = Field(default_factory=list)
         simulate: bool = True
 
+    class SinkLookupReadinessRequest(BaseModel):
+        run_id: str
+        sink: str
+
     class SinkWritePilotRequest(BaseModel):
         run_id: str
         sink: str
@@ -353,6 +357,17 @@ def create_app(config_path: Path | None = None):
             approved_by=request.approved_by,
             matches=[dict(match) for match in request.matches],
             simulate=request.simulate,
+        )
+
+    @app.post("/jobs/{job_id}/sink-lookup-readiness")
+    def create_sink_lookup_readiness(
+        job_id: str,
+        request: SinkLookupReadinessRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().live_lookup_readiness_report(
+            job_id=job_id,
+            run_id=request.run_id,
+            sink=request.sink,
         )
 
     @app.post("/jobs/{job_id}/sink-write-pilot")

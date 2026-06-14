@@ -1,0 +1,86 @@
+# Plan 0007 | Live Pilot Readiness And Evidence
+
+State: IN_PROGRESS
+Product authority: `PRODUCT_SPEC.md`
+Predecessors:
+
+- `docs/dev/plans/0005-2026-06-13-review-routing-normalization-enrichment-dedupe.md`
+- `docs/dev/plans/0006-2026-06-14-public-upstream-hardening.md`
+
+## Scope
+
+Move from simulated/offline sink-pilot proof to operator-safe live-pilot readiness without broad live writes.
+
+This plan covers:
+
+- selected run/job/sink readiness reports before any `--no-simulate` command
+- read-only live lookup readiness for Google Contacts and Odollo/Odoo
+- one-job write/readback pilot readiness evidence
+- CLI/API/MCP parity for readiness reports
+- artifact-backed closeout evidence after any pilot attempt
+
+## Non-Goals
+
+- Do not run live GWS/Odollo/Odoo writes from generic agent-loop continuation.
+- Do not run paid enrichment.
+- Do not commit real card images, OCR dumps, credentials, tenant config, or live sink payload bodies.
+- Do not turn batch-wide live writes on by default.
+
+## Product Decisions
+
+- Live lookup is read-only but still explicit because it may call external systems.
+- Live write and readback remain one-job, one-sink operations until a later policy expands scope.
+- Readiness reports must explain why a selected pilot is blocked and provide the exact next safe commands.
+- Local evidence can prove that a pilot is ready to attempt, but the live command itself must remain separate and operator-approved.
+
+## Execution Slices
+
+1. `0007-A | Live Lookup Readiness`: add selected run/job/sink readiness reports for read-only lookup pilots.
+2. `0007-B | Live Lookup Result Import`: tighten lookup pilot/readback artifacts so live result import preserves redacted execution metadata and downstream duplicate state.
+3. `0007-C | One-Job Write Pilot Readiness`: make write/readback readiness sink-scoped instead of all-configured-sinks scoped.
+4. `0007-D | Operator Pilot Bundle`: generate a one-job pilot bundle with commands, artifacts, stop conditions, and rollback/remediation notes.
+5. `0007-E | Live Smoke Handoff`: document and, only with explicit operator target selection, execute a read-only live lookup smoke.
+
+## Default Stop Rule
+
+Safe agent-loop execution may prepare zero-network artifacts and readiness reports. It must stop before:
+
+- public-web search
+- paid API enrichment
+- live lookup
+- live write pilot
+- live readback pilot
+- duplicate merge decisions
+- route/apply approvals
+
+## Execution Log
+
+### Slice 0007-A | 2026-06-14 | Live Lookup Readiness
+
+Implemented:
+
+- Added `business-card-watchdog.live-lookup-readiness.v1` as a selected run/job/sink readiness report.
+- Added service `BusinessCardService.live_lookup_readiness_report`.
+- Added CLI `bcw sinks lookup-readiness <job-id> --run-id <run-id> --sink <sink>`.
+- Added API `POST /jobs/{job_id}/sink-lookup-readiness`.
+- Added MCP tool `business_card_watchdog_sink_lookup_readiness`.
+- Updated live lookup readiness to use implemented read-only adapters and local evidence:
+  - Google Contacts requires `sink.google_contacts_profile`, `gws` on `PATH`, and local auth evidence.
+  - Odollo/Odoo requires configured tenant, user config, tenant home, and tenant state evidence.
+- Updated the live-pilot checklist to require lookup readiness before any `--no-simulate` lookup pilot.
+
+Safety:
+
+- This slice adds read-only readiness reporting only.
+- No public-web search, paid enrichment provider, GWS, Odollo/Odoo, or live sink calls are made.
+- The report provides the explicit live lookup command, but it does not execute it.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_live_lookup_readiness_blocks_until_requirements_exist tests/test_service.py::test_service_live_lookup_readiness_ready_with_local_gws_evidence tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
+- `.venv/bin/python -m pytest -q` passed with 189 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed and reported the index is up to date.

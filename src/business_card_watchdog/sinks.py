@@ -628,7 +628,13 @@ def _odollo_local_readiness_details(*, tenant: str) -> dict[str, Any]:
     }
 
 
-def check_sink_lookup_readiness(sink: str, *, dry_run: bool) -> SinkReadiness:
+def check_sink_lookup_readiness(
+    sink: str,
+    *,
+    dry_run: bool,
+    google_contacts_profile: str = "",
+    odollo_tenant: str = "",
+) -> SinkReadiness:
     if dry_run:
         return SinkReadiness(
             sink=sink,
@@ -636,22 +642,68 @@ def check_sink_lookup_readiness(sink: str, *, dry_run: bool) -> SinkReadiness:
             reason="dry-run lookup planning does not call downstream sinks",
         )
     if sink == "google_contacts":
+        if not google_contacts_profile.strip():
+            return SinkReadiness(
+                sink=sink,
+                status="blocked",
+                reason="missing sink.google_contacts_profile for live Google Contacts lookup",
+                details={"config_key": "sink.google_contacts_profile"},
+            )
         if shutil.which("gws") is None:
             return SinkReadiness(
                 sink=sink,
                 status="blocked",
                 reason="gws CLI not found; cannot perform Google Contacts lookup",
             )
+        details = _gws_local_readiness_details(profile=google_contacts_profile)
+        if not details["auth_evidence_present"]:
+            return SinkReadiness(
+                sink=sink,
+                status="blocked",
+                reason="missing Google Workspace auth evidence for live Contacts lookup",
+                details=details,
+            )
         return SinkReadiness(
             sink=sink,
-            status="blocked",
-            reason="live Google Contacts lookup adapter is not implemented yet",
+            status="ready",
+            reason="gws CLI is available for explicit read-only Google Contacts lookup",
+            details=details,
         )
     if sink == "odoo":
+        if not odollo_tenant.strip():
+            return SinkReadiness(
+                sink=sink,
+                status="blocked",
+                reason="missing sink.odollo_tenant for live Odoo/Odollo lookup",
+                details={"config_key": "sink.odollo_tenant"},
+            )
+        details = _odollo_local_readiness_details(tenant=odollo_tenant)
+        if not details["config_present"]:
+            return SinkReadiness(
+                sink=sink,
+                status="blocked",
+                reason="missing Odollo user config for live Odoo/Odollo lookup",
+                details=details,
+            )
+        if not details["tenant_home_present"]:
+            return SinkReadiness(
+                sink=sink,
+                status="blocked",
+                reason="missing Odollo tenant home for live Odoo/Odollo lookup",
+                details=details,
+            )
+        if not details["state_evidence_present"]:
+            return SinkReadiness(
+                sink=sink,
+                status="blocked",
+                reason="missing Odollo tenant state evidence for live Odoo/Odollo lookup",
+                details=details,
+            )
         return SinkReadiness(
             sink=sink,
-            status="blocked",
-            reason="live Odoo/Odollo lookup adapter is not implemented yet",
+            status="ready",
+            reason="Odollo local evidence is present for explicit read-only Odoo lookup",
+            details=details,
         )
     return SinkReadiness(sink=sink, status="blocked", reason=f"unknown sink: {sink}")
 
