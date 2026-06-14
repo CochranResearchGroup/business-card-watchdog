@@ -166,6 +166,19 @@ def test_service_live_selection_requirements_report_writes_run_level_artifact(tm
     assert report["entry_count"] == 1
     assert report["writes_attempted"] == 0
     assert report["network_calls_made"] == 0
+    assert report["operator_response_contract"] == {
+        "schema": "business-card-watchdog.operator-selection-response-contract.v1",
+        "required_fields": ["run_id", "job_id", "sink", "operator", "scope", "safety_confirmation"],
+        "allowed_sinks": ["google_contacts", "odoo"],
+        "allowed_scopes": ["lookup", "write", "readback", "all"],
+        "format": (
+            "run_id=<run_id> job_id=<job_id> sink=<google_contacts|odoo> "
+            "operator=<operator> scope=<lookup|write|readback|all> safety_confirmation=<confirmation>"
+        ),
+        "default_scope": "lookup",
+        "requires_human_safety_confirmation": True,
+        "creates_selected_live_target": False,
+    }
     assert {field["name"] for field in report["required_operator_fields"]} == {
         "run_id",
         "job_id",
@@ -180,6 +193,19 @@ def test_service_live_selection_requirements_report_writes_run_level_artifact(tm
     assert entry["selected_target_identity"] is None
     assert entry["abandonment_identity"] is None
     assert entry["missing_operator_fields"] == ["operator", "scope", "safety_confirmation"]
+    assert entry["operator_response_template"] == (
+        f"run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=<operator> scope=lookup safety_confirmation=<confirmation>"
+    )
+    assert "Reply with an explicit live target selection" in entry["operator_prompt"]
+    assert entry["copyable_approval_fields"] == {
+        "run_id": run_id,
+        "job_id": job_id,
+        "sink": "google_contacts",
+        "operator": "<operator>",
+        "scope": "lookup",
+        "safety_confirmation": "<confirmation>",
+    }
     assert entry["commands"]["selection_packet"] == (
         f"sinks live-selection-packet {job_id} --run-id {run_id} --sink google_contacts --operator <operator>"
     )

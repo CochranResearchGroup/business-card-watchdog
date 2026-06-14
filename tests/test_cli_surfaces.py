@@ -175,7 +175,20 @@ def test_cli_live_selection_requirements_reports_text_and_json(tmp_path: Path, c
     assert Path(payload["requirements_path"]).exists()
     assert payload["network_calls_made"] == 0
     assert payload["writes_attempted"] == 0
+    assert payload["operator_response_contract"]["creates_selected_live_target"] is False
+    assert payload["operator_response_contract"]["required_fields"] == [
+        "run_id",
+        "job_id",
+        "sink",
+        "operator",
+        "scope",
+        "safety_confirmation",
+    ]
     entry = payload["entries"][0]
+    assert entry["operator_response_template"] == (
+        f"run_id={run_id} job_id={entry['job_id']} sink=google_contacts "
+        "operator=<operator> scope=lookup safety_confirmation=<confirmation>"
+    )
     assert entry["commands"]["selection_packet"] == (
         f"sinks live-selection-packet {entry['job_id']} --run-id {run_id} --sink google_contacts --operator <operator>"
     )
@@ -197,6 +210,10 @@ def test_cli_live_selection_requirements_reports_text_and_json(tmp_path: Path, c
     assert (
         f"Select target: sinks select-live-target {entry['job_id']} --run-id {run_id} "
         "--sink google_contacts --operator <operator> --scope lookup --safety-confirmation <confirmation> --json"
+    ) in text
+    assert (
+        f"Operator response: run_id={run_id} job_id={entry['job_id']} sink=google_contacts "
+        "operator=<operator> scope=lookup safety_confirmation=<confirmation>"
     ) in text
     assert f"Live target candidates: live-target-candidates --run-id {run_id}" in text
     assert f"Live readiness audit: live-readiness-audit --run-id {run_id}" in text

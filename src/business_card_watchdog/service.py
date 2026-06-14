@@ -4907,6 +4907,18 @@ class BusinessCardService:
                 selected_target.get("target_safety_confirmed")
                 and str(selected_target.get("target_safety_confirmation") or "").strip()
             )
+            operator_response_template = (
+                f"run_id={candidate_run_id} job_id={candidate_job_id} sink={candidate_sink} "
+                "operator=<operator> scope=lookup safety_confirmation=<confirmation>"
+            )
+            copyable_approval_fields = {
+                "run_id": candidate_run_id,
+                "job_id": candidate_job_id,
+                "sink": candidate_sink,
+                "operator": "<operator>",
+                "scope": "lookup",
+                "safety_confirmation": "<confirmation>",
+            }
             missing_operator_fields: list[str] = []
             if not selected_target_exists or target_abandoned:
                 missing_operator_fields.extend(["operator", "scope", "safety_confirmation"])
@@ -4944,6 +4956,12 @@ class BusinessCardService:
                     "abandonment_reason": abandonment_reason,
                     "missing_operator_fields": missing_operator_fields,
                     "required_operator_fields": requirement_fields,
+                    "operator_response_template": operator_response_template,
+                    "operator_prompt": (
+                        "Reply with an explicit live target selection only if this card/contact is safe for the "
+                        f"target tenant/profile: {operator_response_template}"
+                    ),
+                    "copyable_approval_fields": copyable_approval_fields,
                     "commands": {
                         "selection_packet": (
                             f"sinks live-selection-packet {candidate_job_id} --run-id {candidate_run_id} "
@@ -4983,6 +5001,20 @@ class BusinessCardService:
             "state_counts": state_counts,
             "required_operator_fields": requirement_fields,
             "entries": entries,
+            "operator_response_contract": {
+                "schema": "business-card-watchdog.operator-selection-response-contract.v1",
+                "required_fields": ["run_id", "job_id", "sink", "operator", "scope", "safety_confirmation"],
+                "allowed_sinks": ["google_contacts", "odoo"],
+                "allowed_scopes": ["lookup", "write", "readback", "all"],
+                "format": (
+                    "run_id=<run_id> job_id=<job_id> sink=<google_contacts|odoo> "
+                    "operator=<operator> scope=<lookup|write|readback|all> "
+                    "safety_confirmation=<confirmation>"
+                ),
+                "default_scope": "lookup",
+                "requires_human_safety_confirmation": True,
+                "creates_selected_live_target": False,
+            },
             "writes_attempted": 0,
             "network_calls_made": 0,
             "commands": {

@@ -301,6 +301,8 @@ def _render_live_selection_requirements_text(payload: dict[str, object]) -> str:
             lines.append(f"   Selection packet: {entry_commands.get('selection_packet')}")
         if entry_commands.get("select_target"):
             lines.append(f"   Select target: {entry_commands.get('select_target')}")
+        if entry.get("operator_response_template"):
+            lines.append(f"   Operator response: {entry.get('operator_response_template')}")
     if payload.get("requirements_path"):
         lines.append(f"Requirements path: {payload.get('requirements_path')}")
     for label, key in [

@@ -868,6 +868,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_next_actions_recommends_review_for_needs_review_job tests/test_service.py::test_service_run_next_actions_executes_safe_steps_until_manual_decision tests/test_service.py::test_service_next_actions_recommends_live_apply_after_decision tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_cli_surfaces.py::test_cli_jobs_review_records_submission -q` passed with 5 tests.
 
+### Slice 0009-A50 | 2026-06-14 | Machine-Readable Operator Selection Prompt
+
+Implemented:
+
+- `live_selection_requirements` now includes `operator_response_contract` so `/goal` and subagents can pause on an exact required response shape.
+- Each selection requirement entry now includes `operator_response_template`, `operator_prompt`, and `copyable_approval_fields`.
+- CLI text for `bcw live-selection-requirements` now renders the operator response template next to the packet and selected-target commands.
+
+Safety:
+
+- This slice adds prompt/contract metadata only.
+- It does not create `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- The response contract explicitly records `creates_selected_live_target = false`; the operator must still run the selected-target command to create durable approval evidence.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_live_selection_requirements_report_writes_run_level_artifact tests/test_cli_surfaces.py::test_cli_live_selection_requirements_reports_text_and_json -q` passed with 2 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:
