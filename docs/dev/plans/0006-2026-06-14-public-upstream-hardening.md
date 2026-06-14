@@ -131,6 +131,28 @@ Acceptance:
 
 - Clean clone can run `bcw --help` and the offline test suite without user runtime credentials.
 
+### Slice 0006-D | 2026-06-14 | Clean Public Clone Validation
+
+Implemented:
+
+- Added `docs/operations/public-upstream-validation.md`.
+- Documented public clone, `uv` install, offline skill fixture seeding, CLI smoke, pytest, ruff, and build commands.
+- Linked the validation runbook from README.
+
+Validation:
+
+- Cloned `https://github.com/CochranResearchGroup/business-card-watchdog.git` into `/tmp/bcw-public-clone.3OrD8L/business-card-watchdog`.
+- `uv venv --python 3.11` installed CPython 3.11.15.
+- `uv pip install --python .venv/bin/python -e '.[dev]'` installed the package and dev tools.
+- `.venv/bin/bcw --help` returned successfully.
+- `.venv/bin/python -m pytest -q` passed with 172 tests and 3 skipped optional-extra tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` built source and wheel distributions.
+
+Remaining:
+
+- Live read-only lookup smoke planning remains explicit follow-on work.
+
 ### Slice 0006-E | Live Read-Only Lookup Smoke Plan
 
 Deliverables:

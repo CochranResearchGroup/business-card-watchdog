@@ -1689,6 +1689,26 @@ Validation:
 - `gitleaks detect --source . --no-banner --redact --exit-code 1` scanned 95 commits and found no leaks.
 - `rg -n 'private business-card images|raw OCR|API keys|Live pilot|Plan slice|FORCE_JAVASCRIPT_ACTIONS_TO_NODE24|enable-cache' .github SECURITY.md docs/dev/plans/0006-2026-06-14-public-upstream-hardening.md RUNBOOK.md` passed.
 
+## Turn 101 | 2026-06-14
+
+Continued Plan 0006 with clean public clone validation.
+
+Implemented:
+
+- Added `docs/operations/public-upstream-validation.md`.
+- Documented public clone, `uv` install, offline skill fixture seeding, CLI smoke, pytest, ruff, and build commands.
+- Linked the validation runbook from README.
+
+Validation:
+
+- Cloned `https://github.com/CochranResearchGroup/business-card-watchdog.git` into `/tmp/bcw-public-clone.3OrD8L/business-card-watchdog`.
+- `uv venv --python 3.11` installed CPython 3.11.15.
+- `uv pip install --python .venv/bin/python -e '.[dev]'` installed the package and dev tools.
+- `.venv/bin/bcw --help` returned successfully.
+- `.venv/bin/python -m pytest -q` passed with 172 tests and 3 skipped optional-extra tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` built source and wheel distributions.
+
 ## Turn 98 | 2026-06-14
 
 Continued Plan 0004 execution with a current completion and residual backlog audit.
