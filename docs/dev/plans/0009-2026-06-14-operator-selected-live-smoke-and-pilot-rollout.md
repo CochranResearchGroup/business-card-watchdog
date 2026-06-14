@@ -593,6 +593,25 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_live_selection_packet_reports_existing_selected_target_context tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval -q` passed with 2 tests.
 
+### Slice 0009-A35 | 2026-06-14 | Add Live Selection Packet Text Review
+
+Implemented:
+
+- `bcw sinks live-selection-packet` now renders a compact text review when `--json` is omitted.
+- The text review shows run, job, sink, operator, scope, existing selected-target identity, safety-confirmation status, abandonment status, replacement gate, blocked reasons, and stop conditions.
+- Active selected-target text includes the `abandon-live-pilot` command before replacement.
+- CLI tests now cover missing-target and active-target text output without exposing raw JSON.
+
+Safety:
+
+- This slice improves operator review ergonomics only.
+- It does not create or modify selected targets, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It keeps selection packet review usable from CLI while preserving the explicit selected-target approval gate.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_live_selection_packet_writes_no_selected_target tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval -q` passed with 2 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

@@ -271,6 +271,54 @@ def _render_live_selection_requirements_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_live_selection_packet_text(payload: dict[str, object]) -> str:
+    existing = dict(payload.get("existing_selected_target") or {})
+    scope_allows = dict(payload.get("scope_allows") or {})
+    blocked_reasons = payload.get("blocked_reasons") or []
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    commands = dict(payload.get("commands") or {})
+    lines = [
+        f"Live selection packet: {payload.get('state')}",
+        f"Run: {payload.get('run_id')}",
+        f"Job: {payload.get('job_id')}",
+        f"Sink: {payload.get('sink')}",
+        f"Operator: {payload.get('operator')}",
+        f"Scope: {payload.get('scope')}",
+        "Scope allows: "
+        f"lookup={scope_allows.get('lookup', False)} "
+        f"write={scope_allows.get('write', False)} "
+        f"readback={scope_allows.get('readback', False)}",
+        "Existing target: "
+        f"exists={existing.get('exists', False)} "
+        f"identity={existing.get('identity') or 'none'} "
+        f"sink={existing.get('sink') or 'none'} "
+        f"scope={existing.get('scope') or 'none'} "
+        f"safety_confirmed={existing.get('target_safety_confirmed', False)} "
+        f"abandoned={existing.get('abandoned', False)}",
+        "Replacement: "
+        f"requires_abandonment={existing.get('replacement_requires_abandonment', False)} "
+        f"can_select_now={existing.get('can_select_replacement_now', False)}",
+        f"Observed: writes={payload.get('writes_attempted', 0)} network={payload.get('network_calls_made', 0)}",
+    ]
+    if payload.get("packet_path"):
+        lines.append(f"Packet path: {payload.get('packet_path')}")
+    rows = blocked_reasons if isinstance(blocked_reasons, list) else []
+    lines.append(f"Blocked reasons: {len(rows)}")
+    for reason in rows:
+        lines.append(f" - {reason}")
+    abandon_command = existing.get("abandon_command")
+    if abandon_command:
+        lines.append(f"Abandon existing target: {abandon_command}")
+    create_command = commands.get("create_selected_target")
+    if create_command:
+        lines.append(f"Create selected target: {create_command}")
+    stops = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stops)}")
+    for condition in stops:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_review_queue_text(entries: list[dict[str, object]]) -> str:
     lines = [f"Review queue: {len(entries)} jobs"]
     if not entries:
@@ -1042,6 +1090,9 @@ def main(argv: list[str] | None = None) -> int:
                 job_id=args.job_id,
                 run_id=args.run_id,
             )
+        if args.sinks_command == "live-selection-packet" and not args.json:
+            print(_render_live_selection_packet_text(payload), end="")
+            return 0
         print(json.dumps(payload, indent=2) if args.json else payload)
         return 0
 

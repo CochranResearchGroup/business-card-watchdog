@@ -212,6 +212,34 @@ def test_cli_live_selection_packet_writes_no_selected_target(tmp_path: Path, cap
     assert payload["existing_selected_target"]["can_select_replacement_now"] is True
     assert payload["existing_selected_target"]["abandon_command"] is None
 
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "sinks",
+                "live-selection-packet",
+                job_id,
+                "--run-id",
+                run_id,
+                "--sink",
+                "google_contacts",
+                "--operator",
+                "tester",
+                "--no-write",
+            ]
+        )
+        == 0
+    )
+    text = capsys.readouterr().out
+    assert "Live selection packet: blocked" in text
+    assert f"Run: {run_id}" in text
+    assert f"Job: {job_id}" in text
+    assert "Existing target: exists=False identity=none" in text
+    assert "Replacement: requires_abandonment=False can_select_now=True" in text
+    assert "Create selected target: sinks select-live-target" in text
+    assert "{" not in text
+
 
 def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.toml"
@@ -309,6 +337,33 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert f"target={target_identity}" in text_handoff
     assert "abandonment=none" in text_handoff
     assert "{" not in text_handoff
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "sinks",
+                "live-selection-packet",
+                job_id,
+                "--run-id",
+                run_id,
+                "--sink",
+                "google_contacts",
+                "--operator",
+                "tester",
+                "--no-write",
+            ]
+        )
+        == 0
+    )
+    active_packet = capsys.readouterr().out
+    assert "Live selection packet: blocked" in active_packet
+    assert f"identity={target_identity}" in active_packet
+    assert "safety_confirmed=True abandoned=False" in active_packet
+    assert "Replacement: requires_abandonment=True can_select_now=False" in active_packet
+    assert "Abandon existing target: sinks abandon-live-pilot" in active_packet
+    assert "{" not in active_packet
 
     assert (
         main(
