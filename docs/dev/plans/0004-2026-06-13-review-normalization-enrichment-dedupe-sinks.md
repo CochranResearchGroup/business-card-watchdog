@@ -2181,3 +2181,20 @@ Validation:
 Remaining:
 
 - Future preview work can add sink-readiness warnings and optional persisted validation artifacts, but the default preview remains zero-write.
+
+### Slice 0004-BQ | 2026-06-14 | Preview Sink Readiness Warnings
+
+Implemented:
+
+- Added sink-readiness warnings to review workbook preview rows for actions that can move a job toward routing.
+- Blocked sink readiness now appears in row `warnings`, structured `sink_readiness_warnings`, and the spreadsheet `validation_csv`.
+- Warnings reuse the existing user-config-aware sink readiness checks and remain zero-network/zero-write.
+- Added regression coverage for a live Google Contacts target with apply disabled.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_preview_review_workbook_csv_validates_without_writes tests/test_service.py::test_service_preview_review_workbook_csv_warns_on_blocked_sink_readiness tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+
+Remaining:
+
+- Future preview work can optionally persist validation artifacts, but default preview responses remain non-mutating.

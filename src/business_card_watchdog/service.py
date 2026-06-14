@@ -1264,6 +1264,8 @@ class BusinessCardService:
                     errors.append("resolve_duplicate requires duplicate_resolution.decision")
             if action == "approve_for_routing" and "contact_candidate" not in artifact_kinds:
                 warnings.append("approve_for_routing will fall back to an empty contact candidate")
+            sink_readiness_warnings = self._review_workbook_sink_readiness_warnings(decision)
+            warnings.extend(str(warning["message"]) for warning in sink_readiness_warnings)
             rows.append(
                 {
                     "row_number": row_number,
@@ -1277,6 +1279,7 @@ class BusinessCardService:
                     "field_correction_count": len(dict(decision.get("field_corrections") or {})),
                     "approved_enrichment_fields": list(decision.get("approved_enrichment_fields") or []),
                     "duplicate_resolution": dict(decision.get("duplicate_resolution") or {}),
+                    "sink_readiness_warnings": sink_readiness_warnings,
                 }
             )
         skipped_count = sum(1 for row in rows if row["status"] == "skipped")
@@ -2991,6 +2994,7 @@ class BusinessCardService:
             "duplicate_decision",
             "duplicate_target_identity",
             "duplicate_reason",
+            "sink_readiness_warnings",
         ]
         writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore", lineterminator="\n")
         writer.writeheader()
@@ -3014,6 +3018,10 @@ class BusinessCardService:
                         "duplicate_decision": duplicate_resolution.get("decision", ""),
                         "duplicate_target_identity": duplicate_resolution.get("target_identity", ""),
                         "duplicate_reason": duplicate_resolution.get("reason", ""),
+                        "sink_readiness_warnings": "; ".join(
+                            str(warning.get("message") or warning)
+                            for warning in row.get("sink_readiness_warnings") or []
+                        ),
                     }
                 )
         else:
@@ -3021,6 +3029,29 @@ class BusinessCardService:
                 message = error.get("message") if isinstance(error, dict) else str(error)
                 writer.writerow({"status": "error", "errors": message})
         return output.getvalue()
+
+    def _review_workbook_sink_readiness_warnings(self, decision: dict[str, Any]) -> list[dict[str, Any]]:
+        action = str(decision.get("action") or "keep_needs_review")
+        duplicate_decision = str((decision.get("duplicate_resolution") or {}).get("decision") or "")
+        routes_after_review = action in {"approve_for_routing", "approve_enrichment_merge"} or (
+            action == "resolve_duplicate" and duplicate_decision != "noop"
+        )
+        if not routes_after_review:
+            return []
+        warnings: list[dict[str, Any]] = []
+        for readiness in self.sink_readiness()["sinks"]:
+            if readiness.get("status") == "blocked":
+                sink = str(readiness.get("sink") or "")
+                reason = str(readiness.get("reason") or "sink readiness is blocked")
+                warnings.append(
+                    {
+                        "sink": sink,
+                        "status": "blocked",
+                        "reason": reason,
+                        "message": f"sink {sink} blocked: {reason}",
+                    }
+                )
+        return warnings
 
     def _review_decisions_from_workbook_csv(self, csv_text: str) -> list[dict[str, Any]]:
         return [

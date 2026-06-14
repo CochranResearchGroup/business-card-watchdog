@@ -517,6 +517,37 @@ def test_service_preview_review_workbook_csv_validates_without_writes(tmp_path: 
     assert not (config.runs_dir / run_id / "review_decisions_import.json").exists()
 
 
+def test_service_preview_review_workbook_csv_warns_on_blocked_sink_readiness(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=False, google_contacts_apply_enabled=False),
+    )
+    run_id, _job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    workbook = service.review_workbook(run_id=run_id)
+    rows = list(csv.DictReader(StringIO(workbook["csv"])))
+    rows[0]["review_action"] = "approve_for_routing"
+    output = StringIO()
+    writer = csv.DictWriter(output, fieldnames=list(rows[0]))
+    writer.writeheader()
+    writer.writerows(rows)
+
+    preview = service.preview_review_workbook_csv(
+        run_id=run_id,
+        reviewer="previewer",
+        csv_text=output.getvalue(),
+    )
+    validation_rows = list(csv.DictReader(StringIO(preview["validation_csv"])))
+
+    assert preview["rows"][0]["status"] == "ready"
+    assert preview["rows"][0]["sink_readiness_warnings"][0]["sink"] == "google_contacts"
+    assert any("live sink apply is disabled" in warning for warning in preview["rows"][0]["warnings"])
+    assert "sink google_contacts blocked" in validation_rows[0]["sink_readiness_warnings"]
+    assert preview["writes_attempted"] == 0
+    assert preview["network_calls_made"] == 0
+
+
 def test_service_apply_review_workbook_csv_supports_enrichment_columns(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, job_id = make_recorded_run(config)
