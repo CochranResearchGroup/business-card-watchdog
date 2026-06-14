@@ -87,6 +87,12 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert live_handoff["schema"] == "business-card-watchdog.live-pilot-handoff.v1"
     assert live_handoff["action_counts"]["request_live_lookup_smoke"] == 1
     assert live_handoff["writes_attempted"] == 0
+    abandonment = client.post(
+        f"/jobs/{job_id}/live-pilot-abandonment",
+        json={"run_id": run_id, "operator": "api-test", "reason": "wrong target profile selected"},
+    ).json()
+    assert abandonment["abandonment"]["schema"] == "business-card-watchdog.live-pilot-abandonment.v1"
+    assert abandonment["abandonment"]["writes_attempted"] == 0
     assert client.get("/runs").json()[0]["run_id"] == run_id
     assert client.get(f"/runs/{run_id}").json()["run_id"] == run_id
     assert client.get(f"/runs/{run_id}/summary").json()["needs_review_count"] == 1

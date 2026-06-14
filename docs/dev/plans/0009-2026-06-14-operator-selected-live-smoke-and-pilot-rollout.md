@@ -131,34 +131,6 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed; index is up to date.
 
-### Slice 0009-A7 | 2026-06-14 | Operator Live Pilot Handoff
-
-Implemented:
-
-- Added `business-card-watchdog.live-pilot-handoff.v1`.
-- Added service `BusinessCardService.live_pilot_handoff`.
-- Added CLI `bcw runs live-pilot-handoff`.
-- Added API `GET /runs/{run_id}/live-pilot-handoff`.
-- Added MCP tool `business_card_watchdog_live_pilot_handoff`.
-- The handoff turns live pilot status entries into operator-facing next actions, exact next commands, stop reasons, selected-target context, and per-run action counts.
-
-Safety:
-
-- This slice is handoff/readback only.
-- It can write `live_pilot_handoff.json` under the run, but it does not create or modify `selected_live_target.json` and does not execute lookup, write, or readback pilots.
-- It records status-operation counters as zero and preserves already observed pilot counters from the status report.
-- It does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
-
-Validation:
-
-- `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
-- `.venv/bin/python -m pytest -q` passed with 210 tests.
-- `.venv/bin/ruff check .` passed.
-- `uv build --out-dir dist` passed.
-- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
-- `git diff --check` passed.
-- `codegraph sync && codegraph status` passed; index is up to date.
-
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:
@@ -265,6 +237,62 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_service.py::test_service_live_pilot_status_does_not_double_count_closeout_totals tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
 - `.venv/bin/python -m pytest -q` passed with 210 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+### Slice 0009-A7 | 2026-06-14 | Operator Live Pilot Handoff
+
+Implemented:
+
+- Added `business-card-watchdog.live-pilot-handoff.v1`.
+- Added service `BusinessCardService.live_pilot_handoff`.
+- Added CLI `bcw runs live-pilot-handoff`.
+- Added API `GET /runs/{run_id}/live-pilot-handoff`.
+- Added MCP tool `business_card_watchdog_live_pilot_handoff`.
+- The handoff turns live pilot status entries into operator-facing next actions, exact next commands, stop reasons, selected-target context, and per-run action counts.
+
+Safety:
+
+- This slice is handoff/readback only.
+- It can write `live_pilot_handoff.json` under the run, but it does not create or modify `selected_live_target.json` and does not execute lookup, write, or readback pilots.
+- It records status-operation counters as zero and preserves already observed pilot counters from the status report.
+- It does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+- `.venv/bin/python -m pytest -q` passed with 210 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+### Slice 0009-A8 | 2026-06-14 | Live Pilot Abandonment Gate
+
+Implemented:
+
+- Added `business-card-watchdog.live-pilot-abandonment.v1`.
+- Added service `BusinessCardService.live_pilot_abandon_for_job`.
+- Added CLI `bcw sinks abandon-live-pilot`.
+- Added API `POST /jobs/{job_id}/live-pilot-abandonment`.
+- Added MCP tool `business_card_watchdog_live_pilot_abandonment`.
+- Live pilot status and handoff now report abandoned selected targets, and non-simulated selected-target gates refuse the abandoned selected target.
+
+Safety:
+
+- This slice is abandonment/readback only.
+- It writes `live_pilot_abandonment.json`, but it does not delete or modify `selected_live_target.json` and does not execute lookup, write, or readback pilots.
+- It records operation counters as zero and requires an explicit operator plus reason.
+- It does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_live_pilot_abandonment_blocks_abandoned_selected_target tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+- `.venv/bin/python -m pytest -q` passed with 211 tests.
 - `.venv/bin/ruff check .` passed.
 - `uv build --out-dir dist` passed.
 - `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.

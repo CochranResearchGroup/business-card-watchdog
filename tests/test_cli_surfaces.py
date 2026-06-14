@@ -257,6 +257,30 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert handoff["writes_attempted"] == 0
     assert Path(handoff["handoff_path"]).exists()
 
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "sinks",
+                "abandon-live-pilot",
+                job_id,
+                "--run-id",
+                run_id,
+                "--operator",
+                "tester",
+                "--reason",
+                "wrong target profile selected",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    abandonment = json.loads(capsys.readouterr().out)
+    assert abandonment["abandonment"]["schema"] == "business-card-watchdog.live-pilot-abandonment.v1"
+    assert abandonment["abandonment"]["writes_attempted"] == 0
+    assert Path(abandonment["abandonment_path"]).exists()
+
 
 def test_cli_runs_and_jobs_use_recorded_runtime_state(
     tmp_path: Path, capsys

@@ -2188,6 +2188,89 @@ class BusinessCardService:
             payload["audit_path"] = str(audit_path)
         return payload
 
+    def live_pilot_abandon_for_job(
+        self,
+        *,
+        job_id: str,
+        run_id: str,
+        operator: str,
+        reason: str,
+    ) -> dict[str, Any]:
+        if not operator.strip():
+            raise ValueError("live pilot abandonment requires an operator")
+        if not reason.strip():
+            raise ValueError("live pilot abandonment requires a reason")
+        job = self.get_job(job_id, run_id=run_id)
+        artifact_dir = (
+            Path(job["artifact_dir"])
+            if job.get("artifact_dir")
+            else self.config.runs_dir / run_id / "artifacts" / job_id
+        )
+        target_path = artifact_dir / "selected_live_target.json"
+        selected_target = _read_json_file(target_path)
+        if selected_target is None:
+            raise ValueError("live pilot abandonment requires selected_live_target.json")
+        payload = {
+            "schema": "business-card-watchdog.live-pilot-abandonment.v1",
+            "state": "abandoned",
+            "created_at": utc_now(),
+            "run_id": run_id,
+            "job_id": job_id,
+            "job_state": job.get("state"),
+            "sink": selected_target.get("sink"),
+            "scope": selected_target.get("scope"),
+            "operator": operator,
+            "reason": reason,
+            "selected_target_path": str(target_path),
+            "selected_target_created_at": selected_target.get("created_at"),
+            "selected_target_operator": selected_target.get("operator") or selected_target.get("approved_by"),
+            "selected_target": selected_target,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "commands": {
+                "live_pilot_status": f"runs live-pilot-status {run_id} --json",
+                "live_pilot_handoff": f"runs live-pilot-handoff {run_id} --json",
+                "prepare_new_selection_packet": (
+                    f"sinks live-selection-packet {job_id} --run-id {run_id} "
+                    "--sink <sink> --operator <operator> --json"
+                ),
+                "select_new_target": (
+                    f"sinks select-live-target {job_id} --run-id {run_id} "
+                    "--sink <sink> --operator <operator> --scope <scope> --json"
+                ),
+            },
+            "explicit_stop_conditions": [
+                "This abandonment artifact does not delete selected_live_target.json.",
+                "Do not run live lookup, live write, or live readback for the abandoned selected target.",
+                "A later selected_live_target.json with a different created_at is required before another non-simulated live command.",
+                "Do not process private SyncThing images, run public-web search, or call paid enrichment from this abandonment artifact.",
+            ],
+        }
+        abandon_path = artifact_dir / "live_pilot_abandonment.json"
+        abandon_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        ledger.record_artifact(job_id=job_id, kind="live_pilot_abandonment", path=abandon_path)
+        ledger.record_event(
+            "live_pilot_abandoned",
+            {
+                "job_id": job_id,
+                "run_id": run_id,
+                "sink": selected_target.get("sink"),
+                "scope": selected_target.get("scope"),
+                "operator": operator,
+                "abandon_path": str(abandon_path),
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        self._mark_route_artifact_refreshed(
+            artifact_dir,
+            job_id=job_id,
+            run_id=run_id,
+            kind="live_pilot_abandonment",
+        )
+        return {"abandonment_path": str(abandon_path), "abandonment": payload}
+
     def execute_selected_lookup_smoke_for_job(
         self,
         *,
@@ -4556,13 +4639,22 @@ class BusinessCardService:
                 "sink_write_pilot": _read_json_file(artifact_dir / "sink_write_pilot.json"),
                 "sink_readback_pilot": _read_json_file(artifact_dir / "sink_readback_pilot.json"),
                 "live_pilot_closeout": _read_json_file(artifact_dir / "live_pilot_closeout.json"),
+                "live_pilot_abandonment": _read_json_file(artifact_dir / "live_pilot_abandonment.json"),
             }
             closeout = artifacts["live_pilot_closeout"] or {}
             selected_target = artifacts["selected_live_target"] or {}
+            abandonment = artifacts["live_pilot_abandonment"] or {}
             packet = artifacts["live_selection_packet"] or {}
             job_candidates = candidates_by_job.get(job_id, [])
             ready_candidate_count = sum(1 for candidate in job_candidates if candidate.get("state") == "ready_for_selection")
-            if closeout.get("state") == "complete":
+            target_abandoned = (
+                artifacts["selected_live_target"] is not None
+                and abandonment.get("state") == "abandoned"
+                and abandonment.get("selected_target_created_at") == selected_target.get("created_at")
+            )
+            if target_abandoned:
+                state = "abandoned"
+            elif closeout.get("state") == "complete":
                 state = "complete"
             elif artifacts["selected_live_target"] is not None:
                 state = "selected_target_active"
@@ -4598,11 +4690,14 @@ class BusinessCardService:
                     "readback_pilot_state": (artifacts["sink_readback_pilot"] or {}).get("state"),
                     "closeout_state": closeout.get("state"),
                     "closeout_missing_artifacts": closeout.get("missing_artifacts", []),
+                    "abandonment_state": abandonment.get("state"),
+                    "abandonment_reason": abandonment.get("reason"),
                     "commands": {
                         "selection_packet": f"sinks live-selection-packet {job_id} --run-id {run_id} --sink <sink> --operator <operator> --json",
                         "select_target": f"sinks select-live-target {job_id} --run-id {run_id} --sink <sink> --operator <operator> --scope lookup --json",
                         "selected_target_audit": f"sinks selected-target-audit {job_id} --run-id {run_id} --json",
                         "lookup_smoke": f"sinks execute-lookup-smoke {job_id} --run-id {run_id} --json",
+                        "abandon": f"sinks abandon-live-pilot {job_id} --run-id {run_id} --operator <operator> --reason <reason> --json",
                         "closeout": f"sinks live-pilot-closeout {job_id} --run-id {run_id} --json",
                     },
                 }
@@ -4614,7 +4709,10 @@ class BusinessCardService:
             "complete"
             if entries and counts.get("complete") == len(entries)
             else "operator_action_required"
-            if any(entry["state"] in {"pending_operator_approval", "selected_target_active", "ready_for_selection"} for entry in entries)
+            if any(
+                entry["state"] in {"abandoned", "pending_operator_approval", "selected_target_active", "ready_for_selection"}
+                for entry in entries
+            )
             else "blocked"
             if entries
             else "empty"
@@ -4681,6 +4779,11 @@ class BusinessCardService:
                 operator_required = True
                 command = commands.get("lookup_smoke")
                 reason = "selected live target exists; live lookup smoke requires explicit operator request"
+            elif job_state == "abandoned":
+                next_action = "select_new_live_target"
+                operator_required = True
+                command = commands.get("select_target")
+                reason = "selected live target was abandoned; operator must approve a new target before live commands"
             elif job_state == "pending_operator_approval":
                 next_action = "approve_selected_target"
                 operator_required = True
@@ -4719,6 +4822,8 @@ class BusinessCardService:
                     "readback_pilot_state": entry.get("readback_pilot_state"),
                     "closeout_state": entry.get("closeout_state"),
                     "closeout_missing_artifacts": entry.get("closeout_missing_artifacts", []),
+                    "abandonment_state": entry.get("abandonment_state"),
+                    "abandonment_reason": entry.get("abandonment_reason"),
                     "commands": commands,
                 }
             )
@@ -4732,7 +4837,9 @@ class BusinessCardService:
             else "ready_for_live_lookup_request"
             if action_counts.get("request_live_lookup_smoke")
             else "ready_for_operator_selection"
-            if action_counts.get("approve_selected_target") or action_counts.get("prepare_selection_packet")
+            if action_counts.get("approve_selected_target")
+            or action_counts.get("prepare_selection_packet")
+            or action_counts.get("select_new_live_target")
             else "blocked"
             if handoff_entries
             else "empty"
@@ -5037,6 +5144,12 @@ class BusinessCardService:
         target = _read_json_file(target_path)
         if target is None:
             raise ValueError("non-simulated sink pilot requires selected_live_target.json")
+        abandonment = _read_json_file(artifact_dir / "live_pilot_abandonment.json") or {}
+        if (
+            abandonment.get("state") == "abandoned"
+            and abandonment.get("selected_target_created_at") == target.get("created_at")
+        ):
+            raise ValueError("non-simulated sink pilot selected target was abandoned")
         mismatches = []
         for key, expected in [
             ("job_id", job_id),

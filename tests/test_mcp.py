@@ -51,6 +51,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_sink_lookup_smoke_handoff" in names
     assert "business_card_watchdog_selected_live_target" in names
     assert "business_card_watchdog_selected_live_target_audit" in names
+    assert "business_card_watchdog_live_pilot_abandonment" in names
     assert "business_card_watchdog_selected_lookup_smoke" in names
     assert "business_card_watchdog_sink_write_pilot" in names
     assert "business_card_watchdog_sink_readback_pilot" in names
@@ -218,6 +219,16 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     live_handoff = call_tool(
         "business_card_watchdog_live_pilot_handoff",
         {"run_id": run_id, "write": False},
+        config=config,
+    )
+    abandonment = call_tool(
+        "business_card_watchdog_live_pilot_abandonment",
+        {
+            "job_id": job_id,
+            "run_id": run_id,
+            "operator": "mcp-test",
+            "reason": "wrong target profile selected",
+        },
         config=config,
     )
     write_pilot = call_tool(
@@ -431,6 +442,8 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert live_handoff["schema"] == "business-card-watchdog.live-pilot-handoff.v1"
     assert live_handoff["action_counts"]["request_live_lookup_smoke"] == 1
     assert live_handoff["writes_attempted"] == 0
+    assert abandonment["abandonment"]["schema"] == "business-card-watchdog.live-pilot-abandonment.v1"
+    assert abandonment["abandonment"]["writes_attempted"] == 0
     assert write_pilot["pilot"]["schema"] == "business-card-watchdog.sink-write-pilot.v1"
     assert write_pilot["pilot"]["writes_attempted"] == 0
     assert write_pilot["result"]["state"] == "mock_applied"

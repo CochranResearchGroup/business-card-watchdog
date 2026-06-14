@@ -1919,6 +1919,50 @@ def test_service_selected_lookup_smoke_imports_redacted_duplicate_evidence(tmp_p
     assert "selected_lookup_smoke" in review_bundle["entries"][0]["artifact_kinds"]
 
 
+def test_service_live_pilot_abandonment_blocks_abandoned_selected_target(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
+    service.select_live_target_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        operator="tester",
+        scope="lookup",
+    )
+
+    abandonment = service.live_pilot_abandon_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        operator="tester",
+        reason="wrong target profile selected",
+    )
+    status = service.live_pilot_status(run_id=run_id, write=False)
+    handoff = service.live_pilot_handoff(run_id=run_id, write=False)
+
+    assert abandonment["abandonment"]["schema"] == "business-card-watchdog.live-pilot-abandonment.v1"
+    assert Path(abandonment["abandonment_path"]).exists()
+    assert status["counts"]["abandoned"] == 1
+    assert handoff["action_counts"]["select_new_live_target"] == 1
+    try:
+        service.execute_sink_lookup_pilot_for_job(
+            job_id=job_id,
+            run_id=run_id,
+            sink="google_contacts",
+            approved_by="tester",
+            simulate=False,
+        )
+    except ValueError as exc:
+        assert "selected target was abandoned" in str(exc)
+    else:
+        raise AssertionError("expected abandoned selected target to block non-simulated lookup")
+
+
 def test_service_live_pilot_status_does_not_double_count_closeout_totals(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, job_id = make_recorded_run(config)

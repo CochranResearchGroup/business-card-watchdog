@@ -2551,3 +2551,31 @@ Validation:
 Safety:
 
 - This was handoff/readback only. It can write `live_pilot_handoff.json`, but it did not create or modify `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+## Turn 132 | 2026-06-14
+
+Continued Plan 0009 with Slice 0009-A8.
+
+Implemented:
+
+- Added `business-card-watchdog.live-pilot-abandonment.v1`.
+- Added `BusinessCardService.live_pilot_abandon_for_job`.
+- Added CLI `bcw sinks abandon-live-pilot`.
+- Added API `POST /jobs/{job_id}/live-pilot-abandonment`.
+- Added MCP tool `business_card_watchdog_live_pilot_abandonment`.
+- Live pilot status and handoff now report abandoned selected targets.
+- Non-simulated selected-target gates now refuse the abandoned selected target until the operator creates a later selected target.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_live_pilot_abandonment_blocks_abandoned_selected_target tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+- `.venv/bin/python -m pytest -q` passed with 211 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was abandonment/readback only. It can write `live_pilot_abandonment.json`, but it did not delete or modify `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.

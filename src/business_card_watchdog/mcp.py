@@ -527,6 +527,20 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_live_pilot_abandonment",
+                "description": "Record that the current selected live target is abandoned without deleting artifacts or executing live calls.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "job_id": {"type": "string"},
+                        "run_id": {"type": "string"},
+                        "operator": {"type": "string"},
+                        "reason": {"type": "string"},
+                    },
+                    "required": ["job_id", "run_id", "operator", "reason"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_selected_lookup_smoke",
                 "description": "Execute the selected read-only live lookup smoke from selected_live_target.json and import redacted duplicate evidence.",
                 "input_schema": {
@@ -951,6 +965,13 @@ def call_tool(
             run_id=str(args["run_id"]),
             scope=str(args["scope"]) if args.get("scope") else None,
             write=bool(args.get("write", True)),
+        )
+    if tool_name == "business_card_watchdog_live_pilot_abandonment":
+        return service.live_pilot_abandon_for_job(
+            job_id=str(args["job_id"]),
+            run_id=str(args["run_id"]),
+            operator=str(args["operator"]),
+            reason=str(args["reason"]),
         )
     if tool_name == "business_card_watchdog_selected_lookup_smoke":
         return service.execute_selected_lookup_smoke_for_job(

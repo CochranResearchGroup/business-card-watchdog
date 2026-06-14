@@ -119,6 +119,11 @@ def create_app(config_path: Path | None = None):
         scope: str | None = None
         write: bool = True
 
+    class LivePilotAbandonRequest(BaseModel):
+        run_id: str
+        operator: str
+        reason: str
+
     class SelectedLookupSmokeRequest(BaseModel):
         run_id: str
 
@@ -508,6 +513,18 @@ def create_app(config_path: Path | None = None):
             run_id=request.run_id,
             scope=request.scope,
             write=request.write,
+        )
+
+    @app.post("/jobs/{job_id}/live-pilot-abandonment")
+    def create_live_pilot_abandonment(
+        job_id: str,
+        request: LivePilotAbandonRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().live_pilot_abandon_for_job(
+            job_id=job_id,
+            run_id=request.run_id,
+            operator=request.operator,
+            reason=request.reason,
         )
 
     @app.post("/jobs/{job_id}/selected-lookup-smoke")
