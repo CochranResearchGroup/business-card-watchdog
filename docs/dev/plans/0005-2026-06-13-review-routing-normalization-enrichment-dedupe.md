@@ -184,6 +184,32 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed and reported the index is up to date.
 
+### Slice 0005-C | 2026-06-14 | Durable Duplicate Resolution Index
+
+Implemented:
+
+- Added `business-card-watchdog.duplicate-resolution-index.v1` records under the user-scoped identity directory.
+- Added `duplicate-resolutions.jsonl` next to the existing contact identity index.
+- Persisted duplicate-resolution decisions from review submission into the durable identity index.
+- Added reviewer-cleared `create_new` suppression for future false-positive duplicate pairs, while keeping unresolved duplicate matches blocking.
+- Preserved existing per-job `duplicate_resolution.json` artifacts and route-refresh behavior.
+
+Safety:
+
+- This slice is local identity-index and review-artifact work only.
+- No public-web search, paid enrichment provider, GWS, Odollo/Odoo, or live sink calls are made.
+- Only explicit reviewer duplicate decisions update the durable resolution index.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_dedupe.py tests/test_service.py::test_service_submit_review_resolves_duplicate_for_routing tests/test_service.py::test_service_submit_review_resolves_duplicate_noop_as_cancelled -q` passed with 6 tests.
+- `.venv/bin/python -m pytest -q` passed with 181 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed and reported the index is up to date.
+
 ## Workstreams
 
 ### WS1. Review Surface And Operator Queue

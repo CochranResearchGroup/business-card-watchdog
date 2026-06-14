@@ -4,7 +4,13 @@ import json
 from pathlib import Path
 
 from business_card_watchdog.config import AppConfig, PrefilterConfig, SinkConfig
-from business_card_watchdog.dedupe import assess_downstream_lookup_result, assess_duplicate, remember_identity
+from business_card_watchdog.dedupe import (
+    IdentityIndex,
+    assess_downstream_lookup_result,
+    assess_duplicate,
+    remember_duplicate_resolution,
+    remember_identity,
+)
 from business_card_watchdog.orchestrator import BatchOrchestrator
 
 from synthetic_fixtures import SyntheticSkillAdapter, latest_jobs_by_id, read_jsonl, write_synthetic_image
@@ -26,6 +32,46 @@ def test_identity_index_detects_strong_email_duplicate(tmp_path: Path) -> None:
     assert assessment.state == "strong_duplicate"
     assert assessment.blocks_routing is True
     assert assessment.matches[0]["basis"] == "email"
+
+
+def test_create_new_duplicate_resolution_suppresses_future_false_positive(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    prior = {"full_name": "Ada Lovelace", "organization": "Analytical Engines"}
+    current = {"full_name": "Ada Lovelace", "organization": "Analytical Engines", "title": "Founder"}
+    remember_identity(config, spec=prior, job_id="job-1", run_id="run-1", image_path="/tmp/one.png")
+    assessment = assess_duplicate(
+        config,
+        spec=current,
+        job_id="job-2",
+        run_id="run-2",
+        image_path="/tmp/two.png",
+    )
+
+    record = remember_duplicate_resolution(
+        config,
+        spec=current,
+        resolution={
+            "decision": "create_new",
+            "reviewer": "operator",
+            "reason": "same company and name, different person confirmed",
+            "duplicate_assessment": assessment.to_dict(),
+        },
+        job_id="job-2",
+        run_id="run-2",
+        image_path="/tmp/two.png",
+    )
+    repeated = assess_duplicate(
+        config,
+        spec=current,
+        job_id="job-3",
+        run_id="run-3",
+        image_path="/tmp/three.png",
+    )
+
+    assert assessment.state == "possible_duplicate"
+    assert record.schema == "business-card-watchdog.duplicate-resolution-index.v1"
+    assert IdentityIndex(config).duplicate_resolutions()[0].decision == "create_new"
+    assert repeated.state == "no_match"
 
 
 def test_downstream_lookup_result_detects_strong_sink_duplicate() -> None:

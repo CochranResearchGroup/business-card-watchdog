@@ -2255,6 +2255,7 @@ def test_service_submit_review_resolves_duplicate_for_routing(tmp_path: Path) ->
     )
     plan = service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
     resolution = json.loads((artifact_dir / "duplicate_resolution.json").read_text(encoding="utf-8"))
+    resolution_index = config.data_dir / "identity" / "duplicate-resolutions.jsonl"
     job = service.get_job(job_id, run_id=run_id)
     events = [
         json.loads(line)
@@ -2263,6 +2264,8 @@ def test_service_submit_review_resolves_duplicate_for_routing(tmp_path: Path) ->
 
     assert result["job"]["state"] == "ready_to_route"
     assert resolution["decision"] == "merge_existing"
+    assert resolution_index.exists()
+    assert json.loads(resolution_index.read_text(encoding="utf-8").splitlines()[0])["decision"] == "merge_existing"
     assert job["state"] == "ready_to_route"
     assert plan["plan"]["duplicate_resolution"]["decision"] == "merge_existing"
     assert any(artifact["kind"] == "duplicate_resolution" for artifact in job["artifacts"])

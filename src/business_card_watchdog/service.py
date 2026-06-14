@@ -16,7 +16,7 @@ from .contact import (
     contact_candidate_to_spec,
     field_provenance_from_canonical,
 )
-from .dedupe import assess_downstream_lookup_result
+from .dedupe import assess_downstream_lookup_result, remember_duplicate_resolution
 from .enrichment import (
     build_paid_api_provider_handoff,
     build_public_web_result_artifact,
@@ -1202,6 +1202,15 @@ class BusinessCardService:
                 encoding="utf-8",
             )
             ledger.record_artifact(job_id=job_id, kind="duplicate_resolution", path=resolution_path)
+            contact_spec = self._contact_spec_for_artifact_dir(artifact_dir)
+            resolution_record = remember_duplicate_resolution(
+                self.config,
+                spec=contact_spec,
+                resolution=resolution_payload,
+                job_id=job_id,
+                run_id=run_id,
+                image_path=job.image_path,
+            )
             if decision == "noop":
                 job.transition_to("cancelled", error="duplicate resolved as no-op")
             else:
@@ -1215,6 +1224,7 @@ class BusinessCardService:
                     "reviewer": reviewer,
                     "decision": decision,
                     "resolution_path": str(resolution_path),
+                    "resolution_index_schema": resolution_record.schema,
                 },
             )
             if decision != "noop":

@@ -1954,3 +1954,29 @@ Validation:
 Safety:
 
 - This was local schema and payload-readback work only. It made no public-web search, paid enrichment, GWS, Odollo/Odoo, or live sink calls.
+
+## Turn 108 | 2026-06-14
+
+Continued Plan 0005 execution with the durable duplicate-resolution index slice.
+
+Implemented:
+
+- Added `business-card-watchdog.duplicate-resolution-index.v1` records in the user-scoped identity directory.
+- Added `duplicate-resolutions.jsonl` next to the existing contact identity index.
+- Persisted explicit duplicate-resolution review decisions into the durable index.
+- Added suppression for reviewer-cleared `create_new` false-positive duplicate pairs.
+- Kept unresolved duplicate matches blocking and preserved per-job `duplicate_resolution.json` plus route-refresh behavior.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_dedupe.py tests/test_service.py::test_service_submit_review_resolves_duplicate_for_routing tests/test_service.py::test_service_submit_review_resolves_duplicate_noop_as_cancelled -q` passed with 6 tests.
+- `.venv/bin/python -m pytest -q` passed with 181 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed and reported the index is up to date.
+
+Safety:
+
+- This was local identity-index and review-artifact work only. It made no public-web search, paid enrichment, GWS, Odollo/Odoo, or live sink calls.
