@@ -221,6 +221,27 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert payload["writes_attempted"] == 0
     assert payload["network_calls_made"] == 0
 
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "sinks",
+                "live-pilot-closeout",
+                job_id,
+                "--run-id",
+                run_id,
+                "--json",
+            ]
+        )
+        == 0
+    )
+    closeout = json.loads(capsys.readouterr().out)
+    assert closeout["report"]["schema"] == "business-card-watchdog.live-pilot-closeout.v1"
+    assert closeout["report"]["state"] == "incomplete"
+    assert closeout["report"]["writes_attempted"] == 0
+    assert Path(closeout["closeout_path"]).exists()
+
 
 def test_cli_runs_and_jobs_use_recorded_runtime_state(
     tmp_path: Path, capsys

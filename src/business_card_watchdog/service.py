@@ -113,6 +113,7 @@ _ROUTE_ARTIFACT_FILES = {
     "sink_adapter_request_readback": "sink_adapter_request_readback.json",
     "sink_readback_pilot": "sink_readback_pilot.json",
     "sink_apply_pilot_report": "sink_apply_pilot_report.json",
+    "live_pilot_closeout": "live_pilot_closeout.json",
 }
 
 _ROUTE_REFRESH_STEPS = [
@@ -3778,6 +3779,166 @@ class BusinessCardService:
             kind="sink_apply_pilot_report",
         )
         return {"report_path": str(report_path), "report": payload}
+
+    def build_live_pilot_closeout_for_job(self, *, job_id: str, run_id: str, write: bool = True) -> dict[str, Any]:
+        job = self.get_job(job_id, run_id=run_id)
+        artifact_dir = (
+            Path(job["artifact_dir"])
+            if job.get("artifact_dir")
+            else self.config.runs_dir / run_id / "artifacts" / job_id
+        )
+        artifacts = {
+            "selected_live_target": _read_json_file(artifact_dir / "selected_live_target.json"),
+            "selected_live_target_audit": _read_json_file(artifact_dir / "selected_live_target_audit.json"),
+            "selected_lookup_smoke": _read_json_file(artifact_dir / "selected_lookup_smoke.json"),
+            "sink_lookup_pilot": _read_json_file(artifact_dir / "sink_lookup_pilot.json"),
+            "sink_lookup_result": _read_json_file(artifact_dir / "sink_lookup_result.json"),
+            "downstream_duplicate_assessment": _read_json_file(artifact_dir / "downstream_duplicate_assessment.json"),
+            "sink_apply_pilot_bundle": _read_json_file(artifact_dir / "sink_apply_pilot_bundle.json"),
+            "sink_write_pilot": _read_json_file(artifact_dir / "sink_write_pilot.json"),
+            "sink_apply_result": _read_json_file(artifact_dir / "sink_apply_result.json"),
+            "sink_readback_pilot": _read_json_file(artifact_dir / "sink_readback_pilot.json"),
+            "sink_apply_pilot_report": _read_json_file(artifact_dir / "sink_apply_pilot_report.json"),
+        }
+        selected_target = artifacts["selected_live_target"] or {}
+        sink = str(
+            selected_target.get("sink")
+            or (artifacts["sink_write_pilot"] or {}).get("sink")
+            or (artifacts["sink_readback_pilot"] or {}).get("sink")
+            or ""
+        )
+        operator = str(selected_target.get("operator") or selected_target.get("approved_by") or "")
+        scope = str(selected_target.get("scope") or "lookup")
+        scope_allows = dict(selected_target.get("scope_allows") or {})
+        selected_lookup_smoke = artifacts["selected_lookup_smoke"] or {}
+        duplicate = artifacts["downstream_duplicate_assessment"] or {}
+        write_pilot = artifacts["sink_write_pilot"] or {}
+        readback_pilot = artifacts["sink_readback_pilot"] or {}
+        apply_report = artifacts["sink_apply_pilot_report"] or {}
+        required_artifacts = ["selected_live_target"]
+        if scope_allows.get("lookup") or scope in {"lookup", "all"}:
+            required_artifacts.extend(["selected_lookup_smoke", "downstream_duplicate_assessment"])
+        if scope_allows.get("write") or scope in {"write", "all"}:
+            required_artifacts.extend(["sink_write_pilot", "sink_apply_result", "sink_apply_pilot_report"])
+        if scope_allows.get("readback") or scope in {"readback", "all"}:
+            required_artifacts.extend(["sink_readback_pilot", "sink_apply_pilot_report"])
+        required_artifacts = list(dict.fromkeys(required_artifacts))
+        missing_artifacts = [name for name in required_artifacts if artifacts.get(name) is None]
+        blocked_reasons = list(missing_artifacts)
+        if duplicate.get("state") in {"strong_duplicate", "possible_duplicate"} and not duplicate.get("reviewed"):
+            blocked_reasons.append(f"downstream_duplicate_state:{duplicate.get('state')}")
+        if write_pilot and write_pilot.get("state") not in {"mock_written", "live_written"}:
+            blocked_reasons.append(f"write_pilot_state:{write_pilot.get('state')}")
+        if readback_pilot and readback_pilot.get("state") != "verified":
+            blocked_reasons.append(f"readback_pilot_state:{readback_pilot.get('state')}")
+        if apply_report and apply_report.get("state") != "complete":
+            blocked_reasons.append(f"sink_apply_pilot_report_state:{apply_report.get('state')}")
+        state = "complete" if not blocked_reasons else "incomplete"
+        writes_attempted = int(write_pilot.get("writes_attempted") or 0)
+        network_calls_made = (
+            int((selected_lookup_smoke or {}).get("network_calls_made") or 0)
+            + int(write_pilot.get("network_calls_made") or 0)
+            + int(readback_pilot.get("network_calls_made") or 0)
+        )
+        artifact_paths = {
+            name: str(artifact_dir / filename)
+            for name, filename in {
+                "selected_live_target": "selected_live_target.json",
+                "selected_live_target_audit": "selected_live_target_audit.json",
+                "selected_lookup_smoke": "selected_lookup_smoke.json",
+                "sink_lookup_pilot": "sink_lookup_pilot.json",
+                "sink_lookup_result": "sink_lookup_result.json",
+                "downstream_duplicate_assessment": "downstream_duplicate_assessment.json",
+                "sink_apply_pilot_bundle": "sink_apply_pilot_bundle.json",
+                "sink_write_pilot": "sink_write_pilot.json",
+                "sink_apply_result": "sink_apply_result.json",
+                "sink_readback_pilot": "sink_readback_pilot.json",
+                "sink_apply_pilot_report": "sink_apply_pilot_report.json",
+            }.items()
+        }
+        payload = {
+            "schema": "business-card-watchdog.live-pilot-closeout.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "status": state,
+            "reason": (
+                "selected live pilot evidence is complete for the approved scope"
+                if state == "complete"
+                else "selected live pilot closeout is missing required evidence"
+            ),
+            "run_id": run_id,
+            "job_id": job_id,
+            "job_state": job.get("state"),
+            "sink": sink or None,
+            "operator": operator or None,
+            "scope": scope,
+            "required_artifacts": required_artifacts,
+            "missing_artifacts": missing_artifacts,
+            "blocked_reasons": blocked_reasons,
+            "writes_attempted": writes_attempted,
+            "network_calls_made": network_calls_made,
+            "lookup": {
+                "status": selected_lookup_smoke.get("lookup_status") or (artifacts["sink_lookup_pilot"] or {}).get("status"),
+                "match_count": selected_lookup_smoke.get("lookup_match_count")
+                or (artifacts["sink_lookup_pilot"] or {}).get("match_count", 0),
+                "result_redacted": selected_lookup_smoke.get("result_redacted")
+                or bool((artifacts["sink_lookup_pilot"] or {}).get("execution_redacted", False)),
+                "downstream_duplicate_state": duplicate.get("state"),
+            },
+            "write": {
+                "state": write_pilot.get("state"),
+                "simulated": write_pilot.get("simulated"),
+                "resource_id": (write_pilot.get("write") or {}).get("resource_id"),
+            },
+            "readback": {
+                "state": readback_pilot.get("state"),
+                "simulated": readback_pilot.get("simulated"),
+                "matched": (readback_pilot.get("readback") or {}).get("matched"),
+                "resource_id": (readback_pilot.get("readback") or {}).get("resource_id"),
+            },
+            "apply_report": {
+                "state": apply_report.get("state"),
+                "path": artifact_paths["sink_apply_pilot_report"],
+            },
+            "artifact_paths": artifact_paths,
+            "remediation": self._pilot_bundle_remediation(sink or "unknown"),
+            "commands": {
+                "selected_target_audit": f"sinks selected-target-audit {job_id} --run-id {run_id} --json",
+                "lookup_smoke": f"sinks execute-lookup-smoke {job_id} --run-id {run_id} --json",
+                "apply_pilot_report": f"sinks apply-pilot-report {job_id} --run-id {run_id} --json",
+                "closeout": f"sinks live-pilot-closeout {job_id} --run-id {run_id} --json",
+            },
+            "explicit_stop_conditions": [
+                "Do not run another live write until this closeout is complete or explicitly abandoned.",
+                "Do not proceed if required artifacts name a different run, job, sink, operator, or scope.",
+                "Do not paste raw downstream contact rows, credentials, tenant state, or private card data into the repo.",
+                "Inspect downstream contacts manually before retrying any failed write or readback.",
+            ],
+        }
+        if write:
+            closeout_path = artifact_dir / "live_pilot_closeout.json"
+            closeout_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            ledger = RunLedger(self.config.runs_dir / run_id)
+            ledger.record_artifact(job_id=job_id, kind="live_pilot_closeout", path=closeout_path)
+            ledger.record_event(
+                "live_pilot_closeout_created",
+                {
+                    "job_id": job_id,
+                    "run_id": run_id,
+                    "closeout_path": str(closeout_path),
+                    "state": state,
+                    "writes_attempted": writes_attempted,
+                    "network_calls_made": network_calls_made,
+                },
+            )
+            self._mark_route_artifact_refreshed(
+                artifact_dir,
+                job_id=job_id,
+                run_id=run_id,
+                kind="live_pilot_closeout",
+            )
+            payload["closeout_path"] = str(closeout_path)
+        return {"closeout_path": payload.get("closeout_path"), "report": payload}
 
     def build_sink_apply_pilot_bundle_for_job(
         self,

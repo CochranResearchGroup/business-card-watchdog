@@ -186,3 +186,31 @@ Validation:
 - `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed; index is up to date.
+
+### Slice 0009-A5 | 2026-06-14 | Live Pilot Closeout Report
+
+Implemented:
+
+- Added `business-card-watchdog.live-pilot-closeout.v1`.
+- Added service `BusinessCardService.build_live_pilot_closeout_for_job`.
+- Added CLI `bcw sinks live-pilot-closeout`.
+- Added API `POST /jobs/{job_id}/live-pilot-closeout`.
+- Added MCP tool `business_card_watchdog_live_pilot_closeout`.
+- The closeout report composes selected-target approval, selected-target audit, lookup smoke evidence, downstream duplicate assessment, write/readback pilot evidence, apply-pilot report state, artifact links, stop conditions, and remediation notes.
+
+Safety:
+
+- This slice is closeout evidence only.
+- It can write `live_pilot_closeout.json`, but it does not create or modify `selected_live_target.json` and does not execute lookup, write, or readback pilots.
+- It records only the already persisted `writes_attempted` and `network_calls_made` counters from pilot artifacts.
+- It does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+- `.venv/bin/python -m pytest -q` passed with 209 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.

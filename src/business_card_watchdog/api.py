@@ -135,6 +135,10 @@ def create_app(config_path: Path | None = None):
         readback: dict[str, object] = Field(default_factory=dict)
         simulate: bool = True
 
+    class LivePilotCloseoutRequest(BaseModel):
+        run_id: str
+        write: bool = True
+
     class RunNextActionsRequest(BaseModel):
         run_id: str | None = None
         limit: int = 10
@@ -527,6 +531,17 @@ def create_app(config_path: Path | None = None):
             approved_by=request.approved_by,
             readback=dict(request.readback),
             simulate=request.simulate,
+        )
+
+    @app.post("/jobs/{job_id}/live-pilot-closeout")
+    def create_live_pilot_closeout(
+        job_id: str,
+        request: LivePilotCloseoutRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().build_live_pilot_closeout_for_job(
+            job_id=job_id,
+            run_id=request.run_id,
+            write=request.write,
         )
 
     @app.post("/jobs/{job_id}/downstream-duplicate-assessment")

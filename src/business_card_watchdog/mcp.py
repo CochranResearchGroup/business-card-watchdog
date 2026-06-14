@@ -546,6 +546,19 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_live_pilot_closeout",
+                "description": "Create or preview a no-network live pilot closeout report from selected-target, lookup, write, and readback evidence.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "job_id": {"type": "string"},
+                        "run_id": {"type": "string"},
+                        "write": {"type": "boolean", "default": True},
+                    },
+                    "required": ["job_id", "run_id"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_downstream_duplicate_assessment",
                 "description": "Assess sink lookup results into a review-blocking downstream duplicate artifact.",
                 "input_schema": {
@@ -926,6 +939,12 @@ def call_tool(
             approved_by=str(args["approved_by"]),
             readback=dict(args.get("readback") or {}),
             simulate=bool(args.get("simulate", True)),
+        )
+    if tool_name == "business_card_watchdog_live_pilot_closeout":
+        return service.build_live_pilot_closeout_for_job(
+            job_id=str(args["job_id"]),
+            run_id=str(args["run_id"]),
+            write=bool(args.get("write", True)),
         )
     if tool_name == "business_card_watchdog_downstream_duplicate_assessment":
         return service.assess_downstream_duplicates_for_job(

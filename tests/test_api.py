@@ -72,6 +72,13 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert selected_audit["schema"] == "business-card-watchdog.selected-live-target-audit.v1"
     assert selected_audit["selected_target_exists"] is True
     assert selected_audit["writes_attempted"] == 0
+    closeout = client.post(
+        f"/jobs/{job_id}/live-pilot-closeout",
+        json={"run_id": run_id, "write": False},
+    ).json()
+    assert closeout["report"]["schema"] == "business-card-watchdog.live-pilot-closeout.v1"
+    assert closeout["report"]["state"] == "incomplete"
+    assert closeout["report"]["writes_attempted"] == 0
     assert client.get("/runs").json()[0]["run_id"] == run_id
     assert client.get(f"/runs/{run_id}").json()["run_id"] == run_id
     assert client.get(f"/runs/{run_id}/summary").json()["needs_review_count"] == 1

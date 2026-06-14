@@ -165,6 +165,7 @@ Prepare and run readback:
   --no-simulate \
   --json
 .venv/bin/bcw sinks apply-pilot-report <job-id> --run-id <run-id> --json
+.venv/bin/bcw sinks live-pilot-closeout <job-id> --run-id <run-id> --json
 ```
 
 Use `--sink odoo` for an Odollo/Odoo readback pilot.
@@ -175,6 +176,7 @@ Completion evidence:
 - `sink_write_pilot.json` exists and records the expected sink/resource ID.
 - `sink_readback_pilot.json` exists and reports `state = verified`.
 - `sink_apply_pilot_report.json` reports complete state for the selected sink.
+- `live_pilot_closeout.json` reports complete state for the selected scope or names missing evidence.
 - Run phase report no longer points to missing write/readback pilot evidence for the selected job.
 
 Stop conditions:

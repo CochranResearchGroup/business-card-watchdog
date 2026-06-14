@@ -506,6 +506,11 @@ def build_parser() -> argparse.ArgumentParser:
     sinks_readback_pilot.add_argument("--readback-json", default="{}")
     sinks_readback_pilot.add_argument("--simulate", action=argparse.BooleanOptionalAction, default=True)
     sinks_readback_pilot.add_argument("--json", action="store_true")
+    sinks_live_pilot_closeout = sinks_sub.add_parser("live-pilot-closeout")
+    sinks_live_pilot_closeout.add_argument("job_id")
+    sinks_live_pilot_closeout.add_argument("--run-id", required=True)
+    sinks_live_pilot_closeout.add_argument("--no-write", action="store_true")
+    sinks_live_pilot_closeout.add_argument("--json", action="store_true")
     sinks_assess_duplicates = sinks_sub.add_parser("assess-duplicates")
     sinks_assess_duplicates.add_argument("job_id")
     sinks_assess_duplicates.add_argument("--run-id", required=True)
@@ -890,6 +895,12 @@ def main(argv: list[str] | None = None) -> int:
                 approved_by=args.approved_by,
                 readback=json.loads(args.readback_json),
                 simulate=args.simulate,
+            )
+        elif args.sinks_command == "live-pilot-closeout":
+            payload = service.build_live_pilot_closeout_for_job(
+                job_id=args.job_id,
+                run_id=args.run_id,
+                write=not args.no_write,
             )
         else:
             payload = service.assess_downstream_duplicates_for_job(

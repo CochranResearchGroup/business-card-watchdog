@@ -1824,6 +1824,17 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert Path(audit["audit_path"]).exists()
     assert any(artifact["kind"] == "selected_live_target_audit" for artifact in service.list_artifacts(run_id))
 
+    closeout = service.build_live_pilot_closeout_for_job(job_id=job_id, run_id=run_id)
+    assert closeout["report"]["schema"] == "business-card-watchdog.live-pilot-closeout.v1"
+    assert closeout["report"]["state"] == "incomplete"
+    assert closeout["report"]["sink"] == "google_contacts"
+    assert closeout["report"]["operator"] == "tester"
+    assert "selected_lookup_smoke" in closeout["report"]["missing_artifacts"]
+    assert closeout["report"]["writes_attempted"] == 0
+    assert closeout["report"]["network_calls_made"] == 0
+    assert Path(closeout["closeout_path"]).exists()
+    assert any(artifact["kind"] == "live_pilot_closeout" for artifact in service.list_artifacts(run_id))
+
     result = service.execute_sink_lookup_pilot_for_job(
         job_id=job_id,
         run_id=run_id,
