@@ -62,7 +62,13 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert live_packet["writes_attempted"] == 0
     selected = client.post(
         f"/jobs/{job_id}/selected-live-target",
-        json={"run_id": run_id, "sink": "google_contacts", "operator": "api-test", "scope": "lookup"},
+        json={
+            "run_id": run_id,
+            "sink": "google_contacts",
+            "operator": "api-test",
+            "scope": "lookup",
+            "safety_confirmation": "fixture contact is safe for google contacts test profile",
+        },
     ).json()
     assert selected["target"]["schema"] == "business-card-watchdog.selected-live-target.v1"
     selected_audit = client.post(
@@ -357,7 +363,13 @@ def test_api_sink_readback_pilot_writes_zero_write_artifact(tmp_path: Path) -> N
     assert bundle["bundle"]["writes_attempted"] == 0
     selected_target = client.post(
         f"/jobs/{job_id}/selected-live-target",
-        json={"run_id": run_id, "sink": "google_contacts", "operator": "api-test", "scope": "all"},
+        json={
+            "run_id": run_id,
+            "sink": "google_contacts",
+            "operator": "api-test",
+            "scope": "all",
+            "safety_confirmation": "fixture contact is safe for google contacts test profile",
+        },
     ).json()
     assert selected_target["target"]["schema"] == "business-card-watchdog.selected-live-target.v1"
     assert selected_target["target"]["operator"] == "api-test"
@@ -546,7 +558,13 @@ def test_api_executes_sink_lookup_pilot_with_mocked_matches(tmp_path: Path, monk
     monkeypatch.setattr(service_module, "execute_sink_lookup_adapter", execute_lookup)
     selected = client.post(
         f"/jobs/{job_id}/selected-live-target",
-        json={"run_id": run_id, "sink": "google_contacts", "operator": "api-operator", "scope": "lookup"},
+        json={
+            "run_id": run_id,
+            "sink": "google_contacts",
+            "operator": "api-operator",
+            "scope": "lookup",
+            "safety_confirmation": "fixture contact is safe for google contacts test profile",
+        },
     ).json()
     smoke = client.post(f"/jobs/{job_id}/selected-lookup-smoke", json={"run_id": run_id}).json()
     assert selected["target"]["schema"] == "business-card-watchdog.selected-live-target.v1"

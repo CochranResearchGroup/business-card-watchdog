@@ -1105,6 +1105,7 @@ def test_service_write_pilot_writes_simulated_apply_result(tmp_path: Path) -> No
         sink="google_contacts",
         operator="tester",
         scope="write",
+        safety_confirmation="fixture contact is safe for google contacts test profile",
     )
 
     pilot = service.execute_sink_write_pilot_for_job(
@@ -1200,6 +1201,7 @@ def test_service_write_pilot_uses_injected_executor(tmp_path: Path) -> None:
         sink="google_contacts",
         operator="tester",
         scope="write",
+        safety_confirmation="fixture contact is safe for google contacts test profile",
     )
 
     pilot = service.execute_sink_write_pilot_for_job(
@@ -1481,6 +1483,7 @@ def test_service_readback_pilot_uses_injected_executor(tmp_path: Path) -> None:
         sink="google_contacts",
         operator="tester",
         scope="readback",
+        safety_confirmation="fixture contact is safe for google contacts test profile",
     )
 
     pilot = service.execute_sink_readback_pilot_for_job(
@@ -1731,6 +1734,7 @@ def test_service_lookup_pilot_uses_injected_read_only_executor(tmp_path: Path) -
         sink="google_contacts",
         operator="operator",
         scope="lookup",
+        safety_confirmation="fixture contact is safe for google contacts test profile",
     )
 
     payload = service.execute_sink_lookup_pilot_for_job(
@@ -1777,6 +1781,19 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
 
     try:
+        service.select_live_target_for_job(
+            job_id=job_id,
+            run_id=run_id,
+            sink="google_contacts",
+            operator="tester",
+            scope="lookup",
+        )
+    except ValueError as exc:
+        assert "safety confirmation" in str(exc)
+    else:
+        raise AssertionError("expected safety confirmation gate")
+
+    try:
         service.execute_sink_lookup_pilot_for_job(
             job_id=job_id,
             run_id=run_id,
@@ -1796,6 +1813,7 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
         operator="tester",
         scope="lookup",
         reason="fixture live lookup approval",
+        safety_confirmation="fixture contact is safe for google contacts test profile",
     )
     payload = target["target"]
     job = service.get_job(job_id, run_id=run_id)
@@ -1805,6 +1823,8 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert payload["scope_allows"]["lookup"] is True
     assert payload["scope_allows"]["write"] is False
     assert payload["operator"] == "tester"
+    assert payload["target_safety_confirmed"] is True
+    assert payload["target_safety_confirmation"] == "fixture contact is safe for google contacts test profile"
     assert payload["writes_attempted"] == 0
     assert payload["network_calls_made"] == 0
     assert Path(target["target_path"]).exists()
@@ -1817,6 +1837,7 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert audit["selected_target_exists"] is True
     assert audit["sink"] == "google_contacts"
     assert audit["operator"] == "tester"
+    assert audit["target_safety_confirmed"] is True
     assert audit["writes_attempted"] == 0
     assert audit["network_calls_made"] == 0
     assert "lookup:reviewed_contact_exists" in audit["blocked_reasons"]
@@ -1900,6 +1921,7 @@ def test_service_selected_lookup_smoke_imports_redacted_duplicate_evidence(tmp_p
         sink="google_contacts",
         operator="tester",
         scope="lookup",
+        safety_confirmation="fixture contact is safe for google contacts test profile",
     )
 
     smoke = service.execute_selected_lookup_smoke_for_job(job_id=job_id, run_id=run_id)
@@ -1934,6 +1956,7 @@ def test_service_live_pilot_abandonment_blocks_abandoned_selected_target(tmp_pat
         sink="google_contacts",
         operator="tester",
         scope="lookup",
+        safety_confirmation="fixture contact is safe for google contacts test profile",
     )
 
     abandonment = service.live_pilot_abandon_for_job(

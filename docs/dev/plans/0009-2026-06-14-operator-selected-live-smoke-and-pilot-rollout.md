@@ -41,7 +41,7 @@ Before any live call, the operator must provide or create all of:
 The durable approval artifact is `selected_live_target.json`, created by:
 
 ```bash
-bcw sinks select-live-target <job-id> --run-id <run-id> --sink <sink> --operator <operator> --scope lookup
+bcw sinks select-live-target <job-id> --run-id <run-id> --sink <sink> --operator <operator> --scope lookup --safety-confirmation "<confirmation>"
 ```
 
 ## Execution Slices
@@ -70,7 +70,7 @@ Recommended subagent split:
 
 ## Acceptance Criteria
 
-- No live call occurs without matching `selected_live_target.json`.
+- No live call occurs without matching `selected_live_target.json` that includes tenant/profile safety confirmation.
 - Lookup smoke results are redacted before persistence.
 - Strong downstream duplicates block write pilots until reviewed or resolved.
 - Write and readback remain one job and one sink.
@@ -292,6 +292,32 @@ Safety:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_live_pilot_abandonment_blocks_abandoned_selected_target tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+- `.venv/bin/python -m pytest -q` passed with 211 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+### Slice 0009-A9 | 2026-06-14 | Selected Target Safety Confirmation Gate
+
+Implemented:
+
+- `bcw sinks select-live-target` now requires `--safety-confirmation`.
+- API `POST /jobs/{job_id}/selected-live-target` now requires `safety_confirmation`.
+- MCP `business_card_watchdog_selected_live_target` now requires `safety_confirmation`.
+- Selected target artifacts now persist `target_safety_confirmed` and `target_safety_confirmation`.
+- Selected target audits and non-simulated selected-target gates now reject selected targets that lack tenant/profile safety confirmation.
+- Generated selection commands now include a safety-confirmation placeholder.
+
+Safety:
+
+- This slice strengthens approval evidence only.
+- It does not create selected targets from generic continuation, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_service.py::test_service_live_pilot_abandonment_blocks_abandoned_selected_target tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
 - `.venv/bin/python -m pytest -q` passed with 211 tests.
 - `.venv/bin/ruff check .` passed.
 - `uv build --out-dir dist` passed.

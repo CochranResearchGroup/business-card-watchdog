@@ -195,6 +195,7 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
         sink="google_contacts",
         operator="tester",
         scope="lookup",
+        safety_confirmation="fixture contact is safe for google contacts test profile",
     )
 
     assert (
@@ -983,6 +984,8 @@ def test_cli_sinks_apply_decision_writes_zero_write_artifact(tmp_path: Path, cap
                 "cli-test",
                 "--scope",
                 "all",
+                "--safety-confirmation",
+                "fixture contact is safe for google contacts test profile",
                 "--json",
             ]
         )

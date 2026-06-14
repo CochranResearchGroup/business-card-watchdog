@@ -193,6 +193,7 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
             "sink": "google_contacts",
             "operator": "mcp-test",
             "scope": "all",
+            "safety_confirmation": "fixture contact is safe for google contacts test profile",
         },
         config=config,
     )
@@ -501,7 +502,13 @@ def test_mcp_selected_lookup_smoke_uses_selected_target(tmp_path: Path, monkeypa
     )
     call_tool(
         "business_card_watchdog_selected_live_target",
-        {"job_id": job_id, "run_id": run_id, "sink": "google_contacts", "operator": "mcp-smoke"},
+        {
+            "job_id": job_id,
+            "run_id": run_id,
+            "sink": "google_contacts",
+            "operator": "mcp-smoke",
+            "safety_confirmation": "fixture contact is safe for google contacts test profile",
+        },
         config=config,
     )
     smoke = call_tool(

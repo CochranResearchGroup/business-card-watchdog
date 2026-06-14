@@ -508,8 +508,9 @@ def tool_manifest() -> dict[str, object]:
                         "operator": {"type": "string"},
                         "scope": {"type": "string", "enum": ["lookup", "write", "readback", "all"], "default": "lookup"},
                         "reason": {"type": "string"},
+                        "safety_confirmation": {"type": "string"},
                     },
-                    "required": ["job_id", "run_id", "sink", "operator"],
+                    "required": ["job_id", "run_id", "sink", "operator", "safety_confirmation"],
                 },
             },
             {
@@ -958,6 +959,7 @@ def call_tool(
             operator=str(args["operator"]),
             scope=str(args.get("scope") or "lookup"),
             reason=str(args.get("reason") or ""),
+            safety_confirmation=str(args["safety_confirmation"]),
         )
     if tool_name == "business_card_watchdog_selected_live_target_audit":
         return service.selected_live_target_audit(

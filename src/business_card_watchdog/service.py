@@ -1959,6 +1959,7 @@ class BusinessCardService:
         operator: str,
         scope: str = "lookup",
         reason: str = "",
+        safety_confirmation: str = "",
     ) -> dict[str, Any]:
         if sink not in {"google_contacts", "odoo"}:
             raise ValueError("selected live target requires sink google_contacts or odoo")
@@ -1966,6 +1967,8 @@ class BusinessCardService:
             raise ValueError("selected live target scope must be lookup, write, readback, or all")
         if not operator.strip():
             raise ValueError("selected live target requires an operator")
+        if not safety_confirmation.strip():
+            raise ValueError("selected live target requires tenant/profile safety confirmation")
         job = self.get_job(job_id, run_id=run_id)
         artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
         lookup_readiness = None
@@ -1998,6 +2001,8 @@ class BusinessCardService:
             "operator": operator,
             "approved_by": operator,
             "scope": scope,
+            "target_safety_confirmed": True,
+            "target_safety_confirmation": safety_confirmation,
             "scope_allows": {
                 "lookup": scope in {"lookup", "all"},
                 "write": scope in {"write", "all"},
@@ -2030,6 +2035,7 @@ class BusinessCardService:
                 "the live command names a different run, job, sink, operator, or scope",
                 "readiness artifacts are stale or reference a different sink",
                 "operator did not explicitly request the non-simulated command after this record was created",
+                "operator did not confirm the selected card/contact is safe for the target tenant/profile",
                 "public-web search, paid enrichment, or duplicate merge decisions would be needed first",
             ],
             "operator_note": (
@@ -2049,6 +2055,7 @@ class BusinessCardService:
                 "sink": sink,
                 "operator": operator,
                 "scope": scope,
+                "target_safety_confirmed": True,
                 "target_path": str(target_path),
                 "writes_attempted": 0,
                 "network_calls_made": 0,
@@ -2096,6 +2103,8 @@ class BusinessCardService:
                     mismatches.append(f"{key}={target.get(key)!r}")
             if sink not in {"google_contacts", "odoo"}:
                 mismatches.append(f"sink={sink!r}")
+            if not target.get("target_safety_confirmed") or not target.get("target_safety_confirmation"):
+                mismatches.append("target_safety_confirmation=missing")
             allows = dict(target.get("scope_allows") or {})
             if requested_scope == "all":
                 if not all(bool(allows.get(name)) for name in ["lookup", "write", "readback"]):
@@ -2132,6 +2141,8 @@ class BusinessCardService:
             "selected_target": target,
             "sink": sink or None,
             "operator": operator or None,
+            "target_safety_confirmed": bool((target or {}).get("target_safety_confirmed")),
+            "target_safety_confirmation": (target or {}).get("target_safety_confirmation"),
             "mismatches": mismatches,
             "blocked_reasons": blocked_reasons,
             "readiness": {
@@ -2158,7 +2169,7 @@ class BusinessCardService:
             "explicit_stop_conditions": [
                 "This audit is not a live execution command.",
                 "Do not run live lookup, live write, or live readback unless state is ready and the operator explicitly requests the matching command.",
-                "Do not proceed if selected_live_target.json does not match run, job, sink, operator, and scope.",
+                "Do not proceed if selected_live_target.json does not match run, job, sink, operator, scope, and target safety confirmation.",
                 "Do not process private SyncThing images, run public-web search, or call paid enrichment from this audit.",
             ],
         }
@@ -2236,7 +2247,8 @@ class BusinessCardService:
                 ),
                 "select_new_target": (
                     f"sinks select-live-target {job_id} --run-id {run_id} "
-                    "--sink <sink> --operator <operator> --scope <scope> --json"
+                    "--sink <sink> --operator <operator> --scope <scope> "
+                    "--safety-confirmation <confirmation> --json"
                 ),
             },
             "explicit_stop_conditions": [
@@ -4504,7 +4516,8 @@ class BusinessCardService:
                                 ),
                                 "select_lookup_target": (
                                     f"sinks select-live-target {entry['job_id']} --run-id {current_run_id} "
-                                    f"--sink {candidate_sink} --operator <operator> --scope lookup"
+                                    f"--sink {candidate_sink} --operator <operator> --scope lookup "
+                                    "--safety-confirmation <confirmation>"
                                 ),
                             },
                         }
@@ -4694,7 +4707,10 @@ class BusinessCardService:
                     "abandonment_reason": abandonment.get("reason"),
                     "commands": {
                         "selection_packet": f"sinks live-selection-packet {job_id} --run-id {run_id} --sink <sink> --operator <operator> --json",
-                        "select_target": f"sinks select-live-target {job_id} --run-id {run_id} --sink <sink> --operator <operator> --scope lookup --json",
+                        "select_target": (
+                            f"sinks select-live-target {job_id} --run-id {run_id} --sink <sink> "
+                            "--operator <operator> --scope lookup --safety-confirmation <confirmation> --json"
+                        ),
                         "selected_target_audit": f"sinks selected-target-audit {job_id} --run-id {run_id} --json",
                         "lookup_smoke": f"sinks execute-lookup-smoke {job_id} --run-id {run_id} --json",
                         "abandon": f"sinks abandon-live-pilot {job_id} --run-id {run_id} --operator <operator> --reason <reason> --json",
@@ -4983,7 +4999,7 @@ class BusinessCardService:
             "commands": {
                 "create_selected_target": (
                     f"sinks select-live-target {job_id} --run-id {run_id} --sink {sink} "
-                    f"--operator {operator} --scope {scope}"
+                    f"--operator {operator} --scope {scope} --safety-confirmation <confirmation>"
                     + (f" --reason {json.dumps(reason)}" if reason else "")
                 ),
                 "lookup_pilot": (
@@ -5160,6 +5176,8 @@ class BusinessCardService:
                 mismatches.append(f"{key}={target.get(key)!r}")
         if target.get("approved_by") != approved_by and target.get("operator") != approved_by:
             mismatches.append(f"operator={target.get('operator')!r}")
+        if not target.get("target_safety_confirmed") or not target.get("target_safety_confirmation"):
+            mismatches.append("target_safety_confirmation=missing")
         allows = dict(target.get("scope_allows") or {})
         if not bool(allows.get(scope)):
             mismatches.append(f"scope={target.get('scope')!r}")

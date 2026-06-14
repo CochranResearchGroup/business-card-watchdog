@@ -539,6 +539,7 @@ def build_parser() -> argparse.ArgumentParser:
     sinks_select_live_target.add_argument("--operator", required=True)
     sinks_select_live_target.add_argument("--scope", choices=["lookup", "write", "readback", "all"], default="lookup")
     sinks_select_live_target.add_argument("--reason", default="")
+    sinks_select_live_target.add_argument("--safety-confirmation", required=True)
     sinks_select_live_target.add_argument("--json", action="store_true")
     sinks_selected_target_audit = sinks_sub.add_parser("selected-target-audit")
     sinks_selected_target_audit.add_argument("job_id")
@@ -941,6 +942,7 @@ def main(argv: list[str] | None = None) -> int:
                 operator=args.operator,
                 scope=args.scope,
                 reason=args.reason,
+                safety_confirmation=args.safety_confirmation,
             )
         elif args.sinks_command == "selected-target-audit":
             payload = service.selected_live_target_audit(

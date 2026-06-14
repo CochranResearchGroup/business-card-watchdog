@@ -2579,3 +2579,31 @@ Validation:
 Safety:
 
 - This was abandonment/readback only. It can write `live_pilot_abandonment.json`, but it did not delete or modify `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+## Turn 133 | 2026-06-14
+
+Continued Plan 0009 with Slice 0009-A9.
+
+Implemented:
+
+- `BusinessCardService.select_live_target_for_job` now requires tenant/profile safety confirmation.
+- CLI `bcw sinks select-live-target` now requires `--safety-confirmation`.
+- API `POST /jobs/{job_id}/selected-live-target` now requires `safety_confirmation`.
+- MCP `business_card_watchdog_selected_live_target` now requires `safety_confirmation`.
+- Selected target artifacts persist `target_safety_confirmed` and `target_safety_confirmation`.
+- Selected target audits and non-simulated selected-target gates reject selected targets missing tenant/profile safety confirmation.
+- Generated selection commands now include a safety-confirmation placeholder.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_service.py::test_service_live_pilot_abandonment_blocks_abandoned_selected_target tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
+- `.venv/bin/python -m pytest -q` passed with 211 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was approval-evidence hardening only. It did not create selected targets from generic continuation, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.

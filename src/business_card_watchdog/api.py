@@ -113,6 +113,7 @@ def create_app(config_path: Path | None = None):
         operator: str
         scope: str = "lookup"
         reason: str = ""
+        safety_confirmation: str
 
     class SelectedLiveTargetAuditRequest(BaseModel):
         run_id: str
@@ -501,6 +502,7 @@ def create_app(config_path: Path | None = None):
             operator=request.operator,
             scope=request.scope,
             reason=request.reason,
+            safety_confirmation=request.safety_confirmation,
         )
 
     @app.post("/jobs/{job_id}/selected-live-target-audit")
