@@ -1735,6 +1735,8 @@ Implemented:
 - Added `docs/operations/release-readiness.md`.
 - Documented pre-release gates, branch-protection readback, private-artifact check, annotated tag command, GitHub release command, and v0.1.0 release notes.
 - Linked the release-readiness runbook from README.
+- Added public repository topics: `app-intelligence`, `business-cards`, `contacts`, `google-workspace`, `mcp`, `ocr`, and `odoo`.
+- Published annotated tag and GitHub release `v0.1.0`.
 
 Validation:
 
@@ -1746,6 +1748,10 @@ Validation:
 - `gh api repos/CochranResearchGroup/business-card-watchdog/branches/main/protection --jq '{strict:.required_status_checks.strict, contexts:.required_status_checks.contexts, allow_force_pushes:.allow_force_pushes.enabled, allow_deletions:.allow_deletions.enabled}'` confirmed strict checks, disabled force pushes, and disabled deletion.
 - `git ls-files | rg '(\.env|secret|credential|token|\.key|\.pem|\.p12|\.sqlite|\.db|\.jpg|\.jpeg|\.png|\.heic)' || true` returned no tracked private-artifact paths.
 - `rg -n 'release-readiness|v0.1.0|Initial public source release|Paid enrichment remains explicitly requested' README.md docs/operations/release-readiness.md docs/dev/plans/0006-2026-06-14-public-upstream-hardening.md RUNBOOK.md` passed.
+- Latest pre-release CI run `27507317451` passed `Test, lint, and build` and `Secret scan`.
+- `git ls-remote --tags upstream v0.1.0` returned `refs/tags/v0.1.0`.
+- `gh release view v0.1.0 --repo CochranResearchGroup/business-card-watchdog --json tagName,name,url,isDraft,isPrerelease,publishedAt,targetCommitish` confirmed a published non-draft, non-prerelease release.
+- `gh repo view CochranResearchGroup/business-card-watchdog --json repositoryTopics,description,visibility,url` confirmed the public repository topics.
 
 ## Turn 98 | 2026-06-14
 
