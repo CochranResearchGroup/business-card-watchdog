@@ -730,6 +730,11 @@ def test_service_plan_sinks_for_job_writes_dry_run_plan(tmp_path: Path) -> None:
     assert result["plan"]["state"] == "dry_run"
     assert [action["sink"] for action in result["plan"]["actions"]] == ["google_contacts", "odoo"]
     assert result["plan"]["actions"][0]["match_keys"]["email"] == "ada@example.test"
+    assert result["plan"]["route_explanation"]["schema"] == "business-card-watchdog.route-explanation.v1"
+    assert result["plan"]["route_explanation"]["matched_rules"][0]["reason"] == "matched email_domain=example.test"
+    assert result["plan"]["sink_eligibility"][0]["sink"] == "google_contacts"
+    assert result["plan"]["sink_eligibility"][0]["route_eligible"] is True
+    assert result["plan"]["sink_eligibility"][0]["apply_approval_required"] is True
     assert any(artifact["kind"] == "sink_plan" for artifact in job["artifacts"])
 
 

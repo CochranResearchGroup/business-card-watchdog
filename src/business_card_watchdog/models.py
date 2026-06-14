@@ -148,6 +148,7 @@ class SinkDecision:
     state: SinkActionState = "planned"
     fingerprint: str | None = None
     matched_rule: dict[str, Any] | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

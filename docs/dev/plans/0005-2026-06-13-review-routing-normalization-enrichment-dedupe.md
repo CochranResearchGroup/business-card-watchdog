@@ -210,6 +210,33 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed and reported the index is up to date.
 
+### Slice 0005-D | 2026-06-14 | Explainable Route Policy
+
+Implemented:
+
+- Added `business-card-watchdog.route-explanation.v1` decision metadata.
+- Recorded configured sinks, route context, matched rules, and excluded rules with reasons.
+- Extended route rules beyond email domain to support organization, source folder, tenant, duplicate state, and review state predicates.
+- Added sink eligibility reports that keep route eligibility separate from apply approval.
+- Persisted route explanation and sink eligibility into `sink_plan.json` and `sink_lookup_plan.json`.
+- Added service route context from current job image path, review state, and local/downstream duplicate assessment state.
+
+Safety:
+
+- This slice is local route-policy and artifact-readback work only.
+- No public-web search, paid enrichment provider, GWS, Odollo/Odoo, or live sink calls are made.
+- Route eligibility remains separate from write approval; live writes stay gated by existing explicit apply/pilot checks.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_routing.py tests/test_service.py::test_service_plan_sinks_for_job_writes_dry_run_plan tests/test_service.py::test_service_plan_sink_lookup_for_job_writes_zero_network_plan -q` passed with 6 tests.
+- `.venv/bin/python -m pytest -q` passed with 183 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed and reported the index is up to date.
+
 ## Workstreams
 
 ### WS1. Review Surface And Operator Queue

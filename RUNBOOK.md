@@ -1980,3 +1980,29 @@ Validation:
 Safety:
 
 - This was local identity-index and review-artifact work only. It made no public-web search, paid enrichment, GWS, Odollo/Odoo, or live sink calls.
+
+## Turn 109 | 2026-06-14
+
+Continued Plan 0005 execution with the explainable route-policy slice.
+
+Implemented:
+
+- Added `business-card-watchdog.route-explanation.v1` metadata to route decisions.
+- Recorded configured sinks, route context, matched rules, and excluded rules with reasons.
+- Added route predicates for organization, source folder, tenant, duplicate state, and review state while preserving email-domain behavior.
+- Added sink eligibility reports that keep route eligibility separate from apply approval.
+- Persisted route explanation and sink eligibility into `sink_plan.json` and `sink_lookup_plan.json`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_routing.py tests/test_service.py::test_service_plan_sinks_for_job_writes_dry_run_plan tests/test_service.py::test_service_plan_sink_lookup_for_job_writes_zero_network_plan -q` passed with 6 tests.
+- `.venv/bin/python -m pytest -q` passed with 183 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed and reported the index is up to date.
+
+Safety:
+
+- This was local route-policy and artifact-readback work only. It made no public-web search, paid enrichment, GWS, Odollo/Odoo, or live sink calls.

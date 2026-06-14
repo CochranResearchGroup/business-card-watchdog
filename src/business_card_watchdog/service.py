@@ -1889,6 +1889,7 @@ class BusinessCardService:
         job = self.get_job(job_id, run_id=run_id)
         artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
         spec = self._contact_spec_for_artifact_dir(artifact_dir)
+        self._add_route_context(spec, job=job, artifact_dir=artifact_dir)
         decision = decide_sinks(self.config, spec)
         plan = build_sink_plan(
             sinks=decision.sinks,
@@ -1900,6 +1901,8 @@ class BusinessCardService:
         plan["job_id"] = job_id
         plan["run_id"] = run_id
         plan["decision"] = decision.to_dict()
+        plan["route_explanation"] = decision.metadata.get("route_explanation")
+        plan["sink_eligibility"] = decision.metadata.get("sink_eligibility", [])
         duplicate_resolution_path = artifact_dir / "duplicate_resolution.json"
         if duplicate_resolution_path.exists():
             plan["duplicate_resolution"] = json.loads(duplicate_resolution_path.read_text(encoding="utf-8"))
@@ -1929,6 +1932,7 @@ class BusinessCardService:
         job = self.get_job(job_id, run_id=run_id)
         artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
         spec = self._contact_spec_for_artifact_dir(artifact_dir)
+        self._add_route_context(spec, job=job, artifact_dir=artifact_dir)
         decision = decide_sinks(self.config, spec)
         plan = build_sink_lookup_plan(
             sinks=decision.sinks,
@@ -1939,6 +1943,8 @@ class BusinessCardService:
         plan["job_id"] = job_id
         plan["run_id"] = run_id
         plan["decision"] = decision.to_dict()
+        plan["route_explanation"] = decision.metadata.get("route_explanation")
+        plan["sink_eligibility"] = decision.metadata.get("sink_eligibility", [])
         lookup_plan_path = artifact_dir / "sink_lookup_plan.json"
         lookup_plan_path.write_text(json.dumps(plan, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         ledger = RunLedger(self.config.runs_dir / run_id)
@@ -2938,6 +2944,22 @@ class BusinessCardService:
             "google_contacts": {"profile": self.config.sink.google_contacts_profile},
             "odoo": {"tenant": self.config.sink.odollo_tenant},
         }
+
+    def _add_route_context(self, spec: dict[str, Any], *, job: dict[str, Any], artifact_dir: Path) -> None:
+        spec["_image_path"] = str(job.get("image_path") or "")
+        spec["_review_state"] = str(job.get("state") or "")
+        duplicate_payload = self._load_first_existing_json(
+            artifact_dir / "downstream_duplicate_assessment.json",
+            artifact_dir / "duplicate_assessment.json",
+        )
+        if duplicate_payload:
+            spec["_duplicate_state"] = str(duplicate_payload.get("state") or "")
+
+    def _load_first_existing_json(self, *paths: Path) -> dict[str, Any] | None:
+        for path in paths:
+            if path.exists():
+                return json.loads(path.read_text(encoding="utf-8"))
+        return None
 
     def _artifact_bundle_entry(self, record: dict[str, Any]) -> dict[str, Any]:
         path = Path(str(record.get("path") or ""))
