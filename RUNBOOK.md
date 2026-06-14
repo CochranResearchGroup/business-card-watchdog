@@ -1668,6 +1668,8 @@ Validation:
 - `uv build --out-dir dist` built source and wheel distributions.
 - `gitleaks detect --source . --no-banner --redact --exit-code 1` scanned 92 commits and found no leaks.
 - First upstream workflow run failed before this adjustment because the CI runner lacked the user-scoped skill and `gitleaks/gitleaks-action@v2` required an organization license.
+- Second upstream workflow run passed for both jobs: `Test, lint, and build` and `Secret scan`.
+- Configured `main` branch protection requiring both CI jobs, with force-push and deletion disabled.
 
 ## Turn 98 | 2026-06-14
 

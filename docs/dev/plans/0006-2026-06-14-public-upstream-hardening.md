@@ -46,7 +46,6 @@ Important gaps:
 
 - No GitHub Actions workflow exists yet.
 - No public CI gate runs pytest, lint, packaging, or leak scanning on push/PR.
-- No GitHub branch protection/ruleset has been configured from this repo.
 - No issue/PR templates exist for public or subagent work.
 - Clean-clone installation has not been validated from the public upstream.
 - Live read-only lookup and one-job write/readback pilots still need explicit selected targets and local auth.
@@ -165,7 +164,30 @@ Validation:
 - `uv build --out-dir dist` built sdist and wheel artifacts.
 - `gitleaks detect --source . --no-banner --redact --exit-code 1` scanned 92 commits and found no leaks.
 - First upstream workflow run failed because GitHub CI lacked the user-scoped skill root and `gitleaks/gitleaks-action@v2` requires an organization license.
+- Second upstream workflow run passed for both required jobs: `Test, lint, and build` and `Secret scan`.
 
 Remaining:
 
-- Configure branch protection/rulesets after the first workflow run exists on GitHub.
+- Public collaboration templates remain the next repository-hardening slice.
+
+### Slice 0006-C | 2026-06-14 | Main Branch Protection
+
+Implemented:
+
+- Confirmed `main` initially had no branch protection and the repository had no rulesets.
+- Configured branch protection for `main` with strict required status checks.
+- Required checks are:
+  - `Test, lint, and build`
+  - `Secret scan`
+- Disabled force pushes and branch deletion.
+- Left admin enforcement disabled so repository administrators can still perform emergency maintenance.
+
+Validation:
+
+- `gh api repos/CochranResearchGroup/business-card-watchdog/branches/main/protection` returned the configured protection object.
+- Required status check contexts resolve to the GitHub Actions app.
+
+Remaining:
+
+- Add public collaboration templates in Slice 0006-B.
+- Add a clean-clone `uv` install validation slice.
