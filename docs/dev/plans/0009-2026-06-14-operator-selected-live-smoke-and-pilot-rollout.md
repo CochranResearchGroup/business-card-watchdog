@@ -229,6 +229,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_service.py::test_service_live_pilot_closeout_requires_selected_target_audit tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
 
+### Slice 0009-A15 | 2026-06-14 | Closeout Rejects Stale Selected Target Audit
+
+Implemented:
+
+- `BusinessCardService.build_live_pilot_closeout_for_job` now verifies that `selected_live_target_audit.json` matches the selected run, job, sink, operator, and scope.
+- Closeout blocks when the selected target audit was created for a different scope or stale selected-target context.
+- This prevents a lookup-only audit from being reused as closeout evidence for an `all`, `write`, or `readback` pilot scope.
+
+Safety:
+
+- This slice validates closeout evidence only.
+- It does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It strengthens stale-artifact detection for final pilot evidence.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_live_pilot_closeout_requires_selected_target_audit tests/test_service.py::test_service_live_pilot_closeout_rejects_stale_selected_target_audit_scope tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

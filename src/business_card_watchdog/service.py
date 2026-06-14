@@ -3965,6 +3965,17 @@ class BusinessCardService:
         missing_artifacts = [name for name in required_artifacts if artifacts.get(name) is None]
         blocked_reasons = list(missing_artifacts)
         if selected_target_audit:
+            for key, expected in [
+                ("run_id", run_id),
+                ("job_id", job_id),
+                ("sink", sink or None),
+                ("operator", operator or None),
+                ("scope", scope),
+            ]:
+                if selected_target_audit.get(key) != expected:
+                    blocked_reasons.append(
+                        f"selected_target_audit:{key}={selected_target_audit.get(key)!r}"
+                    )
             audit_mismatches = list(selected_target_audit.get("mismatches") or [])
             blocked_reasons.extend(f"selected_target_audit:{reason}" for reason in audit_mismatches)
             if selected_target_audit.get("target_safety_confirmed") is False:

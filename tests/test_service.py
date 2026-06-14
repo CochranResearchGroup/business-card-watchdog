@@ -2033,6 +2033,35 @@ def test_service_live_pilot_closeout_requires_selected_target_audit(tmp_path: Pa
     assert audited["report"]["selected_target_audit"]["target_safety_confirmed"] is True
 
 
+def test_service_live_pilot_closeout_rejects_stale_selected_target_audit_scope(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.select_live_target_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        operator="tester",
+        scope="all",
+        safety_confirmation="fixture contact is safe for google contacts test profile",
+    )
+    service.selected_live_target_audit(job_id=job_id, run_id=run_id, scope="lookup")
+
+    stale_audit = service.build_live_pilot_closeout_for_job(job_id=job_id, run_id=run_id, write=False)
+
+    assert "selected_target_audit:scope='lookup'" in stale_audit["report"]["blocked_reasons"]
+
+    service.selected_live_target_audit(job_id=job_id, run_id=run_id, scope="all")
+    aligned_audit = service.build_live_pilot_closeout_for_job(job_id=job_id, run_id=run_id, write=False)
+
+    assert "selected_target_audit:scope='lookup'" not in aligned_audit["report"]["blocked_reasons"]
+
+
 def test_service_selected_lookup_smoke_imports_redacted_duplicate_evidence(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",
