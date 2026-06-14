@@ -464,6 +464,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 2 tests.
 
+### Slice 0009-A28 | 2026-06-14 | Hide Stale Abandonment Identity After Replacement
+
+Implemented:
+
+- Live selection requirements now report an abandonment identity only when it matches the current selected target.
+- Live pilot status and handoff now suppress stale abandonment identity after an abandoned target has been replaced.
+- Replacement tests now prove the active replacement target is reported without carrying the previous target's abandonment identity.
+
+Safety:
+
+- This slice changes report interpretation only.
+- It does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It prevents operators from confusing a historical abandonment artifact with the current selected target.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_select_live_target_requires_abandonment_before_replacement tests/test_service.py::test_service_live_pilot_abandonment_blocks_abandoned_selected_target -q` passed with 2 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

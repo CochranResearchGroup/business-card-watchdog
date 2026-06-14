@@ -4870,9 +4870,10 @@ class BusinessCardService:
                 == _selected_target_identity(selected_target)
             )
             selected_target_identity = _selected_target_identity(selected_target)
-            abandonment_identity = str(
+            raw_abandonment_identity = str(
                 abandonment.get("selected_target_identity") or abandonment.get("selected_target_created_at") or ""
             )
+            abandonment_identity = raw_abandonment_identity if target_abandoned else ""
             target_safety_confirmed = bool(
                 selected_target.get("target_safety_confirmed")
                 and str(selected_target.get("target_safety_confirmation") or "").strip()
@@ -5044,9 +5045,10 @@ class BusinessCardService:
                 == _selected_target_identity(selected_target)
             )
             selected_target_identity = _selected_target_identity(selected_target)
-            abandonment_identity = str(
+            raw_abandonment_identity = str(
                 abandonment.get("selected_target_identity") or abandonment.get("selected_target_created_at") or ""
             )
+            abandonment_identity = raw_abandonment_identity if target_abandoned else ""
             selected_target_audit_blockers = self._selected_target_audit_context_mismatches(
                 selected_target=selected_target,
                 selected_target_audit=selected_target_audit,

@@ -2514,6 +2514,16 @@ def test_service_select_live_target_requires_abandonment_before_replacement(tmp_
     artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
     persisted = json.loads((artifact_dir / "selected_live_target.json").read_text(encoding="utf-8"))
     assert persisted["scope"] == "all"
+    requirements = service.live_selection_requirements(run_id=run_id, sink="google_contacts", write=False)
+    status = service.live_pilot_status(run_id=run_id, write=False)
+    handoff = service.live_pilot_handoff(run_id=run_id, write=False)
+    assert requirements["entries"][0]["selected_target_identity"] == replacement["target"]["selection_id"]
+    assert requirements["entries"][0]["selected_target_abandoned"] is False
+    assert requirements["entries"][0]["abandonment_identity"] is None
+    assert status["entries"][0]["selected_target_identity"] == replacement["target"]["selection_id"]
+    assert status["entries"][0]["abandonment_identity"] is None
+    assert handoff["entries"][0]["selected_target_identity"] == replacement["target"]["selection_id"]
+    assert handoff["entries"][0]["abandonment_identity"] is None
 
 
 def test_service_live_pilot_status_does_not_double_count_closeout_totals(tmp_path: Path) -> None:
