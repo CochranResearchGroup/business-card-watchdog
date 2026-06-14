@@ -29,6 +29,10 @@ Preflight:
 Prepare selected-target approval evidence:
 
 ```bash
+.venv/bin/bcw live-selection-requirements \
+  --run-id <run-id> \
+  --sink google_contacts \
+  --no-write
 .venv/bin/bcw sinks live-selection-packet \
   <job-id> \
   --run-id <run-id> \
@@ -51,7 +55,7 @@ Prepare selected-target approval evidence:
 .venv/bin/bcw runs live-pilot-status <run-id> --no-write
 ```
 
-Use `--sink odoo` when the read-only smoke target is Odollo/Odoo. The packet must show `existing_selected_target.can_select_replacement_now = true` before selecting a replacement; if it shows `replacement_requires_abandonment = true`, run `abandon-live-pilot` for the old target first and then prepare a new packet.
+Use `--sink odoo` when the read-only smoke target is Odollo/Odoo. Start with `live-selection-requirements` when you need candidate-specific packet and approval commands. The packet must show `existing_selected_target.can_select_replacement_now = true` before selecting a replacement; if it shows `replacement_requires_abandonment = true`, run `abandon-live-pilot` for the old target first and then prepare a new packet.
 Add `--json` to review commands when you need to archive the full structured artifact.
 
 Prepare lookup artifacts:
@@ -138,6 +142,10 @@ Required prior evidence:
 Prepare or refresh selected-target approval evidence:
 
 ```bash
+.venv/bin/bcw live-selection-requirements \
+  --run-id <run-id> \
+  --sink google_contacts \
+  --no-write
 .venv/bin/bcw sinks live-selection-packet \
   <job-id> \
   --run-id <run-id> \
@@ -160,7 +168,7 @@ Prepare or refresh selected-target approval evidence:
 .venv/bin/bcw runs live-pilot-status <run-id> --no-write
 ```
 
-If a lookup-only selected target already exists, record `abandon-live-pilot` with the reason for replacement before selecting the broader `all` scope target. Do not hand-edit selected-target artifacts.
+Start with `live-selection-requirements` when you need candidate-specific packet and approval commands. If a lookup-only selected target already exists, record `abandon-live-pilot` with the reason for replacement before selecting the broader `all` scope target. Do not hand-edit selected-target artifacts.
 Add `--json` to review commands when you need to archive the full structured artifact.
 
 Prepare apply artifacts:

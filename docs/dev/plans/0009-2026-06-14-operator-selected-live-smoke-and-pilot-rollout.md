@@ -795,6 +795,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_live_selection_requirements_reports_text_and_json -q` passed with 1 test.
 
+### Slice 0009-A46 | 2026-06-14 | Make Selection Requirements the Operator Front Door
+
+Implemented:
+
+- README and live-pilot checklists now start selected-target approval evidence with `bcw live-selection-requirements --no-write`.
+- Lookup and write/readback checklist paths now tell operators to use the requirements report for candidate-specific packet and approval commands.
+- The selected-target approval command remains explicit and JSON-producing because it creates durable approval evidence.
+
+Safety:
+
+- This slice changes operator documentation only.
+- It does not create selected targets, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It keeps the documented workflow aligned with the no-call requirements report before any selected-target approval.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_live_selection_requirements_reports_text_and_json -q` passed with 1 test.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:
