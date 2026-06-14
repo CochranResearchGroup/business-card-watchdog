@@ -120,6 +120,33 @@ def _render_job_show_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_runs_list_text(entries: list[dict[str, object]]) -> str:
+    lines = [f"Runs: {len(entries)}"]
+    for entry in entries:
+        lines.append(
+            " - "
+            f"{entry.get('run_id')} "
+            f"state={entry.get('state')} "
+            f"jobs={entry.get('job_count')} "
+            f"updated={entry.get('updated_at') or 'unknown'}"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _render_run_show_text(payload: dict[str, object]) -> str:
+    jobs = payload.get("jobs") or []
+    artifacts = payload.get("artifacts") or []
+    lines = [
+        f"Run: {payload.get('run_id')}",
+        f"State: {payload.get('state')}",
+        f"Jobs: {payload.get('job_count')}",
+        f"Loaded jobs: {len(jobs) if isinstance(jobs, list) else 0}",
+        f"Artifacts: {len(artifacts) if isinstance(artifacts, list) else 0}",
+        f"Run dir: {payload.get('run_dir')}",
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="bcw")
     parser.add_argument("--config", type=Path, default=None)
@@ -422,6 +449,12 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.runs_command == "summary" and not args.json:
             print(_render_run_summary_text(payload), end="")
+            return 0
+        if args.runs_command == "list" and not args.json:
+            print(_render_runs_list_text(payload), end="")
+            return 0
+        if args.runs_command == "show" and not args.json:
+            print(_render_run_show_text(payload), end="")
             return 0
         print(json.dumps(payload, indent=2) if args.json else payload)
         return 0

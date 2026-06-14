@@ -41,6 +41,19 @@ def test_cli_runs_and_jobs_use_recorded_runtime_state(
     assert main(["--config", str(config_path), "runs", "list", "--json"]) == 0
     runs = json.loads(capsys.readouterr().out)
     assert runs[0]["run_id"] == run_id
+    assert main(["--config", str(config_path), "runs", "list"]) == 0
+    runs_text = capsys.readouterr().out
+    assert "Runs: 1" in runs_text
+    assert f"{run_id} state=waiting_for_review jobs=1" in runs_text
+    assert "{" not in runs_text
+    assert main(["--config", str(config_path), "runs", "show", run_id]) == 0
+    run_text = capsys.readouterr().out
+    assert f"Run: {run_id}" in run_text
+    assert "State: waiting_for_review" in run_text
+    assert "Jobs: 1" in run_text
+    assert "Loaded jobs: 1" in run_text
+    assert "Artifacts: 1" in run_text
+    assert "{" not in run_text
 
     assert main(["--config", str(config_path), "runs", "summary", run_id, "--json"]) == 0
     summary = json.loads(capsys.readouterr().out)

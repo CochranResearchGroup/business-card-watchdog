@@ -2396,3 +2396,23 @@ Validation:
 Remaining:
 
 - Future work can decide whether `runs list` and `runs show` need similar text renderers, or whether run discovery should stay JSON-first.
+
+### Slice 0004-CC | 2026-06-14 | CLI Run List And Show Text Summaries
+
+Implemented:
+
+- Added human-readable text rendering for non-JSON `bcw runs list`.
+- Added human-readable text rendering for non-JSON `bcw runs show`.
+- Run list output includes run count plus compact rows with run id, state, job count, and updated timestamp.
+- Run show output includes run id, state, job count, loaded job count, artifact count, and run directory.
+- `--json` run list/show output remains unchanged for automation.
+- Added CLI regression coverage to prevent raw Python list/dict output from returning for run list/show surfaces.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state -q` passed with 1 test.
+- `python -m py_compile src/business_card_watchdog/cli.py tests/test_cli_surfaces.py` passed.
+
+Remaining:
+
+- Core run/review/job CLI discovery and dashboard paths now have human-readable non-JSON output while retaining JSON automation surfaces.
