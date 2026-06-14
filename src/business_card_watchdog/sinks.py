@@ -676,6 +676,9 @@ def _payload_for_sink(sink: str, spec: dict[str, Any], fingerprint: str) -> dict
         "website": _normalize_value(spec.get("website")),
         "notes": _normalize_value(spec.get("notes")),
     }
+    field_provenance = _field_provenance_from_spec(spec, common)
+    if field_provenance:
+        common["field_provenance"] = field_provenance
     contact_points = _contact_points_from_spec(spec)
     if contact_points:
         common["contact_points"] = contact_points
@@ -688,6 +691,45 @@ def _payload_for_sink(sink: str, spec: dict[str, Any], fingerprint: str) -> dict
     return {
         "operation": "upsert_contact",
         "values": common,
+    }
+
+
+def _field_provenance_from_spec(spec: dict[str, Any], values: dict[str, Any]) -> dict[str, Any]:
+    provided = spec.get("_field_provenance")
+    if isinstance(provided, dict):
+        return {
+            field: payload
+            for field, payload in provided.items()
+            if field in FINGERPRINT_FIELDS and isinstance(payload, dict) and values.get(field)
+        }
+    canonical = spec.get("_canonical_contact")
+    fields = canonical.get("fields") if isinstance(canonical, dict) and isinstance(canonical.get("fields"), dict) else {}
+    if fields:
+        return {
+            field: {
+                "source": payload.get("selected_source") or "unknown",
+                "confidence": payload.get("confidence") or "unknown",
+                "reason": payload.get("reason") or "",
+                "provenance": list(payload.get("provenance") or []),
+            }
+            for field, payload in fields.items()
+            if field in FINGERPRINT_FIELDS and isinstance(payload, dict) and values.get(field)
+        }
+    return {
+        field: {
+            "source": "flat_spec",
+            "confidence": "unknown",
+            "reason": "contact was supplied as a flat spec without canonical provenance",
+            "provenance": [
+                {
+                    "stage": "flat",
+                    "source": "flat_spec",
+                    "value": values[field],
+                }
+            ],
+        }
+        for field in FINGERPRINT_FIELDS
+        if values.get(field)
     }
 
 

@@ -1,8 +1,10 @@
 from business_card_watchdog.contact import (
+    CANONICAL_CONTACT_SCHEMA,
     ENRICHMENT_MERGE_REVIEW_SCHEMA,
     REVIEWED_CONTACT_SCHEMA,
     apply_enrichment_proposals,
     build_contact_candidate,
+    canonical_contact_to_spec,
     contact_candidate_to_spec,
     apply_review_corrections,
 )
@@ -56,6 +58,12 @@ def test_contact_candidate_preserves_observed_and_normalizes_common_fields() -> 
         "given": "Ada",
         "family": "Lovelace",
     }
+    assert candidate["canonical"]["schema"] == CANONICAL_CONTACT_SCHEMA
+    assert candidate["canonical"]["fields"]["email"]["selected_source"] == "business_card_skill"
+    assert candidate["canonical"]["fields"]["email"]["provenance"][0]["stage"] == "observed"
+    assert candidate["canonical"]["fields"]["email"]["provenance"][1]["stage"] == "normalized"
+    assert candidate["provenance_diagnostics"]["review_field_count"] == 0
+    assert canonical_contact_to_spec(candidate["canonical"])["website"] == "https://example.test"
     assert contact_candidate_to_spec(candidate)["email"] == "ada@example.test"
 
 
@@ -95,6 +103,8 @@ def test_review_corrections_create_reviewed_contact_without_losing_observed_fiel
     assert reviewed["observed"]["organization"]["value"] == "Fixture Labs"
     assert reviewed["observed"]["full_name"]["source"] == "operator_review"
     assert reviewed["normalized"]["email"]["value"] == "grace@example.test"
+    assert reviewed["canonical"]["fields"]["full_name"]["selected_source"] == "reviewer_correction"
+    assert reviewed["canonical"]["fields"]["full_name"]["provenance"][-1]["stage"] == "reviewed"
     assert reviewed["contact_points"][0]["source"] == "operator_review"
     assert reviewed["extras"]["linkedin"] == "linkedin.com/in/grace-hopper"
     assert {
@@ -173,6 +183,8 @@ def test_enrichment_proposals_apply_only_approved_fields() -> None:
     assert merge_review["applied"][0]["field"] == "notes"
     assert merge_review["skipped"][0]["field"] == "title"
     assert reviewed["observed"]["notes"]["source"] == "approved_enrichment"
+    assert reviewed["canonical"]["fields"]["notes"]["selected_source"] == "approved_enrichment"
+    assert reviewed["canonical"]["fields"]["notes"]["provenance"][-1]["stage"] == "enriched"
     assert "Card note" in reviewed["flat"]["notes"]
     assert "corroboration" in reviewed["flat"]["notes"]
     assert reviewed["extras"]["profile_url"] == "example.test/ada"

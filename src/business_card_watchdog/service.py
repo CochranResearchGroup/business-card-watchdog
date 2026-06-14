@@ -11,8 +11,10 @@ from .config import AppConfig, ensure_runtime_dirs
 from .contact import (
     apply_enrichment_proposals,
     apply_review_corrections,
+    build_canonical_contact,
     build_contact_candidate,
     contact_candidate_to_spec,
+    field_provenance_from_canonical,
 )
 from .dedupe import assess_downstream_lookup_result
 from .enrichment import (
@@ -2895,12 +2897,18 @@ class BusinessCardService:
         if reviewed_path.exists():
             reviewed = json.loads(reviewed_path.read_text(encoding="utf-8"))
             spec = contact_candidate_to_spec(reviewed)
+            canonical = reviewed.get("canonical") or build_canonical_contact(reviewed)
+            spec["_canonical_contact"] = canonical
+            spec["_field_provenance"] = field_provenance_from_canonical(canonical)
             if isinstance(reviewed.get("contact_points"), list):
                 spec["contact_points"] = list(reviewed["contact_points"])
             return spec
         if candidate_path.exists():
             candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
             spec = contact_candidate_to_spec(candidate)
+            canonical = candidate.get("canonical") or build_canonical_contact(candidate)
+            spec["_canonical_contact"] = canonical
+            spec["_field_provenance"] = field_provenance_from_canonical(canonical)
             if isinstance(candidate.get("contact_points"), list):
                 spec["contact_points"] = list(candidate["contact_points"])
             return spec

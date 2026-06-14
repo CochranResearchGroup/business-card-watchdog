@@ -157,6 +157,33 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed and reported the index is up to date.
 
+### Slice 0005-B | 2026-06-14 | Canonical Contact Provenance
+
+Implemented:
+
+- Added `business-card-watchdog.canonical-contact.v1` as a stable canonical view inside contact candidate and reviewed contact artifacts.
+- Added per-field provenance chains for observed card data, normalized values, reviewer corrections, and approved enrichment values.
+- Added provenance diagnostics that count fields needing review and summarize selected field sources.
+- Preserved the existing flat contact spec contract for CLI/API/sink compatibility.
+- Added service-loaded `_canonical_contact` and `_field_provenance` metadata so downstream dedupe/routing still read flat fields while sink planning can cite field evidence.
+- Added `field_provenance` to dry-run sink payload values, including a conservative `flat_spec` fallback for callers that provide direct flat specs.
+
+Safety:
+
+- This slice is local schema and payload-readback work only.
+- No public-web search, paid enrichment provider, GWS, Odollo/Odoo, or live sink calls are made.
+- Sink write behavior remains gated; provenance is attached to planned payloads but does not approve or execute writes.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_contact.py tests/test_sinks.py tests/test_service.py::test_service_run_summary_and_review_queue tests/test_service.py::test_service_review_bundle_includes_sink_pilot_status -q` passed with 26 tests.
+- `.venv/bin/python -m pytest -q` passed with 180 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed and reported the index is up to date.
+
 ## Workstreams
 
 ### WS1. Review Surface And Operator Queue

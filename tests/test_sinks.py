@@ -136,6 +136,43 @@ def test_build_sink_payloads_include_match_keys_and_readiness() -> None:
             "label": "linkedin_url",
         }
     ]
+    assert payloads[0].payload["values"]["field_provenance"]["email"]["source"] == "flat_spec"
+
+
+def test_build_sink_payloads_preserve_canonical_field_provenance() -> None:
+    payloads = build_sink_payloads(
+        sinks=["google_contacts"],
+        spec={
+            "full_name": "Ada Lovelace",
+            "email": "ada@example.test",
+            "_field_provenance": {
+                "full_name": {
+                    "source": "reviewer_correction",
+                    "confidence": "observed",
+                    "reason": "trimmed whitespace",
+                    "provenance": [
+                        {"stage": "observed", "source": "business_card_skill", "value": "A. Lovelace"},
+                        {"stage": "reviewed", "source": "operator_review", "value": "Ada Lovelace"},
+                    ],
+                },
+                "email": {
+                    "source": "business_card_skill",
+                    "confidence": "high",
+                    "reason": "lowercased email address",
+                    "provenance": [
+                        {"stage": "observed", "source": "business_card_skill", "value": "ADA@EXAMPLE.TEST"},
+                        {"stage": "normalized", "source": "business_card_skill", "value": "ada@example.test"},
+                    ],
+                },
+            },
+        },
+        dry_run=True,
+    )
+
+    values = payloads[0].payload["values"]
+    assert values["field_provenance"]["full_name"]["source"] == "reviewer_correction"
+    assert values["field_provenance"]["full_name"]["provenance"][-1]["stage"] == "reviewed"
+    assert values["field_provenance"]["email"]["confidence"] == "high"
 
 
 def test_build_sink_plan_is_dry_run_and_action_oriented() -> None:

@@ -1928,3 +1928,29 @@ Validation:
 Safety:
 
 - This was a readback/reporting slice only. It made no public-web search, paid enrichment, GWS, Odollo/Odoo, or live sink calls.
+
+## Turn 107 | 2026-06-14
+
+Continued Plan 0005 execution with the canonical-contact provenance slice.
+
+Implemented:
+
+- Added `business-card-watchdog.canonical-contact.v1` inside contact candidate and reviewed contact artifacts.
+- Added per-field provenance chains for observed card data, normalization, reviewer corrections, and approved enrichment values.
+- Added provenance diagnostics for review-needed fields and selected source counts.
+- Preserved the existing flat contact spec while adding service-loaded `_canonical_contact` and `_field_provenance` metadata for downstream planning.
+- Added `field_provenance` to dry-run sink payload values so planned writes can cite field sources.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_contact.py tests/test_sinks.py tests/test_service.py::test_service_run_summary_and_review_queue tests/test_service.py::test_service_review_bundle_includes_sink_pilot_status -q` passed with 26 tests.
+- `.venv/bin/python -m pytest -q` passed with 180 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed and reported the index is up to date.
+
+Safety:
+
+- This was local schema and payload-readback work only. It made no public-web search, paid enrichment, GWS, Odollo/Odoo, or live sink calls.
