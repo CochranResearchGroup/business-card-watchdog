@@ -996,7 +996,16 @@ class BusinessCardService:
                 kinds = {str(artifact.get("kind")) for artifact in artifacts}
                 action = self._next_action_for_job(job, kinds)
                 if action is not None:
-                    actions.append({"run_id": current_run_id, "job_id": job["job_id"], **action})
+                    action_name = str(action.get("action") or "")
+                    actions.append(
+                        {
+                            "run_id": current_run_id,
+                            "job_id": job["job_id"],
+                            **action,
+                            "safe_to_auto_continue": action_name in _SAFE_NEXT_ACTIONS,
+                            "requires_explicit_operator_action": action_name in _EXPLICIT_OPERATOR_ACTIONS,
+                        }
+                    )
                 if len(actions) >= limit:
                     break
             if len(actions) >= limit:
@@ -1044,6 +1053,15 @@ class BusinessCardService:
             "skipped": skipped,
             "executed_count": len(executed),
             "skipped_count": len(skipped),
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "safe_auto_actions": sorted(_SAFE_NEXT_ACTIONS),
+            "explicit_operator_actions": sorted(_EXPLICIT_OPERATOR_ACTIONS),
+            "operator_stop_conditions": [
+                "Do not execute skipped actions from run-next without explicit operator approval.",
+                "Do not run live lookup, live write, or live readback from deterministic safe continuation.",
+                "Do not process private SyncThing images, run public-web search, or call paid enrichment from run-next.",
+            ],
             "phase_report_before": phase_report_before,
             "phase_report_after": phase_report_after,
         }

@@ -587,6 +587,8 @@ def test_service_next_actions_recommends_review_for_needs_review_job(tmp_path: P
     assert payload["action_count"] == 1
     assert payload["actions"][0]["job_id"] == job_id
     assert payload["actions"][0]["action"] == "review_contact"
+    assert payload["actions"][0]["safe_to_auto_continue"] is False
+    assert payload["actions"][0]["requires_explicit_operator_action"] is True
 
 
 def test_service_status_and_sink_readiness_are_structured(tmp_path: Path) -> None:
@@ -2986,6 +2988,14 @@ def test_service_run_next_actions_executes_safe_steps_until_manual_decision(tmp_
     ]
     assert payload["skipped"][0]["action"] == "decide_sink_apply"
     assert payload["skipped"][0]["status"] == "skipped"
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert "plan_sink_lookup" in payload["safe_auto_actions"]
+    assert "execute_sink_write_pilot" in payload["explicit_operator_actions"]
+    assert any("Do not run live lookup" in condition for condition in payload["operator_stop_conditions"])
+    assert all(item["safe_to_auto_continue"] is True for item in payload["executed"])
+    assert payload["skipped"][0]["safe_to_auto_continue"] is False
+    assert payload["skipped"][0]["requires_explicit_operator_action"] is True
     assert payload["phase_report_before"]["schema"] == "business-card-watchdog.phase-report.v1"
     assert payload["phase_report_before"]["phases"][5]["phase"] == "route"
     assert payload["phase_report_after"]["schema"] == "business-card-watchdog.phase-report.v1"
@@ -3340,6 +3350,8 @@ def test_service_next_actions_recommends_live_apply_after_decision(tmp_path: Pat
 
     assert payload["actions"][0]["action"] == "prepare_sink_apply_pilot_readiness"
     assert payload["actions"][0]["command"] == "sinks apply-pilot-readiness"
+    assert payload["actions"][0]["safe_to_auto_continue"] is True
+    assert payload["actions"][0]["requires_explicit_operator_action"] is False
 
     readiness = service.build_sink_apply_pilot_readiness_for_job(job_id=job_id, run_id=run_id)
     next_payload = service.next_actions(run_id=run_id)
@@ -3356,6 +3368,8 @@ def test_service_next_actions_recommends_live_apply_after_decision(tmp_path: Pat
     assert "readback_adapter_available_after_apply" in readiness["readiness"]["live_missing_requirements"]
     assert next_payload["actions"][0]["action"] == "execute_sink_write_pilot"
     assert next_payload["actions"][0]["command"] == "sinks write-pilot"
+    assert next_payload["actions"][0]["safe_to_auto_continue"] is False
+    assert next_payload["actions"][0]["requires_explicit_operator_action"] is True
 
 
 def test_service_next_actions_recommends_readback_adapter_request_after_apply_result(tmp_path: Path) -> None:

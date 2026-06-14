@@ -850,6 +850,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_live_target_candidates_reports_text_and_json -q` passed with 1 test.
 
+### Slice 0009-A49 | 2026-06-14 | Expose Safe Continuation Policy
+
+Implemented:
+
+- `next_actions` now labels each action with `safe_to_auto_continue` and `requires_explicit_operator_action`.
+- `run_next_actions` now returns sink/live operation counters, the safe-auto action set, the explicit-operator action set, and stop conditions for subagent orchestration.
+- Service and CLI tests now assert that deterministic safe actions are auto-continuable while review/live/manual actions remain explicit operator actions.
+
+Safety:
+
+- This slice exposes policy metadata only.
+- It does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- `run_next_actions` continues to stop at explicit operator actions and reports zero sink writes and zero network calls from deterministic safe continuation.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_next_actions_recommends_review_for_needs_review_job tests/test_service.py::test_service_run_next_actions_executes_safe_steps_until_manual_decision tests/test_service.py::test_service_next_actions_recommends_live_apply_after_decision tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_cli_surfaces.py::test_cli_jobs_review_records_submission -q` passed with 5 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

@@ -833,6 +833,8 @@ def test_cli_runs_and_jobs_use_recorded_runtime_state(
     )
     next_actions = json.loads(capsys.readouterr().out)
     assert next_actions["actions"][0]["action"] == "plan_sink_lookup"
+    assert next_actions["actions"][0]["safe_to_auto_continue"] is True
+    assert next_actions["actions"][0]["requires_explicit_operator_action"] is False
 
 
 def test_cli_jobs_review_records_submission(tmp_path: Path, capsys) -> None:
@@ -889,6 +891,11 @@ def test_cli_jobs_review_records_submission(tmp_path: Path, capsys) -> None:
         "plan_sink_lookup",
         "prepare_sink_lookup_adapter",
     ]
+    assert actions["writes_attempted"] == 0
+    assert actions["network_calls_made"] == 0
+    assert "plan_sink_lookup" in actions["safe_auto_actions"]
+    assert "execute_sink_write_pilot" in actions["explicit_operator_actions"]
+    assert all(item["safe_to_auto_continue"] is True for item in actions["executed"])
     assert actions["phase_report_before"]["schema"] == "business-card-watchdog.phase-report.v1"
     assert actions["phase_report_after"]["schema"] == "business-card-watchdog.phase-report.v1"
 
