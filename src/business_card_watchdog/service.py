@@ -4919,7 +4919,7 @@ class BusinessCardService:
                     "commands": {
                         "selection_packet": (
                             f"sinks live-selection-packet {candidate_job_id} --run-id {candidate_run_id} "
-                            f"--sink {candidate_sink} --operator <operator> --json"
+                            f"--sink {candidate_sink} --operator <operator>"
                         ),
                         "select_target": (
                             f"sinks select-live-target {candidate_job_id} --run-id {candidate_run_id} "
@@ -4962,19 +4962,16 @@ class BusinessCardService:
                     "live-target-candidates"
                     + (f" --run-id {run_id}" if run_id else "")
                     + (f" --sink {selected_sink}" if selected_sink else "")
-                    + " --json"
                 ),
                 "live_readiness_audit": (
                     "live-readiness-audit"
                     + (f" --run-id {run_id}" if run_id else "")
                     + (f" --sink {selected_sink}" if selected_sink else "")
-                    + " --json"
                 ),
                 "live_selection_requirements": (
                     "live-selection-requirements"
                     + (f" --run-id {run_id}" if run_id else "")
                     + (f" --sink {selected_sink}" if selected_sink else "")
-                    + " --json"
                 ),
             },
             "explicit_stop_conditions": [

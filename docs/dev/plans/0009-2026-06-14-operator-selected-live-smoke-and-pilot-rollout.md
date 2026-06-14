@@ -759,6 +759,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_service.py::test_service_live_pilot_closeout_rejects_stale_selected_target_evidence -q` passed with 2 tests.
 
+### Slice 0009-A44 | 2026-06-14 | Align Selection Requirements Commands With Text Reviews
+
+Implemented:
+
+- Live selection requirements now generate text-mode review/readiness commands for selection packets, live target candidates, live readiness audits, and the requirements report itself.
+- Durable selected-target approval remains an explicit JSON command because it creates `selected_live_target.json`.
+- CLI and service tests now pin both filtered and unfiltered requirements command maps.
+
+Safety:
+
+- This slice changes generated next-step command text only.
+- It does not create selected targets, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It keeps live execution gated by selected-target approval and explicit operator commands.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_live_selection_requirements_reports_text_and_json tests/test_service.py::test_service_live_selection_requirements_report_writes_run_level_artifact -q` passed with 2 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:
