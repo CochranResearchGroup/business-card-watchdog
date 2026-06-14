@@ -4597,6 +4597,12 @@ class BusinessCardService:
                     + (f" --sink {selected_sink}" if selected_sink else "")
                     + " --json"
                 ),
+                "selection_requirements": (
+                    "live-selection-requirements"
+                    + (f" --run-id {run_id}" if run_id else "")
+                    + (f" --sink {selected_sink}" if selected_sink else "")
+                    + " --json"
+                ),
             },
             "explicit_stop_conditions": [
                 "Do not create selected_live_target.json from this audit alone.",
@@ -4624,6 +4630,200 @@ class BusinessCardService:
                 },
             )
             payload["audit_path"] = str(audit_path)
+        return payload
+
+    def live_selection_requirements(
+        self,
+        *,
+        run_id: str | None = None,
+        sink: str | None = None,
+        write: bool = True,
+    ) -> dict[str, Any]:
+        selected_sink = str(sink or "").strip()
+        if selected_sink and selected_sink not in {"google_contacts", "odoo"}:
+            raise ValueError("live selection requirements require sink google_contacts or odoo")
+        candidates_payload = self.live_target_candidates(run_id=run_id, sink=selected_sink or None)
+        requirement_fields = [
+            {
+                "name": "run_id",
+                "source": "candidate",
+                "required": True,
+                "description": "Operator-selected run containing the reviewed card job.",
+            },
+            {
+                "name": "job_id",
+                "source": "candidate",
+                "required": True,
+                "description": "Operator-selected business card job within the run.",
+            },
+            {
+                "name": "sink",
+                "source": "candidate_or_operator",
+                "required": True,
+                "allowed_values": ["google_contacts", "odoo"],
+                "description": "One selected downstream target sink.",
+            },
+            {
+                "name": "operator",
+                "source": "operator",
+                "required": True,
+                "description": "Human operator approving the selected target.",
+            },
+            {
+                "name": "scope",
+                "source": "operator",
+                "required": True,
+                "allowed_values": ["lookup", "write", "readback", "all"],
+                "default": "lookup",
+                "description": "Maximum allowed live pilot scope for this selected target.",
+            },
+            {
+                "name": "safety_confirmation",
+                "source": "operator",
+                "required": True,
+                "description": "Statement that the selected card/contact is safe for the target tenant/profile.",
+            },
+        ]
+        entries: list[dict[str, Any]] = []
+        for candidate in list(candidates_payload.get("candidates") or []):
+            if not isinstance(candidate, dict):
+                continue
+            candidate_run_id = str(candidate.get("run_id") or "")
+            candidate_job_id = str(candidate.get("job_id") or "")
+            candidate_sink = str(candidate.get("sink") or "")
+            artifact_dir = self.config.runs_dir / candidate_run_id / "artifacts" / candidate_job_id
+            selected_target = _read_json_file(artifact_dir / "selected_live_target.json") or {}
+            abandonment = _read_json_file(artifact_dir / "live_pilot_abandonment.json") or {}
+            selected_target_exists = bool(selected_target)
+            target_abandoned = (
+                selected_target_exists
+                and abandonment.get("state") == "abandoned"
+                and abandonment.get("selected_target_created_at") == selected_target.get("created_at")
+            )
+            target_safety_confirmed = bool(
+                selected_target.get("target_safety_confirmed")
+                and str(selected_target.get("target_safety_confirmation") or "").strip()
+            )
+            missing_operator_fields: list[str] = []
+            if not selected_target_exists or target_abandoned:
+                missing_operator_fields.extend(["operator", "scope", "safety_confirmation"])
+            else:
+                if not str(selected_target.get("operator") or selected_target.get("approved_by") or "").strip():
+                    missing_operator_fields.append("operator")
+                if not str(selected_target.get("scope") or "").strip():
+                    missing_operator_fields.append("scope")
+                if not target_safety_confirmed:
+                    missing_operator_fields.append("safety_confirmation")
+            if target_abandoned:
+                entry_state = "abandoned_select_new_target"
+            elif selected_target_exists and not missing_operator_fields:
+                entry_state = "selected_target_active"
+            elif candidate.get("state") == "ready_for_selection":
+                entry_state = "needs_operator_selection"
+            else:
+                entry_state = "blocked"
+            entries.append(
+                {
+                    "schema": "business-card-watchdog.live-selection-requirement.v1",
+                    "state": entry_state,
+                    "run_id": candidate_run_id,
+                    "job_id": candidate_job_id,
+                    "sink": candidate_sink,
+                    "candidate_state": candidate.get("state"),
+                    "candidate_stop_reasons": list(candidate.get("stop_reasons") or []),
+                    "selected_target_exists": selected_target_exists,
+                    "selected_target_scope": selected_target.get("scope"),
+                    "selected_target_operator": selected_target.get("operator") or selected_target.get("approved_by"),
+                    "selected_target_safety_confirmed": target_safety_confirmed,
+                    "selected_target_abandoned": target_abandoned,
+                    "missing_operator_fields": missing_operator_fields,
+                    "required_operator_fields": requirement_fields,
+                    "commands": {
+                        "selection_packet": (
+                            f"sinks live-selection-packet {candidate_job_id} --run-id {candidate_run_id} "
+                            f"--sink {candidate_sink} --operator <operator> --json"
+                        ),
+                        "select_target": (
+                            f"sinks select-live-target {candidate_job_id} --run-id {candidate_run_id} "
+                            f"--sink {candidate_sink} --operator <operator> --scope lookup "
+                            "--safety-confirmation <confirmation> --json"
+                        ),
+                    },
+                }
+            )
+        state_counts: dict[str, int] = {}
+        for entry in entries:
+            state = str(entry["state"])
+            state_counts[state] = state_counts.get(state, 0) + 1
+        state = (
+            "ready_for_operator_selection"
+            if state_counts.get("needs_operator_selection") or state_counts.get("abandoned_select_new_target")
+            else "selected_target_active"
+            if state_counts.get("selected_target_active")
+            else "needs_preparation"
+            if entries
+            else "empty"
+        )
+        payload = {
+            "schema": "business-card-watchdog.live-selection-requirements.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_id,
+            "sink": selected_sink or None,
+            "candidate_count": candidates_payload.get("candidate_count", 0),
+            "ready_candidate_count": candidates_payload.get("ready_candidate_count", 0),
+            "blocked_candidate_count": candidates_payload.get("blocked_candidate_count", 0),
+            "entry_count": len(entries),
+            "state_counts": state_counts,
+            "required_operator_fields": requirement_fields,
+            "entries": entries,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "commands": {
+                "live_target_candidates": (
+                    "live-target-candidates"
+                    + (f" --run-id {run_id}" if run_id else "")
+                    + (f" --sink {selected_sink}" if selected_sink else "")
+                    + " --json"
+                ),
+                "live_readiness_audit": (
+                    "live-readiness-audit"
+                    + (f" --run-id {run_id}" if run_id else "")
+                    + (f" --sink {selected_sink}" if selected_sink else "")
+                    + " --json"
+                ),
+                "live_selection_requirements": (
+                    "live-selection-requirements"
+                    + (f" --run-id {run_id}" if run_id else "")
+                    + (f" --sink {selected_sink}" if selected_sink else "")
+                    + " --json"
+                ),
+            },
+            "explicit_stop_conditions": [
+                "This report does not create selected_live_target.json.",
+                "Operator must provide run_id, job_id, sink, operator, scope, and safety_confirmation before any non-simulated live call.",
+                "Do not run live lookup, live write, or live readback from this report.",
+                "Do not process private SyncThing images, run public-web search, or call paid enrichment from this report.",
+            ],
+        }
+        if write and run_id:
+            requirements_path = self.config.runs_dir / run_id / "live_selection_requirements.json"
+            requirements_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            ledger = RunLedger(self.config.runs_dir / run_id)
+            ledger.record_artifact(job_id="__run__", kind="live_selection_requirements", path=requirements_path)
+            ledger.record_event(
+                "live_selection_requirements_created",
+                {
+                    "run_id": run_id,
+                    "sink": selected_sink or None,
+                    "requirements_path": str(requirements_path),
+                    "state": state,
+                    "entry_count": len(entries),
+                    "writes_attempted": 0,
+                    "network_calls_made": 0,
+                },
+            )
+            payload["requirements_path"] = str(requirements_path)
         return payload
 
     def live_pilot_status(self, *, run_id: str, write: bool = True) -> dict[str, Any]:
@@ -4748,6 +4948,7 @@ class BusinessCardService:
             "observed_network_calls_made": observed_network_calls_made,
             "commands": {
                 "live_readiness_audit": f"live-readiness-audit --run-id {run_id} --json",
+                "live_selection_requirements": f"live-selection-requirements --run-id {run_id} --json",
                 "live_target_candidates": f"live-target-candidates --run-id {run_id} --json",
                 "live_pilot_status": f"runs live-pilot-status {run_id} --json",
             },
@@ -4877,6 +5078,7 @@ class BusinessCardService:
                 "live_pilot_status": f"runs live-pilot-status {run_id} --json",
                 "live_pilot_handoff": f"runs live-pilot-handoff {run_id} --json",
                 "live_readiness_audit": f"live-readiness-audit --run-id {run_id} --json",
+                "live_selection_requirements": f"live-selection-requirements --run-id {run_id} --json",
                 "live_target_candidates": f"live-target-candidates --run-id {run_id} --json",
             },
             "operator_stop_conditions": [

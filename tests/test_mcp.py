@@ -19,6 +19,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_service_recovery" in names
     assert "business_card_watchdog_live_target_candidates" in names
     assert "business_card_watchdog_live_readiness_audit" in names
+    assert "business_card_watchdog_live_selection_requirements" in names
     assert "business_card_watchdog_live_selection_packet" in names
     assert "business_card_watchdog_runs_list" in names
     assert "business_card_watchdog_job_show" in names
@@ -111,6 +112,11 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     live_targets = call_tool("business_card_watchdog_live_target_candidates", {"run_id": run_id}, config=config)
     live_audit = call_tool(
         "business_card_watchdog_live_readiness_audit",
+        {"run_id": run_id, "write": False},
+        config=config,
+    )
+    live_requirements = call_tool(
+        "business_card_watchdog_live_selection_requirements",
         {"run_id": run_id, "write": False},
         config=config,
     )
@@ -358,6 +364,10 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert live_audit["schema"] == "business-card-watchdog.live-readiness-audit.v1"
     assert live_audit["run_id"] == run_id
     assert live_audit["writes_attempted"] == 0
+    assert live_requirements["schema"] == "business-card-watchdog.live-selection-requirements.v1"
+    assert live_requirements["run_id"] == run_id
+    assert live_requirements["writes_attempted"] == 0
+    assert live_requirements["network_calls_made"] == 0
     assert live_packet["schema"] == "business-card-watchdog.live-selection-packet.v1"
     assert live_packet["approval_state"] == "pending_operator_approval"
     assert live_packet["writes_attempted"] == 0

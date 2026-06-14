@@ -149,6 +149,41 @@ def test_service_live_readiness_audit_writes_run_level_artifact(tmp_path: Path) 
     assert any(artifact["kind"] == "live_readiness_audit" for artifact in artifacts)
 
 
+def test_service_live_selection_requirements_report_writes_run_level_artifact(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    run_id, job_id = make_recorded_run(config)
+
+    report = BusinessCardService(config).live_selection_requirements(run_id=run_id, sink="google_contacts")
+
+    assert report["schema"] == "business-card-watchdog.live-selection-requirements.v1"
+    assert report["run_id"] == run_id
+    assert report["sink"] == "google_contacts"
+    assert report["candidate_count"] == 1
+    assert report["entry_count"] == 1
+    assert report["writes_attempted"] == 0
+    assert report["network_calls_made"] == 0
+    assert {field["name"] for field in report["required_operator_fields"]} == {
+        "run_id",
+        "job_id",
+        "sink",
+        "operator",
+        "scope",
+        "safety_confirmation",
+    }
+    entry = report["entries"][0]
+    assert entry["job_id"] == job_id
+    assert entry["state"] == "blocked"
+    assert entry["missing_operator_fields"] == ["operator", "scope", "safety_confirmation"]
+    assert "select-live-target" in entry["commands"]["select_target"]
+    assert Path(report["requirements_path"]).exists()
+    artifacts = BusinessCardService(config).list_artifacts(run_id)
+    assert any(artifact["kind"] == "live_selection_requirements" for artifact in artifacts)
+
+
 def test_service_live_selection_packet_does_not_select_target(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",
@@ -1875,6 +1910,11 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert handoff["writes_attempted"] == 0
     assert handoff["network_calls_made"] == 0
     assert Path(handoff["handoff_path"]).exists()
+
+    requirements = service.live_selection_requirements(run_id=run_id, sink="google_contacts", write=False)
+    assert requirements["state"] == "selected_target_active"
+    assert requirements["entries"][0]["missing_operator_fields"] == []
+    assert requirements["entries"][0]["selected_target_safety_confirmed"] is True
 
     result = service.execute_sink_lookup_pilot_for_job(
         job_id=job_id,

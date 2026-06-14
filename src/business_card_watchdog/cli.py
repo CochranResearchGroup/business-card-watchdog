@@ -234,6 +234,37 @@ def _render_live_readiness_audit_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_live_selection_requirements_text(payload: dict[str, object]) -> str:
+    entries = payload.get("entries") or []
+    rows = entries if isinstance(entries, list) else []
+    state_counts = dict(payload.get("state_counts") or {})
+    lines = [
+        f"Live selection requirements: {payload.get('state')}",
+        f"Run: {payload.get('run_id') or 'all'}",
+        f"Sink: {payload.get('sink') or 'all'}",
+        f"Candidates: {payload.get('candidate_count', 0)}",
+        "States: "
+        + " ".join(f"{key}={value}" for key, value in sorted(state_counts.items()))
+        if state_counts
+        else "States: none",
+    ]
+    for entry in rows:
+        if not isinstance(entry, dict):
+            continue
+        missing = entry.get("missing_operator_fields") or []
+        missing_text = ",".join(str(item) for item in missing) if isinstance(missing, list) and missing else "none"
+        lines.append(
+            " - "
+            f"{entry.get('run_id')}/{entry.get('job_id')} "
+            f"sink={entry.get('sink')} "
+            f"state={entry.get('state')} "
+            f"missing={missing_text}"
+        )
+    if payload.get("requirements_path"):
+        lines.append(f"Requirements path: {payload.get('requirements_path')}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_review_queue_text(entries: list[dict[str, object]]) -> str:
     lines = [f"Review queue: {len(entries)} jobs"]
     if not entries:
@@ -337,6 +368,11 @@ def build_parser() -> argparse.ArgumentParser:
     live_readiness_audit.add_argument("--sink", choices=["google_contacts", "odoo"], default=None)
     live_readiness_audit.add_argument("--no-write", action="store_true")
     live_readiness_audit.add_argument("--json", action="store_true")
+    live_selection_requirements = sub.add_parser("live-selection-requirements")
+    live_selection_requirements.add_argument("--run-id", default=None)
+    live_selection_requirements.add_argument("--sink", choices=["google_contacts", "odoo"], default=None)
+    live_selection_requirements.add_argument("--no-write", action="store_true")
+    live_selection_requirements.add_argument("--json", action="store_true")
 
     process = sub.add_parser("process")
     process.add_argument("source")
@@ -695,6 +731,15 @@ def main(argv: list[str] | None = None) -> int:
             write=not args.no_write,
         )
         print(json.dumps(payload, indent=2) if args.json else _render_live_readiness_audit_text(payload), end="")
+        return 0
+
+    if args.command == "live-selection-requirements":
+        payload = service.live_selection_requirements(
+            run_id=args.run_id,
+            sink=args.sink,
+            write=not args.no_write,
+        )
+        print(json.dumps(payload, indent=2) if args.json else _render_live_selection_requirements_text(payload), end="")
         return 0
 
     if args.command == "process":

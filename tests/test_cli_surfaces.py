@@ -133,6 +133,37 @@ def test_cli_live_readiness_audit_reports_text_and_json(tmp_path: Path, capsys) 
     assert "{" not in text
 
 
+def test_cli_live_selection_requirements_reports_text_and_json(tmp_path: Path, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    config_path.write_text(
+        f'data_dir = "{data_dir}"\n[watch]\ninputs = []\n[sink]\ngoogle_contacts = true\n',
+        encoding="utf-8",
+    )
+    run_id, _job_id = make_recorded_run(
+        AppConfig(
+            config_path=config_path,
+            data_dir=data_dir,
+            sink=SinkConfig(google_contacts=True, dry_run=True),
+        )
+    )
+
+    assert main(["--config", str(config_path), "live-selection-requirements", "--run-id", run_id, "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["schema"] == "business-card-watchdog.live-selection-requirements.v1"
+    assert payload["candidate_count"] == 1
+    assert Path(payload["requirements_path"]).exists()
+    assert payload["network_calls_made"] == 0
+    assert payload["writes_attempted"] == 0
+
+    assert main(["--config", str(config_path), "live-selection-requirements", "--run-id", run_id, "--no-write"]) == 0
+    text = capsys.readouterr().out
+    assert "Live selection requirements:" in text
+    assert f"Run: {run_id}" in text
+    assert "missing=operator,scope,safety_confirmation" in text
+    assert "{" not in text
+
+
 def test_cli_live_selection_packet_writes_no_selected_target(tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.toml"
     data_dir = tmp_path / "data"

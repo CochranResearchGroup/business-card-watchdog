@@ -131,6 +131,30 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed; index is up to date.
 
+### Slice 0009-A10 | 2026-06-14 | Operator Selection Requirements Report
+
+Implemented:
+
+- Added `business-card-watchdog.live-selection-requirements.v1`.
+- Added service `BusinessCardService.live_selection_requirements`.
+- Added CLI `bcw live-selection-requirements`.
+- Added API `POST /live-selection-requirements`.
+- Added MCP tool `business_card_watchdog_live_selection_requirements`.
+- The report enumerates the required operator fields for live target selection: `run_id`, `job_id`, `sink`, `operator`, `scope`, and `safety_confirmation`.
+- Per candidate, the report shows selected-target existence, safety-confirmation state, abandonment state, missing operator fields, and exact selection commands.
+- Live readiness, status, and handoff command maps now point operators to the requirements report.
+
+Safety:
+
+- This slice creates only a no-network operator requirements artifact.
+- It can write `live_selection_requirements.json` under a selected run, but it does not create or modify `selected_live_target.json`.
+- It records `writes_attempted = 0` and `network_calls_made = 0`.
+- It does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_live_selection_requirements_report_writes_run_level_artifact tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_live_selection_requirements_reports_text_and_json tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:
