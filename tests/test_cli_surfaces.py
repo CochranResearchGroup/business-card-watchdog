@@ -82,6 +82,11 @@ def test_cli_runs_and_jobs_use_recorded_runtime_state(
     reviews = json.loads(capsys.readouterr().out)
     assert reviews[0]["job_id"] == job_id
     assert reviews[0]["next_action"]["action"] == "review_contact"
+    assert main(["--config", str(config_path), "reviews", "list", "--run-id", run_id]) == 0
+    review_text = capsys.readouterr().out
+    assert "Review queue: 1 jobs" in review_text
+    assert f"{job_id} state=needs_review next=review_contact artifacts=contact_spec" in review_text
+    assert "{" not in review_text
 
     assert (
         main(
@@ -103,6 +108,23 @@ def test_cli_runs_and_jobs_use_recorded_runtime_state(
     )
     filtered_reviews = json.loads(capsys.readouterr().out)
     assert [entry["job_id"] for entry in filtered_reviews] == [job_id]
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "reviews",
+                "list",
+                "--run-id",
+                run_id,
+                "--next-action",
+                "plan_sinks",
+            ]
+        )
+        == 0
+    )
+    empty_review_text = capsys.readouterr().out
+    assert empty_review_text == "Review queue: 0 jobs\n"
 
     assert main(["--config", str(config_path), "reviews", "bundle", "--run-id", run_id, "--json"]) == 0
     bundle = json.loads(capsys.readouterr().out)

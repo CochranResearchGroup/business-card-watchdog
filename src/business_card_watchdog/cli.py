@@ -70,6 +70,24 @@ def _render_run_summary_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_review_queue_text(entries: list[dict[str, object]]) -> str:
+    lines = [f"Review queue: {len(entries)} jobs"]
+    if not entries:
+        return "\n".join(lines) + "\n"
+    for entry in entries:
+        next_action = dict(entry.get("next_action") or {})
+        artifact_kinds = entry.get("artifact_kinds") or []
+        artifacts = ",".join(str(kind) for kind in artifact_kinds) if isinstance(artifact_kinds, list) else ""
+        lines.append(
+            " - "
+            f"{entry.get('job_id')} "
+            f"state={entry.get('state')} "
+            f"next={next_action.get('action') or 'none'} "
+            f"artifacts={artifacts or 'none'}"
+        )
+    return "\n".join(lines) + "\n"
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="bcw")
     parser.add_argument("--config", type=Path, default=None)
@@ -430,6 +448,9 @@ def main(argv: list[str] | None = None) -> int:
                 next_action=args.next_action,
                 artifact_kind=args.artifact_kind,
             )
+            if not args.json:
+                print(_render_review_queue_text(payload), end="")
+                return 0
         print(json.dumps(payload, indent=2) if args.json else payload)
         return 0
 
