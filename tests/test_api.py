@@ -68,6 +68,13 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     workbook_writer = csv.DictWriter(workbook_csv, fieldnames=list(workbook_rows[0]))
     workbook_writer.writeheader()
     workbook_writer.writerows(workbook_rows)
+    workbook_preview = client.post(
+        f"/runs/{run_id}/review-decisions",
+        json={"reviewer": "api-workbook", "decisions_csv": workbook_csv.getvalue(), "preview": True},
+    ).json()
+    assert workbook_preview["schema"] == "business-card-watchdog.review-workbook-preview.v1"
+    assert workbook_preview["ready_count"] == 1
+    assert workbook_preview["writes_attempted"] == 0
     workbook_import = client.post(
         f"/runs/{run_id}/review-decisions",
         json={"reviewer": "api-workbook", "decisions_csv": workbook_csv.getvalue()},

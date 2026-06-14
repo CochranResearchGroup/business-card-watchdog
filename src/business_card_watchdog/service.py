@@ -75,6 +75,16 @@ _EXPLICIT_OPERATOR_ACTIONS = {
     "resolve_duplicate",
 }
 
+_SUPPORTED_REVIEW_ACTIONS = {
+    "approve_for_routing",
+    "approve_enrichment_merge",
+    "keep_needs_review",
+    "request_enrichment",
+    "resolve_duplicate",
+    "reject_not_card",
+    "skip",
+}
+
 _ROUTE_ARTIFACT_FILES = {
     "sink_lookup_plan": "sink_lookup_plan.json",
     "sink_adapter_request_lookup": "sink_adapter_request_lookup.json",
@@ -926,15 +936,7 @@ class BusinessCardService:
         duplicate_resolution: dict[str, Any] | None = None,
         notes: str = "",
     ) -> dict[str, Any]:
-        if action not in {
-            "approve_for_routing",
-            "approve_enrichment_merge",
-            "keep_needs_review",
-            "request_enrichment",
-            "resolve_duplicate",
-            "reject_not_card",
-            "skip",
-        }:
+        if action not in _SUPPORTED_REVIEW_ACTIONS:
             raise ValueError(f"unsupported review action: {action}")
 
         job_payload = self.get_job(job_id, run_id=run_id)
@@ -1192,6 +1194,107 @@ class BusinessCardService:
         import_path = self.config.runs_dir / run_id / "review_decisions_import.json"
         import_path.write_text(json.dumps(payload["import"], indent=2, sort_keys=True) + "\n", encoding="utf-8")
         return payload
+
+    def preview_review_workbook_csv(
+        self,
+        *,
+        run_id: str,
+        csv_text: str,
+        reviewer: str = "operator",
+    ) -> dict[str, Any]:
+        try:
+            entries = self._review_workbook_decision_entries(csv_text)
+        except ValueError as exc:
+            return {
+                "schema": "business-card-watchdog.review-workbook-preview.v1",
+                "run_id": run_id,
+                "reviewer": reviewer,
+                "valid": False,
+                "row_count": 0,
+                "decision_count": 0,
+                "ready_count": 0,
+                "skipped_count": 0,
+                "error_count": 1,
+                "rows": [],
+                "errors": [{"message": str(exc)}],
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            }
+        rows: list[dict[str, Any]] = []
+        jobs_by_run: dict[str, dict[str, dict[str, Any]]] = {}
+        artifacts_by_run: dict[str, dict[str, set[str]]] = {}
+        for entry in entries:
+            row_number = int(entry["row_number"])
+            if entry.get("skipped"):
+                rows.append(
+                    {
+                        "row_number": row_number,
+                        "status": "skipped",
+                        "reason": entry.get("skip_reason") or "skip_import",
+                        "errors": [],
+                        "warnings": [],
+                    }
+                )
+                continue
+            decision = dict(entry["decision"])
+            decision_run_id = str(decision.get("run_id") or run_id)
+            job_id = str(decision.get("job_id") or "")
+            action = str(decision.get("action") or "keep_needs_review")
+            if decision_run_id not in jobs_by_run:
+                jobs_by_run[decision_run_id] = {str(job["job_id"]): job for job in self.list_jobs(decision_run_id)}
+                artifact_kinds: dict[str, set[str]] = {}
+                for artifact in self.list_artifacts(decision_run_id):
+                    artifact_kinds.setdefault(str(artifact.get("job_id") or ""), set()).add(str(artifact.get("kind") or ""))
+                artifacts_by_run[decision_run_id] = artifact_kinds
+            errors: list[str] = []
+            warnings: list[str] = []
+            artifact_kinds = artifacts_by_run[decision_run_id].get(job_id, set())
+            if job_id not in jobs_by_run[decision_run_id]:
+                errors.append(f"job not found in run {decision_run_id}: {job_id}")
+            if action not in _SUPPORTED_REVIEW_ACTIONS:
+                errors.append(f"unsupported review action: {action}")
+            if action == "approve_enrichment_merge" and "enrichment_result" not in artifact_kinds:
+                errors.append("approve_enrichment_merge requires an enrichment_result artifact")
+            if action == "resolve_duplicate":
+                if not ({"duplicate_assessment", "downstream_duplicate_assessment"} & artifact_kinds):
+                    errors.append("resolve_duplicate requires a duplicate assessment artifact")
+                if not dict(decision.get("duplicate_resolution") or {}).get("decision"):
+                    errors.append("resolve_duplicate requires duplicate_resolution.decision")
+            if action == "approve_for_routing" and "contact_candidate" not in artifact_kinds:
+                warnings.append("approve_for_routing will fall back to an empty contact candidate")
+            rows.append(
+                {
+                    "row_number": row_number,
+                    "run_id": decision_run_id,
+                    "job_id": job_id,
+                    "action": action,
+                    "status": "ready" if not errors else "error",
+                    "errors": errors,
+                    "warnings": warnings,
+                    "artifact_kinds": sorted(kind for kind in artifact_kinds if kind),
+                    "field_correction_count": len(dict(decision.get("field_corrections") or {})),
+                    "approved_enrichment_fields": list(decision.get("approved_enrichment_fields") or []),
+                    "duplicate_resolution": dict(decision.get("duplicate_resolution") or {}),
+                }
+            )
+        skipped_count = sum(1 for row in rows if row["status"] == "skipped")
+        error_count = sum(1 for row in rows if row["status"] == "error")
+        ready_count = sum(1 for row in rows if row["status"] == "ready")
+        return {
+            "schema": "business-card-watchdog.review-workbook-preview.v1",
+            "run_id": run_id,
+            "reviewer": reviewer,
+            "valid": error_count == 0,
+            "row_count": len(rows),
+            "decision_count": ready_count + error_count,
+            "ready_count": ready_count,
+            "skipped_count": skipped_count,
+            "error_count": error_count,
+            "rows": rows,
+            "errors": [error for row in rows for error in row.get("errors", [])],
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
 
     def list_artifacts(self, run_id: str) -> list[dict[str, Any]]:
         artifacts_path = self.config.runs_dir / run_id / "artifacts.jsonl"
@@ -2865,75 +2968,89 @@ class BusinessCardService:
         return output.getvalue()
 
     def _review_decisions_from_workbook_csv(self, csv_text: str) -> list[dict[str, Any]]:
+        return [dict(entry["decision"]) for entry in self._review_workbook_decision_entries(csv_text) if not entry.get("skipped")]
+
+    def _review_workbook_decision_entries(self, csv_text: str) -> list[dict[str, Any]]:
         reader = csv.DictReader(StringIO(csv_text))
-        decisions: list[dict[str, Any]] = []
+        entries: list[dict[str, Any]] = []
         for index, row in enumerate(reader):
+            row_number = index + 2
             if str(row.get("skip_import") or "").strip().lower() in {"1", "true", "yes", "y"}:
+                entries.append({"row_number": row_number, "skipped": True, "skip_reason": "skip_import"})
                 continue
-            template_text = str(row.get("decision_template_json") or "").strip()
-            if template_text:
+            entries.append(
+                {
+                    "row_number": row_number,
+                    "skipped": False,
+                    "decision": self._review_decision_from_workbook_row(row, row_number=row_number),
+                }
+            )
+        return entries
+
+    def _review_decision_from_workbook_row(self, row: dict[str, Any], *, row_number: int) -> dict[str, Any]:
+        template_text = str(row.get("decision_template_json") or "").strip()
+        if template_text:
+            try:
+                decision = json.loads(template_text)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"invalid decision_template_json at CSV row {row_number}: {exc}") from exc
+            if not isinstance(decision, dict):
+                raise ValueError(f"decision_template_json at CSV row {row_number} must be a JSON object")
+        else:
+            decision = {}
+        job_id = str(row.get("job_id") or decision.get("job_id") or "").strip()
+        if not job_id:
+            raise ValueError(f"review workbook CSV row {row_number} is missing job_id")
+        decision["job_id"] = job_id
+        if row.get("run_id") and not decision.get("run_id"):
+            decision["run_id"] = str(row["run_id"])
+        if row.get("decision_action"):
+            decision["action"] = str(row["decision_action"])
+        if row.get("review_action"):
+            decision["action"] = str(row["review_action"])
+        if row.get("notes"):
+            decision["notes"] = str(row["notes"])
+        if row.get("review_notes"):
+            decision["notes"] = str(row["review_notes"])
+        field_corrections = dict(decision.get("field_corrections") or {})
+        for column, field in [
+            ("corrected_full_name", "full_name"),
+            ("corrected_organization", "organization"),
+            ("corrected_title", "title"),
+            ("corrected_email", "email"),
+            ("corrected_phone", "phone"),
+            ("corrected_website", "website"),
+        ]:
+            value = str(row.get(column) or "").strip()
+            if value:
+                field_corrections[field] = value
+        if field_corrections:
+            decision["field_corrections"] = field_corrections
+        approved_fields = self._split_workbook_list(row.get("approved_enrichment_fields"))
+        if approved_fields:
+            decision["approved_enrichment_fields"] = approved_fields
+        duplicate_decision = str(row.get("duplicate_decision") or "").strip()
+        if duplicate_decision:
+            duplicate_resolution = dict(decision.get("duplicate_resolution") or {})
+            duplicate_resolution["decision"] = duplicate_decision
+            if row.get("duplicate_target_identity"):
+                duplicate_resolution["target_identity"] = str(row["duplicate_target_identity"]).strip()
+            if row.get("duplicate_reason"):
+                duplicate_resolution["reason"] = str(row["duplicate_reason"]).strip()
+            decision["duplicate_resolution"] = duplicate_resolution
+        for column, key in [
+            ("field_corrections_json", "field_corrections"),
+            ("crop_selection_json", "crop_selection"),
+            ("approved_enrichment_fields_json", "approved_enrichment_fields"),
+            ("duplicate_resolution_json", "duplicate_resolution"),
+        ]:
+            value = str(row.get(column) or "").strip()
+            if value:
                 try:
-                    decision = json.loads(template_text)
+                    decision[key] = json.loads(value)
                 except json.JSONDecodeError as exc:
-                    raise ValueError(f"invalid decision_template_json at CSV row {index + 2}: {exc}") from exc
-                if not isinstance(decision, dict):
-                    raise ValueError(f"decision_template_json at CSV row {index + 2} must be a JSON object")
-            else:
-                decision = {}
-            job_id = str(row.get("job_id") or decision.get("job_id") or "").strip()
-            if not job_id:
-                raise ValueError(f"review workbook CSV row {index + 2} is missing job_id")
-            decision["job_id"] = job_id
-            if row.get("run_id") and not decision.get("run_id"):
-                decision["run_id"] = str(row["run_id"])
-            if row.get("decision_action"):
-                decision["action"] = str(row["decision_action"])
-            if row.get("review_action"):
-                decision["action"] = str(row["review_action"])
-            if row.get("notes"):
-                decision["notes"] = str(row["notes"])
-            if row.get("review_notes"):
-                decision["notes"] = str(row["review_notes"])
-            field_corrections = dict(decision.get("field_corrections") or {})
-            for column, field in [
-                ("corrected_full_name", "full_name"),
-                ("corrected_organization", "organization"),
-                ("corrected_title", "title"),
-                ("corrected_email", "email"),
-                ("corrected_phone", "phone"),
-                ("corrected_website", "website"),
-            ]:
-                value = str(row.get(column) or "").strip()
-                if value:
-                    field_corrections[field] = value
-            if field_corrections:
-                decision["field_corrections"] = field_corrections
-            approved_fields = self._split_workbook_list(row.get("approved_enrichment_fields"))
-            if approved_fields:
-                decision["approved_enrichment_fields"] = approved_fields
-            duplicate_decision = str(row.get("duplicate_decision") or "").strip()
-            if duplicate_decision:
-                duplicate_resolution = dict(decision.get("duplicate_resolution") or {})
-                duplicate_resolution["decision"] = duplicate_decision
-                if row.get("duplicate_target_identity"):
-                    duplicate_resolution["target_identity"] = str(row["duplicate_target_identity"]).strip()
-                if row.get("duplicate_reason"):
-                    duplicate_resolution["reason"] = str(row["duplicate_reason"]).strip()
-                decision["duplicate_resolution"] = duplicate_resolution
-            for column, key in [
-                ("field_corrections_json", "field_corrections"),
-                ("crop_selection_json", "crop_selection"),
-                ("approved_enrichment_fields_json", "approved_enrichment_fields"),
-                ("duplicate_resolution_json", "duplicate_resolution"),
-            ]:
-                value = str(row.get(column) or "").strip()
-                if value:
-                    try:
-                        decision[key] = json.loads(value)
-                    except json.JSONDecodeError as exc:
-                        raise ValueError(f"invalid {column} at CSV row {index + 2}: {exc}") from exc
-            decisions.append(decision)
-        return decisions
+                    raise ValueError(f"invalid {column} at CSV row {row_number}: {exc}") from exc
+        return decision
 
     def _review_workbook_row(self, entry: dict[str, Any]) -> dict[str, Any]:
         artifacts = entry.get("artifacts") or {}

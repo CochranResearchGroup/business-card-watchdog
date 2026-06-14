@@ -107,6 +107,7 @@ def build_parser() -> argparse.ArgumentParser:
     reviews_apply.add_argument("--decisions-json", default="[]")
     reviews_apply.add_argument("--decisions-file", type=Path, default=None)
     reviews_apply.add_argument("--decisions-csv-file", type=Path, default=None)
+    reviews_apply.add_argument("--preview", action="store_true")
     reviews_apply.add_argument("--json", action="store_true")
 
     actions = sub.add_parser("actions")
@@ -317,11 +318,19 @@ def main(argv: list[str] | None = None) -> int:
                 return 0
         elif args.reviews_command == "apply-decisions":
             if args.decisions_csv_file is not None:
-                payload = service.apply_review_workbook_csv(
-                    run_id=args.run_id,
-                    reviewer=args.reviewer,
-                    csv_text=args.decisions_csv_file.read_text(encoding="utf-8"),
-                )
+                csv_text = args.decisions_csv_file.read_text(encoding="utf-8")
+                if args.preview:
+                    payload = service.preview_review_workbook_csv(
+                        run_id=args.run_id,
+                        reviewer=args.reviewer,
+                        csv_text=csv_text,
+                    )
+                else:
+                    payload = service.apply_review_workbook_csv(
+                        run_id=args.run_id,
+                        reviewer=args.reviewer,
+                        csv_text=csv_text,
+                    )
             else:
                 decisions_body = (
                     args.decisions_file.read_text(encoding="utf-8")

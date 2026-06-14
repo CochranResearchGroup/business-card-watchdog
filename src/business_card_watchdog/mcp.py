@@ -155,6 +155,7 @@ def tool_manifest() -> dict[str, object]:
                         "reviewer": {"type": "string", "default": "operator"},
                         "decisions": {"type": "array", "items": {"type": "object"}},
                         "decisions_csv": {"type": "string"},
+                        "preview": {"type": "boolean", "default": False},
                     },
                     "required": ["run_id"],
                 },
@@ -565,6 +566,12 @@ def call_tool(
         )
     if tool_name == "business_card_watchdog_apply_review_decisions":
         if args.get("decisions_csv"):
+            if bool(args.get("preview", False)):
+                return service.preview_review_workbook_csv(
+                    run_id=str(args["run_id"]),
+                    reviewer=str(args.get("reviewer") or "operator"),
+                    csv_text=str(args["decisions_csv"]),
+                )
             return service.apply_review_workbook_csv(
                 run_id=str(args["run_id"]),
                 reviewer=str(args.get("reviewer") or "operator"),

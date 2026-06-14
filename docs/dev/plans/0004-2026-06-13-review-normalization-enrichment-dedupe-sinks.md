@@ -2143,3 +2143,23 @@ Validation:
 Remaining:
 
 - Workbook convenience columns now cover normal field correction, enrichment approval, and duplicate resolution; future work can add richer validation previews before import.
+
+### Slice 0004-BO | 2026-06-13 | Review Workbook Import Preview
+
+Implemented:
+
+- Added a zero-write review workbook preview report before CSV import.
+- Preview reuses the same workbook CSV parser as the apply path, so row interpretation stays aligned with actual import behavior.
+- Preview reports ready, skipped, and error rows, including row numbers, job IDs, actions, artifact kinds, correction counts, approved enrichment fields, duplicate-resolution payloads, and warnings.
+- Preview validates unsupported review actions, missing jobs, missing enrichment-result artifacts for enrichment merge approval, and missing duplicate-assessment artifacts or decisions for duplicate resolution.
+- Added CLI `bcw reviews apply-decisions --decisions-csv-file <path> --preview`.
+- Added API and MCP preview flags on the existing review-decision import surfaces.
+- Kept preview at `writes_attempted = 0` and `network_calls_made = 0`; applying decisions remains a separate explicit action.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_preview_review_workbook_csv_validates_without_writes tests/test_service.py::test_service_apply_review_workbook_csv_uses_decision_template_json tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+
+Remaining:
+
+- Future preview work can add richer sink-readiness warnings and spreadsheet-exported validation summaries, but the import boundary now has an operator-visible dry-run check.

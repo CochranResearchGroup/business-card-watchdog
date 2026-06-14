@@ -471,6 +471,46 @@ def test_service_apply_review_workbook_csv_uses_decision_template_json(tmp_path:
     assert job["state"] == "ready_to_route"
 
 
+def test_service_preview_review_workbook_csv_validates_without_writes(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    workbook = service.review_workbook(run_id=run_id)
+    rows = list(csv.DictReader(StringIO(workbook["csv"])))
+    rows[0]["review_action"] = "approve_for_routing"
+    rows[0]["corrected_full_name"] = "Previewed Contact"
+    skipped = dict(rows[0])
+    skipped["job_id"] = "skipped-job"
+    skipped["skip_import"] = "true"
+    invalid = dict(rows[0])
+    invalid["review_action"] = "approve_enrichment_merge"
+    output = StringIO()
+    writer = csv.DictWriter(output, fieldnames=list(rows[0]))
+    writer.writeheader()
+    writer.writerows([rows[0], skipped, invalid])
+
+    preview = service.preview_review_workbook_csv(
+        run_id=run_id,
+        reviewer="previewer",
+        csv_text=output.getvalue(),
+    )
+
+    assert preview["schema"] == "business-card-watchdog.review-workbook-preview.v1"
+    assert preview["valid"] is False
+    assert preview["row_count"] == 3
+    assert preview["ready_count"] == 1
+    assert preview["skipped_count"] == 1
+    assert preview["error_count"] == 1
+    assert preview["rows"][0]["status"] == "ready"
+    assert preview["rows"][0]["field_correction_count"] == 1
+    assert preview["rows"][1]["status"] == "skipped"
+    assert preview["rows"][2]["status"] == "error"
+    assert "requires an enrichment_result artifact" in preview["rows"][2]["errors"][0]
+    assert preview["writes_attempted"] == 0
+    assert preview["network_calls_made"] == 0
+    assert not (config.runs_dir / run_id / "review_decisions_import.json").exists()
+
+
 def test_service_apply_review_workbook_csv_supports_enrichment_columns(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, job_id = make_recorded_run(config)

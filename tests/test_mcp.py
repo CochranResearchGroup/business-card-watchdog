@@ -251,6 +251,14 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     workbook_writer = csv.DictWriter(workbook_csv, fieldnames=list(workbook_rows[0]))
     workbook_writer.writeheader()
     workbook_writer.writerows(workbook_rows)
+    workbook_preview = call_tool(
+        "business_card_watchdog_apply_review_decisions",
+        {"run_id": run_id, "reviewer": "mcp-workbook", "decisions_csv": workbook_csv.getvalue(), "preview": True},
+        config=config,
+    )
+    assert workbook_preview["schema"] == "business-card-watchdog.review-workbook-preview.v1"
+    assert workbook_preview["ready_count"] == 1
+    assert workbook_preview["writes_attempted"] == 0
     workbook_import = call_tool(
         "business_card_watchdog_apply_review_decisions",
         {"run_id": run_id, "reviewer": "mcp-workbook", "decisions_csv": workbook_csv.getvalue()},

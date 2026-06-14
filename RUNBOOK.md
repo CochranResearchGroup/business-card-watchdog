@@ -1475,3 +1475,20 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_run_summary_and_review_queue tests/test_service.py::test_service_apply_review_workbook_csv_uses_decision_template_json tests/test_service.py::test_service_apply_review_workbook_csv_supports_enrichment_columns tests/test_service.py::test_service_apply_review_workbook_csv_supports_duplicate_resolution_columns -q` passed with 4 tests.
+
+## Turn 80 | 2026-06-13
+
+Continued Plan 0004 execution with review workbook preview before import.
+
+Implemented:
+
+- Added service `preview_review_workbook_csv` for zero-write validation of edited review workbooks.
+- Preview reports ready, skipped, and error rows before applying review submissions.
+- Preview validates unsupported review actions, missing jobs, missing enrichment-result artifacts, and missing duplicate-assessment prerequisites.
+- Added CLI `bcw reviews apply-decisions --decisions-csv-file <path> --preview`.
+- Added API/MCP preview flags on the existing review-decision import surfaces.
+- No review artifacts, job states, external calls, or live sink writes are changed by preview.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_preview_review_workbook_csv_validates_without_writes tests/test_service.py::test_service_apply_review_workbook_csv_uses_decision_template_json tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
