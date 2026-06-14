@@ -301,6 +301,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_lookup_smoke_rejects_lookup_writes_attempted tests/test_service.py::test_service_selected_lookup_smoke_imports_redacted_duplicate_evidence tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
 
+### Slice 0009-A19 | 2026-06-14 | Readback Pilot Rejects Write-Attempting Executors
+
+Implemented:
+
+- Non-simulated sink readback pilots now reject adapter execution evidence that reports `writes_attempted > 0`.
+- A regression proves a write-attempting readback executor fails before `sink_readback_pilot.json` is persisted.
+- This prevents readback artifacts from falsely recording zero writes when a downstream readback adapter reports a write attempt.
+
+Safety:
+
+- This slice enforces the Plan 0009 read-only readback contract.
+- It does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It validates injected/live executor evidence before durable pilot artifacts are created.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_readback_pilot_rejects_executor_writes_attempted tests/test_service.py::test_service_readback_pilot_uses_injected_executor tests/test_service.py::test_service_readback_pilot_writes_simulated_evidence tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 7 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

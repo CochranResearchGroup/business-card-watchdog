@@ -1613,6 +1613,71 @@ def test_service_readback_pilot_uses_injected_executor(tmp_path: Path) -> None:
     assert pilot["pilot"]["source_write_pilot"]["state"] == "live_written"
 
 
+def test_service_readback_pilot_rejects_executor_writes_attempted(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+
+    def write(request: dict[str, object]) -> dict[str, object]:
+        return {
+            "sink": "google_contacts",
+            "network_calls_made": 1,
+            "writes_attempted": 1,
+            "write": {"resource_id": "people/live123", "serialization_key": request.get("serialization_key")},
+        }
+
+    def readback(request: dict[str, object]) -> dict[str, object]:
+        return {
+            "sink": "google_contacts",
+            "status": "unexpected_readback_write_attempt",
+            "network_calls_made": 1,
+            "writes_attempted": 1,
+            "readback": {"resource_id": "people/live123", "matched": True},
+        }
+
+    service = BusinessCardService(config, sink_write_executor=write, sink_readback_executor=readback)
+    service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="write")
+    service.preflight_sink_apply(job_id=job_id, run_id=run_id)
+    service.decide_sink_apply(job_id=job_id, run_id=run_id, decision="approve", reviewer="tester")
+    service.select_live_target_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        operator="tester",
+        scope="all",
+        safety_confirmation="fixture contact is safe for google contacts test profile",
+    )
+    service.execute_sink_write_pilot_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        approved_by="tester",
+        simulate=False,
+    )
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="readback")
+
+    try:
+        service.execute_sink_readback_pilot_for_job(
+            job_id=job_id,
+            run_id=run_id,
+            sink="google_contacts",
+            approved_by="tester",
+            simulate=False,
+        )
+    except ValueError as exc:
+        assert "writes attempted" in str(exc)
+    else:
+        raise AssertionError("expected readback pilot to reject write-attempting readback executor")
+
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+    assert not (artifact_dir / "sink_readback_pilot.json").exists()
+
+
 def test_service_build_sink_adapter_request_writes_phase_artifact(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",

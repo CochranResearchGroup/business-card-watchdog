@@ -3754,6 +3754,8 @@ class BusinessCardService:
                 execution = self.sink_readback_executor(request)
             else:
                 execution = execute_sink_readback_adapter(request)
+            if int(execution.get("writes_attempted") or 0):
+                raise ValueError("live sink readback pilot reported writes attempted")
             readback_payload = dict(execution.get("readback") or {})
             network_calls_made = int(execution.get("network_calls_made") or 0)
             status = str(execution.get("status") or "live_readback_completed")
