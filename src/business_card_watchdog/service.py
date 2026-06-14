@@ -5121,6 +5121,35 @@ class BusinessCardService:
                 for reason in list(closeout.get("blocked_reasons") or [])
                 if str(reason) not in closeout_missing_artifacts
             ]
+            candidate_sink = next(
+                (
+                    str(candidate.get("sink") or "")
+                    for candidate in job_candidates
+                    if isinstance(candidate, dict) and candidate.get("sink")
+                ),
+                "",
+            )
+            selection_prompt_sink = str(packet.get("sink") or candidate_sink or selected_target.get("sink") or "<sink>")
+            selection_operator = str(
+                packet.get("operator")
+                or selected_target.get("operator")
+                or selected_target.get("approved_by")
+                or "<operator>"
+            )
+            selection_scope = str(packet.get("scope") or "lookup")
+            operator_response_template = (
+                f"run_id={run_id} job_id={job_id} sink={selection_prompt_sink} "
+                f"operator={selection_operator} scope={selection_scope} "
+                "safety_confirmation=<confirmation>"
+            )
+            copyable_approval_fields = {
+                "run_id": run_id,
+                "job_id": job_id,
+                "sink": selection_prompt_sink,
+                "operator": selection_operator,
+                "scope": selection_scope,
+                "safety_confirmation": "<confirmation>",
+            }
             if target_abandoned:
                 state = "abandoned"
             elif closeout.get("state") == "complete":
@@ -5169,11 +5198,21 @@ class BusinessCardService:
                     "abandonment_state": abandonment_state,
                     "abandonment_identity": abandonment_identity or None,
                     "abandonment_reason": abandonment_reason,
+                    "operator_response_template": operator_response_template,
+                    "operator_prompt": (
+                        "Reply with an explicit live target selection only if this card/contact is safe for the "
+                        f"target tenant/profile: {operator_response_template}"
+                    ),
+                    "copyable_approval_fields": copyable_approval_fields,
                     "commands": {
-                        "selection_packet": f"sinks live-selection-packet {job_id} --run-id {run_id} --sink <sink> --operator <operator>",
+                        "selection_packet": (
+                            f"sinks live-selection-packet {job_id} --run-id {run_id} "
+                            f"--sink {selection_prompt_sink} --operator {selection_operator}"
+                        ),
                         "select_target": (
-                            f"sinks select-live-target {job_id} --run-id {run_id} --sink <sink> "
-                            "--operator <operator> --scope lookup --safety-confirmation <confirmation> --json"
+                            f"sinks select-live-target {job_id} --run-id {run_id} --sink {selection_prompt_sink} "
+                            f"--operator {selection_operator} --scope {selection_scope} "
+                            "--safety-confirmation <confirmation> --json"
                         ),
                         "selected_target_audit": f"sinks selected-target-audit {job_id} --run-id {run_id}",
                         "lookup_smoke": f"sinks execute-lookup-smoke {job_id} --run-id {run_id} --json",
@@ -5211,6 +5250,20 @@ class BusinessCardService:
             "job_count": len(entries),
             "counts": counts,
             "entries": entries,
+            "operator_response_contract": {
+                "schema": "business-card-watchdog.operator-selection-response-contract.v1",
+                "required_fields": ["run_id", "job_id", "sink", "operator", "scope", "safety_confirmation"],
+                "allowed_sinks": ["google_contacts", "odoo"],
+                "allowed_scopes": ["lookup", "write", "readback", "all"],
+                "format": (
+                    "run_id=<run_id> job_id=<job_id> sink=<google_contacts|odoo> "
+                    "operator=<operator> scope=<lookup|write|readback|all> "
+                    "safety_confirmation=<confirmation>"
+                ),
+                "default_scope": "lookup",
+                "requires_human_safety_confirmation": True,
+                "creates_selected_live_target": False,
+            },
             "writes_attempted": 0,
             "network_calls_made": 0,
             "observed_writes_attempted": observed_writes_attempted,
@@ -5310,6 +5363,9 @@ class BusinessCardService:
                     "operator_required": operator_required,
                     "reason": reason,
                     "command": command,
+                    "operator_response_template": entry.get("operator_response_template"),
+                    "operator_prompt": entry.get("operator_prompt"),
+                    "copyable_approval_fields": entry.get("copyable_approval_fields"),
                     "selected_target_sink": entry.get("selected_target_sink"),
                     "selected_target_identity": entry.get("selected_target_identity"),
                     "selected_target_scope": entry.get("selected_target_scope"),
@@ -5354,6 +5410,7 @@ class BusinessCardService:
             "job_count": len(handoff_entries),
             "action_counts": action_counts,
             "entries": handoff_entries,
+            "operator_response_contract": status.get("operator_response_contract"),
             "writes_attempted": 0,
             "network_calls_made": 0,
             "observed_writes_attempted": status.get("observed_writes_attempted", 0),

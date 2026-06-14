@@ -2260,6 +2260,19 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert live_status["writes_attempted"] == 0
     assert live_status["network_calls_made"] == 0
     assert live_status["observed_writes_attempted"] == 0
+    assert live_status["operator_response_contract"]["creates_selected_live_target"] is False
+    assert live_status["entries"][0]["operator_response_template"] == (
+        f"run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=tester scope=lookup safety_confirmation=<confirmation>"
+    )
+    assert live_status["entries"][0]["copyable_approval_fields"] == {
+        "run_id": run_id,
+        "job_id": job_id,
+        "sink": "google_contacts",
+        "operator": "tester",
+        "scope": "lookup",
+        "safety_confirmation": "<confirmation>",
+    }
     assert Path(live_status["status_path"]).exists()
 
     handoff = service.live_pilot_handoff(run_id=run_id)
@@ -2268,6 +2281,11 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert handoff["action_counts"]["request_live_lookup_smoke"] == 1
     assert handoff["entries"][0]["operator_required"] is True
     assert handoff["entries"][0]["command"].startswith("sinks execute-lookup-smoke")
+    assert handoff["operator_response_contract"]["creates_selected_live_target"] is False
+    assert handoff["entries"][0]["operator_response_template"] == (
+        f"run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=tester scope=lookup safety_confirmation=<confirmation>"
+    )
     assert handoff["writes_attempted"] == 0
     assert handoff["network_calls_made"] == 0
     assert Path(handoff["handoff_path"]).exists()

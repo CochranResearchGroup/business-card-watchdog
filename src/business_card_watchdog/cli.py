@@ -111,6 +111,8 @@ def _render_live_pilot_handoff_text(payload: dict[str, object]) -> str:
                 f"operator_required={entry.get('operator_required')} "
                 f"command={entry.get('command') or 'none'}"
             )
+            if entry.get("operator_response_template"):
+                lines.append(f"   Operator response: {entry.get('operator_response_template')}")
     return "\n".join(lines) + "\n"
 
 

@@ -903,6 +903,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 2 tests.
 
+### Slice 0009-A52 | 2026-06-14 | Propagate Operator Prompt Into Live Handoff
+
+Implemented:
+
+- Live pilot status entries now carry the operator response contract, per-entry response template, prompt, and copyable approval fields.
+- Live pilot handoff entries now propagate the same operator-selection metadata so `/goal` and subagents can stop with a concrete prompt from the handoff surface.
+- CLI live pilot handoff text now renders the operator response template.
+
+Safety:
+
+- This slice adds handoff metadata only.
+- It does not create `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- The propagated contract still records that it does not create selected-target approval evidence.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval -q` passed with 2 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

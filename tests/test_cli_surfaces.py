@@ -437,6 +437,11 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert Path(status["status_path"]).exists()
     assert status["commands"]["live_pilot_status"] == f"runs live-pilot-status {run_id}"
     assert status["commands"]["live_target_candidates"] == f"live-target-candidates --run-id {run_id}"
+    assert status["operator_response_contract"]["creates_selected_live_target"] is False
+    assert status["entries"][0]["operator_response_template"] == (
+        f"run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=tester scope=lookup safety_confirmation=<confirmation>"
+    )
     assert status["entries"][0]["commands"]["selected_target_audit"] == (
         f"sinks selected-target-audit {job_id} --run-id {run_id}"
     )
@@ -458,12 +463,21 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert Path(handoff["handoff_path"]).exists()
     assert handoff["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id}"
     assert handoff["commands"]["live_readiness_audit"] == f"live-readiness-audit --run-id {run_id}"
+    assert handoff["operator_response_contract"]["creates_selected_live_target"] is False
+    assert handoff["entries"][0]["operator_response_template"] == (
+        f"run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=tester scope=lookup safety_confirmation=<confirmation>"
+    )
     assert handoff["entries"][0]["command"] == f"sinks execute-lookup-smoke {job_id} --run-id {run_id} --json"
 
     assert main(["--config", str(config_path), "runs", "live-pilot-handoff", run_id, "--no-write"]) == 0
     text_handoff = capsys.readouterr().out
     assert f"target={target_identity}" in text_handoff
     assert "abandonment=none" in text_handoff
+    assert (
+        f"Operator response: run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=tester scope=lookup safety_confirmation=<confirmation>"
+    ) in text_handoff
     assert "{" not in text_handoff
 
     assert (
