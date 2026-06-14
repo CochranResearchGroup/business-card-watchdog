@@ -242,6 +242,7 @@ def _render_live_selection_requirements_text(payload: dict[str, object]) -> str:
     entries = payload.get("entries") or []
     rows = entries if isinstance(entries, list) else []
     state_counts = dict(payload.get("state_counts") or {})
+    commands = dict(payload.get("commands") or {})
     lines = [
         f"Live selection requirements: {payload.get('state')}",
         f"Run: {payload.get('run_id') or 'all'}",
@@ -257,6 +258,7 @@ def _render_live_selection_requirements_text(payload: dict[str, object]) -> str:
             continue
         missing = entry.get("missing_operator_fields") or []
         missing_text = ",".join(str(item) for item in missing) if isinstance(missing, list) and missing else "none"
+        entry_commands = dict(entry.get("commands") or {})
         lines.append(
             " - "
             f"{entry.get('run_id')}/{entry.get('job_id')} "
@@ -266,8 +268,20 @@ def _render_live_selection_requirements_text(payload: dict[str, object]) -> str:
             f"abandonment={entry.get('abandonment_identity') or 'none'} "
             f"missing={missing_text}"
         )
+        if entry_commands.get("selection_packet"):
+            lines.append(f"   Selection packet: {entry_commands.get('selection_packet')}")
+        if entry_commands.get("select_target"):
+            lines.append(f"   Select target: {entry_commands.get('select_target')}")
     if payload.get("requirements_path"):
         lines.append(f"Requirements path: {payload.get('requirements_path')}")
+    for label, key in [
+        ("Live target candidates", "live_target_candidates"),
+        ("Live readiness audit", "live_readiness_audit"),
+        ("Selection requirements", "live_selection_requirements"),
+    ]:
+        command = commands.get(key)
+        if command:
+            lines.append(f"{label}: {command}")
     return "\n".join(lines) + "\n"
 
 

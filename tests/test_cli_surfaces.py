@@ -170,6 +170,17 @@ def test_cli_live_selection_requirements_reports_text_and_json(tmp_path: Path, c
     assert "target=none" in text
     assert "abandonment=none" in text
     assert "missing=operator,scope,safety_confirmation" in text
+    assert (
+        f"Selection packet: sinks live-selection-packet {entry['job_id']} --run-id {run_id} "
+        "--sink google_contacts --operator <operator>"
+    ) in text
+    assert (
+        f"Select target: sinks select-live-target {entry['job_id']} --run-id {run_id} "
+        "--sink google_contacts --operator <operator> --scope lookup --safety-confirmation <confirmation> --json"
+    ) in text
+    assert f"Live target candidates: live-target-candidates --run-id {run_id}" in text
+    assert f"Live readiness audit: live-readiness-audit --run-id {run_id}" in text
+    assert f"Selection requirements: live-selection-requirements --run-id {run_id}" in text
     assert "{" not in text
 
 

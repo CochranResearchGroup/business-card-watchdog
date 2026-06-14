@@ -777,6 +777,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_live_selection_requirements_reports_text_and_json tests/test_service.py::test_service_live_selection_requirements_report_writes_run_level_artifact -q` passed with 2 tests.
 
+### Slice 0009-A45 | 2026-06-14 | Render Selection Requirement Commands
+
+Implemented:
+
+- `bcw live-selection-requirements` text output now includes per-candidate selection packet and selected-target approval commands.
+- The text output now also shows the run-level target-candidates, readiness-audit, and requirements refresh commands.
+- CLI tests now assert that operators can see the next commands without requesting JSON.
+
+Safety:
+
+- This slice changes text presentation only.
+- It does not create selected targets, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- The selected-target approval command remains explicit and JSON-producing because it creates durable approval evidence.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_live_selection_requirements_reports_text_and_json -q` passed with 1 test.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:
