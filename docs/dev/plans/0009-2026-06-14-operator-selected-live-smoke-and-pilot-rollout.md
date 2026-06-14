@@ -574,6 +574,25 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 2 tests.
 
+### Slice 0009-A34 | 2026-06-14 | Update Live Pilot Operator Checklist
+
+Implemented:
+
+- The read-only lookup smoke checklist now requires live selection packet, selected target, selected-target audit, status review, and tenant/profile safety confirmation.
+- The write/readback pilot checklist now requires selected-target evidence with `write` or `all` scope before non-simulated writes.
+- The checklist now documents replacement handling with `replacement_requires_abandonment`, `can_select_replacement_now`, and `abandon-live-pilot`.
+- Stop conditions now include missing, stale, abandoned, scope-mismatched, or safety-unconfirmed selected-target evidence.
+
+Safety:
+
+- This slice updates operator documentation only.
+- It does not create or modify selected targets, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It aligns the operator checklist with the deterministic selected-target gates already enforced by CLI/API/MCP surfaces.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_live_selection_packet_reports_existing_selected_target_context tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval -q` passed with 2 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:
