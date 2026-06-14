@@ -29,6 +29,34 @@ jobs:
       - name: Install package and dev tools
         run: uv pip install --python .venv/bin/python -e ".[dev]"
 
+      - name: Seed offline business-card skill fixture
+        run: |
+          mkdir -p "$HOME/.codex/shared/skills/business-card-to-contact/scripts"
+          cat > "$HOME/.codex/shared/skills/business-card-to-contact/scripts/run_business_card_pipeline.py" <<'PY'
+          from __future__ import annotations
+
+          import json
+          import sys
+          from pathlib import Path
+
+          _image_path = Path(sys.argv[1])
+          artifact_dir = Path(sys.argv[2])
+          artifact_dir.mkdir(parents=True, exist_ok=True)
+          (artifact_dir / "spec.json").write_text(
+              json.dumps(
+                  {
+                      "full_name": "CI Fixture",
+                      "organization": "Example Organization",
+                      "email": "ci.fixture@example.test",
+                  },
+                  sort_keys=True,
+              )
+              + "\n",
+              encoding="utf-8",
+          )
+          (artifact_dir / "review.md").write_text("# CI fixture review\n", encoding="utf-8")
+          PY
+
       - name: Run tests
         run: .venv/bin/python -m pytest -q
 
@@ -48,6 +76,8 @@ jobs:
           fetch-depth: 0
 
       - name: Run gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          docker run --rm \
+            -v "$PWD:/repo" \
+            zricethezav/gitleaks:v8.30.1 \
+            detect --source=/repo --no-banner --redact --exit-code 1

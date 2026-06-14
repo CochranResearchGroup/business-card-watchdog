@@ -1657,6 +1657,8 @@ Implemented:
 - Updated `ROADMAP.md` to make Plan 0006 the active implementation plan.
 - Added `.github/workflows/ci.yml` for public push/PR validation.
 - The workflow installs Python 3.11 with `uv`, installs `.[dev]`, runs pytest, runs ruff, builds package artifacts, and scans repository history with gitleaks.
+- The workflow seeds a minimal offline `business-card-to-contact` skill fixture for status/doctor tests.
+- The secret scan uses the `zricethezav/gitleaks:v8.30.1` CLI container instead of the licensed organization action.
 - Fixed small ruff findings in `dedupe.py` and `sinks.py` so the new lint gate is enforceable.
 
 Validation:
@@ -1665,6 +1667,7 @@ Validation:
 - `.venv/bin/ruff check .` passed.
 - `uv build --out-dir dist` built source and wheel distributions.
 - `gitleaks detect --source . --no-banner --redact --exit-code 1` scanned 92 commits and found no leaks.
+- First upstream workflow run failed before this adjustment because the CI runner lacked the user-scoped skill and `gitleaks/gitleaks-action@v2` required an organization license.
 
 ## Turn 98 | 2026-06-14
 

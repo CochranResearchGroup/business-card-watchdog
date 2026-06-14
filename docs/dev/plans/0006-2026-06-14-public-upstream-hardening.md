@@ -154,7 +154,8 @@ Implemented:
 - Added `.github/workflows/ci.yml`.
 - The workflow runs on push and pull requests to `main`.
 - Test/lint/build job installs Python 3.11 with `uv`, installs `.[dev]`, runs `pytest`, runs `ruff check .`, and builds package artifacts with `uv build`.
-- Secret-scan job checks out full history and runs `gitleaks/gitleaks-action`.
+- Test/lint/build job seeds a minimal offline `business-card-to-contact` skill fixture under the CI runner home so status/doctor tests do not depend on private user-scoped runtime state.
+- Secret-scan job checks out full history and runs the `zricethezav/gitleaks:v8.30.1` CLI container.
 - CI remains offline with no paid enrichment, live GWS/Odollo calls, private card data, or user runtime dependency.
 
 Validation:
@@ -163,6 +164,7 @@ Validation:
 - `.venv/bin/ruff check .` passed.
 - `uv build --out-dir dist` built sdist and wheel artifacts.
 - `gitleaks detect --source . --no-banner --redact --exit-code 1` scanned 92 commits and found no leaks.
+- First upstream workflow run failed because GitHub CI lacked the user-scoped skill root and `gitleaks/gitleaks-action@v2` requires an organization license.
 
 Remaining:
 
