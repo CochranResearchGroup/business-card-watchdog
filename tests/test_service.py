@@ -177,6 +177,8 @@ def test_service_live_selection_requirements_report_writes_run_level_artifact(tm
     entry = report["entries"][0]
     assert entry["job_id"] == job_id
     assert entry["state"] == "blocked"
+    assert entry["selected_target_identity"] is None
+    assert entry["abandonment_identity"] is None
     assert entry["missing_operator_fields"] == ["operator", "scope", "safety_confirmation"]
     assert "select-live-target" in entry["commands"]["select_target"]
     assert Path(report["requirements_path"]).exists()
@@ -2147,6 +2149,7 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     requirements = service.live_selection_requirements(run_id=run_id, sink="google_contacts", write=False)
     assert requirements["state"] == "selected_target_active"
     assert requirements["entries"][0]["missing_operator_fields"] == []
+    assert requirements["entries"][0]["selected_target_identity"] == payload["selection_id"]
     assert requirements["entries"][0]["selected_target_safety_confirmed"] is True
 
     result = service.execute_sink_lookup_pilot_for_job(
@@ -2439,6 +2442,10 @@ def test_service_live_pilot_abandonment_blocks_abandoned_selected_target(tmp_pat
 
     assert abandonment["abandonment"]["schema"] == "business-card-watchdog.live-pilot-abandonment.v1"
     assert Path(abandonment["abandonment_path"]).exists()
+    assert status["entries"][0]["selected_target_identity"] == abandonment["abandonment"]["selected_target_identity"]
+    assert status["entries"][0]["abandonment_identity"] == abandonment["abandonment"]["selected_target_identity"]
+    assert handoff["entries"][0]["selected_target_identity"] == abandonment["abandonment"]["selected_target_identity"]
+    assert handoff["entries"][0]["abandonment_identity"] == abandonment["abandonment"]["selected_target_identity"]
     assert status["counts"]["abandoned"] == 1
     assert handoff["action_counts"]["select_new_live_target"] == 1
     try:

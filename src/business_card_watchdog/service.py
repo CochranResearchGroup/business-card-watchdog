@@ -4869,6 +4869,10 @@ class BusinessCardService:
                 and str(abandonment.get("selected_target_identity") or abandonment.get("selected_target_created_at") or "")
                 == _selected_target_identity(selected_target)
             )
+            selected_target_identity = _selected_target_identity(selected_target)
+            abandonment_identity = str(
+                abandonment.get("selected_target_identity") or abandonment.get("selected_target_created_at") or ""
+            )
             target_safety_confirmed = bool(
                 selected_target.get("target_safety_confirmed")
                 and str(selected_target.get("target_safety_confirmation") or "").strip()
@@ -4901,10 +4905,13 @@ class BusinessCardService:
                     "candidate_state": candidate.get("state"),
                     "candidate_stop_reasons": list(candidate.get("stop_reasons") or []),
                     "selected_target_exists": selected_target_exists,
+                    "selected_target_identity": selected_target_identity or None,
                     "selected_target_scope": selected_target.get("scope"),
                     "selected_target_operator": selected_target.get("operator") or selected_target.get("approved_by"),
                     "selected_target_safety_confirmed": target_safety_confirmed,
                     "selected_target_abandoned": target_abandoned,
+                    "abandonment_identity": abandonment_identity or None,
+                    "abandonment_reason": abandonment.get("reason"),
                     "missing_operator_fields": missing_operator_fields,
                     "required_operator_fields": requirement_fields,
                     "commands": {
@@ -5036,6 +5043,10 @@ class BusinessCardService:
                 and str(abandonment.get("selected_target_identity") or abandonment.get("selected_target_created_at") or "")
                 == _selected_target_identity(selected_target)
             )
+            selected_target_identity = _selected_target_identity(selected_target)
+            abandonment_identity = str(
+                abandonment.get("selected_target_identity") or abandonment.get("selected_target_created_at") or ""
+            )
             selected_target_audit_blockers = self._selected_target_audit_context_mismatches(
                 selected_target=selected_target,
                 selected_target_audit=selected_target_audit,
@@ -5080,6 +5091,7 @@ class BusinessCardService:
                     "candidate_count": len(job_candidates),
                     "ready_candidate_count": ready_candidate_count,
                     "selected_target_exists": artifacts["selected_live_target"] is not None,
+                    "selected_target_identity": selected_target_identity or None,
                     "selected_target_scope": selected_target.get("scope"),
                     "selected_target_sink": selected_target.get("sink"),
                     "selected_target_operator": selected_target.get("operator") or selected_target.get("approved_by"),
@@ -5093,6 +5105,7 @@ class BusinessCardService:
                     "closeout_missing_artifacts": closeout_missing_artifacts,
                     "closeout_blockers": closeout_blockers,
                     "abandonment_state": abandonment.get("state"),
+                    "abandonment_identity": abandonment_identity or None,
                     "abandonment_reason": abandonment.get("reason"),
                     "commands": {
                         "selection_packet": f"sinks live-selection-packet {job_id} --run-id {run_id} --sink <sink> --operator <operator> --json",
@@ -5236,6 +5249,7 @@ class BusinessCardService:
                     "reason": reason,
                     "command": command,
                     "selected_target_sink": entry.get("selected_target_sink"),
+                    "selected_target_identity": entry.get("selected_target_identity"),
                     "selected_target_scope": entry.get("selected_target_scope"),
                     "selection_packet_state": entry.get("selection_packet_state"),
                     "selected_target_audit_state": entry.get("selected_target_audit_state"),
@@ -5247,6 +5261,7 @@ class BusinessCardService:
                     "closeout_missing_artifacts": entry.get("closeout_missing_artifacts", []),
                     "closeout_blockers": entry.get("closeout_blockers", []),
                     "abandonment_state": entry.get("abandonment_state"),
+                    "abandonment_identity": entry.get("abandonment_identity"),
                     "abandonment_reason": entry.get("abandonment_reason"),
                     "commands": commands,
                 }

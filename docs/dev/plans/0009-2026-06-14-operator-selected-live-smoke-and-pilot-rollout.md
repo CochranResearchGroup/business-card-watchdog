@@ -392,6 +392,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_live_pilot_closeout_rejects_stale_selected_target_evidence tests/test_service.py::test_service_live_pilot_closeout_rejects_stale_selected_target_audit_scope tests/test_service.py::test_service_live_pilot_status_does_not_double_count_closeout_totals tests/test_service.py::test_service_live_pilot_abandonment_blocks_abandoned_selected_target -q` passed with 4 tests.
 
+### Slice 0009-A24 | 2026-06-14 | Report Selected Target Identity
+
+Implemented:
+
+- Live selection requirements now report `selected_target_identity`, `abandonment_identity`, and `abandonment_reason` per candidate entry.
+- Live pilot status now reports the active selected-target identity and matching abandonment identity.
+- Live pilot handoff now carries selected-target and abandonment identities into operator-facing next-action entries.
+
+Safety:
+
+- This slice surfaces existing selected-target metadata only.
+- It does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It makes replacement and abandonment workflows auditable without requiring operators to open raw artifact files.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_live_selection_requirements_report_writes_run_level_artifact tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_service.py::test_service_live_pilot_abandonment_blocks_abandoned_selected_target -q` passed with 3 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:
