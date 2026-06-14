@@ -831,6 +831,25 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_live_readiness_audit_reports_text_and_json -q` passed with 1 test.
 
+### Slice 0009-A48 | 2026-06-14 | Render Live Target Candidate Commands
+
+Implemented:
+
+- Live target candidate approval commands now include `--json` because selected-target approval creates durable evidence.
+- `bcw live-target-candidates` text output now renders per-candidate inspect, pilot-readiness, lookup-readiness, and select-target commands.
+- The candidate report now also exposes no-call handoff commands for live readiness audit and selection requirements.
+- CLI tests now assert that candidate text is actionable without requesting JSON.
+
+Safety:
+
+- This slice changes command presentation only.
+- It does not create selected targets, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It keeps selected-target approval explicit and JSON-producing while making the no-call candidate report usable as a CLI handoff.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_live_target_candidates_reports_text_and_json -q` passed with 1 test.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

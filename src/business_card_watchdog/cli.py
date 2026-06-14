@@ -195,6 +195,7 @@ def _render_service_recovery_text(payload: dict[str, object]) -> str:
 def _render_live_target_candidates_text(payload: dict[str, object]) -> str:
     candidates = payload.get("candidates") or []
     rows = candidates if isinstance(candidates, list) else []
+    commands = dict(payload.get("commands") or {})
     lines = [
         f"Live target candidates: {payload.get('candidate_count', 0)}",
         f"Ready: {payload.get('ready_candidate_count', 0)}",
@@ -203,6 +204,7 @@ def _render_live_target_candidates_text(payload: dict[str, object]) -> str:
     for candidate in rows:
         if not isinstance(candidate, dict):
             continue
+        candidate_commands = dict(candidate.get("commands") or {})
         stops = candidate.get("stop_reasons") or []
         stop_text = "; ".join(str(item) for item in stops) if isinstance(stops, list) and stops else "none"
         lines.append(
@@ -213,6 +215,22 @@ def _render_live_target_candidates_text(payload: dict[str, object]) -> str:
             f"lookup={candidate.get('lookup_readiness_state')} "
             f"stops={stop_text}"
         )
+        for label, key in [
+            ("Inspect job", "inspect_job"),
+            ("Pilot readiness", "pilot_readiness"),
+            ("Lookup readiness", "lookup_readiness"),
+            ("Select lookup target", "select_lookup_target"),
+        ]:
+            command = candidate_commands.get(key)
+            if command:
+                lines.append(f"   {label}: {command}")
+    for label, key in [
+        ("Live readiness audit", "live_readiness_audit"),
+        ("Selection requirements", "live_selection_requirements"),
+    ]:
+        command = commands.get(key)
+        if command:
+            lines.append(f"{label}: {command}")
     return "\n".join(lines) + "\n"
 
 

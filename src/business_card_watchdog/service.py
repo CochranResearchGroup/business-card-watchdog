@@ -4685,7 +4685,7 @@ class BusinessCardService:
                                 "select_lookup_target": (
                                     f"sinks select-live-target {entry['job_id']} --run-id {current_run_id} "
                                     f"--sink {candidate_sink} --operator <operator> --scope lookup "
-                                    "--safety-confirmation <confirmation>"
+                                    "--safety-confirmation <confirmation> --json"
                                 ),
                             },
                         }
@@ -4702,6 +4702,18 @@ class BusinessCardService:
             "candidates": candidates,
             "writes_attempted": 0,
             "network_calls_made": 0,
+            "commands": {
+                "live_readiness_audit": (
+                    "live-readiness-audit"
+                    + (f" --run-id {run_id}" if run_id else "")
+                    + (f" --sink {selected_sink}" if selected_sink else "")
+                ),
+                "live_selection_requirements": (
+                    "live-selection-requirements"
+                    + (f" --run-id {run_id}" if run_id else "")
+                    + (f" --sink {selected_sink}" if selected_sink else "")
+                ),
+            },
             "explicit_stop_conditions": [
                 "Do not create selected_live_target.json until the operator chooses a run, job, sink, operator, and scope.",
                 "Do not run live lookup, write, or readback from this report.",

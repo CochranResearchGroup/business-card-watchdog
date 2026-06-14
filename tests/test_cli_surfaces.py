@@ -95,11 +95,26 @@ def test_cli_live_target_candidates_reports_text_and_json(tmp_path: Path, capsys
     assert payload["candidate_count"] == 1
     assert payload["network_calls_made"] == 0
     assert payload["writes_attempted"] == 0
+    candidate = payload["candidates"][0]
+    assert candidate["commands"]["select_lookup_target"] == (
+        f"sinks select-live-target {candidate['job_id']} --run-id {run_id} --sink google_contacts "
+        "--operator <operator> --scope lookup --safety-confirmation <confirmation> --json"
+    )
+    assert payload["commands"]["live_readiness_audit"] == f"live-readiness-audit --run-id {run_id}"
+    assert payload["commands"]["live_selection_requirements"] == f"live-selection-requirements --run-id {run_id}"
 
     assert main(["--config", str(config_path), "live-target-candidates", "--run-id", run_id]) == 0
     text = capsys.readouterr().out
     assert "Live target candidates: 1" in text
     assert "sink=google_contacts" in text
+    assert f"Inspect job: jobs show {candidate['job_id']} --run-id {run_id}" in text
+    assert f"Lookup readiness: sinks lookup-readiness {candidate['job_id']} --run-id {run_id} --sink google_contacts" in text
+    assert (
+        f"Select lookup target: sinks select-live-target {candidate['job_id']} --run-id {run_id} "
+        "--sink google_contacts --operator <operator> --scope lookup --safety-confirmation <confirmation> --json"
+    ) in text
+    assert f"Live readiness audit: live-readiness-audit --run-id {run_id}" in text
+    assert f"Selection requirements: live-selection-requirements --run-id {run_id}" in text
     assert "{" not in text
 
 
