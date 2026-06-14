@@ -237,6 +237,33 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed and reported the index is up to date.
 
+### Slice 0005-E | 2026-06-14 | Odollo Enrichment Reuse
+
+Implemented:
+
+- Inspected the planned Odollo enrichment reuse targets for public-web phone enrichment, Apollo adapter/result shape handling, contact-point handling, merge policy, and idempotency guidance.
+- Adapted Odollo public-web phone normalization/query forms into local watchdog public-web query generation.
+- Adapted Odollo directory-aware public-web scoring hints into local fixture/result scoring.
+- Adapted Apollo person/contact/data/list wrapper extraction patterns into local paid-provider result normalization.
+- Added `adapted_from_odollo_enrichment_patterns` markers to public-web and provider request/result/handoff artifacts.
+- Preserved the existing zero-network, explicit-request enrichment boundary.
+
+Safety:
+
+- This slice is local helper adaptation and fixture scoring only.
+- No public-web search, paid enrichment provider, GWS, Odollo/Odoo, or live sink calls are made.
+- Apollo support remains an explicit paid-provider request/handoff/result-import path; no Apollo client or network adapter was added.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_enrichment.py -q` passed with 20 tests.
+- `.venv/bin/python -m pytest -q` passed with 186 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed and reported the index is up to date.
+
 ## Workstreams
 
 ### WS1. Review Surface And Operator Queue

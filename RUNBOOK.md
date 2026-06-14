@@ -2006,3 +2006,29 @@ Validation:
 Safety:
 
 - This was local route-policy and artifact-readback work only. It made no public-web search, paid enrichment, GWS, Odollo/Odoo, or live sink calls.
+
+## Turn 110 | 2026-06-14
+
+Continued Plan 0005 execution with the Odollo enrichment reuse slice.
+
+Implemented:
+
+- Inspected Odollo public-web enrichment, Apollo adapter/result shape handling, contact-point handling, merge policy, and idempotency guidance.
+- Adapted Odollo public-web phone normalization/query forms into watchdog public-web query generation.
+- Adapted directory-aware public-web scoring hints into local fixture/result scoring.
+- Adapted Apollo person/contact/data/list wrapper extraction patterns into local paid-provider result normalization.
+- Added `adapted_from_odollo_enrichment_patterns` markers to public-web and provider request/result/handoff artifacts.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_enrichment.py -q` passed with 20 tests.
+- `.venv/bin/python -m pytest -q` passed with 186 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed and reported the index is up to date.
+
+Safety:
+
+- This was local helper adaptation and fixture scoring only. It made no public-web search, paid enrichment, GWS, Odollo/Odoo, or live sink calls.

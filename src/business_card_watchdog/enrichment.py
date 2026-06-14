@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -19,6 +20,25 @@ ENRICHMENT_PUBLIC_WEB_REQUEST_SCHEMA = "business-card-watchdog.enrichment-public
 ENRICHMENT_PUBLIC_WEB_SEARCH_HANDOFF_SCHEMA = "business-card-watchdog.enrichment-public-web-search-handoff.v1"
 ENRICHMENT_PUBLIC_WEB_RESULT_SCHEMA = "business-card-watchdog.enrichment-public-web-result.v1"
 ENRICHMENT_PROVIDER_RESULT_SCHEMA = "business-card-watchdog.enrichment-provider-result.v1"
+ODOLLO_REUSE_NOTE = "adapted_from_odollo_enrichment_patterns"
+PHONE_DIGIT_RE = re.compile(r"\D+")
+DIRECTORY_DOMAINS = {
+    "apollo.io",
+    "bbb.org",
+    "facebook.com",
+    "instagram.com",
+    "linkedin.com",
+    "manta.com",
+    "peoplefinders.com",
+    "truepeoplesearch.com",
+    "twitter.com",
+    "whitepages.com",
+    "x.com",
+    "yellowpages.com",
+    "yelp.com",
+    "youtube.com",
+    "zoominfo.com",
+}
 
 
 @dataclass(frozen=True)
@@ -123,6 +143,7 @@ def score_public_web_results(
         "schema": ENRICHMENT_RESULT_SCHEMA,
         "provider": "public_web",
         "cost_class": "operator_search",
+        "reuse_note": ODOLLO_REUSE_NOTE,
         "network_calls_made": 0,
         "results": scored,
         "merge_proposals": _merge_proposals(spec, scored),
@@ -143,6 +164,7 @@ def build_public_web_result_artifact(
         "result_schema": ENRICHMENT_RESULT_SCHEMA,
         "provider": "public_web",
         "mode": public_web_request.get("mode") or "public_web",
+        "reuse_note": ODOLLO_REUSE_NOTE,
         "searched_by": searched_by,
         "source_request_schema": public_web_request.get("schema"),
         "source_request_status": public_web_request.get("status"),
@@ -220,6 +242,7 @@ def build_public_web_search_request(
         "schema": ENRICHMENT_PUBLIC_WEB_REQUEST_SCHEMA,
         "provider": "public_web",
         "mode": mode,
+        "reuse_note": ODOLLO_REUSE_NOTE,
         "requested_by": requested_by,
         "status": "prepared" if public_web_ready.get("status") == "ready" else "blocked",
         "reason": public_web_ready.get("reason") or "public-web readiness was not evaluated",
@@ -263,6 +286,7 @@ def build_paid_api_provider_request(
         "schema": ENRICHMENT_PROVIDER_REQUEST_SCHEMA,
         "provider": "apollo",
         "mode": mode,
+        "reuse_note": ODOLLO_REUSE_NOTE,
         "requested_by": requested_by,
         "status": "prepared" if apollo_ready.get("status") == "ready" else "blocked",
         "reason": apollo_ready.get("reason") or "Apollo readiness was not evaluated",
@@ -301,6 +325,7 @@ def build_paid_api_provider_handoff(
         "job_id": job_id,
         "provider": provider,
         "mode": provider_request.get("mode") or "api",
+        "reuse_note": ODOLLO_REUSE_NOTE,
         "operation": provider_request.get("operation") or "person_company_lookup",
         "cost_class": "paid_api",
         "allow_paid_enrichment": bool(provider_request.get("allow_paid_enrichment", False)),
@@ -344,6 +369,7 @@ def score_paid_api_provider_results(
         "result_schema": ENRICHMENT_RESULT_SCHEMA,
         "provider": provider,
         "cost_class": "paid_api",
+        "reuse_note": ODOLLO_REUSE_NOTE,
         "network_calls_made": 0,
         "paid_api_calls_attempted": 0,
         "max_results": max_results if max_results is not None else len(results),
@@ -363,13 +389,35 @@ def build_public_web_queries(spec: dict[str, Any], *, max_queries: int = 8) -> l
     if email:
         queries.append({"query": f'"{email}"', "purpose": "exact_email", "required": True})
     if phone:
-        queries.append({"query": f'"{phone}"', "purpose": "exact_phone", "required": True})
+        queries.extend(_public_web_phone_queries(phone, context_terms=[full_name, organization]))
     if full_name and organization:
         queries.append({"query": f'"{full_name}" "{organization}"', "purpose": "name_organization"})
     if full_name and website:
         queries.append({"query": f'"{full_name}" site:{_host(website)}', "purpose": "name_site"})
     if organization and website:
         queries.append({"query": f'"{organization}" site:{_host(website)}', "purpose": "organization_site"})
+    return queries[:max_queries]
+
+
+def _public_web_phone_queries(
+    phone: str,
+    *,
+    context_terms: list[str],
+    max_queries: int = 6,
+) -> list[dict[str, Any]]:
+    normalized = _normalize_phone_for_public_web(phone)
+    queries = [
+        {"query": f'"{form}"', "purpose": "exact_phone", "required": True}
+        for form in normalized["search_forms"][:4]
+    ]
+    for term in [item.strip() for item in context_terms if item and item.strip()][:2]:
+        queries.append(
+            {
+                "query": f'"{normalized["display"]}" "{term}"',
+                "purpose": "phone_with_context",
+                "required": False,
+            }
+        )
     return queries[:max_queries]
 
 
@@ -425,22 +473,33 @@ def _score_result(spec: dict[str, Any], result: dict[str, Any], *, index: int) -
     text = " ".join([title, url, snippet]).casefold()
     score = 0
     signals: list[str] = []
+    phone = str(spec.get("phone") or "").strip()
+    phone_hits = _phone_hits(text, phone) if phone else []
     for field, points in (("email", 40), ("phone", 30), ("full_name", 20), ("organization", 15)):
         value = str(spec.get(field) or "").strip()
-        if value and value.casefold() in text:
+        if field == "phone" and phone_hits:
+            score += points
+            signals.append(field)
+        elif field != "phone" and value and value.casefold() in text:
             score += points
             signals.append(field)
     website = str(spec.get("website") or "").strip()
     if website and _host(website) and _host(website) in _host(url):
         score += 15
         signals.append("website_host")
+    domain = _host(url)
+    if domain and domain not in DIRECTORY_DOMAINS:
+        score += 6
+        signals.append("non_directory_source")
     return {
         "rank": index + 1,
         "score": score,
         "signals": signals,
         "title": title,
         "url": url,
+        "domain": domain,
         "snippet": snippet,
+        "phone_hits": phone_hits,
     }
 
 
@@ -458,7 +517,7 @@ def _merge_proposals(spec: dict[str, Any], scored: list[dict[str, Any]]) -> list
 
 
 def _normalize_provider_result(spec: dict[str, Any], result: dict[str, Any], *, index: int) -> dict[str, Any]:
-    person = dict(result.get("person") or result)
+    person = _extract_apollo_person(result)
     organization = dict(result.get("organization") or result.get("account") or {})
     email = str(person.get("email") or result.get("email") or "").strip().lower()
     full_name = str(person.get("name") or result.get("name") or "").strip()
@@ -526,6 +585,72 @@ def _provider_merge_proposals(provider: str, scored: list[dict[str, Any]]) -> li
             }
         )
     return proposals
+
+
+def _extract_apollo_person(payload: dict[str, Any]) -> dict[str, Any]:
+    for key in ("person", "contact", "data"):
+        value = payload.get(key)
+        if isinstance(value, dict) and (value.get("id") or value.get("email") or value.get("name")):
+            return dict(value)
+    for key in ("people", "contacts"):
+        value = payload.get(key)
+        if isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict) and (item.get("id") or item.get("email") or item.get("name")):
+                    return dict(item)
+    return dict(payload)
+
+
+def _normalize_phone_for_public_web(phone: str, *, default_country_code: str = "1") -> dict[str, Any]:
+    digits = PHONE_DIGIT_RE.sub("", phone or "")
+    if len(digits) == 10:
+        e164 = f"+{default_country_code}{digits}"
+        national = digits
+    elif len(digits) == 11 and digits.startswith(default_country_code):
+        e164 = f"+{digits}"
+        national = digits[1:]
+    else:
+        e164 = f"+{digits}" if digits.startswith(default_country_code) and len(digits) > 8 else None
+        national = digits[-10:] if len(digits) >= 10 else digits
+    display = (
+        f"{national[0:3]}-{national[3:6]}-{national[6:10]}"
+        if len(national) == 10
+        else phone.strip()
+    )
+    forms = []
+    if len(national) == 10:
+        forms.extend(
+            [
+                display,
+                national,
+                f"({national[0:3]}) {national[3:6]}-{national[6:10]}",
+                f"{national[0:3]} {national[3:6]} {national[6:10]}",
+            ]
+        )
+    if e164:
+        forms.append(e164)
+    return {
+        "raw": phone,
+        "digits": digits,
+        "e164": e164,
+        "display": display,
+        "search_forms": list(dict.fromkeys(form for form in forms if form)),
+    }
+
+
+def _phone_hits(text: str, phone: str) -> list[str]:
+    normalized = _normalize_phone_for_public_web(phone)
+    compact = PHONE_DIGIT_RE.sub("", text)
+    hits = [
+        form
+        for form in normalized["search_forms"]
+        if str(form).casefold() in text.casefold()
+    ]
+    digits = str(normalized["digits"] or "")
+    national = digits[-10:] if len(digits) >= 10 else digits
+    if national and national in compact:
+        hits.append(national)
+    return list(dict.fromkeys(hits))
 
 
 def _host(url: str) -> str:

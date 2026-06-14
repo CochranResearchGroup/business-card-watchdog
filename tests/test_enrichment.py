@@ -7,11 +7,13 @@ from business_card_watchdog.enrichment import (
     build_enrichment_request,
     build_paid_api_provider_handoff,
     build_paid_api_provider_request,
+    build_public_web_queries,
     build_public_web_result_artifact,
     build_public_web_search_handoff,
     build_public_web_search_request,
     check_enrichment_readiness,
     score_paid_api_provider_results,
+    score_public_web_results,
 )
 from business_card_watchdog.orchestrator import BatchOrchestrator
 from business_card_watchdog.service import BusinessCardService
@@ -122,6 +124,55 @@ def test_public_web_search_request_is_zero_network_and_operator_scoped(tmp_path:
     assert "paid API" in request["instructions"][2]
 
 
+def test_public_web_queries_include_odollo_derived_phone_forms() -> None:
+    queries = build_public_web_queries(
+        {
+            "full_name": "Ada Lovelace",
+            "organization": "Example Labs",
+            "phone": "(555) 010-1234",
+        },
+        max_queries=6,
+    )
+
+    assert queries[0] == {"query": '"555-010-1234"', "purpose": "exact_phone", "required": True}
+    assert {"query": '"5550101234"', "purpose": "exact_phone", "required": True} in queries
+    assert {
+        "query": '"555-010-1234" "Ada Lovelace"',
+        "purpose": "phone_with_context",
+        "required": False,
+    } in queries
+
+
+def test_public_web_scoring_uses_phone_hits_and_directory_penalty_context() -> None:
+    result = score_public_web_results(
+        build_contact_candidate(
+            {
+                "full_name": "Ada Lovelace",
+                "organization": "Example Labs",
+                "phone": "(555) 010-1234",
+            }
+        ),
+        results=[
+            {
+                "title": "Ada Lovelace - Example Labs",
+                "url": "https://example.test/team/ada",
+                "snippet": "Call (555) 010-1234 for Example Labs.",
+            },
+            {
+                "title": "Directory row",
+                "url": "https://yellowpages.com/example-labs",
+                "snippet": "Call 5550101234.",
+            },
+        ],
+    )
+
+    assert result["reuse_note"] == "adapted_from_odollo_enrichment_patterns"
+    assert result["results"][0]["phone_hits"]
+    assert "phone" in result["results"][0]["signals"]
+    assert "non_directory_source" in result["results"][0]["signals"]
+    assert result["results"][0]["domain"] == "example.test"
+
+
 def test_public_web_result_artifact_scores_explicit_operator_results(tmp_path: Path) -> None:
     candidate = build_contact_candidate(
         {
@@ -152,6 +203,7 @@ def test_public_web_result_artifact_scores_explicit_operator_results(tmp_path: P
     )
 
     assert result["schema"] == "business-card-watchdog.enrichment-public-web-result.v1"
+    assert result["reuse_note"] == "adapted_from_odollo_enrichment_patterns"
     assert result["result_schema"] == "business-card-watchdog.enrichment-result.v1"
     assert result["searched_by"] == "tester"
     assert result["source_query_count"] == 1
@@ -292,6 +344,7 @@ def test_paid_api_provider_results_are_reviewable_without_call() -> None:
     )
 
     assert result["schema"] == "business-card-watchdog.enrichment-provider-result.v1"
+    assert result["reuse_note"] == "adapted_from_odollo_enrichment_patterns"
     assert result["result_schema"] == "business-card-watchdog.enrichment-result.v1"
     assert result["provider"] == "apollo"
     assert result["network_calls_made"] == 0
@@ -300,6 +353,30 @@ def test_paid_api_provider_results_are_reviewable_without_call() -> None:
     assert result["submitted_result_count"] == 1
     assert result["results"][0]["score"] >= 80
     assert any(proposal["field"] == "title" for proposal in result["merge_proposals"])
+
+
+def test_apollo_provider_result_extraction_accepts_contact_wrappers() -> None:
+    result = score_paid_api_provider_results(
+        build_contact_candidate({"full_name": "Ada Lovelace", "email": "ada@example.test"}),
+        provider="apollo",
+        results=[
+            {
+                "contact": {
+                    "id": "apollo-contact-1",
+                    "name": "Ada Lovelace",
+                    "email": "ada@example.test",
+                    "title": "Principal",
+                },
+                "account": {"name": "Example Labs", "domain": "example.test"},
+            }
+        ],
+    )
+
+    assert result["network_calls_made"] == 0
+    assert result["paid_api_calls_attempted"] == 0
+    assert result["results"][0]["full_name"] == "Ada Lovelace"
+    assert result["results"][0]["email"] == "ada@example.test"
+    assert result["results"][0]["organization"] == "Example Labs"
 
 
 def test_service_request_enrichment_writes_request_and_fixture_result(tmp_path: Path, monkeypatch) -> None:
