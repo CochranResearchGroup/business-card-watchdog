@@ -198,6 +198,29 @@ Remaining:
 
 - No live lookup or write was run. Actual execution requires an operator-selected non-sensitive run/job/sink and local sink auth.
 
+### Slice 0006-G | 2026-06-14 | Release Readiness And v0.1.0 Tag
+
+Implemented:
+
+- Added `docs/operations/release-readiness.md`.
+- Documented pre-release gates, branch-protection readback, private-artifact check, annotated tag command, GitHub release command, and v0.1.0 release notes.
+- Linked the release-readiness runbook from README.
+
+Validation:
+
+- `git diff --check` passed.
+- `.venv/bin/python -m pytest -q` passed with 179 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` built source and wheel distributions.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` scanned 98 commits and found no leaks.
+- `gh api repos/CochranResearchGroup/business-card-watchdog/branches/main/protection --jq '{strict:.required_status_checks.strict, contexts:.required_status_checks.contexts, allow_force_pushes:.allow_force_pushes.enabled, allow_deletions:.allow_deletions.enabled}'` confirmed strict checks, disabled force pushes, and disabled deletion.
+- `git ls-files | rg '(\.env|secret|credential|token|\.key|\.pem|\.p12|\.sqlite|\.db|\.jpg|\.jpeg|\.png|\.heic)' || true` returned no tracked private-artifact paths.
+- `rg -n 'release-readiness|v0.1.0|Initial public source release|Paid enrichment remains explicitly requested' README.md docs/operations/release-readiness.md docs/dev/plans/0006-2026-06-14-public-upstream-hardening.md RUNBOOK.md` passed.
+
+Remaining:
+
+- Validate, commit, push, tag `v0.1.0`, and create the GitHub release.
+
 ## Operating Rules
 
 - Use `uv` for clean development environments and CI setup.

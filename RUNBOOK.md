@@ -1726,6 +1726,27 @@ Validation:
 - `gitleaks detect --source . --no-banner --redact --exit-code 1` scanned 97 commits and found no leaks.
 - `rg -n 'live-pilot-checklists|Read-Only Lookup Smoke|One-Job Write And Readback Pilot|Stop conditions|No live lookup or write was run|--no-simulate' README.md docs/operations/live-pilot-checklists.md docs/dev/plans/0006-2026-06-14-public-upstream-hardening.md RUNBOOK.md` passed.
 
+## Turn 103 | 2026-06-14
+
+Continued Plan 0006 with release-readiness documentation.
+
+Implemented:
+
+- Added `docs/operations/release-readiness.md`.
+- Documented pre-release gates, branch-protection readback, private-artifact check, annotated tag command, GitHub release command, and v0.1.0 release notes.
+- Linked the release-readiness runbook from README.
+
+Validation:
+
+- `git diff --check` passed.
+- `.venv/bin/python -m pytest -q` passed with 179 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` built source and wheel distributions.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` scanned 98 commits and found no leaks.
+- `gh api repos/CochranResearchGroup/business-card-watchdog/branches/main/protection --jq '{strict:.required_status_checks.strict, contexts:.required_status_checks.contexts, allow_force_pushes:.allow_force_pushes.enabled, allow_deletions:.allow_deletions.enabled}'` confirmed strict checks, disabled force pushes, and disabled deletion.
+- `git ls-files | rg '(\.env|secret|credential|token|\.key|\.pem|\.p12|\.sqlite|\.db|\.jpg|\.jpeg|\.png|\.heic)' || true` returned no tracked private-artifact paths.
+- `rg -n 'release-readiness|v0.1.0|Initial public source release|Paid enrichment remains explicitly requested' README.md docs/operations/release-readiness.md docs/dev/plans/0006-2026-06-14-public-upstream-hardening.md RUNBOOK.md` passed.
+
 ## Turn 98 | 2026-06-14
 
 Continued Plan 0004 execution with a current completion and residual backlog audit.
