@@ -121,6 +121,18 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_live_pilot_handoff",
+                "description": "Create an operator handoff with exact next live-pilot commands and stop conditions without executing live calls.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "write": {"type": "boolean", "default": True},
+                    },
+                    "required": ["run_id"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_next_actions",
                 "description": "Return deterministic next actions for agent-loop batch orchestration.",
                 "input_schema": {
@@ -739,6 +751,11 @@ def call_tool(
         return service.pilot_readiness_report(str(args["run_id"]))
     if tool_name == "business_card_watchdog_live_pilot_status":
         return service.live_pilot_status(
+            run_id=str(args["run_id"]),
+            write=bool(args.get("write", True)),
+        )
+    if tool_name == "business_card_watchdog_live_pilot_handoff":
+        return service.live_pilot_handoff(
             run_id=str(args["run_id"]),
             write=bool(args.get("write", True)),
         )

@@ -27,6 +27,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_phase_report" in names
     assert "business_card_watchdog_pilot_readiness_report" in names
     assert "business_card_watchdog_live_pilot_status" in names
+    assert "business_card_watchdog_live_pilot_handoff" in names
     assert "business_card_watchdog_next_actions" in names
     assert "business_card_watchdog_run_next_actions" in names
     assert "business_card_watchdog_reviews_list" in names
@@ -211,6 +212,11 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     )
     live_status = call_tool(
         "business_card_watchdog_live_pilot_status",
+        {"run_id": run_id, "write": False},
+        config=config,
+    )
+    live_handoff = call_tool(
+        "business_card_watchdog_live_pilot_handoff",
         {"run_id": run_id, "write": False},
         config=config,
     )
@@ -422,6 +428,9 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert live_closeout["report"]["writes_attempted"] == 0
     assert live_status["schema"] == "business-card-watchdog.live-pilot-status.v1"
     assert live_status["writes_attempted"] == 0
+    assert live_handoff["schema"] == "business-card-watchdog.live-pilot-handoff.v1"
+    assert live_handoff["action_counts"]["request_live_lookup_smoke"] == 1
+    assert live_handoff["writes_attempted"] == 0
     assert write_pilot["pilot"]["schema"] == "business-card-watchdog.sink-write-pilot.v1"
     assert write_pilot["pilot"]["writes_attempted"] == 0
     assert write_pilot["result"]["state"] == "mock_applied"

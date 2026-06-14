@@ -249,6 +249,14 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert status["writes_attempted"] == 0
     assert Path(status["status_path"]).exists()
 
+    assert main(["--config", str(config_path), "runs", "live-pilot-handoff", run_id, "--json"]) == 0
+    handoff = json.loads(capsys.readouterr().out)
+    assert handoff["schema"] == "business-card-watchdog.live-pilot-handoff.v1"
+    assert handoff["state"] == "ready_for_live_lookup_request"
+    assert handoff["action_counts"]["request_live_lookup_smoke"] == 1
+    assert handoff["writes_attempted"] == 0
+    assert Path(handoff["handoff_path"]).exists()
+
 
 def test_cli_runs_and_jobs_use_recorded_runtime_state(
     tmp_path: Path, capsys

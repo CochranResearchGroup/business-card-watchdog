@@ -4662,6 +4662,126 @@ class BusinessCardService:
             payload["status_path"] = str(status_path)
         return payload
 
+    def live_pilot_handoff(self, *, run_id: str, write: bool = True) -> dict[str, Any]:
+        status = self.live_pilot_status(run_id=run_id, write=False)
+        handoff_entries: list[dict[str, Any]] = []
+        for entry in list(status.get("entries") or []):
+            if not isinstance(entry, dict):
+                continue
+            job_id = str(entry.get("job_id") or "")
+            job_state = str(entry.get("state") or "unknown")
+            commands = dict(entry.get("commands") or {})
+            if job_state == "complete":
+                next_action = "complete"
+                operator_required = False
+                command = commands.get("closeout")
+                reason = "live pilot closeout is complete"
+            elif job_state == "selected_target_active":
+                next_action = "request_live_lookup_smoke"
+                operator_required = True
+                command = commands.get("lookup_smoke")
+                reason = "selected live target exists; live lookup smoke requires explicit operator request"
+            elif job_state == "pending_operator_approval":
+                next_action = "approve_selected_target"
+                operator_required = True
+                command = commands.get("select_target")
+                reason = "selection packet is ready; operator must approve a selected live target"
+            elif job_state == "ready_for_selection":
+                next_action = "prepare_selection_packet"
+                operator_required = True
+                command = commands.get("selection_packet")
+                reason = "candidate is ready; prepare approval evidence before selecting a live target"
+            elif job_state == "blocked":
+                next_action = "review_blockers"
+                operator_required = True
+                command = f"runs live-pilot-status {run_id} --json"
+                reason = "candidate exists but readiness or policy blockers remain"
+            else:
+                next_action = "no_live_candidate"
+                operator_required = False
+                command = f"live-target-candidates --run-id {run_id} --json"
+                reason = "no live target candidate is currently available for this job"
+            handoff_entries.append(
+                {
+                    "schema": "business-card-watchdog.live-pilot-handoff-entry.v1",
+                    "run_id": run_id,
+                    "job_id": job_id,
+                    "status_state": job_state,
+                    "next_action": next_action,
+                    "operator_required": operator_required,
+                    "reason": reason,
+                    "command": command,
+                    "selected_target_sink": entry.get("selected_target_sink"),
+                    "selected_target_scope": entry.get("selected_target_scope"),
+                    "selection_packet_state": entry.get("selection_packet_state"),
+                    "lookup_smoke_state": entry.get("lookup_smoke_state"),
+                    "write_pilot_state": entry.get("write_pilot_state"),
+                    "readback_pilot_state": entry.get("readback_pilot_state"),
+                    "closeout_state": entry.get("closeout_state"),
+                    "closeout_missing_artifacts": entry.get("closeout_missing_artifacts", []),
+                    "commands": commands,
+                }
+            )
+        action_counts: dict[str, int] = {}
+        for entry in handoff_entries:
+            action = str(entry["next_action"])
+            action_counts[action] = action_counts.get(action, 0) + 1
+        state = (
+            "complete"
+            if handoff_entries and action_counts.get("complete") == len(handoff_entries)
+            else "ready_for_live_lookup_request"
+            if action_counts.get("request_live_lookup_smoke")
+            else "ready_for_operator_selection"
+            if action_counts.get("approve_selected_target") or action_counts.get("prepare_selection_packet")
+            else "blocked"
+            if handoff_entries
+            else "empty"
+        )
+        payload = {
+            "schema": "business-card-watchdog.live-pilot-handoff.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_id,
+            "status_state": status.get("state"),
+            "job_count": len(handoff_entries),
+            "action_counts": action_counts,
+            "entries": handoff_entries,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "observed_writes_attempted": status.get("observed_writes_attempted", 0),
+            "observed_network_calls_made": status.get("observed_network_calls_made", 0),
+            "commands": {
+                "live_pilot_status": f"runs live-pilot-status {run_id} --json",
+                "live_pilot_handoff": f"runs live-pilot-handoff {run_id} --json",
+                "live_readiness_audit": f"live-readiness-audit --run-id {run_id} --json",
+                "live_target_candidates": f"live-target-candidates --run-id {run_id} --json",
+            },
+            "operator_stop_conditions": [
+                "Operator must choose exactly one run_id, job_id, sink, scope, and target tenant/profile before any live call.",
+                "Do not create selected_live_target.json unless the selected card/contact is safe for the target tenant/profile.",
+                "Do not run live lookup, live write, or live readback from this handoff artifact.",
+                "Do not process private SyncThing images, run public-web search, or call paid enrichment from this handoff artifact.",
+            ],
+        }
+        if write:
+            handoff_path = self.config.runs_dir / run_id / "live_pilot_handoff.json"
+            handoff_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            ledger = RunLedger(self.config.runs_dir / run_id)
+            ledger.record_artifact(job_id="__run__", kind="live_pilot_handoff", path=handoff_path)
+            ledger.record_event(
+                "live_pilot_handoff_created",
+                {
+                    "run_id": run_id,
+                    "handoff_path": str(handoff_path),
+                    "state": state,
+                    "job_count": len(handoff_entries),
+                    "writes_attempted": 0,
+                    "network_calls_made": 0,
+                },
+            )
+            payload["handoff_path"] = str(handoff_path)
+        return payload
+
     def live_selection_packet(
         self,
         *,

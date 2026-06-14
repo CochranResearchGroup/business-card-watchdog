@@ -86,6 +86,30 @@ def _render_live_pilot_status_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_live_pilot_handoff_text(payload: dict[str, object]) -> str:
+    action_counts = dict(payload.get("action_counts") or {})
+    entries = payload.get("entries") or []
+    lines = [
+        f"Run: {payload.get('run_id')}",
+        f"State: {payload.get('state')}",
+        f"Jobs: {payload.get('job_count')}",
+        "Actions: "
+        + " ".join(f"{key}={value}" for key, value in sorted(action_counts.items()))
+        if action_counts
+        else "Actions: none",
+    ]
+    for entry in entries if isinstance(entries, list) else []:
+        if isinstance(entry, dict):
+            lines.append(
+                " - "
+                f"{entry.get('job_id')} "
+                f"next={entry.get('next_action')} "
+                f"operator_required={entry.get('operator_required')} "
+                f"command={entry.get('command') or 'none'}"
+            )
+    return "\n".join(lines) + "\n"
+
+
 def _render_run_summary_text(payload: dict[str, object]) -> str:
     enrichment_budget = dict(payload.get("enrichment_budget") or {})
     public_web = dict(enrichment_budget.get("public_web") or {})
@@ -339,6 +363,10 @@ def build_parser() -> argparse.ArgumentParser:
     runs_live_pilot_status.add_argument("run_id")
     runs_live_pilot_status.add_argument("--no-write", action="store_true")
     runs_live_pilot_status.add_argument("--json", action="store_true")
+    runs_live_pilot_handoff = runs_sub.add_parser("live-pilot-handoff")
+    runs_live_pilot_handoff.add_argument("run_id")
+    runs_live_pilot_handoff.add_argument("--no-write", action="store_true")
+    runs_live_pilot_handoff.add_argument("--json", action="store_true")
 
     jobs = sub.add_parser("jobs")
     jobs_sub = jobs.add_subparsers(dest="jobs_command", required=True)
@@ -682,8 +710,13 @@ def main(argv: list[str] | None = None) -> int:
             payload = service.pilot_readiness_report(args.run_id)
         elif args.runs_command == "live-pilot-status":
             payload = service.live_pilot_status(run_id=args.run_id, write=not args.no_write)
+        elif args.runs_command == "live-pilot-handoff":
+            payload = service.live_pilot_handoff(run_id=args.run_id, write=not args.no_write)
         else:
             payload = service.get_run(args.run_id)
+        if args.runs_command == "live-pilot-handoff" and not args.json:
+            print(_render_live_pilot_handoff_text(payload), end="")
+            return 0
         if args.runs_command == "live-pilot-status" and not args.json:
             print(_render_live_pilot_status_text(payload), end="")
             return 0

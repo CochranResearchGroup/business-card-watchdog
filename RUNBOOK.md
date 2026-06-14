@@ -2524,3 +2524,30 @@ Validation:
 Safety:
 
 - This was run-level readback only. It can write `live_pilot_status.json`, but it did not create or modify `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+## Turn 131 | 2026-06-14
+
+Continued Plan 0009 with Slice 0009-A7.
+
+Implemented:
+
+- Added `business-card-watchdog.live-pilot-handoff.v1`.
+- Added `BusinessCardService.live_pilot_handoff`.
+- Added CLI `bcw runs live-pilot-handoff`.
+- Added API `GET /runs/{run_id}/live-pilot-handoff`.
+- Added MCP tool `business_card_watchdog_live_pilot_handoff`.
+- Live pilot handoffs convert run-level status entries into operator-facing next actions, exact next commands, stop reasons, selected-target context, and action counts for deterministic `/goal` and subagent handoff.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+- `.venv/bin/python -m pytest -q` passed with 210 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was handoff/readback only. It can write `live_pilot_handoff.json`, but it did not create or modify `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.

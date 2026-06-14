@@ -1845,6 +1845,16 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert live_status["observed_writes_attempted"] == 0
     assert Path(live_status["status_path"]).exists()
 
+    handoff = service.live_pilot_handoff(run_id=run_id)
+    assert handoff["schema"] == "business-card-watchdog.live-pilot-handoff.v1"
+    assert handoff["state"] == "ready_for_live_lookup_request"
+    assert handoff["action_counts"]["request_live_lookup_smoke"] == 1
+    assert handoff["entries"][0]["operator_required"] is True
+    assert handoff["entries"][0]["command"].startswith("sinks execute-lookup-smoke")
+    assert handoff["writes_attempted"] == 0
+    assert handoff["network_calls_made"] == 0
+    assert Path(handoff["handoff_path"]).exists()
+
     result = service.execute_sink_lookup_pilot_for_job(
         job_id=job_id,
         run_id=run_id,

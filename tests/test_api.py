@@ -83,6 +83,10 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert live_status["schema"] == "business-card-watchdog.live-pilot-status.v1"
     assert live_status["job_count"] == 1
     assert live_status["writes_attempted"] == 0
+    live_handoff = client.get(f"/runs/{run_id}/live-pilot-handoff", params={"write": False}).json()
+    assert live_handoff["schema"] == "business-card-watchdog.live-pilot-handoff.v1"
+    assert live_handoff["action_counts"]["request_live_lookup_smoke"] == 1
+    assert live_handoff["writes_attempted"] == 0
     assert client.get("/runs").json()[0]["run_id"] == run_id
     assert client.get(f"/runs/{run_id}").json()["run_id"] == run_id
     assert client.get(f"/runs/{run_id}/summary").json()["needs_review_count"] == 1
