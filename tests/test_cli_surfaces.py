@@ -338,6 +338,13 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert closeout["report"]["state"] == "incomplete"
     assert closeout["report"]["writes_attempted"] == 0
     assert Path(closeout["closeout_path"]).exists()
+    assert closeout["report"]["commands"]["selected_target_audit"] == (
+        f"sinks selected-target-audit {job_id} --run-id {run_id}"
+    )
+    assert closeout["report"]["commands"]["apply_pilot_report"] == (
+        f"sinks apply-pilot-report {job_id} --run-id {run_id}"
+    )
+    assert closeout["report"]["commands"]["closeout"] == f"sinks live-pilot-closeout {job_id} --run-id {run_id}"
 
     assert (
         main(
@@ -373,6 +380,12 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert status["counts"]["selected_target_active"] == 1
     assert status["writes_attempted"] == 0
     assert Path(status["status_path"]).exists()
+    assert status["commands"]["live_pilot_status"] == f"runs live-pilot-status {run_id}"
+    assert status["commands"]["live_target_candidates"] == f"live-target-candidates --run-id {run_id}"
+    assert status["entries"][0]["commands"]["selected_target_audit"] == (
+        f"sinks selected-target-audit {job_id} --run-id {run_id}"
+    )
+    assert status["entries"][0]["commands"]["closeout"] == f"sinks live-pilot-closeout {job_id} --run-id {run_id}"
     target_identity = status["entries"][0]["selected_target_identity"]
 
     assert main(["--config", str(config_path), "runs", "live-pilot-status", run_id, "--no-write"]) == 0
@@ -388,6 +401,9 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert handoff["action_counts"]["request_live_lookup_smoke"] == 1
     assert handoff["writes_attempted"] == 0
     assert Path(handoff["handoff_path"]).exists()
+    assert handoff["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id}"
+    assert handoff["commands"]["live_readiness_audit"] == f"live-readiness-audit --run-id {run_id}"
+    assert handoff["entries"][0]["command"] == f"sinks execute-lookup-smoke {job_id} --run-id {run_id} --json"
 
     assert main(["--config", str(config_path), "runs", "live-pilot-handoff", run_id, "--no-write"]) == 0
     text_handoff = capsys.readouterr().out

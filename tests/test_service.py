@@ -2403,7 +2403,7 @@ def test_service_live_pilot_closeout_rejects_stale_selected_target_evidence(tmp_
     assert status["entries"][0]["closeout_blockers"] == closeout_blockers
     assert handoff["state"] == "blocked"
     assert handoff["action_counts"]["review_live_pilot_closeout"] == 1
-    assert handoff["entries"][0]["command"].startswith("sinks live-pilot-closeout")
+    assert handoff["entries"][0]["command"] == f"sinks live-pilot-closeout {job_id} --run-id {run_id}"
     assert handoff["entries"][0]["closeout_blockers"] == closeout_blockers
 
 

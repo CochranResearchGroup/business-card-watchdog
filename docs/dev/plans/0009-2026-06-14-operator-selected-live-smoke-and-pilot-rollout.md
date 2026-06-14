@@ -741,6 +741,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_sinks_apply_decision_writes_zero_write_artifact -q` passed with 1 test.
 
+### Slice 0009-A43 | 2026-06-14 | Align Generated Commands With Text Reviews
+
+Implemented:
+
+- Live pilot closeout, status, handoff, and abandonment command maps now prefer text-mode review/readiness commands where text renderers exist.
+- Execution and durable approval commands remain explicit JSON handoffs where they create or drive approval/execution artifacts.
+- CLI and service tests now assert that generated operator review commands stay text-first for selected-target audit, apply pilot report, closeout, live status, handoff, readiness audit, and target candidates.
+
+Safety:
+
+- This slice changes generated next-step command text only.
+- It does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It keeps live execution gated by selected-target approval and explicit operator commands.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_service.py::test_service_live_pilot_closeout_rejects_stale_selected_target_evidence -q` passed with 2 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

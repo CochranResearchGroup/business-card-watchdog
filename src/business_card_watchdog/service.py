@@ -2256,11 +2256,11 @@ class BusinessCardService:
             "writes_attempted": 0,
             "network_calls_made": 0,
             "commands": {
-                "live_pilot_status": f"runs live-pilot-status {run_id} --json",
-                "live_pilot_handoff": f"runs live-pilot-handoff {run_id} --json",
+                "live_pilot_status": f"runs live-pilot-status {run_id}",
+                "live_pilot_handoff": f"runs live-pilot-handoff {run_id}",
                 "prepare_new_selection_packet": (
                     f"sinks live-selection-packet {job_id} --run-id {run_id} "
-                    "--sink <sink> --operator <operator> --json"
+                    "--sink <sink> --operator <operator>"
                 ),
                 "select_new_target": (
                     f"sinks select-live-target {job_id} --run-id {run_id} "
@@ -4166,10 +4166,10 @@ class BusinessCardService:
             "artifact_paths": artifact_paths,
             "remediation": self._pilot_bundle_remediation(sink or "unknown"),
             "commands": {
-                "selected_target_audit": f"sinks selected-target-audit {job_id} --run-id {run_id} --json",
+                "selected_target_audit": f"sinks selected-target-audit {job_id} --run-id {run_id}",
                 "lookup_smoke": f"sinks execute-lookup-smoke {job_id} --run-id {run_id} --json",
-                "apply_pilot_report": f"sinks apply-pilot-report {job_id} --run-id {run_id} --json",
-                "closeout": f"sinks live-pilot-closeout {job_id} --run-id {run_id} --json",
+                "apply_pilot_report": f"sinks apply-pilot-report {job_id} --run-id {run_id}",
+                "closeout": f"sinks live-pilot-closeout {job_id} --run-id {run_id}",
             },
             "explicit_stop_conditions": [
                 "Do not run another live write until this closeout is complete or explicitly abandoned.",
@@ -5113,15 +5113,15 @@ class BusinessCardService:
                     "abandonment_identity": abandonment_identity or None,
                     "abandonment_reason": abandonment_reason,
                     "commands": {
-                        "selection_packet": f"sinks live-selection-packet {job_id} --run-id {run_id} --sink <sink> --operator <operator> --json",
+                        "selection_packet": f"sinks live-selection-packet {job_id} --run-id {run_id} --sink <sink> --operator <operator>",
                         "select_target": (
                             f"sinks select-live-target {job_id} --run-id {run_id} --sink <sink> "
                             "--operator <operator> --scope lookup --safety-confirmation <confirmation> --json"
                         ),
-                        "selected_target_audit": f"sinks selected-target-audit {job_id} --run-id {run_id} --json",
+                        "selected_target_audit": f"sinks selected-target-audit {job_id} --run-id {run_id}",
                         "lookup_smoke": f"sinks execute-lookup-smoke {job_id} --run-id {run_id} --json",
                         "abandon": f"sinks abandon-live-pilot {job_id} --run-id {run_id} --operator <operator> --reason <reason> --json",
-                        "closeout": f"sinks live-pilot-closeout {job_id} --run-id {run_id} --json",
+                        "closeout": f"sinks live-pilot-closeout {job_id} --run-id {run_id}",
                     },
                 }
             )
@@ -5159,10 +5159,10 @@ class BusinessCardService:
             "observed_writes_attempted": observed_writes_attempted,
             "observed_network_calls_made": observed_network_calls_made,
             "commands": {
-                "live_readiness_audit": f"live-readiness-audit --run-id {run_id} --json",
-                "live_selection_requirements": f"live-selection-requirements --run-id {run_id} --json",
-                "live_target_candidates": f"live-target-candidates --run-id {run_id} --json",
-                "live_pilot_status": f"runs live-pilot-status {run_id} --json",
+                "live_readiness_audit": f"live-readiness-audit --run-id {run_id}",
+                "live_selection_requirements": f"live-selection-requirements --run-id {run_id}",
+                "live_target_candidates": f"live-target-candidates --run-id {run_id}",
+                "live_pilot_status": f"runs live-pilot-status {run_id}",
             },
             "explicit_stop_conditions": [
                 "This status report does not create selected_live_target.json.",
@@ -5236,12 +5236,12 @@ class BusinessCardService:
             elif job_state == "blocked":
                 next_action = "review_blockers"
                 operator_required = True
-                command = f"runs live-pilot-status {run_id} --json"
+                command = f"runs live-pilot-status {run_id}"
                 reason = "candidate exists but readiness or policy blockers remain"
             else:
                 next_action = "no_live_candidate"
                 operator_required = False
-                command = f"live-target-candidates --run-id {run_id} --json"
+                command = f"live-target-candidates --run-id {run_id}"
                 reason = "no live target candidate is currently available for this job"
             handoff_entries.append(
                 {
@@ -5302,11 +5302,11 @@ class BusinessCardService:
             "observed_writes_attempted": status.get("observed_writes_attempted", 0),
             "observed_network_calls_made": status.get("observed_network_calls_made", 0),
             "commands": {
-                "live_pilot_status": f"runs live-pilot-status {run_id} --json",
-                "live_pilot_handoff": f"runs live-pilot-handoff {run_id} --json",
-                "live_readiness_audit": f"live-readiness-audit --run-id {run_id} --json",
-                "live_selection_requirements": f"live-selection-requirements --run-id {run_id} --json",
-                "live_target_candidates": f"live-target-candidates --run-id {run_id} --json",
+                "live_pilot_status": f"runs live-pilot-status {run_id}",
+                "live_pilot_handoff": f"runs live-pilot-handoff {run_id}",
+                "live_readiness_audit": f"live-readiness-audit --run-id {run_id}",
+                "live_selection_requirements": f"live-selection-requirements --run-id {run_id}",
+                "live_target_candidates": f"live-target-candidates --run-id {run_id}",
             },
             "operator_stop_conditions": [
                 "Operator must choose exactly one run_id, job_id, sink, scope, and target tenant/profile before any live call.",
