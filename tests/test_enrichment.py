@@ -60,7 +60,7 @@ def test_paid_api_enrichment_requires_config_flag_operator_flag_and_key_name(tmp
     assert missing_key.status == "blocked"
     assert missing_key.missing_key == "APOLLO_API_KEY"
 
-    keys_path.write_text("APOLLO_API_KEY=secret-value-not-printed\n", encoding="utf-8")
+    keys_path.write_text("APOLLO_API_KEY=fixture-value-redacted\n", encoding="utf-8")
     ready = check_enrichment_readiness(config, mode="api", allow_paid_enrichment=True)[0]
     assert ready.status == "ready"
     assert ready.missing_key is None
@@ -194,7 +194,7 @@ def test_public_web_search_handoff_is_zero_network_and_import_scoped() -> None:
 
 def test_paid_api_provider_request_is_zero_network_and_secret_free(tmp_path: Path) -> None:
     keys_path = tmp_path / "API-keys.env"
-    keys_path.write_text("APOLLO_API_KEY=secret-value-not-printed\n", encoding="utf-8")
+    keys_path.write_text("APOLLO_API_KEY=fixture-value-redacted\n", encoding="utf-8")
     config = AppConfig(
         config_path=tmp_path / "config.toml",
         enrichment=EnrichmentConfig(
@@ -464,7 +464,7 @@ def test_service_public_web_result_import_enforces_request_limit(tmp_path: Path)
 
 def test_service_request_api_enrichment_writes_provider_request_without_call(tmp_path: Path) -> None:
     keys_path = tmp_path / "API-keys.env"
-    keys_path.write_text("APOLLO_API_KEY=secret-value-not-printed\n", encoding="utf-8")
+    keys_path.write_text("APOLLO_API_KEY=fixture-value-redacted\n", encoding="utf-8")
     config = AppConfig(
         config_path=tmp_path / "config.toml",
         data_dir=tmp_path / "data",
@@ -514,7 +514,7 @@ def test_service_request_api_enrichment_writes_provider_request_without_call(tmp
 
 def test_service_creates_provider_handoff_and_records_results_after_request(tmp_path: Path) -> None:
     keys_path = tmp_path / "API-keys.env"
-    keys_path.write_text("APOLLO_API_KEY=secret-value-not-printed\n", encoding="utf-8")
+    keys_path.write_text("APOLLO_API_KEY=fixture-value-redacted\n", encoding="utf-8")
     config = AppConfig(
         config_path=tmp_path / "config.toml",
         data_dir=tmp_path / "data",
@@ -573,7 +573,7 @@ def test_service_creates_provider_handoff_and_records_results_after_request(tmp_
 
 def test_service_paid_provider_result_import_enforces_request_limit(tmp_path: Path) -> None:
     keys_path = tmp_path / "API-keys.env"
-    keys_path.write_text("APOLLO_API_KEY=secret-value-not-printed\n", encoding="utf-8")
+    keys_path.write_text("APOLLO_API_KEY=fixture-value-redacted\n", encoding="utf-8")
     config = AppConfig(
         config_path=tmp_path / "config.toml",
         data_dir=tmp_path / "data",

@@ -330,7 +330,7 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
 
 def test_mcp_enrichment_request_can_prepare_paid_provider_without_call(tmp_path: Path) -> None:
     keys_path = tmp_path / "API-keys.env"
-    keys_path.write_text("APOLLO_API_KEY=secret-value-not-printed\n", encoding="utf-8")
+    keys_path.write_text("APOLLO_API_KEY=fixture-value-redacted\n", encoding="utf-8")
     config = AppConfig(
         config_path=tmp_path / "config.toml",
         data_dir=tmp_path / "data",

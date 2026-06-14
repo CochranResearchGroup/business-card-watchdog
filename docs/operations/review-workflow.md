@@ -9,7 +9,7 @@ For representative command output, see `docs/operations/review-workflow-sample-o
 Run a dry batch from a folder:
 
 ```bash
-.venv/bin/bcw process "/mnt/e/SyncThing/S22 Camera Phone Storage" --dry-run
+.venv/bin/bcw process "/mnt/e/SyncThing/Phone Camera" --dry-run
 ```
 
 Or poll the configured watch inputs once:

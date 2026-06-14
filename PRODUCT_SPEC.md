@@ -299,7 +299,7 @@ Example:
 
 ```toml
 [paths]
-sync_phone = "/mnt/e/SyncThing/S22 Camera Phone Storage"
+sync_phone = "/mnt/e/SyncThing/Phone Camera"
 
 [watch]
 inputs = ["$fsr:sync_phone"]

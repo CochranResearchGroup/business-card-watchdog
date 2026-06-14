@@ -8,7 +8,7 @@ from typing import Any
 
 
 APP_NAME = "business-card-watchdog"
-DEFAULT_SKILL_ROOT = Path("/home/ecochran76/.codex/shared/skills/business-card-to-contact")
+DEFAULT_SKILL_ROOT = Path.home() / ".codex/shared/skills/business-card-to-contact"
 
 
 def config_home() -> Path:
@@ -185,11 +185,11 @@ def write_default_config(path: Path | None = None) -> Path:
         return target
     target.write_text(
         """# Business Card Watchdog user config.
-skill_root = "/home/ecochran76/.codex/shared/skills/business-card-to-contact"
+skill_root = "~/.codex/shared/skills/business-card-to-contact"
 
 [paths]
-# WSL/Linux mount for the SyncThing phone-camera directory.
-sync_phone = "/mnt/e/SyncThing/S22 Camera Phone Storage"
+# Example WSL/Linux mount for a SyncThing phone-camera directory.
+sync_phone = "/mnt/e/SyncThing/Phone Camera"
 
 [watch]
 inputs = ["$fsr:sync_phone"]

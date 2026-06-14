@@ -13,7 +13,7 @@ The product must keep deterministic host control over batch orchestration. Agent
 - Keep cache and transient watcher state under `~/.cache/business-card-watchdog/`.
 - Do not put tenant secrets, raw connector credentials, or private card images in git.
 - Treat Google Contacts and Odoo/Odollo writes as explicit sink actions. Default new workflows to dry-run until readiness checks and routing policy are present.
-- The base extraction workflow builds on `/home/ecochran76/.codex/shared/skills/business-card-to-contact`.
+- The base extraction workflow builds on the user-scoped `business-card-to-contact` skill, normally at `~/.codex/shared/skills/business-card-to-contact`.
 - Mutations to the same contact/person should remain sequential even when OCR and review are batched.
 
 ## CodeGraph
@@ -42,4 +42,3 @@ Read and follow:
 - `docs/dev/policies/0001-policy-management.md`
 - `docs/dev/policies/0002-product-and-runtime-governance.md`
 - `docs/dev/policies/0003-planning-and-validation.md`
-

@@ -300,7 +300,7 @@ def test_api_enrichment_request_accepts_paid_provider_results(tmp_path: Path) ->
     config_path = tmp_path / "config.toml"
     data_dir = tmp_path / "data"
     keys_path = tmp_path / "API-keys.env"
-    keys_path.write_text("APOLLO_API_KEY=secret-value-not-printed\n", encoding="utf-8")
+    keys_path.write_text("APOLLO_API_KEY=fixture-value-redacted\n", encoding="utf-8")
     config_path.write_text(
         f'data_dir = "{data_dir}"\n'
         "[watch]\ninputs = []\n"

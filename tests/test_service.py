@@ -254,7 +254,7 @@ def test_service_public_web_enrichment_request_enforces_run_budget(tmp_path: Pat
 
 def test_service_paid_provider_enrichment_request_enforces_run_budget(tmp_path: Path) -> None:
     keys_path = tmp_path / "API-keys.env"
-    keys_path.write_text("APOLLO_API_KEY=secret-value-not-printed\n", encoding="utf-8")
+    keys_path.write_text("APOLLO_API_KEY=fixture-value-redacted\n", encoding="utf-8")
     config = AppConfig(
         config_path=tmp_path / "config.toml",
         data_dir=tmp_path / "data",
