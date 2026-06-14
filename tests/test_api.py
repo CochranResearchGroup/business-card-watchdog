@@ -430,8 +430,9 @@ def test_api_enrichment_request_accepts_paid_provider_results(tmp_path: Path) ->
     assert watch_dry_run["private_sources_used"] is False
 
 
-def test_api_executes_sink_lookup_pilot_with_mocked_matches(tmp_path: Path) -> None:
+def test_api_executes_sink_lookup_pilot_with_mocked_matches(tmp_path: Path, monkeypatch) -> None:
     from business_card_watchdog.api import create_app
+    import business_card_watchdog.service as service_module
 
     config_path = tmp_path / "config.toml"
     data_dir = tmp_path / "data"
@@ -476,6 +477,27 @@ def test_api_executes_sink_lookup_pilot_with_mocked_matches(tmp_path: Path) -> N
     assert payload["pilot"]["network_calls_made"] == 0
     assert payload["pilot"]["writes_attempted"] == 0
     assert payload["result"]["state"] == "possible_duplicate"
+
+    def execute_lookup(request: dict[str, object]) -> dict[str, object]:
+        return {
+            "status": "read_only_lookup_completed",
+            "network_calls_made": 1,
+            "writes_attempted": 0,
+            "matches": [{"resource_id": "people/api-smoke", "confidence": 0.9, "basis": ["email"], "raw": {"x": 1}}],
+            "raw": {"results": [{"person": {"names": [{"displayName": "API Smoke"}]}}]},
+        }
+
+    monkeypatch.setattr(service_module, "execute_sink_lookup_adapter", execute_lookup)
+    selected = client.post(
+        f"/jobs/{job_id}/selected-live-target",
+        json={"run_id": run_id, "sink": "google_contacts", "operator": "api-operator", "scope": "lookup"},
+    ).json()
+    smoke = client.post(f"/jobs/{job_id}/selected-lookup-smoke", json={"run_id": run_id}).json()
+    assert selected["target"]["schema"] == "business-card-watchdog.selected-live-target.v1"
+    assert smoke["smoke"]["schema"] == "business-card-watchdog.selected-lookup-smoke.v1"
+    assert smoke["smoke"]["writes_attempted"] == 0
+    assert smoke["smoke"]["network_calls_made"] == 1
+    assert smoke["smoke"]["downstream_duplicate_state"] == "strong_duplicate"
 
 
 def test_api_records_public_web_enrichment_results(tmp_path: Path) -> None:

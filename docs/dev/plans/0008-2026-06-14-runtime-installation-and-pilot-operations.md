@@ -148,3 +148,26 @@ Safety:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_service.py::test_service_lookup_pilot_uses_injected_read_only_executor tests/test_service.py::test_service_write_pilot_uses_injected_executor tests/test_service.py::test_service_readback_pilot_uses_injected_executor tests/test_cli_surfaces.py::test_cli_sinks_apply_decision_writes_zero_write_artifact tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 8 tests.
+
+### Slice 0008-D | 2026-06-14 | Read-Only Live Smoke Execution
+
+Implemented:
+
+- Added `business-card-watchdog.selected-lookup-smoke.v1`.
+- Added service `BusinessCardService.execute_selected_lookup_smoke_for_job`.
+- Added CLI `bcw sinks execute-lookup-smoke`.
+- Added API `POST /jobs/{job_id}/selected-lookup-smoke`.
+- Added MCP tool `business_card_watchdog_selected_lookup_smoke`.
+- Registered `selected_lookup_smoke.json` for route-refresh staleness and review-bundle visibility.
+- The smoke executor reads `selected_live_target.json`, enforces lookup scope, executes the non-simulated read-only lookup path, writes redacted `sink_lookup_pilot.json` and `sink_lookup_result.json`, and immediately writes `downstream_duplicate_assessment.json`.
+
+Safety:
+
+- This slice adds the execution surface and offline/injected proof only.
+- No real GWS/Odollo/Odoo lookup was executed.
+- The production path still requires selected-target approval before any non-simulated lookup adapter can run.
+- The smoke executor records `writes_attempted = 0` and fails if selected target evidence is missing or mismatched.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_lookup_smoke_imports_redacted_duplicate_evidence tests/test_api.py::test_api_executes_sink_lookup_pilot_with_mocked_matches tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_selected_lookup_smoke_uses_selected_target -q` passed with 4 tests.

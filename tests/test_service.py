@@ -1724,6 +1724,59 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert calls
 
 
+def test_service_selected_lookup_smoke_imports_redacted_duplicate_evidence(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+
+    def execute(request: dict[str, object]) -> dict[str, object]:
+        return {
+            "status": "read_only_lookup_completed",
+            "network_calls_made": 1,
+            "writes_attempted": 0,
+            "matches": [
+                {
+                    "resource_id": "people/live-smoke",
+                    "confidence": 0.94,
+                    "basis": ["email"],
+                    "display": "Live Smoke",
+                    "raw": {"person": {"names": [{"displayName": "Live Smoke"}]}},
+                }
+            ],
+            "raw": {"results": [{"person": {"names": [{"displayName": "Live Smoke"}]}}]},
+        }
+
+    service = BusinessCardService(config, sink_lookup_executor=execute)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
+    service.select_live_target_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        operator="tester",
+        scope="lookup",
+    )
+
+    smoke = service.execute_selected_lookup_smoke_for_job(job_id=job_id, run_id=run_id)
+    job = service.get_job(job_id, run_id=run_id)
+    review_bundle = service.review_bundle(run_id=run_id)
+
+    assert smoke["smoke"]["schema"] == "business-card-watchdog.selected-lookup-smoke.v1"
+    assert smoke["smoke"]["state"] == "complete"
+    assert smoke["smoke"]["writes_attempted"] == 0
+    assert smoke["smoke"]["network_calls_made"] == 1
+    assert smoke["smoke"]["result_redacted"] is True
+    assert smoke["smoke"]["downstream_duplicate_state"] == "strong_duplicate"
+    assert smoke["pilot"]["execution"]["raw_present"] is True
+    assert smoke["result"]["results"][0]["matches"][0]["display"] == "[redacted]"
+    assert smoke["assessment"]["state"] == "strong_duplicate"
+    assert any(artifact["kind"] == "selected_lookup_smoke" for artifact in job["artifacts"])
+    assert "selected_lookup_smoke" in review_bundle["entries"][0]["artifact_kinds"]
+
+
 def test_service_assess_downstream_duplicates_blocks_review_and_can_resolve(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",

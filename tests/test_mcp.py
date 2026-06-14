@@ -44,6 +44,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_sink_lookup_readiness" in names
     assert "business_card_watchdog_sink_lookup_smoke_handoff" in names
     assert "business_card_watchdog_selected_live_target" in names
+    assert "business_card_watchdog_selected_lookup_smoke" in names
     assert "business_card_watchdog_sink_write_pilot" in names
     assert "business_card_watchdog_sink_readback_pilot" in names
     assert "business_card_watchdog_sink_lookup_result" in names
@@ -383,6 +384,49 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert run_next["executed"][0]["action"].startswith(("plan_", "prepare_", "record_", "assess_"))
     assert run_next["phase_report_before"]["schema"] == "business-card-watchdog.phase-report.v1"
     assert run_next["phase_report_after"]["schema"] == "business-card-watchdog.phase-report.v1"
+
+
+def test_mcp_selected_lookup_smoke_uses_selected_target(tmp_path: Path, monkeypatch) -> None:
+    import business_card_watchdog.service as service_module
+
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+
+    def execute_lookup(request: dict[str, object]) -> dict[str, object]:
+        return {
+            "status": "read_only_lookup_completed",
+            "network_calls_made": 1,
+            "writes_attempted": 0,
+            "matches": [{"resource_id": "people/mcp-smoke", "confidence": 0.9, "basis": ["email"], "raw": {"x": 1}}],
+            "raw": {"results": [{"person": {"names": [{"displayName": "MCP Smoke"}]}}]},
+        }
+
+    monkeypatch.setattr(service_module, "execute_sink_lookup_adapter", execute_lookup)
+    call_tool(
+        "business_card_watchdog_sink_adapter_request",
+        {"job_id": job_id, "run_id": run_id, "phase": "lookup"},
+        config=config,
+    )
+    call_tool(
+        "business_card_watchdog_selected_live_target",
+        {"job_id": job_id, "run_id": run_id, "sink": "google_contacts", "operator": "mcp-smoke"},
+        config=config,
+    )
+    smoke = call_tool(
+        "business_card_watchdog_selected_lookup_smoke",
+        {"job_id": job_id, "run_id": run_id},
+        config=config,
+    )
+
+    assert smoke["smoke"]["schema"] == "business-card-watchdog.selected-lookup-smoke.v1"
+    assert smoke["smoke"]["network_calls_made"] == 1
+    assert smoke["smoke"]["writes_attempted"] == 0
+    assert smoke["assessment"]["state"] == "strong_duplicate"
 
 
 def test_mcp_enrichment_request_can_prepare_paid_provider_without_call(tmp_path: Path) -> None:

@@ -96,6 +96,7 @@ _ROUTE_ARTIFACT_FILES = {
     "sink_adapter_request_lookup": "sink_adapter_request_lookup.json",
     "selected_live_target": "selected_live_target.json",
     "sink_lookup_smoke_handoff": "sink_lookup_smoke_handoff.json",
+    "selected_lookup_smoke": "selected_lookup_smoke.json",
     "sink_lookup_pilot": "sink_lookup_pilot.json",
     "sink_lookup_result": "sink_lookup_result.json",
     "downstream_duplicate_assessment": "downstream_duplicate_assessment.json",
@@ -241,6 +242,7 @@ _REVIEW_BUNDLE_ARTIFACT_KINDS = {
     "sink_adapter_request_lookup",
     "selected_live_target",
     "sink_lookup_smoke_handoff",
+    "selected_lookup_smoke",
     "sink_lookup_pilot",
     "sink_lookup_result",
     "sink_plan",
@@ -2056,6 +2058,92 @@ class BusinessCardService:
             kind="selected_live_target",
         )
         return {"target_path": str(target_path), "target": payload}
+
+    def execute_selected_lookup_smoke_for_job(
+        self,
+        *,
+        job_id: str,
+        run_id: str,
+    ) -> dict[str, Any]:
+        job = self.get_job(job_id, run_id=run_id)
+        artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
+        target = self._require_selected_live_target(
+            artifact_dir=artifact_dir,
+            job_id=job_id,
+            run_id=run_id,
+            sink=str((_read_json_file(artifact_dir / "selected_live_target.json") or {}).get("sink") or ""),
+            approved_by=str((_read_json_file(artifact_dir / "selected_live_target.json") or {}).get("operator") or ""),
+            scope="lookup",
+        )
+        sink = str(target["sink"])
+        operator = str(target.get("operator") or target.get("approved_by") or "")
+        pilot_payload = self.execute_sink_lookup_pilot_for_job(
+            job_id=job_id,
+            run_id=run_id,
+            sink=sink,
+            approved_by=operator,
+            simulate=False,
+        )
+        duplicate_payload = self.assess_downstream_duplicates_for_job(job_id=job_id, run_id=run_id)
+        pilot = dict(pilot_payload["pilot"])
+        result = dict(pilot_payload["result"])
+        duplicate = dict(duplicate_payload["assessment"])
+        payload = {
+            "schema": "business-card-watchdog.selected-lookup-smoke.v1",
+            "state": "complete",
+            "status": "complete",
+            "reason": "selected read-only live lookup smoke completed and downstream duplicate assessment was updated",
+            "run_id": run_id,
+            "job_id": job_id,
+            "sink": sink,
+            "operator": operator,
+            "selected_target": target,
+            "pilot_path": pilot_payload["pilot_path"],
+            "result_path": pilot_payload["result_path"],
+            "downstream_duplicate_assessment_path": duplicate_payload["assessment_path"],
+            "lookup_status": pilot.get("status"),
+            "lookup_match_count": pilot.get("match_count", 0),
+            "downstream_duplicate_state": duplicate.get("state"),
+            "writes_attempted": int(pilot.get("writes_attempted") or 0),
+            "network_calls_made": int(pilot.get("network_calls_made") or 0),
+            "result_redacted": bool(pilot.get("execution_redacted", False) or result.get("result_redacted", False)),
+            "artifacts": {
+                "selected_live_target": str(artifact_dir / "selected_live_target.json"),
+                "sink_lookup_pilot": pilot_payload["pilot_path"],
+                "sink_lookup_result": pilot_payload["result_path"],
+                "downstream_duplicate_assessment": duplicate_payload["assessment_path"],
+            },
+            "stop_conditions": [
+                "selected target no longer matches run, job, sink, operator, or lookup scope",
+                "lookup adapter reports writes attempted",
+                "lookup result includes unredacted raw downstream contact rows",
+                "downstream duplicate assessment requires review before any write pilot",
+            ],
+        }
+        smoke_path = artifact_dir / "selected_lookup_smoke.json"
+        smoke_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        ledger.record_artifact(job_id=job_id, kind="selected_lookup_smoke", path=smoke_path)
+        ledger.record_event(
+            "selected_lookup_smoke_executed",
+            {
+                "job_id": job_id,
+                "run_id": run_id,
+                "sink": sink,
+                "operator": operator,
+                "smoke_path": str(smoke_path),
+                "writes_attempted": payload["writes_attempted"],
+                "network_calls_made": payload["network_calls_made"],
+                "downstream_duplicate_state": payload["downstream_duplicate_state"],
+            },
+        )
+        self._mark_route_artifact_refreshed(
+            artifact_dir,
+            job_id=job_id,
+            run_id=run_id,
+            kind="selected_lookup_smoke",
+        )
+        return {"smoke_path": str(smoke_path), "smoke": payload, **pilot_payload, **duplicate_payload}
 
     def enrichment_readiness(
         self,

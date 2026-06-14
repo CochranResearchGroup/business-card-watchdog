@@ -106,6 +106,9 @@ def create_app(config_path: Path | None = None):
         scope: str = "lookup"
         reason: str = ""
 
+    class SelectedLookupSmokeRequest(BaseModel):
+        run_id: str
+
     class SinkWritePilotRequest(BaseModel):
         run_id: str
         sink: str
@@ -432,6 +435,16 @@ def create_app(config_path: Path | None = None):
             operator=request.operator,
             scope=request.scope,
             reason=request.reason,
+        )
+
+    @app.post("/jobs/{job_id}/selected-lookup-smoke")
+    def execute_selected_lookup_smoke(
+        job_id: str,
+        request: SelectedLookupSmokeRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().execute_selected_lookup_smoke_for_job(
+            job_id=job_id,
+            run_id=request.run_id,
         )
 
     @app.post("/jobs/{job_id}/sink-write-pilot")

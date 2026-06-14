@@ -2325,3 +2325,25 @@ Validation:
 Safety:
 
 - This was zero-network, zero-write approval-artifact work only. It made no live lookup, live write, live readback, public-web search, paid enrichment, GWS, or Odollo/Odoo calls.
+
+## Turn 123 | 2026-06-14
+
+Continued Plan 0008 with Slice 0008-D.
+
+Implemented:
+
+- Added `business-card-watchdog.selected-lookup-smoke.v1`.
+- Added `BusinessCardService.execute_selected_lookup_smoke_for_job`.
+- Added CLI `bcw sinks execute-lookup-smoke`.
+- Added API `POST /jobs/{job_id}/selected-lookup-smoke`.
+- Added MCP tool `business_card_watchdog_selected_lookup_smoke`.
+- Registered `selected_lookup_smoke.json` for route-refresh staleness and review-bundle visibility.
+- Smoke execution now consumes `selected_live_target.json`, executes the selected read-only lookup path, imports redacted lookup result evidence, and writes downstream duplicate assessment evidence.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_lookup_smoke_imports_redacted_duplicate_evidence tests/test_api.py::test_api_executes_sink_lookup_pilot_with_mocked_matches tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_selected_lookup_smoke_uses_selected_target -q` passed with 4 tests.
+
+Safety:
+
+- This was execution-surface and injected-adapter proof only. It made no real GWS/Odollo/Odoo lookup, write, readback, public-web search, or paid enrichment calls.

@@ -441,6 +441,18 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_selected_lookup_smoke",
+                "description": "Execute the selected read-only live lookup smoke from selected_live_target.json and import redacted duplicate evidence.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "job_id": {"type": "string"},
+                        "run_id": {"type": "string"},
+                    },
+                    "required": ["job_id", "run_id"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_sink_write_pilot",
                 "description": "Execute an explicit one-job sink write pilot, simulated by default, with approval metadata.",
                 "input_schema": {
@@ -798,6 +810,11 @@ def call_tool(
             operator=str(args["operator"]),
             scope=str(args.get("scope") or "lookup"),
             reason=str(args.get("reason") or ""),
+        )
+    if tool_name == "business_card_watchdog_selected_lookup_smoke":
+        return service.execute_selected_lookup_smoke_for_job(
+            job_id=str(args["job_id"]),
+            run_id=str(args["run_id"]),
         )
     if tool_name == "business_card_watchdog_sink_write_pilot":
         return service.execute_sink_write_pilot_for_job(
