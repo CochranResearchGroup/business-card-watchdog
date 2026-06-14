@@ -86,6 +86,26 @@ Acceptance:
 - Templates avoid asking for secrets, private card images, or raw OCR dumps.
 - PR checklist requires tests, leak-scan awareness, and explicit declaration of live calls.
 
+### Slice 0006-B | 2026-06-14 | Public Collaboration Templates
+
+Implemented:
+
+- Added bug, feature, live-pilot request, and plan-slice issue templates.
+- Added a pull request template with validation, privacy, paid-enrichment, and live-write checks.
+- Added `SECURITY.md` with public-safe reporting and data-handling guidance.
+- Updated CI to opt JavaScript actions into Node 24 and disabled `setup-uv` cache because this repo has no lockfile yet.
+
+Validation:
+
+- `git diff --check` passed.
+- `.venv/bin/ruff check .` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` scanned 95 commits and found no leaks.
+- `rg -n 'private business-card images|raw OCR|API keys|Live pilot|Plan slice|FORCE_JAVASCRIPT_ACTIONS_TO_NODE24|enable-cache' .github SECURITY.md docs/dev/plans/0006-2026-06-14-public-upstream-hardening.md RUNBOOK.md` passed.
+
+Remaining:
+
+- Clean-clone `uv` install validation remains the next repository-hardening slice.
+
 ### Slice 0006-C | Branch Protection / Ruleset Readiness
 
 Deliverables:

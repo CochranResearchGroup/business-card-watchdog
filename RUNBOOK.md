@@ -1671,6 +1671,24 @@ Validation:
 - Second upstream workflow run passed for both jobs: `Test, lint, and build` and `Secret scan`.
 - Configured `main` branch protection requiring both CI jobs, with force-push and deletion disabled.
 
+## Turn 100 | 2026-06-14
+
+Continued Plan 0006 with public collaboration templates.
+
+Implemented:
+
+- Added GitHub issue templates for bug reports, feature requests, live-pilot requests, and bounded plan slices.
+- Added a pull request template with validation and privacy/safety checks.
+- Added `SECURITY.md` with reporting and data-handling guidance.
+- Updated CI to opt JavaScript actions into Node 24 and disabled `setup-uv` cache until a lockfile exists.
+
+Validation:
+
+- `git diff --check` passed.
+- `.venv/bin/ruff check .` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` scanned 95 commits and found no leaks.
+- `rg -n 'private business-card images|raw OCR|API keys|Live pilot|Plan slice|FORCE_JAVASCRIPT_ACTIONS_TO_NODE24|enable-cache' .github SECURITY.md docs/dev/plans/0006-2026-06-14-public-upstream-hardening.md RUNBOOK.md` passed.
+
 ## Turn 98 | 2026-06-14
 
 Continued Plan 0004 execution with a current completion and residual backlog audit.
