@@ -265,6 +265,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_live_pilot_closeout_rejects_stale_selected_target_audit_scope tests/test_service.py::test_service_live_pilot_closeout_requires_selected_target_audit tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
 
+### Slice 0009-A17 | 2026-06-14 | Selected Target Replacement Requires Abandonment
+
+Implemented:
+
+- `BusinessCardService.select_live_target_for_job` now refuses to overwrite an active `selected_live_target.json`.
+- Selecting a replacement target is allowed only after `live_pilot_abandonment.json` records abandonment for the existing selected target creation timestamp.
+- This preserves the Plan 0009 invariant that one run/job/sink target is explicitly active at a time.
+
+Safety:
+
+- This slice changes durable approval artifact creation only.
+- It does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It forces operators to preserve a durable abandonment trail before replacing a selected target.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_select_live_target_requires_abandonment_before_replacement tests/test_service.py::test_service_live_pilot_abandonment_blocks_abandoned_selected_target tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

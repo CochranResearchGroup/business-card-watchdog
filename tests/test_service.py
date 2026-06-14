@@ -2170,6 +2170,60 @@ def test_service_live_pilot_abandonment_blocks_abandoned_selected_target(tmp_pat
         raise AssertionError("expected abandoned selected target to block non-simulated lookup")
 
 
+def test_service_select_live_target_requires_abandonment_before_replacement(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    first = service.select_live_target_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        operator="tester",
+        scope="lookup",
+        safety_confirmation="fixture contact is safe for google contacts test profile",
+    )
+
+    try:
+        service.select_live_target_for_job(
+            job_id=job_id,
+            run_id=run_id,
+            sink="google_contacts",
+            operator="tester",
+            scope="all",
+            safety_confirmation="fixture contact is safe for google contacts test profile",
+        )
+    except ValueError as exc:
+        assert "already exists" in str(exc)
+    else:
+        raise AssertionError("expected active selected target to block replacement")
+
+    service.live_pilot_abandon_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        operator="tester",
+        reason="replace with broader scope",
+    )
+    replacement = service.select_live_target_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        operator="tester",
+        scope="all",
+        safety_confirmation="fixture contact is safe for google contacts test profile",
+    )
+
+    assert first["target"]["scope"] == "lookup"
+    assert replacement["target"]["scope"] == "all"
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+    persisted = json.loads((artifact_dir / "selected_live_target.json").read_text(encoding="utf-8"))
+    assert persisted["scope"] == "all"
+
+
 def test_service_live_pilot_status_does_not_double_count_closeout_totals(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, job_id = make_recorded_run(config)

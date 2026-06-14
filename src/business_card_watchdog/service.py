@@ -1971,6 +1971,15 @@ class BusinessCardService:
             raise ValueError("selected live target requires tenant/profile safety confirmation")
         job = self.get_job(job_id, run_id=run_id)
         artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
+        existing_target = _read_json_file(artifact_dir / "selected_live_target.json")
+        abandonment = _read_json_file(artifact_dir / "live_pilot_abandonment.json") or {}
+        existing_abandoned = (
+            existing_target is not None
+            and abandonment.get("state") == "abandoned"
+            and abandonment.get("selected_target_created_at") == existing_target.get("created_at")
+        )
+        if existing_target is not None and not existing_abandoned:
+            raise ValueError("selected live target already exists; abandon it before selecting a replacement")
         lookup_readiness = None
         apply_readiness = None
         if scope in {"lookup", "all"}:
