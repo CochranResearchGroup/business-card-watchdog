@@ -1,6 +1,6 @@
 # Plan 0007 | Live Pilot Readiness And Evidence
 
-State: IN_PROGRESS
+State: COMPLETE
 Product authority: `PRODUCT_SPEC.md`
 Predecessors:
 
@@ -18,6 +18,29 @@ This plan covers:
 - one-job write/readback pilot readiness evidence
 - CLI/API/MCP parity for readiness reports
 - artifact-backed closeout evidence after any pilot attempt
+
+## Closeout
+
+Completed: 2026-06-14
+
+Outcome:
+
+- Implemented all planned slices, `0007-A` through `0007-E`.
+- Added selected run/job/sink readiness and handoff artifacts before any non-simulated lookup, write, or readback command.
+- Preserved CLI, API, and MCP parity for lookup readiness, write/readback readiness, operator pilot bundles, and live lookup smoke handoffs.
+- Hardened non-simulated lookup artifacts so downstream duplicate assessment keeps enough metadata for idempotency while redacting raw live sink payloads.
+- Registered the new pilot-bundle and lookup-smoke handoff artifacts for route-refresh staleness checks and review-bundle visibility.
+
+Validation evidence:
+
+- Latest full local gate passed in Slice `0007-E`: `.venv/bin/python -m pytest -q` with 193 tests, `.venv/bin/ruff check .`, `uv build --out-dir dist`, `gitleaks detect --source . --no-banner --redact --exit-code 1`, `git diff --check`, and `codegraph sync && codegraph status`.
+- The latest pushed implementation commit, `509ea7b Add live lookup smoke handoff`, passed GitHub Actions run `27509492605`.
+
+Safety boundary:
+
+- No public-web search, paid API enrichment, GWS, Odollo/Odoo, live lookup, live write, or live readback command was executed by this plan.
+- No `lookup-pilot --no-simulate` command was executed because no explicit operator-selected live target was provided.
+- Live execution remains gated by selected run/job/sink readiness, handoff review, and explicit operator approval.
 
 ## Non-Goals
 
