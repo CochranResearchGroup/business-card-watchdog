@@ -1,11 +1,34 @@
 # Plan 0004 | Review, Normalization, Enrichment, Dedupe, And Sink Routing
 
-State: IN_PROGRESS
+State: COMPLETE_RECONCILED
 Product authority: `PRODUCT_SPEC.md`
 Predecessors:
 
 - `docs/dev/plans/0002-2026-06-11-high-level-implementation-goal-plan.md`
 - `docs/dev/plans/0003-2026-06-11-follow-on-live-sinks-and-mcp-server.md`
+
+## Closeout
+
+Completed/reconciled: 2026-06-14
+
+Outcome:
+
+- Plan 0004 is complete for repo-local review, normalization, enrichment, dedupe, routing, sink-pilot, agent-loop, CLI/API/MCP, and operator-documentation control-plane work.
+- Later Plans 0005, 0007, and 0008 superseded the older residual bullets by adding review matrix/workbook surfaces, canonical provenance, durable duplicate-resolution indexes, explainable route policy, Odollo enrichment reuse, enrichment proposal review, pilot readiness reporting, selected live target approval, read-only lookup smoke execution, and runtime recovery reporting.
+- Live GWS/Odollo/Odoo work remains intentionally explicit and one-job/one-sink gated. That is not an unfinished Plan 0004 control-plane gap; it is the production rollout boundary for a later operator-selected live smoke plan.
+
+Validation evidence:
+
+- Plan 0005 closed with the review/routing/normalization/enrichment/dedupe hardening work and full local gates through 187 tests.
+- Plan 0007 closed with live-pilot readiness and handoff evidence and GitHub Actions run `27509492605`.
+- Plan 0008 closed runtime installation/pilot operations with commits `47430ac` and `abdfef3`; GitHub Actions runs `27510473471` and `27510510044` passed.
+- Current local reconciliation verified the worktree was clean before this update and that the repo now contains the sink lookup/write/readback adapter modules, selected-target gate, service recovery report, and public upstream CI history.
+
+Residual production boundary:
+
+- Select a real run/job/sink/operator target before any live lookup, write, or readback.
+- Keep public-web and paid enrichment behind explicit requests and configured budgets.
+- Keep broad batch live writes out of scope until one-job pilots and readbacks have been reviewed.
 
 ## Scope
 
