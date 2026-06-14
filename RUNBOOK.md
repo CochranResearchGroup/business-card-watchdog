@@ -1709,6 +1709,23 @@ Validation:
 - `.venv/bin/ruff check .` passed.
 - `uv build --out-dir dist` built source and wheel distributions.
 
+## Turn 102 | 2026-06-14
+
+Continued Plan 0006 with live pilot checklists.
+
+Implemented:
+
+- Added `docs/operations/live-pilot-checklists.md`.
+- Documented read-only lookup smoke prerequisites, commands, review requirements, and stop conditions.
+- Documented one-job write/readback pilot prerequisites, commands, completion evidence, and remediation notes.
+- Linked the checklist from README.
+
+Validation:
+
+- `git diff --check` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` scanned 97 commits and found no leaks.
+- `rg -n 'live-pilot-checklists|Read-Only Lookup Smoke|One-Job Write And Readback Pilot|Stop conditions|No live lookup or write was run|--no-simulate' README.md docs/operations/live-pilot-checklists.md docs/dev/plans/0006-2026-06-14-public-upstream-hardening.md RUNBOOK.md` passed.
+
 ## Turn 98 | 2026-06-14
 
 Continued Plan 0004 execution with a current completion and residual backlog audit.

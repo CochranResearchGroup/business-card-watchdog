@@ -130,3 +130,4 @@ Operational details live in:
 - `docs/operations/review-workflow.md`
 - `docs/operations/review-workflow-sample-output.md`
 - `docs/operations/public-upstream-validation.md`
+- `docs/operations/live-pilot-checklists.md`

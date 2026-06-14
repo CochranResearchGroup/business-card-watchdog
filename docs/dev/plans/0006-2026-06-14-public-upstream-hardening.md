@@ -179,6 +179,25 @@ Acceptance:
 - No live write is run by this slice.
 - The future live write command is fully gated and one-job/one-sink scoped.
 
+### Slices 0006-E/F | 2026-06-14 | Live Pilot Checklists
+
+Implemented:
+
+- Added `docs/operations/live-pilot-checklists.md`.
+- Documented read-only lookup smoke prerequisites, commands, review requirements, and stop conditions.
+- Documented one-job write/readback pilot prerequisites, commands, completion evidence, and remediation notes.
+- Linked the checklist from README.
+
+Validation:
+
+- `git diff --check` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` scanned 97 commits and found no leaks.
+- `rg -n 'live-pilot-checklists|Read-Only Lookup Smoke|One-Job Write And Readback Pilot|Stop conditions|No live lookup or write was run|--no-simulate' README.md docs/operations/live-pilot-checklists.md docs/dev/plans/0006-2026-06-14-public-upstream-hardening.md RUNBOOK.md` passed.
+
+Remaining:
+
+- No live lookup or write was run. Actual execution requires an operator-selected non-sensitive run/job/sink and local sink auth.
+
 ## Operating Rules
 
 - Use `uv` for clean development environments and CI setup.
