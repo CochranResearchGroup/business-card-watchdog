@@ -2053,13 +2053,22 @@ def test_service_live_pilot_closeout_rejects_stale_selected_target_audit_scope(t
     service.selected_live_target_audit(job_id=job_id, run_id=run_id, scope="lookup")
 
     stale_audit = service.build_live_pilot_closeout_for_job(job_id=job_id, run_id=run_id, write=False)
+    status = service.live_pilot_status(run_id=run_id, write=False)
+    handoff = service.live_pilot_handoff(run_id=run_id, write=False)
 
     assert "selected_target_audit:scope='lookup'" in stale_audit["report"]["blocked_reasons"]
+    assert status["counts"]["selected_target_audit_blocked"] == 1
+    assert status["entries"][0]["selected_target_audit_blockers"] == ["scope='lookup'"]
+    assert handoff["state"] == "blocked"
+    assert handoff["action_counts"]["review_selected_target_audit"] == 1
+    assert handoff["entries"][0]["command"].startswith("sinks selected-target-audit")
 
     service.selected_live_target_audit(job_id=job_id, run_id=run_id, scope="all")
     aligned_audit = service.build_live_pilot_closeout_for_job(job_id=job_id, run_id=run_id, write=False)
+    aligned_status = service.live_pilot_status(run_id=run_id, write=False)
 
     assert "selected_target_audit:scope='lookup'" not in aligned_audit["report"]["blocked_reasons"]
+    assert "selected_target_audit_blocked" not in aligned_status["counts"]
 
 
 def test_service_selected_lookup_smoke_imports_redacted_duplicate_evidence(tmp_path: Path) -> None:

@@ -3918,6 +3918,34 @@ class BusinessCardService:
             )
         return errors
 
+    def _selected_target_audit_context_mismatches(
+        self,
+        *,
+        selected_target: dict[str, Any],
+        selected_target_audit: dict[str, Any],
+        run_id: str,
+        job_id: str,
+    ) -> list[str]:
+        if not selected_target or not selected_target_audit:
+            return []
+        sink = str(selected_target.get("sink") or "")
+        operator = str(selected_target.get("operator") or selected_target.get("approved_by") or "")
+        scope = str(selected_target.get("scope") or "lookup")
+        mismatches: list[str] = []
+        for key, expected in [
+            ("run_id", run_id),
+            ("job_id", job_id),
+            ("sink", sink or None),
+            ("operator", operator or None),
+            ("scope", scope),
+        ]:
+            if selected_target_audit.get(key) != expected:
+                mismatches.append(f"{key}={selected_target_audit.get(key)!r}")
+        mismatches.extend(str(reason) for reason in list(selected_target_audit.get("mismatches") or []))
+        if selected_target_audit.get("target_safety_confirmed") is False:
+            mismatches.append("target_safety_confirmation=missing")
+        return mismatches
+
     def build_live_pilot_closeout_for_job(self, *, job_id: str, run_id: str, write: bool = True) -> dict[str, Any]:
         job = self.get_job(job_id, run_id=run_id)
         artifact_dir = (
@@ -3965,21 +3993,13 @@ class BusinessCardService:
         missing_artifacts = [name for name in required_artifacts if artifacts.get(name) is None]
         blocked_reasons = list(missing_artifacts)
         if selected_target_audit:
-            for key, expected in [
-                ("run_id", run_id),
-                ("job_id", job_id),
-                ("sink", sink or None),
-                ("operator", operator or None),
-                ("scope", scope),
-            ]:
-                if selected_target_audit.get(key) != expected:
-                    blocked_reasons.append(
-                        f"selected_target_audit:{key}={selected_target_audit.get(key)!r}"
-                    )
-            audit_mismatches = list(selected_target_audit.get("mismatches") or [])
+            audit_mismatches = self._selected_target_audit_context_mismatches(
+                selected_target=selected_target,
+                selected_target_audit=selected_target_audit,
+                run_id=run_id,
+                job_id=job_id,
+            )
             blocked_reasons.extend(f"selected_target_audit:{reason}" for reason in audit_mismatches)
-            if selected_target_audit.get("target_safety_confirmed") is False:
-                blocked_reasons.append("selected_target_audit:target_safety_confirmation=missing")
         if duplicate.get("state") in {"strong_duplicate", "possible_duplicate"} and not duplicate.get("reviewed"):
             blocked_reasons.append(f"downstream_duplicate_state:{duplicate.get('state')}")
         if write_pilot and write_pilot.get("state") not in {"mock_written", "live_written"}:
@@ -4921,6 +4941,7 @@ class BusinessCardService:
             }
             closeout = artifacts["live_pilot_closeout"] or {}
             selected_target = artifacts["selected_live_target"] or {}
+            selected_target_audit = artifacts["selected_live_target_audit"] or {}
             abandonment = artifacts["live_pilot_abandonment"] or {}
             packet = artifacts["live_selection_packet"] or {}
             job_candidates = candidates_by_job.get(job_id, [])
@@ -4930,10 +4951,18 @@ class BusinessCardService:
                 and abandonment.get("state") == "abandoned"
                 and abandonment.get("selected_target_created_at") == selected_target.get("created_at")
             )
+            selected_target_audit_blockers = self._selected_target_audit_context_mismatches(
+                selected_target=selected_target,
+                selected_target_audit=selected_target_audit,
+                run_id=run_id,
+                job_id=job_id,
+            )
             if target_abandoned:
                 state = "abandoned"
             elif closeout.get("state") == "complete":
                 state = "complete"
+            elif selected_target_audit_blockers:
+                state = "selected_target_audit_blocked"
             elif artifacts["selected_live_target"] is not None:
                 state = "selected_target_active"
             elif packet.get("state") == "ready_for_operator_approval":
@@ -4962,7 +4991,8 @@ class BusinessCardService:
                     "selected_target_sink": selected_target.get("sink"),
                     "selected_target_operator": selected_target.get("operator") or selected_target.get("approved_by"),
                     "selection_packet_state": packet.get("state"),
-                    "selected_target_audit_state": (artifacts["selected_live_target_audit"] or {}).get("state"),
+                    "selected_target_audit_state": selected_target_audit.get("state"),
+                    "selected_target_audit_blockers": selected_target_audit_blockers,
                     "lookup_smoke_state": (artifacts["selected_lookup_smoke"] or {}).get("state"),
                     "write_pilot_state": (artifacts["sink_write_pilot"] or {}).get("state"),
                     "readback_pilot_state": (artifacts["sink_readback_pilot"] or {}).get("state"),
@@ -4991,7 +5021,12 @@ class BusinessCardService:
             if entries and counts.get("complete") == len(entries)
             else "operator_action_required"
             if any(
-                entry["state"] in {"abandoned", "pending_operator_approval", "selected_target_active", "ready_for_selection"}
+                entry["state"] in {
+                    "abandoned",
+                    "pending_operator_approval",
+                    "selected_target_active",
+                    "ready_for_selection",
+                }
                 for entry in entries
             )
             else "blocked"
@@ -5061,6 +5096,11 @@ class BusinessCardService:
                 operator_required = True
                 command = commands.get("lookup_smoke")
                 reason = "selected live target exists; live lookup smoke requires explicit operator request"
+            elif job_state == "selected_target_audit_blocked":
+                next_action = "review_selected_target_audit"
+                operator_required = True
+                command = commands.get("selected_target_audit")
+                reason = "selected target audit context does not match the current selected target; rerun or abandon before live commands"
             elif job_state == "abandoned":
                 next_action = "select_new_live_target"
                 operator_required = True
@@ -5099,6 +5139,8 @@ class BusinessCardService:
                     "selected_target_sink": entry.get("selected_target_sink"),
                     "selected_target_scope": entry.get("selected_target_scope"),
                     "selection_packet_state": entry.get("selection_packet_state"),
+                    "selected_target_audit_state": entry.get("selected_target_audit_state"),
+                    "selected_target_audit_blockers": entry.get("selected_target_audit_blockers", []),
                     "lookup_smoke_state": entry.get("lookup_smoke_state"),
                     "write_pilot_state": entry.get("write_pilot_state"),
                     "readback_pilot_state": entry.get("readback_pilot_state"),

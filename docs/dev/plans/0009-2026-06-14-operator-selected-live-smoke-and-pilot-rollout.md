@@ -247,6 +247,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_live_pilot_closeout_requires_selected_target_audit tests/test_service.py::test_service_live_pilot_closeout_rejects_stale_selected_target_audit_scope tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
 
+### Slice 0009-A16 | 2026-06-14 | Status Blocks Stale Selected Target Audit
+
+Implemented:
+
+- Added a shared selected-target audit context check for run, job, sink, operator, scope, audit mismatches, and safety confirmation.
+- Run-level live pilot status now reports `selected_target_audit_blocked` when existing audit evidence does not match the current selected target context.
+- Operator handoff now routes stale selected-target audit cases to `review_selected_target_audit` instead of suggesting live lookup smoke execution.
+
+Safety:
+
+- This slice changes status and handoff classification only.
+- It does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It keeps ordinary readiness blockers separate from selected-target identity/safety mismatches so a readiness-blocked audit does not become a false stale-target stop.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_live_pilot_closeout_rejects_stale_selected_target_audit_scope tests/test_service.py::test_service_live_pilot_closeout_requires_selected_target_audit tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:
