@@ -133,9 +133,10 @@ Run simulated pilots before live operations:
 ```bash
 .venv/bin/bcw sinks write-pilot <job-id> --run-id <run-id> --sink google_contacts --approved-by <operator> --simulate
 .venv/bin/bcw sinks readback-pilot <job-id> --run-id <run-id> --sink google_contacts --approved-by <operator> --simulate
-.venv/bin/bcw sinks apply-pilot-report <job-id> --run-id <run-id> --json
+.venv/bin/bcw sinks apply-pilot-report <job-id> --run-id <run-id>
 ```
 
+Add `--json` to `apply-pilot-report` when another tool needs structured report output.
 Live write/readback commands should only be used after the readiness and approval artifacts show the intended target and sink policy.
 
 ## 7. Safe Loop Progression

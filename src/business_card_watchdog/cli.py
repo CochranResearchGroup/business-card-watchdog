@@ -476,6 +476,57 @@ def _render_lookup_smoke_handoff_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_apply_pilot_report_text(payload: dict[str, object]) -> str:
+    report = dict(payload.get("report") or payload)
+    missing_artifacts = report.get("missing_artifacts") or []
+    consistency_errors = report.get("consistency_errors") or []
+    sinks = report.get("sinks") or []
+    paths = dict(report.get("artifact_paths") or {})
+    lines = [
+        f"Apply pilot report: {report.get('state')}",
+        f"Run: {report.get('run_id')}",
+        f"Job: {report.get('job_id')}",
+        f"Reason: {report.get('reason') or 'none'}",
+        (
+            "Evidence: "
+            f"readiness={report.get('readiness_state') or 'missing'} "
+            f"apply_result={report.get('apply_result_state') or 'missing'} "
+            f"readback_request={report.get('readback_request_state') or 'missing'}"
+        ),
+        f"Observed: writes={report.get('writes_attempted', 0)} network={report.get('network_calls_made', 0)}",
+    ]
+    if payload.get("report_path"):
+        lines.append(f"Report path: {payload.get('report_path')}")
+    sink_rows = sinks if isinstance(sinks, list) else []
+    lines.append(f"Sinks: {len(sink_rows)}")
+    for sink in sink_rows:
+        sink_report = dict(sink)
+        lines.append(
+            " - "
+            f"{sink_report.get('sink') or 'unknown'}: "
+            f"write={sink_report.get('write_state') or 'missing'} "
+            f"write_simulated={sink_report.get('write_simulated')} "
+            f"write_resource={sink_report.get('write_resource_id') or 'none'} "
+            f"readback={sink_report.get('readback_state') or 'missing'} "
+            f"readback_simulated={sink_report.get('readback_simulated')} "
+            f"readback_matched={sink_report.get('readback_matched')} "
+            f"readback_resource={sink_report.get('readback_resource_id') or 'none'}"
+        )
+    missing_rows = missing_artifacts if isinstance(missing_artifacts, list) else []
+    lines.append(f"Missing artifacts: {len(missing_rows)}")
+    for artifact in missing_rows:
+        lines.append(f" - {artifact}")
+    error_rows = consistency_errors if isinstance(consistency_errors, list) else []
+    lines.append(f"Consistency errors: {len(error_rows)}")
+    for error in error_rows:
+        lines.append(f" - {error}")
+    if paths:
+        lines.append("Artifact paths:")
+        for key in sorted(paths):
+            lines.append(f" - {key}: {paths[key]}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_apply_pilot_bundle_text(payload: dict[str, object]) -> str:
     bundle = dict(payload.get("bundle") or payload)
     readiness = dict(bundle.get("readiness") or {})
@@ -1313,6 +1364,9 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.sinks_command == "lookup-smoke-handoff" and not args.json:
             print(_render_lookup_smoke_handoff_text(payload), end="")
+            return 0
+        if args.sinks_command == "apply-pilot-report" and not args.json:
+            print(_render_apply_pilot_report_text(payload), end="")
             return 0
         if args.sinks_command == "apply-pilot-bundle" and not args.json:
             print(_render_apply_pilot_bundle_text(payload), end="")

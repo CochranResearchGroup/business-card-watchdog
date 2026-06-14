@@ -722,6 +722,25 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_sinks_apply_decision_writes_zero_write_artifact -q` passed with 1 test.
 
+### Slice 0009-A42 | 2026-06-14 | Add Apply Pilot Report Text Review
+
+Implemented:
+
+- `bcw sinks apply-pilot-report` now renders a compact text review when `--json` is omitted.
+- The text review shows state, run, job, reason, readiness/apply/readback-request evidence, observed write/network counts, report path, per-sink write/readback status, missing artifacts, consistency errors, and artifact paths.
+- Operator review docs now use the text report by default and reserve `--json` for structured handoff output.
+- CLI tests now cover apply pilot report text output without exposing raw JSON.
+
+Safety:
+
+- This slice improves operator review ergonomics only.
+- It writes the existing local `sink_apply_pilot_report.json` artifact but does not execute lookup, write, readback, GWS/Odollo/Odoo, public-web search, paid enrichment, or private SyncThing processing.
+- It keeps apply pilot evidence reviewable before an operator explicitly proceeds to closeout or live follow-up.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_sinks_apply_decision_writes_zero_write_artifact -q` passed with 1 test.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

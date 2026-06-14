@@ -1290,6 +1290,34 @@ def test_cli_sinks_apply_decision_writes_zero_write_artifact(tmp_path: Path, cap
     assert report["report"]["state"] == "complete"
     assert report["report"]["writes_attempted"] == 0
 
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "sinks",
+                "apply-pilot-report",
+                job_id,
+                "--run-id",
+                run_id,
+            ]
+        )
+        == 0
+    )
+    text = capsys.readouterr().out
+    assert "Apply pilot report: complete" in text
+    assert f"Run: {run_id}" in text
+    assert f"Job: {job_id}" in text
+    assert "Evidence: readiness=ready_for_mock_apply apply_result=mock_applied readback_request=blocked" in text
+    assert "Observed: writes=0 network=0" in text
+    assert "Sinks: 1" in text
+    assert "google_contacts: write=mock_written" in text
+    assert "readback=verified" in text
+    assert "readback_matched=True" in text
+    assert "Missing artifacts: 0" in text
+    assert "Consistency errors: 0" in text
+    assert "{" not in text
+
 
 def test_cli_sinks_adapter_request_writes_blocked_contract(tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.toml"

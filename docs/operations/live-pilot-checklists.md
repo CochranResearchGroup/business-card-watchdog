@@ -227,11 +227,12 @@ Prepare and run readback:
   --approved-by <operator> \
   --no-simulate \
   --json
-.venv/bin/bcw sinks apply-pilot-report <job-id> --run-id <run-id> --json
+.venv/bin/bcw sinks apply-pilot-report <job-id> --run-id <run-id>
 .venv/bin/bcw sinks live-pilot-closeout <job-id> --run-id <run-id> --no-write
 ```
 
 Use `--sink odoo` for an Odollo/Odoo readback pilot.
+Add `--json` to `apply-pilot-report` when another tool needs structured report output.
 Run closeout again with `--json` when you are ready to persist the final `live_pilot_closeout.json` artifact.
 
 Completion evidence:
