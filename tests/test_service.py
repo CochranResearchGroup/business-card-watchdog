@@ -1154,6 +1154,63 @@ def test_service_apply_pilot_report_summarizes_write_and_readback(tmp_path: Path
     assert any(artifact["kind"] == "sink_apply_pilot_report" for artifact in job["artifacts"])
 
 
+def test_service_apply_pilot_bundle_collects_selected_sink_commands_and_stops(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+        field_corrections={"full_name": "Reviewed Fixture", "email": "fixture@example.test"},
+    )
+    service.plan_sink_lookup_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
+    service.record_sink_lookup_result_for_job(job_id=job_id, run_id=run_id)
+    service.assess_downstream_duplicates_for_job(job_id=job_id, run_id=run_id)
+    service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="write")
+    service.preflight_sink_apply(job_id=job_id, run_id=run_id)
+    service.decide_sink_apply(job_id=job_id, run_id=run_id, decision="approve", reviewer="tester")
+
+    bundle = service.build_sink_apply_pilot_bundle_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        operator="tester",
+    )
+    job = service.get_job(job_id, run_id=run_id)
+    review_bundle = service.review_bundle(run_id=run_id)
+
+    payload = bundle["bundle"]
+    assert payload["schema"] == "business-card-watchdog.sink-apply-pilot-bundle.v1"
+    assert payload["state"] == "ready_for_mock_pilot"
+    assert payload["sink"] == "google_contacts"
+    assert payload["operator"] == "tester"
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert payload["can_attempt_mock_pilot"] is True
+    assert payload["can_attempt_live_pilot"] is False
+    assert payload["artifacts"]["sink_apply_pilot_readiness"]["exists"] is True
+    assert payload["artifacts"]["sink_apply_pilot_readiness"]["selected"] is True
+    assert payload["commands"]["live_write"].startswith(
+        f"sinks write-pilot {job_id} --run-id {run_id} --sink google_contacts"
+    )
+    assert any("second write pilot" in condition for condition in payload["stop_conditions"])
+    assert payload["remediation"]["sink"] == "google_contacts"
+    assert payload["remediation"]["rollback_guaranteed"] is False
+    assert "live_apply_ready" in payload["missing_requirements"]
+    assert Path(bundle["bundle_path"]).exists()
+    assert any(artifact["kind"] == "sink_apply_pilot_bundle" for artifact in job["artifacts"])
+    assert "sink_apply_pilot_bundle" in review_bundle["entries"][0]["artifact_kinds"]
+
+
 def test_service_review_bundle_includes_sink_pilot_status(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",

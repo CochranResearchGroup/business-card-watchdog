@@ -37,6 +37,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_sink_apply" in names
     assert "business_card_watchdog_sink_apply_pilot_readiness" in names
     assert "business_card_watchdog_sink_apply_pilot_report" in names
+    assert "business_card_watchdog_sink_apply_pilot_bundle" in names
     assert "business_card_watchdog_sink_adapter_request" in names
     assert "business_card_watchdog_sink_lookup_pilot" in names
     assert "business_card_watchdog_sink_lookup_readiness" in names
@@ -143,6 +144,11 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     pilot_readiness = call_tool(
         "business_card_watchdog_sink_apply_pilot_readiness",
         {"job_id": job_id, "run_id": run_id, "sink": "google_contacts"},
+        config=config,
+    )
+    pilot_bundle = call_tool(
+        "business_card_watchdog_sink_apply_pilot_bundle",
+        {"job_id": job_id, "run_id": run_id, "sink": "google_contacts", "operator": "mcp-test"},
         config=config,
     )
     write_pilot = call_tool(
@@ -314,6 +320,9 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert apply_result["result"]["readback"][0]["simulated"] is True
     assert pilot_readiness["readiness"]["schema"] == "business-card-watchdog.sink-apply-pilot-readiness.v1"
     assert pilot_readiness["readiness"]["selected_sink"] == "google_contacts"
+    assert pilot_bundle["bundle"]["schema"] == "business-card-watchdog.sink-apply-pilot-bundle.v1"
+    assert pilot_bundle["bundle"]["sink"] == "google_contacts"
+    assert pilot_bundle["bundle"]["writes_attempted"] == 0
     assert write_pilot["pilot"]["schema"] == "business-card-watchdog.sink-write-pilot.v1"
     assert write_pilot["pilot"]["writes_attempted"] == 0
     assert write_pilot["result"]["state"] == "mock_applied"

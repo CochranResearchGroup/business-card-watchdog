@@ -315,6 +315,12 @@ def build_parser() -> argparse.ArgumentParser:
     sinks_apply_pilot_report.add_argument("job_id")
     sinks_apply_pilot_report.add_argument("--run-id", required=True)
     sinks_apply_pilot_report.add_argument("--json", action="store_true")
+    sinks_apply_pilot_bundle = sinks_sub.add_parser("apply-pilot-bundle")
+    sinks_apply_pilot_bundle.add_argument("job_id")
+    sinks_apply_pilot_bundle.add_argument("--run-id", required=True)
+    sinks_apply_pilot_bundle.add_argument("--sink", choices=["google_contacts", "odoo"], required=True)
+    sinks_apply_pilot_bundle.add_argument("--operator", default="operator")
+    sinks_apply_pilot_bundle.add_argument("--json", action="store_true")
     sinks_apply_decision = sinks_sub.add_parser("apply-decision")
     sinks_apply_decision.add_argument("job_id")
     sinks_apply_decision.add_argument("--run-id", required=True)
@@ -630,6 +636,13 @@ def main(argv: list[str] | None = None) -> int:
             payload = service.build_sink_apply_pilot_report_for_job(
                 job_id=args.job_id,
                 run_id=args.run_id,
+            )
+        elif args.sinks_command == "apply-pilot-bundle":
+            payload = service.build_sink_apply_pilot_bundle_for_job(
+                job_id=args.job_id,
+                run_id=args.run_id,
+                sink=args.sink,
+                operator=args.operator,
             )
         elif args.sinks_command == "adapter-request":
             payload = service.build_sink_adapter_request_for_job(

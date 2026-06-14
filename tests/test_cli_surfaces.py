@@ -697,6 +697,30 @@ def test_cli_sinks_apply_decision_writes_zero_write_artifact(tmp_path: Path, cap
                 "--config",
                 str(config_path),
                 "sinks",
+                "apply-pilot-bundle",
+                job_id,
+                "--run-id",
+                run_id,
+                "--sink",
+                "google_contacts",
+                "--operator",
+                "cli-test",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    pilot_bundle = json.loads(capsys.readouterr().out)
+    assert pilot_bundle["bundle"]["schema"] == "business-card-watchdog.sink-apply-pilot-bundle.v1"
+    assert pilot_bundle["bundle"]["sink"] == "google_contacts"
+    assert pilot_bundle["bundle"]["writes_attempted"] == 0
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "sinks",
                 "write-pilot",
                 job_id,
                 "--run-id",

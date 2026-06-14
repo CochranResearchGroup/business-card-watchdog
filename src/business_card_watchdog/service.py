@@ -61,6 +61,7 @@ _SAFE_NEXT_ACTIONS = {
     "prepare_sink_write_adapter",
     "preflight_sink_apply",
     "prepare_sink_apply_pilot_readiness",
+    "prepare_sink_apply_pilot_bundle",
     "prepare_sink_readback_adapter",
     "prepare_sink_apply_pilot_report",
 }
@@ -99,6 +100,7 @@ _ROUTE_ARTIFACT_FILES = {
     "sink_apply_preflight": "sink_apply_preflight.json",
     "sink_apply_decision": "sink_apply_decision.json",
     "sink_apply_pilot_readiness": "sink_apply_pilot_readiness.json",
+    "sink_apply_pilot_bundle": "sink_apply_pilot_bundle.json",
     "sink_write_pilot": "sink_write_pilot.json",
     "sink_apply_result": "sink_apply_result.json",
     "sink_adapter_request_readback": "sink_adapter_request_readback.json",
@@ -168,6 +170,12 @@ _ROUTE_REFRESH_STEPS = [
         "reason": "review changed routing-relevant contact data; refresh live apply pilot readiness",
     },
     {
+        "kind": "sink_apply_pilot_bundle",
+        "action": "prepare_sink_apply_pilot_bundle",
+        "command": "sinks apply-pilot-bundle",
+        "reason": "review changed routing-relevant contact data; refresh operator pilot bundle",
+    },
+    {
         "kind": "sink_write_pilot",
         "action": "execute_sink_write_pilot",
         "command": "sinks write-pilot",
@@ -228,6 +236,7 @@ _REVIEW_BUNDLE_ARTIFACT_KINDS = {
     "sink_apply_preflight",
     "sink_apply_decision",
     "sink_apply_pilot_readiness",
+    "sink_apply_pilot_bundle",
     "sink_write_pilot",
     "sink_apply_result",
     "sink_adapter_request_readback",
@@ -3286,6 +3295,173 @@ class BusinessCardService:
         )
         return {"report_path": str(report_path), "report": payload}
 
+    def build_sink_apply_pilot_bundle_for_job(
+        self,
+        *,
+        job_id: str,
+        run_id: str,
+        sink: str,
+        operator: str = "operator",
+    ) -> dict[str, Any]:
+        if sink not in {"google_contacts", "odoo"}:
+            raise ValueError("sink apply pilot bundle requires sink google_contacts or odoo")
+        job = self.get_job(job_id, run_id=run_id)
+        artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
+        readiness = self.build_sink_apply_pilot_readiness_for_job(
+            job_id=job_id,
+            run_id=run_id,
+            sink=sink,
+        )["readiness"]
+        artifacts = {
+            "reviewed_contact": _read_json_file(artifact_dir / "reviewed_contact.json"),
+            "contact_candidate": _read_json_file(artifact_dir / "contact_candidate.json"),
+            "sink_lookup_result": _read_json_file(artifact_dir / "sink_lookup_result.json"),
+            "downstream_duplicate_assessment": _read_json_file(artifact_dir / "downstream_duplicate_assessment.json"),
+            "duplicate_resolution": _read_json_file(artifact_dir / "duplicate_resolution.json"),
+            "sink_plan": _read_json_file(artifact_dir / "sink_plan.json"),
+            "sink_adapter_request_write": _read_json_file(artifact_dir / "sink_adapter_request_write.json"),
+            "sink_apply_preflight": _read_json_file(artifact_dir / "sink_apply_preflight.json"),
+            "sink_apply_decision": _read_json_file(artifact_dir / "sink_apply_decision.json"),
+            "sink_apply_pilot_readiness": readiness,
+            "sink_write_pilot": _read_json_file(artifact_dir / "sink_write_pilot.json"),
+            "sink_apply_result": _read_json_file(artifact_dir / "sink_apply_result.json"),
+            "sink_adapter_request_readback": _read_json_file(artifact_dir / "sink_adapter_request_readback.json"),
+            "sink_readback_pilot": _read_json_file(artifact_dir / "sink_readback_pilot.json"),
+            "sink_apply_pilot_report": _read_json_file(artifact_dir / "sink_apply_pilot_report.json"),
+        }
+        artifact_status = {
+            kind: self._pilot_bundle_artifact_status(
+                kind=kind,
+                path=artifact_dir / f"{kind}.json",
+                payload=payload,
+                sink=sink,
+            )
+            for kind, payload in artifacts.items()
+        }
+        requirements = self._pilot_bundle_requirements(
+            artifacts=artifacts,
+            artifact_status=artifact_status,
+            readiness=readiness,
+            sink=sink,
+        )
+        requirement_by_name = {str(item["name"]): bool(item["ok"]) for item in requirements}
+        can_attempt_mock = all(
+            requirement_by_name[name]
+            for name in [
+                "reviewed_contact_exists",
+                "selected_sink_planned",
+                "apply_decision_approved",
+                "selected_sink_readiness_prepared",
+                "mock_apply_ready",
+            ]
+        )
+        can_attempt_live = all(
+            requirement_by_name[name]
+            for name in [
+                "reviewed_contact_exists",
+                "selected_sink_lookup_reviewed",
+                "selected_sink_planned",
+                "apply_decision_approved",
+                "selected_sink_readiness_prepared",
+                "live_apply_ready",
+            ]
+        )
+        missing_requirements = [item["name"] for item in requirements if not item["ok"]]
+        state = (
+            "ready_for_live_pilot"
+            if can_attempt_live
+            else ("ready_for_mock_pilot" if can_attempt_mock else "blocked")
+        )
+        payload = {
+            "schema": "business-card-watchdog.sink-apply-pilot-bundle.v1",
+            "state": state,
+            "status": state,
+            "reason": (
+                "selected sink has live pilot readiness evidence"
+                if can_attempt_live
+                else (
+                    "selected sink has mock pilot readiness evidence; live pilot remains blocked"
+                    if can_attempt_mock
+                    else "operator pilot bundle is blocked until required selected-sink evidence exists"
+                )
+            ),
+            "job_id": job_id,
+            "run_id": run_id,
+            "sink": sink,
+            "operator": operator,
+            "created_at": utc_now(),
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "can_attempt_mock_pilot": can_attempt_mock,
+            "can_attempt_live_pilot": can_attempt_live,
+            "requirements": requirements,
+            "missing_requirements": missing_requirements,
+            "artifacts": artifact_status,
+            "readiness": readiness,
+            "commands": {
+                "inspect_job": f"jobs show {job_id} --run-id {run_id}",
+                "review_bundle": f"reviews bundle --run-id {run_id} --state all",
+                "lookup_readiness": f"sinks lookup-readiness {job_id} --run-id {run_id} --sink {sink}",
+                "lookup_pilot": (
+                    f"sinks lookup-pilot {job_id} --run-id {run_id} --sink {sink} "
+                    "--approved-by <operator> --no-simulate"
+                ),
+                "assess_duplicates": f"sinks assess-duplicates {job_id} --run-id {run_id}",
+                "apply_pilot_readiness": f"sinks apply-pilot-readiness {job_id} --run-id {run_id} --sink {sink}",
+                "mock_write": (
+                    f"sinks write-pilot {job_id} --run-id {run_id} --sink {sink} "
+                    "--approved-by <operator> --simulate"
+                ),
+                "live_write": (
+                    f"sinks write-pilot {job_id} --run-id {run_id} --sink {sink} "
+                    "--approved-by <operator> --no-simulate"
+                ),
+                "readback_request": f"sinks adapter-request {job_id} --run-id {run_id} --phase readback",
+                "mock_readback": (
+                    f"sinks readback-pilot {job_id} --run-id {run_id} --sink {sink} "
+                    "--approved-by <operator> --simulate"
+                ),
+                "live_readback": (
+                    f"sinks readback-pilot {job_id} --run-id {run_id} --sink {sink} "
+                    "--approved-by <operator> --no-simulate"
+                ),
+                "pilot_report": f"sinks apply-pilot-report {job_id} --run-id {run_id}",
+            },
+            "stop_conditions": [
+                "any artifact names a different run, job, or sink than this bundle",
+                "selected sink readiness is blocked or references an unexpected profile or tenant",
+                "downstream duplicate assessment is missing, unresolved, or names an unreviewed strong match",
+                "operator cannot accept sink-specific remediation limits",
+                "readback does not verify the expected resource after a write pilot",
+                "a second write pilot would run before the first pilot report is complete or explicitly abandoned",
+            ],
+            "remediation": self._pilot_bundle_remediation(sink),
+        }
+        bundle_path = artifact_dir / "sink_apply_pilot_bundle.json"
+        bundle_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        ledger.record_artifact(job_id=job_id, kind="sink_apply_pilot_bundle", path=bundle_path)
+        ledger.record_event(
+            "sink_apply_pilot_bundle_created",
+            {
+                "job_id": job_id,
+                "run_id": run_id,
+                "sink": sink,
+                "operator": operator,
+                "bundle_path": str(bundle_path),
+                "state": state,
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        self._mark_route_artifact_refreshed(
+            artifact_dir,
+            job_id=job_id,
+            run_id=run_id,
+            kind="sink_apply_pilot_bundle",
+        )
+        return {"bundle_path": str(bundle_path), "bundle": payload}
+
     def doctor(self) -> dict[str, Any]:
         status = self.status()
         checks = [
@@ -4186,6 +4362,181 @@ class BusinessCardService:
         )
         return {"route_refresh_path": str(refresh_path), "route_refresh": payload}
 
+    def _pilot_bundle_artifact_status(
+        self,
+        *,
+        kind: str,
+        path: Path,
+        payload: dict[str, Any] | None,
+        sink: str,
+    ) -> dict[str, Any]:
+        payload_sink = str((payload or {}).get("sink") or (payload or {}).get("selected_sink") or "")
+        if kind == "sink_plan":
+            payload_sink = ",".join(
+                sorted(
+                    {
+                        str(action.get("sink") or "")
+                        for action in list((payload or {}).get("actions") or [])
+                        if action.get("sink")
+                    }
+                )
+            )
+        if kind == "sink_lookup_result":
+            payload_sink = ",".join(
+                sorted(
+                    {
+                        str(result.get("sink") or "")
+                        for result in list((payload or {}).get("results") or [])
+                        if result.get("sink")
+                    }
+                )
+            )
+        return {
+            "kind": kind,
+            "path": str(path),
+            "exists": payload is not None,
+            "schema": (payload or {}).get("schema"),
+            "state": (payload or {}).get("state", "missing"),
+            "status": (payload or {}).get("status", "missing"),
+            "sink": payload_sink or None,
+            "selected": bool(payload and (not payload_sink or sink in payload_sink.split(","))),
+        }
+
+    def _pilot_bundle_requirements(
+        self,
+        *,
+        artifacts: dict[str, dict[str, Any] | None],
+        artifact_status: dict[str, dict[str, Any]],
+        readiness: dict[str, Any],
+        sink: str,
+    ) -> list[dict[str, Any]]:
+        duplicate_assessment = artifacts.get("downstream_duplicate_assessment") or {}
+        duplicate_resolution = artifacts.get("duplicate_resolution") or {}
+        duplicate_state = str(duplicate_assessment.get("state") or "missing")
+        duplicate_reviewed = duplicate_state == "no_match" or bool(duplicate_resolution.get("decision"))
+        return [
+            {
+                "name": "reviewed_contact_exists",
+                "ok": artifacts.get("reviewed_contact") is not None,
+                "detail": artifact_status["reviewed_contact"]["path"],
+            },
+            {
+                "name": "selected_sink_lookup_reviewed",
+                "ok": self._pilot_bundle_lookup_result_has_sink(artifacts.get("sink_lookup_result"), sink)
+                and duplicate_reviewed,
+                "detail": (
+                    "lookup result exists and duplicate state is reviewed or no-match"
+                    if duplicate_reviewed
+                    else f"downstream duplicate state is {duplicate_state}"
+                ),
+            },
+            {
+                "name": "selected_sink_planned",
+                "ok": self._pilot_bundle_sink_plan_has_sink(artifacts.get("sink_plan"), sink),
+                "detail": artifact_status["sink_plan"]["path"],
+            },
+            {
+                "name": "write_adapter_request_exists",
+                "ok": self._pilot_bundle_adapter_has_sink(artifacts.get("sink_adapter_request_write"), sink, phase="write"),
+                "detail": artifact_status["sink_adapter_request_write"]["path"],
+            },
+            {
+                "name": "apply_preflight_exists",
+                "ok": artifacts.get("sink_apply_preflight") is not None,
+                "detail": artifact_status["sink_apply_preflight"]["path"],
+            },
+            {
+                "name": "apply_decision_approved",
+                "ok": bool((artifacts.get("sink_apply_decision") or {}).get("decision") == "approve"),
+                "detail": artifact_status["sink_apply_decision"]["path"],
+            },
+            {
+                "name": "selected_sink_readiness_prepared",
+                "ok": readiness.get("selected_sink") == sink,
+                "detail": "apply pilot readiness artifact is scoped to the selected sink",
+            },
+            {
+                "name": "mock_apply_ready",
+                "ok": bool(readiness.get("can_mock_apply_pilot")),
+                "detail": "mock write/readback pilot can run without live sink calls",
+            },
+            {
+                "name": "live_apply_ready",
+                "ok": bool(readiness.get("can_live_apply_pilot")),
+                "detail": "live write/readback pilot readiness checks are satisfied for the selected sink",
+            },
+            {
+                "name": "readback_adapter_request_exists",
+                "ok": self._pilot_bundle_adapter_has_sink(
+                    artifacts.get("sink_adapter_request_readback"),
+                    sink,
+                    phase="readback",
+                ),
+                "detail": artifact_status["sink_adapter_request_readback"]["path"],
+            },
+        ]
+
+    def _pilot_bundle_sink_plan_has_sink(self, plan: dict[str, Any] | None, sink: str) -> bool:
+        return any(action.get("sink") == sink for action in list((plan or {}).get("actions") or []))
+
+    def _pilot_bundle_lookup_result_has_sink(self, result: dict[str, Any] | None, sink: str) -> bool:
+        return any(row.get("sink") == sink for row in list((result or {}).get("results") or []))
+
+    def _pilot_bundle_adapter_has_sink(
+        self,
+        request: dict[str, Any] | None,
+        sink: str,
+        *,
+        phase: str,
+    ) -> bool:
+        return any(
+            row.get("sink") == sink and row.get("phase") == phase
+            for row in list((request or {}).get("requests") or [])
+        )
+
+    def _pilot_bundle_remediation(self, sink: str) -> dict[str, Any]:
+        common = {
+            "rollback_guaranteed": False,
+            "before_retry": [
+                "preserve sink_apply_pilot_bundle.json and all pilot artifacts",
+                "inspect the downstream contact manually",
+                "do not rerun write-pilot until the prior pilot is complete or explicitly abandoned",
+            ],
+        }
+        if sink == "google_contacts":
+            return {
+                **common,
+                "sink": sink,
+                "manual_checks": [
+                    "inspect the created or updated Google Contact resource",
+                    "remove disposable pilot contacts manually if appropriate",
+                    "verify People API scopes before another live write",
+                ],
+            }
+        return {
+            **common,
+            "sink": sink,
+            "manual_checks": [
+                "inspect the Odollo/Odoo res.partner record in the selected tenant",
+                "preserve tenant action logs before manual correction",
+                "verify tenant/profile selection before another live write",
+            ],
+        }
+
+    def _default_sink_for_job(self, *, job_id: str, run_id: str) -> str:
+        job = self.get_job(job_id, run_id=run_id)
+        artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
+        plan = _read_json_file(artifact_dir / "sink_plan.json")
+        for action in list((plan or {}).get("actions") or []):
+            sink = str(action.get("sink") or "")
+            if sink in {"google_contacts", "odoo"}:
+                return sink
+        if self.config.sink.google_contacts:
+            return "google_contacts"
+        if self.config.sink.odoo:
+            return "odoo"
+        return "google_contacts"
+
     def _mark_route_artifact_refreshed(
         self,
         artifact_dir: Path,
@@ -4263,6 +4614,9 @@ class BusinessCardService:
             return self.preflight_sink_apply(job_id=job_id, run_id=run_id)
         if action_name == "prepare_sink_apply_pilot_readiness":
             return self.build_sink_apply_pilot_readiness_for_job(job_id=job_id, run_id=run_id)
+        if action_name == "prepare_sink_apply_pilot_bundle":
+            sink = self._default_sink_for_job(job_id=job_id, run_id=run_id)
+            return self.build_sink_apply_pilot_bundle_for_job(job_id=job_id, run_id=run_id, sink=sink)
         if action_name == "prepare_sink_readback_adapter":
             return self.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="readback")
         if action_name == "prepare_sink_apply_pilot_report":

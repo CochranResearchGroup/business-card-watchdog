@@ -64,6 +64,11 @@ def create_app(config_path: Path | None = None):
         simulate: bool = False
         sink: str | None = None
 
+    class SinkApplyPilotBundleRequest(BaseModel):
+        run_id: str
+        sink: str
+        operator: str = "operator"
+
     class SinkApplyDecisionRequest(BaseModel):
         run_id: str
         decision: str
@@ -336,6 +341,18 @@ def create_app(config_path: Path | None = None):
         request: SinkApplyPreflightRequest = Body(...),
     ) -> dict[str, object]:
         return service().build_sink_apply_pilot_report_for_job(job_id=job_id, run_id=request.run_id)
+
+    @app.post("/jobs/{job_id}/sink-apply-pilot-bundle")
+    def create_sink_apply_pilot_bundle(
+        job_id: str,
+        request: SinkApplyPilotBundleRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().build_sink_apply_pilot_bundle_for_job(
+            job_id=job_id,
+            run_id=request.run_id,
+            sink=request.sink,
+            operator=request.operator,
+        )
 
     @app.post("/jobs/{job_id}/sink-adapter-request")
     def create_sink_adapter_request(job_id: str, request: SinkAdapterRequest = Body(...)) -> dict[str, object]:

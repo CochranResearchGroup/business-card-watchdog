@@ -109,9 +109,16 @@ Prepare apply artifacts:
   --run-id <run-id> \
   --sink google_contacts \
   --json
+.venv/bin/bcw sinks apply-pilot-bundle \
+  <job-id> \
+  --run-id <run-id> \
+  --sink google_contacts \
+  --operator <operator> \
+  --json
 ```
 
 Use `--sink odoo` when the one-job pilot target is Odollo/Odoo. Treat readiness as valid only for the selected sink named in the artifact.
+Review the operator bundle before any live write. It lists selected-sink commands, artifact paths, missing requirements, stop conditions, and remediation notes.
 
 Run one explicit live write pilot:
 
@@ -155,6 +162,7 @@ Use `--sink odoo` for an Odollo/Odoo readback pilot.
 
 Completion evidence:
 
+- `sink_apply_pilot_bundle.json` exists and names the selected sink/operator.
 - `sink_write_pilot.json` exists and records the expected sink/resource ID.
 - `sink_readback_pilot.json` exists and reports `state = verified`.
 - `sink_apply_pilot_report.json` reports complete state for the selected sink.

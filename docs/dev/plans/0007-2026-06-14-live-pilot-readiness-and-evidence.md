@@ -85,6 +85,34 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed and reported the index is up to date.
 
+### Slice 0007-D | 2026-06-14 | Operator Pilot Bundle
+
+Implemented:
+
+- Added `business-card-watchdog.sink-apply-pilot-bundle.v1` for one-job, selected-sink operator handoff.
+- Added service `BusinessCardService.build_sink_apply_pilot_bundle_for_job`.
+- Added CLI `bcw sinks apply-pilot-bundle <job-id> --run-id <run-id> --sink <sink> --operator <operator>`.
+- Added API `POST /jobs/{job_id}/sink-apply-pilot-bundle`.
+- Added MCP tool `business_card_watchdog_sink_apply_pilot_bundle`.
+- Registered `sink_apply_pilot_bundle.json` for route-refresh staleness and review-bundle visibility.
+- Bundle payload includes selected-sink commands, artifact status, requirements, missing requirements, stop conditions, and sink-specific remediation notes.
+
+Safety:
+
+- This slice creates zero-network, zero-write operator handoff artifacts only.
+- No public-web search, paid enrichment provider, GWS, Odollo/Odoo, or live sink calls are made.
+- Live write/readback remains an explicit operator command outside generic agent-loop continuation.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_apply_pilot_bundle_collects_selected_sink_commands_and_stops tests/test_api.py::test_api_sink_readback_pilot_writes_zero_write_artifact tests/test_cli_surfaces.py::test_cli_sinks_apply_decision_writes_zero_write_artifact tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+- `.venv/bin/python -m pytest -q` passed with 192 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed and reported the index is up to date.
+
 ### Slice 0007-C | 2026-06-14 | One-Job Write Pilot Readiness
 
 Implemented:

@@ -2189,3 +2189,31 @@ Validation:
 Safety:
 
 - This was zero-network, zero-write readiness work only. It made no public-web search, paid enrichment, GWS, Odollo/Odoo, or live sink calls.
+
+## Turn 117 | 2026-06-14
+
+Continued Plan 0007 with the operator pilot bundle slice.
+
+Implemented:
+
+- Added `business-card-watchdog.sink-apply-pilot-bundle.v1` for one-job, selected-sink live pilot handoff.
+- Added service `build_sink_apply_pilot_bundle_for_job`.
+- Added CLI `bcw sinks apply-pilot-bundle <job-id> --run-id <run-id> --sink <sink> --operator <operator>`.
+- Added API `POST /jobs/{job_id}/sink-apply-pilot-bundle`.
+- Added MCP `business_card_watchdog_sink_apply_pilot_bundle`.
+- Registered `sink_apply_pilot_bundle.json` for route-refresh staleness and review-bundle visibility.
+- Bundle artifacts include selected-sink commands, requirements, missing requirements, stop conditions, and sink-specific remediation notes.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_apply_pilot_bundle_collects_selected_sink_commands_and_stops tests/test_api.py::test_api_sink_readback_pilot_writes_zero_write_artifact tests/test_cli_surfaces.py::test_cli_sinks_apply_decision_writes_zero_write_artifact tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+- `.venv/bin/python -m pytest -q` passed with 192 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed and reported the index is up to date.
+
+Safety:
+
+- This was zero-network, zero-write handoff work only. It made no public-web search, paid enrichment, GWS, Odollo/Odoo, or live sink calls.

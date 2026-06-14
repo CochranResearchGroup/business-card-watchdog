@@ -287,6 +287,13 @@ def test_api_sink_readback_pilot_writes_zero_write_artifact(tmp_path: Path) -> N
         json={"run_id": run_id, "sink": "google_contacts"},
     ).json()
     assert readiness["readiness"]["selected_sink"] == "google_contacts"
+    bundle = client.post(
+        f"/jobs/{job_id}/sink-apply-pilot-bundle",
+        json={"run_id": run_id, "sink": "google_contacts", "operator": "api-test"},
+    ).json()
+    assert bundle["bundle"]["schema"] == "business-card-watchdog.sink-apply-pilot-bundle.v1"
+    assert bundle["bundle"]["sink"] == "google_contacts"
+    assert bundle["bundle"]["writes_attempted"] == 0
     write_pilot = client.post(
         f"/jobs/{job_id}/sink-write-pilot",
         json={"run_id": run_id, "sink": "google_contacts", "approved_by": "api-test"},

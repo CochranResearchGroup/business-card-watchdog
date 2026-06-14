@@ -327,6 +327,20 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_sink_apply_pilot_bundle",
+                "description": "Create a zero-write one-job selected-sink operator pilot bundle with commands and stop conditions.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "job_id": {"type": "string"},
+                        "run_id": {"type": "string"},
+                        "sink": {"type": "string", "enum": ["google_contacts", "odoo"]},
+                        "operator": {"type": "string", "default": "operator"},
+                    },
+                    "required": ["job_id", "run_id", "sink"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_sink_adapter_request",
                 "description": "Create a blocked live-adapter request artifact for lookup, write, or readback.",
                 "input_schema": {
@@ -692,6 +706,13 @@ def call_tool(
         return service.build_sink_apply_pilot_report_for_job(
             job_id=str(args["job_id"]),
             run_id=str(args["run_id"]),
+        )
+    if tool_name == "business_card_watchdog_sink_apply_pilot_bundle":
+        return service.build_sink_apply_pilot_bundle_for_job(
+            job_id=str(args["job_id"]),
+            run_id=str(args["run_id"]),
+            sink=str(args["sink"]),
+            operator=str(args.get("operator") or "operator"),
         )
     if tool_name == "business_card_watchdog_sink_adapter_request":
         return service.build_sink_adapter_request_for_job(
