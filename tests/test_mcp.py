@@ -203,6 +203,17 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
         },
         config=config,
     )
+    active_live_packet = call_tool(
+        "business_card_watchdog_live_selection_packet",
+        {
+            "job_id": job_id,
+            "run_id": run_id,
+            "sink": "google_contacts",
+            "operator": "mcp-test",
+            "write": False,
+        },
+        config=config,
+    )
     selected_target_audit = call_tool(
         "business_card_watchdog_selected_live_target_audit",
         {
@@ -235,6 +246,17 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
             "run_id": run_id,
             "operator": "mcp-test",
             "reason": "wrong target profile selected",
+        },
+        config=config,
+    )
+    abandoned_live_packet = call_tool(
+        "business_card_watchdog_live_selection_packet",
+        {
+            "job_id": job_id,
+            "run_id": run_id,
+            "sink": "google_contacts",
+            "operator": "mcp-test",
+            "write": False,
         },
         config=config,
     )
@@ -374,6 +396,18 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert live_packet["existing_selected_target"]["exists"] is False
     assert live_packet["existing_selected_target"]["identity"] is None
     assert live_packet["existing_selected_target"]["abandoned"] is False
+    assert active_live_packet["state"] == "blocked"
+    assert active_live_packet["existing_selected_target"]["exists"] is True
+    assert active_live_packet["existing_selected_target"]["identity"] == selected_target["target"]["selection_id"]
+    assert active_live_packet["existing_selected_target"]["target_safety_confirmed"] is True
+    assert active_live_packet["existing_selected_target"]["replacement_requires_abandonment"] is True
+    assert active_live_packet["existing_selected_target"]["can_select_replacement_now"] is False
+    assert "abandon-live-pilot" in active_live_packet["existing_selected_target"]["abandon_command"]
+    assert abandoned_live_packet["existing_selected_target"]["identity"] == selected_target["target"]["selection_id"]
+    assert abandoned_live_packet["existing_selected_target"]["abandoned"] is True
+    assert abandoned_live_packet["existing_selected_target"]["replacement_requires_abandonment"] is False
+    assert abandoned_live_packet["existing_selected_target"]["can_select_replacement_now"] is True
+    assert abandoned_live_packet["existing_selected_target"]["abandon_command"] is None
     assert watch_dry_run["schema"] == "business-card-watchdog.watch-dry-run-harness.v1"
     assert watch_dry_run["state"] == "passed"
     assert [entry["job_id"] for entry in reviews] == [job_id]

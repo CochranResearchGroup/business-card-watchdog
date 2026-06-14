@@ -555,6 +555,25 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_live_selection_packet_does_not_select_target tests/test_service.py::test_service_live_selection_packet_reports_existing_selected_target_context tests/test_cli_surfaces.py::test_cli_live_selection_packet_writes_no_selected_target -q` passed with 3 tests.
 
+### Slice 0009-A33 | 2026-06-14 | Assert Replacement Packet API/MCP Parity
+
+Implemented:
+
+- API live selection packet tests now assert active selected-target replacement gates.
+- API live selection packet tests now assert abandoned selected-target replacement gates.
+- MCP live selection packet tests now assert active and abandoned selected-target replacement gates.
+- API/MCP parity now protects `target_safety_confirmed`, `replacement_requires_abandonment`, `can_select_replacement_now`, and `abandon_command`.
+
+Safety:
+
+- This slice adds parity coverage only.
+- It does not create or modify selected targets outside fixture artifacts, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It keeps agent/API clients aligned with the deterministic replacement gate before any operator-selected live pilot.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 2 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

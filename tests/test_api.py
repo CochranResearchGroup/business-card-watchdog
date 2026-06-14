@@ -80,6 +80,17 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
         },
     ).json()
     assert selected["target"]["schema"] == "business-card-watchdog.selected-live-target.v1"
+    active_live_packet = client.post(
+        f"/jobs/{job_id}/live-selection-packet",
+        json={"run_id": run_id, "sink": "google_contacts", "operator": "api-test", "write": False},
+    ).json()
+    assert active_live_packet["state"] == "blocked"
+    assert active_live_packet["existing_selected_target"]["exists"] is True
+    assert active_live_packet["existing_selected_target"]["identity"] == selected["target"]["selection_id"]
+    assert active_live_packet["existing_selected_target"]["target_safety_confirmed"] is True
+    assert active_live_packet["existing_selected_target"]["replacement_requires_abandonment"] is True
+    assert active_live_packet["existing_selected_target"]["can_select_replacement_now"] is False
+    assert "abandon-live-pilot" in active_live_packet["existing_selected_target"]["abandon_command"]
     selected_audit = client.post(
         f"/jobs/{job_id}/selected-live-target-audit",
         json={"run_id": run_id, "scope": "lookup", "write": False},
@@ -115,6 +126,15 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     abandoned_status = client.get(f"/runs/{run_id}/live-pilot-status", params={"write": False}).json()
     assert abandoned_status["entries"][0]["selected_target_identity"] == selected["target"]["selection_id"]
     assert abandoned_status["entries"][0]["abandonment_identity"] == selected["target"]["selection_id"]
+    abandoned_live_packet = client.post(
+        f"/jobs/{job_id}/live-selection-packet",
+        json={"run_id": run_id, "sink": "google_contacts", "operator": "api-test", "write": False},
+    ).json()
+    assert abandoned_live_packet["existing_selected_target"]["identity"] == selected["target"]["selection_id"]
+    assert abandoned_live_packet["existing_selected_target"]["abandoned"] is True
+    assert abandoned_live_packet["existing_selected_target"]["replacement_requires_abandonment"] is False
+    assert abandoned_live_packet["existing_selected_target"]["can_select_replacement_now"] is True
+    assert abandoned_live_packet["existing_selected_target"]["abandon_command"] is None
     assert client.get("/runs").json()[0]["run_id"] == run_id
     assert client.get(f"/runs/{run_id}").json()["run_id"] == run_id
     assert client.get(f"/runs/{run_id}/summary").json()["needs_review_count"] == 1
