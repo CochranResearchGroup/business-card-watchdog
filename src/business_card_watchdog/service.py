@@ -3953,7 +3953,8 @@ class BusinessCardService:
         write_pilot = artifacts["sink_write_pilot"] or {}
         readback_pilot = artifacts["sink_readback_pilot"] or {}
         apply_report = artifacts["sink_apply_pilot_report"] or {}
-        required_artifacts = ["selected_live_target"]
+        selected_target_audit = artifacts["selected_live_target_audit"] or {}
+        required_artifacts = ["selected_live_target", "selected_live_target_audit"]
         if scope_allows.get("lookup") or scope in {"lookup", "all"}:
             required_artifacts.extend(["selected_lookup_smoke", "downstream_duplicate_assessment"])
         if scope_allows.get("write") or scope in {"write", "all"}:
@@ -3963,6 +3964,11 @@ class BusinessCardService:
         required_artifacts = list(dict.fromkeys(required_artifacts))
         missing_artifacts = [name for name in required_artifacts if artifacts.get(name) is None]
         blocked_reasons = list(missing_artifacts)
+        if selected_target_audit:
+            audit_mismatches = list(selected_target_audit.get("mismatches") or [])
+            blocked_reasons.extend(f"selected_target_audit:{reason}" for reason in audit_mismatches)
+            if selected_target_audit.get("target_safety_confirmed") is False:
+                blocked_reasons.append("selected_target_audit:target_safety_confirmation=missing")
         if duplicate.get("state") in {"strong_duplicate", "possible_duplicate"} and not duplicate.get("reviewed"):
             blocked_reasons.append(f"downstream_duplicate_state:{duplicate.get('state')}")
         if write_pilot and write_pilot.get("state") not in {"mock_written", "live_written"}:
@@ -4022,6 +4028,11 @@ class BusinessCardService:
                 "result_redacted": selected_lookup_smoke.get("result_redacted")
                 or bool((artifacts["sink_lookup_pilot"] or {}).get("execution_redacted", False)),
                 "downstream_duplicate_state": duplicate.get("state"),
+            },
+            "selected_target_audit": {
+                "state": selected_target_audit.get("state"),
+                "mismatches": selected_target_audit.get("mismatches", []),
+                "target_safety_confirmed": selected_target_audit.get("target_safety_confirmed"),
             },
             "write": {
                 "state": write_pilot.get("state"),

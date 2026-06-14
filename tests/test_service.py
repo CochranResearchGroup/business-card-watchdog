@@ -1960,6 +1960,7 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert closeout["report"]["state"] == "incomplete"
     assert closeout["report"]["sink"] == "google_contacts"
     assert closeout["report"]["operator"] == "tester"
+    assert "selected_live_target_audit" not in closeout["report"]["missing_artifacts"]
     assert "selected_lookup_smoke" in closeout["report"]["missing_artifacts"]
     assert closeout["report"]["writes_attempted"] == 0
     assert closeout["report"]["network_calls_made"] == 0
@@ -2000,6 +2001,36 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     )
     assert result["pilot"]["simulated"] is False
     assert calls
+
+
+def test_service_live_pilot_closeout_requires_selected_target_audit(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.select_live_target_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        operator="tester",
+        scope="lookup",
+        safety_confirmation="fixture contact is safe for google contacts test profile",
+    )
+
+    missing_audit = service.build_live_pilot_closeout_for_job(job_id=job_id, run_id=run_id, write=False)
+
+    assert missing_audit["report"]["state"] == "incomplete"
+    assert "selected_live_target_audit" in missing_audit["report"]["missing_artifacts"]
+
+    service.selected_live_target_audit(job_id=job_id, run_id=run_id, scope="lookup")
+    audited = service.build_live_pilot_closeout_for_job(job_id=job_id, run_id=run_id, write=False)
+
+    assert "selected_live_target_audit" not in audited["report"]["missing_artifacts"]
+    assert audited["report"]["selected_target_audit"]["target_safety_confirmed"] is True
 
 
 def test_service_selected_lookup_smoke_imports_redacted_duplicate_evidence(tmp_path: Path) -> None:

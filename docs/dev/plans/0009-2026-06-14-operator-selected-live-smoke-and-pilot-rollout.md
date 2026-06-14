@@ -211,6 +211,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_apply_pilot_report_summarizes_write_and_readback tests/test_service.py::test_service_apply_pilot_report_blocks_inconsistent_write_readback tests/test_service.py::test_service_readback_pilot_writes_simulated_evidence tests/test_service.py::test_service_safe_loop_and_manual_steps_complete_simulated_pilot_chain tests/test_cli_surfaces.py::test_cli_sinks_apply_decision_writes_zero_write_artifact tests/test_api.py::test_api_sink_readback_pilot_writes_zero_write_artifact tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 7 tests.
 
+### Slice 0009-A14 | 2026-06-14 | Closeout Requires Selected Target Audit
+
+Implemented:
+
+- `BusinessCardService.build_live_pilot_closeout_for_job` now requires `selected_live_target_audit.json`.
+- Closeout reports now include selected-target audit state, mismatches, and safety-confirmation state.
+- Closeout blocks when selected-target audit mismatches exist or when target safety confirmation is missing.
+
+Safety:
+
+- This slice validates closeout evidence only.
+- It does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- Older pre-live audit state can remain blocked for readiness reasons; closeout only treats identity/safety mismatches as closeout blockers.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_service.py::test_service_live_pilot_closeout_requires_selected_target_audit tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:
