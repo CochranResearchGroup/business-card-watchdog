@@ -127,6 +127,28 @@ def test_service_live_target_candidates_report_blocks_unready_jobs(tmp_path: Pat
     assert "sinks select-live-target" in candidate["commands"]["select_lookup_target"]
 
 
+def test_service_live_readiness_audit_writes_run_level_artifact(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    run_id, _job_id = make_recorded_run(config)
+
+    audit = BusinessCardService(config).live_readiness_audit(run_id=run_id, sink="google_contacts")
+
+    assert audit["schema"] == "business-card-watchdog.live-readiness-audit.v1"
+    assert audit["run_id"] == run_id
+    assert audit["sink"] == "google_contacts"
+    assert audit["candidate_count"] == 1
+    assert audit["writes_attempted"] == 0
+    assert audit["network_calls_made"] == 0
+    assert "audit_path" in audit
+    assert Path(audit["audit_path"]).exists()
+    artifacts = BusinessCardService(config).list_artifacts(run_id)
+    assert any(artifact["kind"] == "live_readiness_audit" for artifact in artifacts)
+
+
 def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, job_id = make_recorded_run(config)

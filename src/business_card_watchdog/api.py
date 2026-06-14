@@ -126,6 +126,11 @@ def create_app(config_path: Path | None = None):
         run_id: str | None = None
         limit: int = 10
 
+    class LiveReadinessAuditRequest(BaseModel):
+        run_id: str | None = None
+        sink: str | None = None
+        write: bool = True
+
     app = FastAPI(title="Business Card Watchdog")
 
     def service() -> BusinessCardService:
@@ -151,6 +156,14 @@ def create_app(config_path: Path | None = None):
     @app.get("/live-target-candidates")
     def live_target_candidates(run_id: str | None = None, sink: str | None = None) -> dict[str, object]:
         return service().live_target_candidates(run_id=run_id, sink=sink)
+
+    @app.post("/live-readiness-audit")
+    def live_readiness_audit(request: LiveReadinessAuditRequest = Body(...)) -> dict[str, object]:
+        return service().live_readiness_audit(
+            run_id=request.run_id,
+            sink=request.sink,
+            write=request.write,
+        )
 
     @app.post("/runs")
     def create_run(request: ProcessRequest) -> dict[str, object]:

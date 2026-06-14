@@ -47,6 +47,11 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert live_targets["schema"] == "business-card-watchdog.live-target-candidates.v1"
     assert live_targets["network_calls_made"] == 0
     assert live_targets["writes_attempted"] == 0
+    live_audit = client.post("/live-readiness-audit", json={"run_id": run_id, "write": False}).json()
+    assert live_audit["schema"] == "business-card-watchdog.live-readiness-audit.v1"
+    assert live_audit["run_id"] == run_id
+    assert live_audit["network_calls_made"] == 0
+    assert live_audit["writes_attempted"] == 0
     assert client.get("/runs").json()[0]["run_id"] == run_id
     assert client.get(f"/runs/{run_id}").json()["run_id"] == run_id
     assert client.get(f"/runs/{run_id}/summary").json()["needs_review_count"] == 1

@@ -4157,6 +4157,90 @@ class BusinessCardService:
             ],
         }
 
+    def live_readiness_audit(
+        self,
+        *,
+        run_id: str | None = None,
+        sink: str | None = None,
+        write: bool = True,
+    ) -> dict[str, Any]:
+        selected_sink = str(sink or "").strip()
+        if selected_sink and selected_sink not in {"google_contacts", "odoo"}:
+            raise ValueError("live readiness audit requires sink google_contacts or odoo")
+        runtime = self.runtime_readiness()
+        recovery = self.service_recovery_report(run_id=run_id)
+        candidates = self.live_target_candidates(run_id=run_id, sink=selected_sink or None)
+        pilot_readiness = self.pilot_readiness_report(run_id) if run_id else None
+        blocked_reasons: list[str] = []
+        if runtime.get("state") == "blocked":
+            blocked_reasons.append("runtime readiness is blocked")
+        if candidates.get("candidate_count", 0) == 0:
+            blocked_reasons.append("no live target candidates are available")
+        if candidates.get("ready_candidate_count", 0) == 0:
+            blocked_reasons.append("no candidate is ready for selected-target approval")
+        if pilot_readiness and pilot_readiness.get("state") == "blocked":
+            blocked_reasons.append("pilot readiness is blocked")
+        state = "ready_for_operator_selection" if not blocked_reasons else "needs_preparation"
+        payload = {
+            "schema": "business-card-watchdog.live-readiness-audit.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_id,
+            "sink": selected_sink or None,
+            "runtime_readiness_state": runtime.get("state"),
+            "service_recovery_state": recovery.get("state"),
+            "pilot_readiness_state": (pilot_readiness or {}).get("state") if pilot_readiness else None,
+            "candidate_count": candidates.get("candidate_count", 0),
+            "ready_candidate_count": candidates.get("ready_candidate_count", 0),
+            "blocked_candidate_count": candidates.get("blocked_candidate_count", 0),
+            "blocked_reasons": blocked_reasons,
+            "runtime_readiness": runtime,
+            "service_recovery": recovery,
+            "pilot_readiness": pilot_readiness,
+            "live_target_candidates": candidates,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "commands": {
+                "runtime_readiness": "runtime-readiness --json",
+                "service_recovery": (
+                    f"service recovery --run-id {run_id} --json" if run_id else "service recovery --json"
+                ),
+                "pilot_readiness": f"runs pilot-readiness {run_id} --json" if run_id else "runs list --json",
+                "target_candidates": (
+                    "live-target-candidates"
+                    + (f" --run-id {run_id}" if run_id else "")
+                    + (f" --sink {selected_sink}" if selected_sink else "")
+                    + " --json"
+                ),
+            },
+            "explicit_stop_conditions": [
+                "Do not create selected_live_target.json from this audit alone.",
+                "Do not run live lookup, live write, or live readback from this audit.",
+                "Do not process private SyncThing images from generic readiness auditing.",
+                "Do not run public-web search or paid enrichment from readiness auditing.",
+            ],
+        }
+        if write and run_id:
+            audit_path = self.config.runs_dir / run_id / "live_readiness_audit.json"
+            audit_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            ledger = RunLedger(self.config.runs_dir / run_id)
+            ledger.record_artifact(job_id="__run__", kind="live_readiness_audit", path=audit_path)
+            ledger.record_event(
+                "live_readiness_audit_created",
+                {
+                    "run_id": run_id,
+                    "sink": selected_sink or None,
+                    "audit_path": str(audit_path),
+                    "state": state,
+                    "candidate_count": payload["candidate_count"],
+                    "ready_candidate_count": payload["ready_candidate_count"],
+                    "writes_attempted": 0,
+                    "network_calls_made": 0,
+                },
+            )
+            payload["audit_path"] = str(audit_path)
+        return payload
+
     def watch_status(self) -> dict[str, Any]:
         return PollingWatcher(self.config).status().to_dict()
 

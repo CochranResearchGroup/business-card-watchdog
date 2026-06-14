@@ -161,6 +161,28 @@ def _render_live_target_candidates_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_live_readiness_audit_text(payload: dict[str, object]) -> str:
+    lines = [
+        f"Live readiness audit: {payload.get('state')}",
+        f"Run: {payload.get('run_id') or 'none'}",
+        f"Sink: {payload.get('sink') or 'all'}",
+        f"Runtime: {payload.get('runtime_readiness_state')}",
+        f"Service recovery: {payload.get('service_recovery_state')}",
+        f"Pilot readiness: {payload.get('pilot_readiness_state') or 'none'}",
+        f"Candidates: {payload.get('candidate_count', 0)}",
+        f"Ready candidates: {payload.get('ready_candidate_count', 0)}",
+        f"Blocked candidates: {payload.get('blocked_candidate_count', 0)}",
+    ]
+    if payload.get("audit_path"):
+        lines.append(f"Audit path: {payload.get('audit_path')}")
+    blocked = payload.get("blocked_reasons") or []
+    rows = blocked if isinstance(blocked, list) else []
+    lines.append(f"Blocked reasons: {len(rows)}")
+    for reason in rows:
+        lines.append(f" - {reason}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_review_queue_text(entries: list[dict[str, object]]) -> str:
     lines = [f"Review queue: {len(entries)} jobs"]
     if not entries:
@@ -258,6 +280,12 @@ def build_parser() -> argparse.ArgumentParser:
     live_target_candidates.add_argument("--run-id", default=None)
     live_target_candidates.add_argument("--sink", choices=["google_contacts", "odoo"], default=None)
     live_target_candidates.add_argument("--json", action="store_true")
+
+    live_readiness_audit = sub.add_parser("live-readiness-audit")
+    live_readiness_audit.add_argument("--run-id", default=None)
+    live_readiness_audit.add_argument("--sink", choices=["google_contacts", "odoo"], default=None)
+    live_readiness_audit.add_argument("--no-write", action="store_true")
+    live_readiness_audit.add_argument("--json", action="store_true")
 
     process = sub.add_parser("process")
     process.add_argument("source")
@@ -572,6 +600,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "live-target-candidates":
         payload = service.live_target_candidates(run_id=args.run_id, sink=args.sink)
         print(json.dumps(payload, indent=2) if args.json else _render_live_target_candidates_text(payload), end="")
+        return 0
+
+    if args.command == "live-readiness-audit":
+        payload = service.live_readiness_audit(
+            run_id=args.run_id,
+            sink=args.sink,
+            write=not args.no_write,
+        )
+        print(json.dumps(payload, indent=2) if args.json else _render_live_readiness_audit_text(payload), end="")
         return 0
 
     if args.command == "process":

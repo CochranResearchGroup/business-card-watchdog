@@ -56,6 +56,18 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_live_readiness_audit",
+                "description": "Create or preview a no-network run-level live readiness audit before selected-target approval.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "sink": {"type": "string", "enum": ["google_contacts", "odoo"]},
+                        "write": {"type": "boolean", "default": True},
+                    },
+                },
+            },
+            {
                 "name": "business_card_watchdog_runs_list",
                 "description": "List known run records from the user-scoped run index.",
                 "input_schema": {"type": "object", "properties": {}},
@@ -652,6 +664,12 @@ def call_tool(
         return service.live_target_candidates(
             run_id=str(args["run_id"]) if args.get("run_id") else None,
             sink=str(args["sink"]) if args.get("sink") else None,
+        )
+    if tool_name == "business_card_watchdog_live_readiness_audit":
+        return service.live_readiness_audit(
+            run_id=str(args["run_id"]) if args.get("run_id") else None,
+            sink=str(args["sink"]) if args.get("sink") else None,
+            write=bool(args.get("write", True)),
         )
     if tool_name == "business_card_watchdog_runs_list":
         return service.list_runs()
