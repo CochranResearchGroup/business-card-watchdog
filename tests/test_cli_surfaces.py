@@ -1150,6 +1150,37 @@ def test_cli_sinks_apply_decision_writes_zero_write_artifact(tmp_path: Path, cap
                 "--config",
                 str(config_path),
                 "sinks",
+                "apply-pilot-bundle",
+                job_id,
+                "--run-id",
+                run_id,
+                "--sink",
+                "google_contacts",
+                "--operator",
+                "cli-test",
+            ]
+        )
+        == 0
+    )
+    bundle_text = capsys.readouterr().out
+    assert "Apply pilot bundle:" in bundle_text
+    assert f"Run: {run_id}" in bundle_text
+    assert f"Job: {job_id}" in bundle_text
+    assert "Sink: google_contacts" in bundle_text
+    assert "Operator: cli-test" in bundle_text
+    assert "Mock pilot:" in bundle_text
+    assert "Live pilot:" in bundle_text
+    assert "Missing requirements:" in bundle_text
+    assert "Live write: sinks write-pilot" in bundle_text
+    assert "Stop conditions:" in bundle_text
+    assert "{" not in bundle_text
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "sinks",
                 "select-live-target",
                 job_id,
                 "--run-id",

@@ -704,6 +704,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_sinks_lookup_result_writes_zero_network_artifact -q` passed with 1 test.
 
+### Slice 0009-A41 | 2026-06-14 | Add Apply Pilot Bundle Text Review
+
+Implemented:
+
+- `bcw sinks apply-pilot-bundle` now renders a compact text review when `--json` is omitted.
+- The text review shows state, run, job, sink, operator, mock/live pilot eligibility, readiness state, requirements, missing requirements, write/readback/report commands, stop conditions, and remediation notes.
+- CLI tests now cover apply pilot bundle text output without exposing raw JSON.
+
+Safety:
+
+- This slice improves operator review ergonomics only.
+- It does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It keeps the one-job write/readback pilot bundle reviewable before an operator explicitly runs non-simulated write or readback commands.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_sinks_apply_decision_writes_zero_write_artifact -q` passed with 1 test.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

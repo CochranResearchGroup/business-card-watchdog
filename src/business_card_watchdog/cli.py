@@ -476,6 +476,61 @@ def _render_lookup_smoke_handoff_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_apply_pilot_bundle_text(payload: dict[str, object]) -> str:
+    bundle = dict(payload.get("bundle") or payload)
+    readiness = dict(bundle.get("readiness") or {})
+    missing = bundle.get("missing_requirements") or []
+    requirements = bundle.get("requirements") or []
+    commands = dict(bundle.get("commands") or {})
+    stop_conditions = bundle.get("stop_conditions") or []
+    remediation = dict(bundle.get("remediation") or {})
+    lines = [
+        f"Apply pilot bundle: {bundle.get('state')}",
+        f"Run: {bundle.get('run_id')}",
+        f"Job: {bundle.get('job_id')}",
+        f"Sink: {bundle.get('sink')}",
+        f"Operator: {bundle.get('operator')}",
+        f"Mock pilot: {bundle.get('can_attempt_mock_pilot', False)}",
+        f"Live pilot: {bundle.get('can_attempt_live_pilot', False)}",
+        f"Readiness: {readiness.get('state') or readiness.get('status') or 'unknown'}",
+        f"Observed: writes={bundle.get('writes_attempted', 0)} network={bundle.get('network_calls_made', 0)}",
+    ]
+    if payload.get("bundle_path"):
+        lines.append(f"Bundle path: {payload.get('bundle_path')}")
+    req_rows = requirements if isinstance(requirements, list) else []
+    lines.append(f"Requirements: {len(req_rows)}")
+    for requirement in req_rows:
+        if isinstance(requirement, dict):
+            lines.append(f" - {requirement.get('name')}: ok={requirement.get('ok')} reason={requirement.get('reason') or 'none'}")
+    missing_rows = missing if isinstance(missing, list) else []
+    lines.append(f"Missing requirements: {len(missing_rows)}")
+    for requirement in missing_rows:
+        lines.append(f" - {requirement}")
+    for label, key in [
+        ("Apply pilot readiness", "apply_pilot_readiness"),
+        ("Mock write", "mock_write"),
+        ("Live write", "live_write"),
+        ("Readback request", "readback_request"),
+        ("Mock readback", "mock_readback"),
+        ("Live readback", "live_readback"),
+        ("Pilot report", "pilot_report"),
+    ]:
+        command = commands.get(key)
+        if command:
+            lines.append(f"{label}: {command}")
+    stops = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stops)}")
+    for condition in stops:
+        lines.append(f" - {condition}")
+    notes = remediation.get("notes") or remediation.get("manual_checks") or []
+    note_rows = notes if isinstance(notes, list) else []
+    if note_rows:
+        lines.append("Remediation notes:")
+        for note in note_rows:
+            lines.append(f" - {note}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_review_queue_text(entries: list[dict[str, object]]) -> str:
     lines = [f"Review queue: {len(entries)} jobs"]
     if not entries:
@@ -1258,6 +1313,9 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.sinks_command == "lookup-smoke-handoff" and not args.json:
             print(_render_lookup_smoke_handoff_text(payload), end="")
+            return 0
+        if args.sinks_command == "apply-pilot-bundle" and not args.json:
+            print(_render_apply_pilot_bundle_text(payload), end="")
             return 0
         print(json.dumps(payload, indent=2) if args.json else payload)
         return 0
