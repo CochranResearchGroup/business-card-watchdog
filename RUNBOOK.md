@@ -1753,6 +1753,21 @@ Validation:
 - `gh release view v0.1.0 --repo CochranResearchGroup/business-card-watchdog --json tagName,name,url,isDraft,isPrerelease,publishedAt,targetCommitish` confirmed a published non-draft, non-prerelease release.
 - `gh repo view CochranResearchGroup/business-card-watchdog --json repositoryTopics,description,visibility,url` confirmed the public repository topics.
 
+## Turn 104 | 2026-06-14
+
+Closed Plan 0006 for public-release hardening.
+
+Implemented:
+
+- Updated `docs/dev/plans/0006-2026-06-14-public-upstream-hardening.md` state to `COMPLETE_FOR_PUBLIC_RELEASE`.
+- Reconciled stale remaining-work notes for completed public CI, collaboration-template, branch-protection, clean-clone, and release slices.
+- Added a Plan 0006 completion audit with public repo, CI, branch-protection, clean-clone, live-pilot checklist, and v0.1.0 release evidence.
+
+Validation:
+
+- Latest upstream CI run `27507366888` passed both required jobs: `Test, lint, and build` and `Secret scan`.
+- Plan 0006 remaining work is now scoped to out-of-plan live pilot execution requiring selected target inputs and local auth.
+
 ## Turn 98 | 2026-06-14
 
 Continued Plan 0004 execution with a current completion and residual backlog audit.

@@ -1,6 +1,6 @@
 # Plan 0006 | Public Upstream Hardening And Production-Readiness Path
 
-State: IN_PROGRESS
+State: COMPLETE_FOR_PUBLIC_RELEASE
 Product authority: `PRODUCT_SPEC.md`
 Predecessors:
 
@@ -42,12 +42,8 @@ Implemented before this plan:
 - Concrete local default paths and fake fixture key wording were scrubbed before publication.
 - Plan 0004 control-plane work is repo-complete for offline/simulated review, enrichment, dedupe, routing, sink-pilot, CLI/API/MCP, and operations-documentation surfaces.
 
-Important gaps:
+Important remaining gap:
 
-- No GitHub Actions workflow exists yet.
-- No public CI gate runs pytest, lint, packaging, or leak scanning on push/PR.
-- No issue/PR templates exist for public or subagent work.
-- Clean-clone installation has not been validated from the public upstream.
 - Live read-only lookup and one-job write/readback pilots still need explicit selected targets and local auth.
 
 ## Execution Slices
@@ -104,7 +100,7 @@ Validation:
 
 Remaining:
 
-- Clean-clone `uv` install validation remains the next repository-hardening slice.
+- Completed.
 
 ### Slice 0006-C | Branch Protection / Ruleset Readiness
 
@@ -151,7 +147,7 @@ Validation:
 
 Remaining:
 
-- Live read-only lookup smoke planning remains explicit follow-on work.
+- Completed.
 
 ### Slice 0006-E | Live Read-Only Lookup Smoke Plan
 
@@ -258,7 +254,7 @@ Validation:
 
 Remaining:
 
-- Public collaboration templates remain the next repository-hardening slice.
+- Completed.
 
 ### Slice 0006-C | 2026-06-14 | Main Branch Protection
 
@@ -279,5 +275,24 @@ Validation:
 
 Remaining:
 
-- Add public collaboration templates in Slice 0006-B.
-- Add a clean-clone `uv` install validation slice.
+- Completed.
+
+## Completion Audit
+
+Plan 0006 public-release hardening is complete as of `e50eace`.
+
+Evidence:
+
+- Public repository exists at `https://github.com/CochranResearchGroup/business-card-watchdog`.
+- Local `main` tracks `upstream/main`.
+- Public CI exists and the latest head run `27507366888` passed `Test, lint, and build` and `Secret scan`.
+- `main` branch protection requires strict `Test, lint, and build` plus `Secret scan`; force pushes and deletion are disabled.
+- Public collaboration templates and `SECURITY.md` exist.
+- Clean public clone validation passed with `uv`, pytest, ruff, CLI help, and package build.
+- Live lookup/write pilot checklists exist and explicitly stop before unapproved writes.
+- `v0.1.0` is tagged and published as a non-draft, non-prerelease GitHub release.
+
+Remaining outside this public-release plan:
+
+- Actual live lookup or write/readback pilot execution requires an operator-selected non-sensitive `run_id`, `job_id`, sink, reviewer, and local GWS/Odollo auth.
+- Plan 0005 product hardening remains the next code/product plan.
