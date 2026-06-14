@@ -2368,3 +2368,24 @@ Validation:
 Safety:
 
 - This was report-only recovery guidance. It did not run `systemctl`, scan configured SyncThing inputs, process private images, execute safe next actions, run public-web search, call paid enrichment, or call GWS/Odollo/Odoo.
+
+## Turn 125 | 2026-06-14
+
+Started Plan 0009 with Slice 0009-A.
+
+Implemented:
+
+- Added `business-card-watchdog.live-target-candidates.v1`.
+- Added `BusinessCardService.live_target_candidates`.
+- Added CLI `bcw live-target-candidates`.
+- Added API `GET /live-target-candidates`.
+- Added MCP tool `business_card_watchdog_live_target_candidates`.
+- Candidate reports list no-network run/job/sink target candidates, lookup readiness state, stop reasons, and selected-target commands for operator review.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_live_target_candidates_report_blocks_unready_jobs tests/test_cli_surfaces.py::test_cli_live_target_candidates_reports_text_and_json tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+
+Safety:
+
+- This was read-only target-selection preparation. It did not create `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.

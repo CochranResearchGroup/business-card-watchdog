@@ -80,3 +80,26 @@ Recommended subagent split:
 ## Current State
 
 Ready for operator target selection. No live target has been selected in this plan.
+
+## Execution Log
+
+### Slice 0009-A | 2026-06-14 | Live Target Candidate Report
+
+Implemented:
+
+- Added `business-card-watchdog.live-target-candidates.v1`.
+- Added service `BusinessCardService.live_target_candidates`.
+- Added CLI `bcw live-target-candidates`.
+- Added API `GET /live-target-candidates`.
+- Added MCP tool `business_card_watchdog_live_target_candidates`.
+- Candidate reports list no-network run/job/sink target candidates, lookup readiness state, stop reasons, and the exact selected-target command the operator can run after choosing a target.
+
+Safety:
+
+- This slice is read-only and report-only.
+- It does not create `selected_live_target.json`.
+- It does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_live_target_candidates_report_blocks_unready_jobs tests/test_cli_surfaces.py::test_cli_live_target_candidates_reports_text_and_json tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.

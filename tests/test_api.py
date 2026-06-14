@@ -43,6 +43,10 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert service_recovery["commands"]["restart"] == "systemctl --user restart business-card-watchdog.service"
     assert service_recovery["network_calls_made"] == 0
     assert service_recovery["writes_attempted"] == 0
+    live_targets = client.get("/live-target-candidates", params={"run_id": run_id}).json()
+    assert live_targets["schema"] == "business-card-watchdog.live-target-candidates.v1"
+    assert live_targets["network_calls_made"] == 0
+    assert live_targets["writes_attempted"] == 0
     assert client.get("/runs").json()[0]["run_id"] == run_id
     assert client.get(f"/runs/{run_id}").json()["run_id"] == run_id
     assert client.get(f"/runs/{run_id}/summary").json()["needs_review_count"] == 1

@@ -45,6 +45,17 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_live_target_candidates",
+                "description": "List no-network candidate run/job/sink targets for explicit selected live lookup approval.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "sink": {"type": "string", "enum": ["google_contacts", "odoo"]},
+                    },
+                },
+            },
+            {
                 "name": "business_card_watchdog_runs_list",
                 "description": "List known run records from the user-scoped run index.",
                 "input_schema": {"type": "object", "properties": {}},
@@ -636,6 +647,11 @@ def call_tool(
     if tool_name == "business_card_watchdog_service_recovery":
         return service.service_recovery_report(
             run_id=str(args["run_id"]) if args.get("run_id") else None,
+        )
+    if tool_name == "business_card_watchdog_live_target_candidates":
+        return service.live_target_candidates(
+            run_id=str(args["run_id"]) if args.get("run_id") else None,
+            sink=str(args["sink"]) if args.get("sink") else None,
         )
     if tool_name == "business_card_watchdog_runs_list":
         return service.list_runs()

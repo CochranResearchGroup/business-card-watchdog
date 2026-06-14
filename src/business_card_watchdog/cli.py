@@ -137,6 +137,30 @@ def _render_service_recovery_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_live_target_candidates_text(payload: dict[str, object]) -> str:
+    candidates = payload.get("candidates") or []
+    rows = candidates if isinstance(candidates, list) else []
+    lines = [
+        f"Live target candidates: {payload.get('candidate_count', 0)}",
+        f"Ready: {payload.get('ready_candidate_count', 0)}",
+        f"Blocked: {payload.get('blocked_candidate_count', 0)}",
+    ]
+    for candidate in rows:
+        if not isinstance(candidate, dict):
+            continue
+        stops = candidate.get("stop_reasons") or []
+        stop_text = "; ".join(str(item) for item in stops) if isinstance(stops, list) and stops else "none"
+        lines.append(
+            " - "
+            f"{candidate.get('run_id')}/{candidate.get('job_id')} "
+            f"sink={candidate.get('sink')} "
+            f"state={candidate.get('state')} "
+            f"lookup={candidate.get('lookup_readiness_state')} "
+            f"stops={stop_text}"
+        )
+    return "\n".join(lines) + "\n"
+
+
 def _render_review_queue_text(entries: list[dict[str, object]]) -> str:
     lines = [f"Review queue: {len(entries)} jobs"]
     if not entries:
@@ -229,6 +253,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     runtime_readiness = sub.add_parser("runtime-readiness")
     runtime_readiness.add_argument("--json", action="store_true")
+
+    live_target_candidates = sub.add_parser("live-target-candidates")
+    live_target_candidates.add_argument("--run-id", default=None)
+    live_target_candidates.add_argument("--sink", choices=["google_contacts", "odoo"], default=None)
+    live_target_candidates.add_argument("--json", action="store_true")
 
     process = sub.add_parser("process")
     process.add_argument("source")
@@ -539,6 +568,11 @@ def main(argv: list[str] | None = None) -> int:
         payload = service.runtime_readiness()
         print(json.dumps(payload, indent=2) if args.json else _render_runtime_readiness_text(payload), end="")
         return 0 if payload["state"] != "blocked" else 2
+
+    if args.command == "live-target-candidates":
+        payload = service.live_target_candidates(run_id=args.run_id, sink=args.sink)
+        print(json.dumps(payload, indent=2) if args.json else _render_live_target_candidates_text(payload), end="")
+        return 0
 
     if args.command == "process":
         run = service.process_source(

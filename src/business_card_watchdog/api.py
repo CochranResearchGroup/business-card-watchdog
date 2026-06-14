@@ -148,6 +148,10 @@ def create_app(config_path: Path | None = None):
     def service_recovery(run_id: str | None = None) -> dict[str, object]:
         return service().service_recovery_report(run_id=run_id)
 
+    @app.get("/live-target-candidates")
+    def live_target_candidates(run_id: str | None = None, sink: str | None = None) -> dict[str, object]:
+        return service().live_target_candidates(run_id=run_id, sink=sink)
+
     @app.post("/runs")
     def create_run(request: ProcessRequest) -> dict[str, object]:
         return service().process_source(

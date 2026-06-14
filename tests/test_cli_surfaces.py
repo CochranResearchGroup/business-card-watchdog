@@ -11,6 +11,7 @@ from business_card_watchdog.config import (
     EnrichmentConfig,
     EnrichmentProviderConfig,
     PrefilterConfig,
+    SinkConfig,
 )
 from business_card_watchdog.contact import build_contact_candidate
 from business_card_watchdog.orchestrator import BatchOrchestrator
@@ -69,6 +70,35 @@ def test_cli_service_recovery_reports_status_shape(tmp_path: Path, capsys) -> No
     assert f"Run: {run_id}" in text
     assert "Restart: systemctl --user restart business-card-watchdog.service" in text
     assert "Resume: bcw --config" in text
+    assert "{" not in text
+
+
+def test_cli_live_target_candidates_reports_text_and_json(tmp_path: Path, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    config_path.write_text(
+        f'data_dir = "{data_dir}"\n[watch]\ninputs = []\n[sink]\ngoogle_contacts = true\n',
+        encoding="utf-8",
+    )
+    run_id, _job_id = make_recorded_run(
+        AppConfig(
+            config_path=config_path,
+            data_dir=data_dir,
+            sink=SinkConfig(google_contacts=True, dry_run=True),
+        )
+    )
+
+    assert main(["--config", str(config_path), "live-target-candidates", "--run-id", run_id, "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["schema"] == "business-card-watchdog.live-target-candidates.v1"
+    assert payload["candidate_count"] == 1
+    assert payload["network_calls_made"] == 0
+    assert payload["writes_attempted"] == 0
+
+    assert main(["--config", str(config_path), "live-target-candidates", "--run-id", run_id]) == 0
+    text = capsys.readouterr().out
+    assert "Live target candidates: 1" in text
+    assert "sink=google_contacts" in text
     assert "{" not in text
 
 

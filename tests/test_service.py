@@ -102,6 +102,31 @@ def test_service_recovery_report_composes_status_and_recovery_commands(tmp_path:
     assert "Do not scan or process private SyncThing images from generic recovery." in report["explicit_stop_conditions"]
 
 
+def test_service_live_target_candidates_report_blocks_unready_jobs(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    run_id, job_id = make_recorded_run(config)
+
+    report = BusinessCardService(config).live_target_candidates(run_id=run_id, sink="google_contacts")
+
+    assert report["schema"] == "business-card-watchdog.live-target-candidates.v1"
+    assert report["run_id"] == run_id
+    assert report["candidate_count"] == 1
+    assert report["ready_candidate_count"] == 0
+    assert report["writes_attempted"] == 0
+    assert report["network_calls_made"] == 0
+    candidate = report["candidates"][0]
+    assert candidate["schema"] == "business-card-watchdog.live-target-candidate.v1"
+    assert candidate["job_id"] == job_id
+    assert candidate["sink"] == "google_contacts"
+    assert candidate["state"] == "blocked"
+    assert "job state is needs_review" in candidate["stop_reasons"]
+    assert "sinks select-live-target" in candidate["commands"]["select_lookup_target"]
+
+
 def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, job_id = make_recorded_run(config)

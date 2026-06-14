@@ -4079,6 +4079,84 @@ class BusinessCardService:
             ],
         }
 
+    def live_target_candidates(
+        self,
+        *,
+        run_id: str | None = None,
+        sink: str | None = None,
+    ) -> dict[str, Any]:
+        selected_sink = str(sink or "").strip()
+        if selected_sink and selected_sink not in {"google_contacts", "odoo"}:
+            raise ValueError("live target candidates require sink google_contacts or odoo")
+        runs = [self.get_run(run_id)] if run_id else self.list_runs()
+        candidates: list[dict[str, Any]] = []
+        for run in runs:
+            current_run_id = str(run["run_id"])
+            bundle = self.review_bundle(run_id=current_run_id, state="all", write=False)
+            for entry in bundle["entries"]:
+                candidate_sinks = self._live_candidate_sinks(entry, selected_sink=selected_sink)
+                for candidate_sink in candidate_sinks:
+                    readiness = self.live_lookup_readiness_report(
+                        job_id=str(entry["job_id"]),
+                        run_id=current_run_id,
+                        sink=candidate_sink,
+                    )
+                    matrix = dict(entry.get("review_matrix") or {})
+                    stop_reasons = self._live_target_candidate_stop_reasons(
+                        entry=entry,
+                        readiness=readiness,
+                    )
+                    candidate_state = "ready_for_selection" if not stop_reasons else "blocked"
+                    candidates.append(
+                        {
+                            "schema": "business-card-watchdog.live-target-candidate.v1",
+                            "state": candidate_state,
+                            "run_id": current_run_id,
+                            "job_id": entry["job_id"],
+                            "sink": candidate_sink,
+                            "job_state": entry.get("state"),
+                            "image_path": entry.get("image_path"),
+                            "next_action": (entry.get("next_action") or {}).get("action"),
+                            "duplicate_state": matrix.get("duplicate_state"),
+                            "route_state": matrix.get("route_state"),
+                            "sink_lookup_state": matrix.get("sink_lookup_state"),
+                            "lookup_readiness_state": readiness.get("state"),
+                            "lookup_missing_requirements": readiness.get("missing_requirements", []),
+                            "stop_reasons": stop_reasons,
+                            "commands": {
+                                "inspect_job": f"jobs show {entry['job_id']} --run-id {current_run_id}",
+                                "pilot_readiness": f"runs pilot-readiness {current_run_id}",
+                                "lookup_readiness": (
+                                    f"sinks lookup-readiness {entry['job_id']} --run-id {current_run_id} "
+                                    f"--sink {candidate_sink}"
+                                ),
+                                "select_lookup_target": (
+                                    f"sinks select-live-target {entry['job_id']} --run-id {current_run_id} "
+                                    f"--sink {candidate_sink} --operator <operator> --scope lookup"
+                                ),
+                            },
+                        }
+                    )
+        return {
+            "schema": "business-card-watchdog.live-target-candidates.v1",
+            "generated_at": utc_now(),
+            "state": "candidates_available" if candidates else "empty",
+            "run_id": run_id,
+            "sink": selected_sink or None,
+            "candidate_count": len(candidates),
+            "ready_candidate_count": sum(1 for candidate in candidates if candidate["state"] == "ready_for_selection"),
+            "blocked_candidate_count": sum(1 for candidate in candidates if candidate["state"] == "blocked"),
+            "candidates": candidates,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "explicit_stop_conditions": [
+                "Do not create selected_live_target.json until the operator chooses a run, job, sink, operator, and scope.",
+                "Do not run live lookup, write, or readback from this report.",
+                "Do not process private SyncThing images from generic target selection.",
+                "Do not run public-web search or paid enrichment from target selection.",
+            ],
+        }
+
     def watch_status(self) -> dict[str, Any]:
         return PollingWatcher(self.config).status().to_dict()
 
@@ -4472,6 +4550,43 @@ class BusinessCardService:
                 sink_pilot_status.get("requires_explicit_operator_action")
             ),
         }
+
+    def _live_candidate_sinks(self, entry: dict[str, Any], *, selected_sink: str = "") -> list[str]:
+        if selected_sink:
+            return [selected_sink]
+        matrix = dict(entry.get("review_matrix") or {})
+        planned = [
+            str(sink)
+            for sink in list(matrix.get("planned_sinks") or [])
+            if str(sink) in {"google_contacts", "odoo"}
+        ]
+        if planned:
+            return sorted(set(planned))
+        configured: list[str] = []
+        if self.config.sink.google_contacts:
+            configured.append("google_contacts")
+        if self.config.sink.odoo:
+            configured.append("odoo")
+        return configured
+
+    def _live_target_candidate_stop_reasons(
+        self,
+        *,
+        entry: dict[str, Any],
+        readiness: dict[str, Any],
+    ) -> list[str]:
+        reasons: list[str] = []
+        matrix = dict(entry.get("review_matrix") or {})
+        if entry.get("state") != "ready_to_route":
+            reasons.append(f"job state is {entry.get('state')}")
+        duplicate_state = str(matrix.get("duplicate_state") or "")
+        if duplicate_state in {"strong_duplicate", "possible_duplicate"}:
+            reasons.append(f"downstream duplicate state is {duplicate_state}")
+        if readiness.get("state") != "ready":
+            reasons.append(f"lookup readiness is {readiness.get('state')}")
+        for missing in list(readiness.get("missing_requirements") or []):
+            reasons.append(f"missing lookup requirement: {missing}")
+        return reasons
 
     def _sink_pilot_status(
         self,
