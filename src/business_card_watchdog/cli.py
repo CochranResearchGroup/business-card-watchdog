@@ -104,6 +104,8 @@ def _render_live_pilot_handoff_text(payload: dict[str, object]) -> str:
                 " - "
                 f"{entry.get('job_id')} "
                 f"next={entry.get('next_action')} "
+                f"target={entry.get('selected_target_identity') or 'none'} "
+                f"abandonment={entry.get('abandonment_identity') or 'none'} "
                 f"operator_required={entry.get('operator_required')} "
                 f"command={entry.get('command') or 'none'}"
             )
@@ -258,6 +260,8 @@ def _render_live_selection_requirements_text(payload: dict[str, object]) -> str:
             f"{entry.get('run_id')}/{entry.get('job_id')} "
             f"sink={entry.get('sink')} "
             f"state={entry.get('state')} "
+            f"target={entry.get('selected_target_identity') or 'none'} "
+            f"abandonment={entry.get('abandonment_identity') or 'none'} "
             f"missing={missing_text}"
         )
     if payload.get("requirements_path"):

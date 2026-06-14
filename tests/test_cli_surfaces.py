@@ -160,6 +160,8 @@ def test_cli_live_selection_requirements_reports_text_and_json(tmp_path: Path, c
     text = capsys.readouterr().out
     assert "Live selection requirements:" in text
     assert f"Run: {run_id}" in text
+    assert "target=none" in text
+    assert "abandonment=none" in text
     assert "missing=operator,scope,safety_confirmation" in text
     assert "{" not in text
 
@@ -288,6 +290,13 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert handoff["action_counts"]["request_live_lookup_smoke"] == 1
     assert handoff["writes_attempted"] == 0
     assert Path(handoff["handoff_path"]).exists()
+    target_identity = handoff["entries"][0]["selected_target_identity"]
+
+    assert main(["--config", str(config_path), "runs", "live-pilot-handoff", run_id, "--no-write"]) == 0
+    text_handoff = capsys.readouterr().out
+    assert f"target={target_identity}" in text_handoff
+    assert "abandonment=none" in text_handoff
+    assert "{" not in text_handoff
 
     assert (
         main(
@@ -312,6 +321,12 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert abandonment["abandonment"]["schema"] == "business-card-watchdog.live-pilot-abandonment.v1"
     assert abandonment["abandonment"]["writes_attempted"] == 0
     assert Path(abandonment["abandonment_path"]).exists()
+
+    assert main(["--config", str(config_path), "runs", "live-pilot-handoff", run_id, "--no-write"]) == 0
+    abandoned_handoff = capsys.readouterr().out
+    assert f"target={target_identity}" in abandoned_handoff
+    assert f"abandonment={target_identity}" in abandoned_handoff
+    assert "{" not in abandoned_handoff
 
 
 def test_cli_runs_and_jobs_use_recorded_runtime_state(

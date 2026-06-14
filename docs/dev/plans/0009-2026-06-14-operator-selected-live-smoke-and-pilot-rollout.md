@@ -410,6 +410,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_live_selection_requirements_report_writes_run_level_artifact tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_service.py::test_service_live_pilot_abandonment_blocks_abandoned_selected_target -q` passed with 3 tests.
 
+### Slice 0009-A25 | 2026-06-14 | Show Target Identity in CLI Text
+
+Implemented:
+
+- CLI live selection requirements text now shows selected-target and abandonment identities per entry.
+- CLI live pilot handoff text now shows selected-target and abandonment identities per next-action entry.
+- Text-mode CLI output now lets operators reconcile active and abandoned targets without requiring `--json`.
+
+Safety:
+
+- This slice changes presentation only.
+- It does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It keeps private card/contact contents out of the CLI text while exposing durable artifact identities needed for operator control.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_live_selection_requirements_reports_text_and_json tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval -q` passed with 2 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:
