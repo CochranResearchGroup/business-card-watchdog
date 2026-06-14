@@ -217,6 +217,7 @@ def _render_live_target_candidates_text(payload: dict[str, object]) -> str:
 
 
 def _render_live_readiness_audit_text(payload: dict[str, object]) -> str:
+    commands = dict(payload.get("commands") or {})
     lines = [
         f"Live readiness audit: {payload.get('state')}",
         f"Run: {payload.get('run_id') or 'none'}",
@@ -235,6 +236,16 @@ def _render_live_readiness_audit_text(payload: dict[str, object]) -> str:
     lines.append(f"Blocked reasons: {len(rows)}")
     for reason in rows:
         lines.append(f" - {reason}")
+    for label, key in [
+        ("Target candidates", "target_candidates"),
+        ("Selection requirements", "selection_requirements"),
+        ("Runtime readiness", "runtime_readiness"),
+        ("Service recovery", "service_recovery"),
+        ("Pilot readiness", "pilot_readiness"),
+    ]:
+        command = commands.get(key)
+        if command:
+            lines.append(f"{label}: {command}")
     return "\n".join(lines) + "\n"
 
 

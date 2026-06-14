@@ -4763,13 +4763,11 @@ class BusinessCardService:
                     "live-target-candidates"
                     + (f" --run-id {run_id}" if run_id else "")
                     + (f" --sink {selected_sink}" if selected_sink else "")
-                    + " --json"
                 ),
                 "selection_requirements": (
                     "live-selection-requirements"
                     + (f" --run-id {run_id}" if run_id else "")
                     + (f" --sink {selected_sink}" if selected_sink else "")
-                    + " --json"
                 ),
             },
             "explicit_stop_conditions": [

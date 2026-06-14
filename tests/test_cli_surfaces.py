@@ -125,11 +125,16 @@ def test_cli_live_readiness_audit_reports_text_and_json(tmp_path: Path, capsys) 
     assert Path(payload["audit_path"]).exists()
     assert payload["network_calls_made"] == 0
     assert payload["writes_attempted"] == 0
+    assert payload["commands"]["target_candidates"] == f"live-target-candidates --run-id {run_id}"
+    assert payload["commands"]["selection_requirements"] == f"live-selection-requirements --run-id {run_id}"
 
     assert main(["--config", str(config_path), "live-readiness-audit", "--run-id", run_id, "--no-write"]) == 0
     text = capsys.readouterr().out
     assert "Live readiness audit:" in text
     assert f"Run: {run_id}" in text
+    assert f"Target candidates: live-target-candidates --run-id {run_id}" in text
+    assert f"Selection requirements: live-selection-requirements --run-id {run_id}" in text
+    assert "Runtime readiness: runtime-readiness --json" in text
     assert "{" not in text
 
 

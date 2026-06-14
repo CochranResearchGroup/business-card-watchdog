@@ -813,6 +813,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_live_selection_requirements_reports_text_and_json -q` passed with 1 test.
 
+### Slice 0009-A47 | 2026-06-14 | Render Live Readiness Audit Commands
+
+Implemented:
+
+- Live readiness audit command maps now use text-mode target-candidates and selection-requirements commands.
+- `bcw live-readiness-audit` text output now renders next-step commands for target candidates, selection requirements, runtime readiness, service recovery, and pilot readiness.
+- CLI tests now assert that the audit text is sufficient to continue to the next no-call operator review surface without requesting JSON.
+
+Safety:
+
+- This slice changes command presentation only.
+- It does not create selected targets, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It keeps the live readiness audit as no-call evidence before any selected-target approval.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_live_readiness_audit_reports_text_and_json -q` passed with 1 test.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:
