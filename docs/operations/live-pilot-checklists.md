@@ -34,8 +34,7 @@ Prepare selected-target approval evidence:
   --run-id <run-id> \
   --sink google_contacts \
   --operator <operator> \
-  --scope lookup \
-  --json
+  --scope lookup
 .venv/bin/bcw sinks select-live-target \
   <job-id> \
   --run-id <run-id> \
@@ -48,11 +47,12 @@ Prepare selected-target approval evidence:
   <job-id> \
   --run-id <run-id> \
   --scope lookup \
-  --json
+  --no-write
 .venv/bin/bcw runs live-pilot-status <run-id> --no-write
 ```
 
 Use `--sink odoo` when the read-only smoke target is Odollo/Odoo. The packet must show `existing_selected_target.can_select_replacement_now = true` before selecting a replacement; if it shows `replacement_requires_abandonment = true`, run `abandon-live-pilot` for the old target first and then prepare a new packet.
+Add `--json` to review commands when you need to archive the full structured artifact.
 
 Prepare lookup artifacts:
 
@@ -143,8 +143,7 @@ Prepare or refresh selected-target approval evidence:
   --run-id <run-id> \
   --sink google_contacts \
   --operator <operator> \
-  --scope all \
-  --json
+  --scope all
 .venv/bin/bcw sinks select-live-target \
   <job-id> \
   --run-id <run-id> \
@@ -157,11 +156,12 @@ Prepare or refresh selected-target approval evidence:
   <job-id> \
   --run-id <run-id> \
   --scope all \
-  --json
+  --no-write
 .venv/bin/bcw runs live-pilot-status <run-id> --no-write
 ```
 
 If a lookup-only selected target already exists, record `abandon-live-pilot` with the reason for replacement before selecting the broader `all` scope target. Do not hand-edit selected-target artifacts.
+Add `--json` to review commands when you need to archive the full structured artifact.
 
 Prepare apply artifacts:
 
@@ -228,10 +228,11 @@ Prepare and run readback:
   --no-simulate \
   --json
 .venv/bin/bcw sinks apply-pilot-report <job-id> --run-id <run-id> --json
-.venv/bin/bcw sinks live-pilot-closeout <job-id> --run-id <run-id> --json
+.venv/bin/bcw sinks live-pilot-closeout <job-id> --run-id <run-id> --no-write
 ```
 
 Use `--sink odoo` for an Odollo/Odoo readback pilot.
+Run closeout again with `--json` when you are ready to persist the final `live_pilot_closeout.json` artifact.
 
 Completion evidence:
 

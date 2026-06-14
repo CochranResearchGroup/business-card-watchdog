@@ -649,6 +649,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval -q` passed with 1 test.
 
+### Slice 0009-A38 | 2026-06-14 | Align Checklist With Text Review Surfaces
+
+Implemented:
+
+- The live pilot checklist now uses text-mode review commands for `live-selection-packet`, `selected-target-audit`, and `live-pilot-closeout`.
+- The checklist keeps JSON on artifact-producing commands and notes when to add `--json` for archival structured output.
+- The closeout checklist now previews closeout with `--no-write` before persisting the final `live_pilot_closeout.json`.
+
+Safety:
+
+- This slice updates operator documentation only.
+- It does not create or modify selected targets, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It aligns the live pilot checklist with the CLI text review surfaces used before live execution.
+
+Validation:
+
+- `.venv/bin/python -m pytest -q` passed with 223 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:
