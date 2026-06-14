@@ -1359,6 +1359,36 @@ def test_cli_sinks_lookup_result_writes_zero_network_artifact(tmp_path: Path, ca
                 "--config",
                 str(config_path),
                 "sinks",
+                "lookup-smoke-handoff",
+                job_id,
+                "--run-id",
+                run_id,
+                "--sink",
+                "google_contacts",
+                "--approved-by",
+                "cli-operator",
+            ]
+        )
+        == 0
+    )
+    handoff_text = capsys.readouterr().out
+    assert "Lookup smoke handoff:" in handoff_text
+    assert f"Run: {run_id}" in handoff_text
+    assert f"Job: {job_id}" in handoff_text
+    assert "Sink: google_contacts" in handoff_text
+    assert "Approved by: cli-operator" in handoff_text
+    assert "Read only: True" in handoff_text
+    assert "Missing requirements:" in handoff_text
+    assert "Live lookup pilot: sinks lookup-pilot" in handoff_text
+    assert "Stop conditions:" in handoff_text
+    assert "{" not in handoff_text
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "sinks",
                 "lookup-pilot",
                 job_id,
                 "--run-id",

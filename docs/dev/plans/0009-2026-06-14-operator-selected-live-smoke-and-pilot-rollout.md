@@ -686,6 +686,24 @@ Validation:
 
 - `.venv/bin/python -m pytest -q` passed with 223 tests.
 
+### Slice 0009-A40 | 2026-06-14 | Add Lookup Smoke Handoff Text Review
+
+Implemented:
+
+- `bcw sinks lookup-smoke-handoff` now renders a compact text review when `--json` is omitted.
+- The text review shows state, run, job, sink, approver, read-only status, readiness state, missing requirements, artifact existence, next commands, stop conditions, and the operator note.
+- CLI tests now cover lookup smoke handoff text output without exposing raw JSON.
+
+Safety:
+
+- This slice improves operator review ergonomics only.
+- It does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It keeps the read-only lookup smoke handoff reviewable before an operator explicitly runs `lookup-pilot --no-simulate`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_sinks_lookup_result_writes_zero_network_artifact -q` passed with 1 test.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

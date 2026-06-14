@@ -429,6 +429,53 @@ def _render_live_pilot_closeout_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_lookup_smoke_handoff_text(payload: dict[str, object]) -> str:
+    handoff = dict(payload.get("handoff") or payload)
+    readiness = dict(handoff.get("readiness") or {})
+    missing = handoff.get("missing_requirements") or []
+    artifacts = dict(handoff.get("artifacts") or {})
+    commands = dict(handoff.get("commands") or {})
+    stop_conditions = handoff.get("stop_conditions") or []
+    lines = [
+        f"Lookup smoke handoff: {handoff.get('state')}",
+        f"Run: {handoff.get('run_id')}",
+        f"Job: {handoff.get('job_id')}",
+        f"Sink: {handoff.get('sink')}",
+        f"Approved by: {handoff.get('approved_by')}",
+        f"Read only: {handoff.get('read_only')}",
+        f"Readiness: {readiness.get('state') or readiness.get('status') or 'unknown'}",
+        f"Observed: writes={handoff.get('writes_attempted', 0)} network={handoff.get('network_calls_made', 0)}",
+    ]
+    if payload.get("handoff_path"):
+        lines.append(f"Handoff path: {payload.get('handoff_path')}")
+    missing_rows = missing if isinstance(missing, list) else []
+    lines.append(f"Missing requirements: {len(missing_rows)}")
+    for requirement in missing_rows:
+        lines.append(f" - {requirement}")
+    if artifacts:
+        lines.append("Artifacts:")
+        for name, artifact in sorted(artifacts.items()):
+            if isinstance(artifact, dict):
+                lines.append(f" - {name}: exists={artifact.get('exists', False)} path={artifact.get('path')}")
+    for label, key in [
+        ("Lookup readiness", "lookup_readiness"),
+        ("Live lookup pilot", "live_lookup_pilot"),
+        ("Assess duplicates", "assess_duplicates"),
+        ("Review bundle", "review_bundle"),
+    ]:
+        command = commands.get(key)
+        if command:
+            lines.append(f"{label}: {command}")
+    stops = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stops)}")
+    for condition in stops:
+        lines.append(f" - {condition}")
+    note = handoff.get("operator_note")
+    if note:
+        lines.append(f"Operator note: {note}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_review_queue_text(entries: list[dict[str, object]]) -> str:
     lines = [f"Review queue: {len(entries)} jobs"]
     if not entries:
@@ -1208,6 +1255,9 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.sinks_command == "live-pilot-closeout" and not args.json:
             print(_render_live_pilot_closeout_text(payload), end="")
+            return 0
+        if args.sinks_command == "lookup-smoke-handoff" and not args.json:
+            print(_render_lookup_smoke_handoff_text(payload), end="")
             return 0
         print(json.dumps(payload, indent=2) if args.json else payload)
         return 0
