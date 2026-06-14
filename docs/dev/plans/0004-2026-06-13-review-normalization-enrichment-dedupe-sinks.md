@@ -2285,3 +2285,21 @@ Validation:
 Remaining:
 
 - Future work can surface this run-level preview phase in CLI/API/MCP dashboards if operators want it outside the existing phase-report payload.
+
+### Slice 0004-BW | 2026-06-14 | Phase Report Preview Surface Coverage
+
+Implemented:
+
+- Added explicit CLI phase-report regression coverage for `review_workbook_preview`.
+- Added explicit API phase-report regression coverage for `review_workbook_preview`.
+- Added explicit MCP tool and JSON-RPC stdio regression coverage for `review_workbook_preview`.
+- Confirmed the run-level preview validation phase is visible through existing phase-report dashboard surfaces without changing the transport contracts.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service tests/test_mcp.py::test_mcp_jsonl_server_lists_and_calls_tools -q` passed with 4 tests.
+- `python -m py_compile tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+
+Remaining:
+
+- Future work can add formatted dashboard summaries if operators need a condensed view beyond the raw phase-report JSON payload.

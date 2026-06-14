@@ -49,6 +49,10 @@ def test_cli_runs_and_jobs_use_recorded_runtime_state(
     assert main(["--config", str(config_path), "runs", "phase-report", run_id, "--json"]) == 0
     phase_report = json.loads(capsys.readouterr().out)
     assert phase_report["schema"] == "business-card-watchdog.phase-report.v1"
+    assert phase_report["review_workbook_preview"]["schema"] == (
+        "business-card-watchdog.review-workbook-preview-phase.v1"
+    )
+    assert phase_report["review_workbook_preview"]["state"] == "not_started"
     assert phase_report["phases"][2]["phase"] == "review"
     assert phase_report["phases"][2]["counts"]["blocked"] == 1
 

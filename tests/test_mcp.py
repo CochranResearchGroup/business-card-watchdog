@@ -231,6 +231,10 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
 
     assert summary["needs_review_count"] == 1
     assert phase_report["schema"] == "business-card-watchdog.phase-report.v1"
+    assert phase_report["review_workbook_preview"]["schema"] == (
+        "business-card-watchdog.review-workbook-preview-phase.v1"
+    )
+    assert phase_report["review_workbook_preview"]["state"] == "not_started"
     assert phase_report["phases"][2]["phase"] == "review"
     assert phase_report["phases"][2]["counts"]["blocked"] == 1
     assert [entry["job_id"] for entry in reviews] == [job_id]
@@ -549,6 +553,10 @@ def test_mcp_jsonl_server_lists_and_calls_tools(tmp_path: Path) -> None:
     assert responses[2]["result"]["structuredContent"]["skill_ready"] is True
     phase_report = responses[3]["result"]["structuredContent"]
     assert phase_report["schema"] == "business-card-watchdog.phase-report.v1"
+    assert phase_report["review_workbook_preview"]["schema"] == (
+        "business-card-watchdog.review-workbook-preview-phase.v1"
+    )
+    assert phase_report["review_workbook_preview"]["state"] == "not_started"
     assert phase_report["phases"][2]["phase"] == "review"
     assert phase_report["phases"][2]["counts"]["blocked"] == 1
     reviews = responses[4]["result"]["structuredContent"]

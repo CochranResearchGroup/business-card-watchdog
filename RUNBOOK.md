@@ -1598,3 +1598,19 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_run_summary_and_review_queue tests/test_service.py::test_service_preview_review_workbook_csv_can_persist_artifacts -q` passed with 2 tests.
 - `python -m py_compile src/business_card_watchdog/service.py` passed.
+
+## Turn 88 | 2026-06-14
+
+Continued Plan 0004 execution with phase-report preview surface coverage.
+
+Implemented:
+
+- Added explicit CLI coverage that `runs phase-report --json` includes `review_workbook_preview`.
+- Added explicit API coverage that `GET /runs/{run_id}/phase-report` includes `review_workbook_preview`.
+- Added explicit MCP direct-tool and JSON-RPC stdio coverage that phase-report payloads include `review_workbook_preview`.
+- Kept existing phase-report transport contracts unchanged.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service tests/test_mcp.py::test_mcp_jsonl_server_lists_and_calls_tools -q` passed with 4 tests.
+- `python -m py_compile tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
