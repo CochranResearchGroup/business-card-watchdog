@@ -88,6 +88,38 @@ def _render_review_queue_text(entries: list[dict[str, object]]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_jobs_list_text(entries: list[dict[str, object]]) -> str:
+    lines = [f"Jobs: {len(entries)}"]
+    for entry in entries:
+        lines.append(
+            " - "
+            f"{entry.get('job_id')} "
+            f"run={entry.get('run_id')} "
+            f"state={entry.get('state')} "
+            f"image={entry.get('image_path')}"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _render_job_show_text(payload: dict[str, object]) -> str:
+    artifacts = payload.get("artifacts") or []
+    artifact_kinds = [
+        str(artifact.get("kind"))
+        for artifact in artifacts
+        if isinstance(artifact, dict) and artifact.get("kind")
+    ]
+    lines = [
+        f"Job: {payload.get('job_id')}",
+        f"Run: {payload.get('run_id')}",
+        f"State: {payload.get('state')}",
+        f"Image: {payload.get('image_path')}",
+        f"Artifacts: {','.join(sorted(artifact_kinds)) if artifact_kinds else 'none'}",
+    ]
+    if payload.get("error"):
+        lines.append(f"Error: {payload.get('error')}")
+    return "\n".join(lines) + "\n"
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="bcw")
     parser.add_argument("--config", type=Path, default=None)
@@ -476,6 +508,12 @@ def main(argv: list[str] | None = None) -> int:
                 duplicate_resolution=json.loads(args.duplicate_resolution_json),
                 notes=args.notes,
             )
+        if args.jobs_command == "list" and not args.json:
+            print(_render_jobs_list_text(payload), end="")
+            return 0
+        if args.jobs_command == "show" and not args.json:
+            print(_render_job_show_text(payload), end="")
+            return 0
         print(json.dumps(payload, indent=2) if args.json else payload)
         return 0
 

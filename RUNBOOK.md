@@ -1647,6 +1647,24 @@ Validation:
 - `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state -q` passed with 1 test.
 - `python -m py_compile src/business_card_watchdog/cli.py tests/test_cli_surfaces.py` passed.
 
+## Turn 93 | 2026-06-14
+
+Continued Plan 0004 execution with CLI job text summaries.
+
+Implemented:
+
+- Added human-readable non-JSON output for `bcw jobs list`.
+- Added human-readable non-JSON output for `bcw jobs show`.
+- Job list output includes job count plus compact rows with job id, run id, state, and image path.
+- Job show output includes job id, run id, state, image path, artifact kinds, and any error.
+- JSON output remains unchanged.
+- Added CLI regression coverage to keep job list/show text output from falling back to raw Python list/dict output.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state -q` passed with 1 test.
+- `python -m py_compile src/business_card_watchdog/cli.py tests/test_cli_surfaces.py` passed.
+
 ## Turn 92 | 2026-06-14
 
 Continued Plan 0004 execution with CLI review-queue text rendering.

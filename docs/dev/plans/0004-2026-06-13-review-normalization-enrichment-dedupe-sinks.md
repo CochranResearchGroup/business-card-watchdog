@@ -2376,3 +2376,23 @@ Validation:
 Remaining:
 
 - Future work can decide whether `runs list`, `runs show`, `jobs list`, and `jobs show` need similar text renderers, or whether those should stay JSON-first.
+
+### Slice 0004-CB | 2026-06-14 | CLI Job Text Summaries
+
+Implemented:
+
+- Added human-readable text rendering for non-JSON `bcw jobs list`.
+- Added human-readable text rendering for non-JSON `bcw jobs show`.
+- Job list output includes job count plus compact rows with job id, run id, state, and image path.
+- Job show output includes job id, run id, state, image path, artifact kinds, and any error.
+- `--json` job list/show output remains unchanged for automation.
+- Added CLI regression coverage to prevent raw Python list/dict output from returning for job list/show surfaces.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state -q` passed with 1 test.
+- `python -m py_compile src/business_card_watchdog/cli.py tests/test_cli_surfaces.py` passed.
+
+Remaining:
+
+- Future work can decide whether `runs list` and `runs show` need similar text renderers, or whether run discovery should stay JSON-first.
