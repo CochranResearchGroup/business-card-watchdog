@@ -1647,6 +1647,23 @@ Validation:
 - `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state -q` passed with 1 test.
 - `python -m py_compile src/business_card_watchdog/cli.py tests/test_cli_surfaces.py` passed.
 
+## Turn 95 | 2026-06-14
+
+Continued Plan 0004 execution with README CLI review-surface readback.
+
+Implemented:
+
+- Updated README operator commands to show human-readable run, phase-report, job, and review queue surfaces.
+- Kept `--json` guidance explicit for automation consumers.
+- Documented review queue and job show commands alongside run discovery so operators can inspect imported cards without reading raw JSON by default.
+
+Validation:
+
+- `git diff --check` passed.
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state -q` passed with 1 test.
+- `rg -n 'bcw runs list|bcw runs summary|bcw runs phase-report|bcw jobs show|bcw reviews list|--json' README.md` passed.
+- `python -m py_compile src/business_card_watchdog/cli.py tests/test_cli_surfaces.py` passed.
+
 ## Turn 94 | 2026-06-14
 
 Continued Plan 0004 execution with CLI run list/show text summaries.

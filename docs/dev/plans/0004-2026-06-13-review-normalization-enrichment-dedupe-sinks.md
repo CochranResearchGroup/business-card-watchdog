@@ -2416,3 +2416,22 @@ Validation:
 Remaining:
 
 - Core run/review/job CLI discovery and dashboard paths now have human-readable non-JSON output while retaining JSON automation surfaces.
+
+### Slice 0004-CD | 2026-06-14 | README CLI Review Surface Readback
+
+Implemented:
+
+- Updated README operator commands to show human-readable run, phase-report, job, and review queue surfaces.
+- Kept JSON guidance explicit for automation consumers.
+- Documented the review queue and job show commands alongside run discovery so operators can inspect imported cards without reading raw JSON by default.
+
+Validation:
+
+- `git diff --check` passed.
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state -q` passed with 1 test.
+- `rg -n 'bcw runs list|bcw runs summary|bcw runs phase-report|bcw jobs show|bcw reviews list|--json' README.md` passed.
+- `python -m py_compile src/business_card_watchdog/cli.py tests/test_cli_surfaces.py` passed.
+
+Remaining:
+
+- Future documentation work can add a longer operator walkthrough once Plan 0004 reaches a stable end-to-end review workflow.

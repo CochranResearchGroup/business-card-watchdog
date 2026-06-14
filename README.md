@@ -83,14 +83,20 @@ Print the MCP tool manifest:
 .venv/bin/bcw mcp-manifest
 ```
 
-Inspect runs, jobs, sinks, and watcher state:
+Inspect runs, jobs, review queue, sinks, and watcher state:
 
 ```bash
-.venv/bin/bcw runs list --json
-.venv/bin/bcw jobs list --json
+.venv/bin/bcw runs list
+.venv/bin/bcw runs summary <run-id>
+.venv/bin/bcw runs phase-report <run-id>
+.venv/bin/bcw jobs list --run-id <run-id>
+.venv/bin/bcw jobs show <job-id> --run-id <run-id>
+.venv/bin/bcw reviews list --run-id <run-id>
 .venv/bin/bcw sinks check --json
 .venv/bin/bcw watch-status --json
 ```
+
+Add `--json` to run, job, and review commands when consuming them from automation.
 
 Install a user-scope systemd unit file without enabling or starting it:
 
