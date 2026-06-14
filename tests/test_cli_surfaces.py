@@ -282,6 +282,13 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert status["counts"]["selected_target_active"] == 1
     assert status["writes_attempted"] == 0
     assert Path(status["status_path"]).exists()
+    target_identity = status["entries"][0]["selected_target_identity"]
+
+    assert main(["--config", str(config_path), "runs", "live-pilot-status", run_id, "--no-write"]) == 0
+    text_status = capsys.readouterr().out
+    assert f"target={target_identity}" in text_status
+    assert "abandonment=none" in text_status
+    assert "{" not in text_status
 
     assert main(["--config", str(config_path), "runs", "live-pilot-handoff", run_id, "--json"]) == 0
     handoff = json.loads(capsys.readouterr().out)
@@ -290,7 +297,6 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert handoff["action_counts"]["request_live_lookup_smoke"] == 1
     assert handoff["writes_attempted"] == 0
     assert Path(handoff["handoff_path"]).exists()
-    target_identity = handoff["entries"][0]["selected_target_identity"]
 
     assert main(["--config", str(config_path), "runs", "live-pilot-handoff", run_id, "--no-write"]) == 0
     text_handoff = capsys.readouterr().out
@@ -321,6 +327,12 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert abandonment["abandonment"]["schema"] == "business-card-watchdog.live-pilot-abandonment.v1"
     assert abandonment["abandonment"]["writes_attempted"] == 0
     assert Path(abandonment["abandonment_path"]).exists()
+
+    assert main(["--config", str(config_path), "runs", "live-pilot-status", run_id, "--no-write"]) == 0
+    abandoned_status = capsys.readouterr().out
+    assert f"target={target_identity}" in abandoned_status
+    assert f"abandonment={target_identity}" in abandoned_status
+    assert "{" not in abandoned_status
 
     assert main(["--config", str(config_path), "runs", "live-pilot-handoff", run_id, "--no-write"]) == 0
     abandoned_handoff = capsys.readouterr().out

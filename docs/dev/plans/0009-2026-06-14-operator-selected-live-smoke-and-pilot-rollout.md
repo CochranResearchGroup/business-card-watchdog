@@ -428,6 +428,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_live_selection_requirements_reports_text_and_json tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval -q` passed with 2 tests.
 
+### Slice 0009-A26 | 2026-06-14 | Show Target Identity in Status Text
+
+Implemented:
+
+- CLI live pilot status text now shows selected-target and abandonment identities per status entry.
+- Text-mode status output now matches the identity visibility already present in JSON status and text handoff surfaces.
+- The CLI regression covers active selected-target status and abandoned selected-target status.
+
+Safety:
+
+- This slice changes presentation only.
+- It does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It exposes only durable selected-target artifact identities, not private card/contact contents.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval -q` passed with 1 test.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

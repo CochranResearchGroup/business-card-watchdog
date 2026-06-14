@@ -81,6 +81,8 @@ def _render_live_pilot_status_text(payload: dict[str, object]) -> str:
                 f"{entry.get('job_id')} "
                 f"state={entry.get('state')} "
                 f"sink={entry.get('selected_target_sink') or 'none'} "
+                f"target={entry.get('selected_target_identity') or 'none'} "
+                f"abandonment={entry.get('abandonment_identity') or 'none'} "
                 f"closeout={entry.get('closeout_state') or 'none'}"
             )
     return "\n".join(lines) + "\n"
