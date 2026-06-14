@@ -371,6 +371,9 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert live_packet["schema"] == "business-card-watchdog.live-selection-packet.v1"
     assert live_packet["approval_state"] == "pending_operator_approval"
     assert live_packet["writes_attempted"] == 0
+    assert live_packet["existing_selected_target"]["exists"] is False
+    assert live_packet["existing_selected_target"]["identity"] is None
+    assert live_packet["existing_selected_target"]["abandoned"] is False
     assert watch_dry_run["schema"] == "business-card-watchdog.watch-dry-run-harness.v1"
     assert watch_dry_run["state"] == "passed"
     assert [entry["job_id"] for entry in reviews] == [job_id]

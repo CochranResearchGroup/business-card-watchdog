@@ -66,6 +66,9 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert live_packet["job_id"] == job_id
     assert live_packet["approval_state"] == "pending_operator_approval"
     assert live_packet["writes_attempted"] == 0
+    assert live_packet["existing_selected_target"]["exists"] is False
+    assert live_packet["existing_selected_target"]["identity"] is None
+    assert live_packet["existing_selected_target"]["abandoned"] is False
     selected = client.post(
         f"/jobs/{job_id}/selected-live-target",
         json={

@@ -518,6 +518,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_live_selection_packet_does_not_select_target tests/test_service.py::test_service_live_selection_packet_reports_existing_selected_target_context tests/test_cli_surfaces.py::test_cli_live_selection_packet_writes_no_selected_target -q` passed with 3 tests.
 
+### Slice 0009-A31 | 2026-06-14 | Assert Selection Packet API/MCP Context
+
+Implemented:
+
+- API live selection packet tests now assert missing existing-target context before approval.
+- MCP live selection packet tests now assert missing existing-target context before approval.
+- API/MCP parity now protects the existing selected-target context added to selection packets.
+
+Safety:
+
+- This slice adds parity coverage only.
+- It does not create or modify selected targets, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It protects agent/API clients from losing the selected-target context fields required for operator review.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 2 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:
