@@ -2101,6 +2101,74 @@ def test_service_assess_downstream_duplicates_blocks_review_and_can_resolve(tmp_
     assert any(event["event_type"] == "downstream_duplicate_assessed" for event in events)
 
 
+def test_service_write_pilot_blocks_unresolved_downstream_duplicate(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+        field_corrections={"full_name": "Reviewed Fixture", "email": "fixture@example.test"},
+    )
+    service.plan_sink_lookup_for_job(job_id=job_id, run_id=run_id)
+    service.record_sink_lookup_result_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        matches_by_sink={
+            "google_contacts": [
+                {
+                    "resource_id": "people/c123",
+                    "confidence": 0.91,
+                    "basis": ["email"],
+                    "display": "Reviewed Fixture",
+                }
+            ]
+        },
+    )
+    service.assess_downstream_duplicates_for_job(job_id=job_id, run_id=run_id)
+    service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="write")
+    service.preflight_sink_apply(job_id=job_id, run_id=run_id)
+    service.decide_sink_apply(job_id=job_id, run_id=run_id, decision="approve", reviewer="tester")
+
+    try:
+        service.execute_sink_write_pilot_for_job(
+            job_id=job_id,
+            run_id=run_id,
+            sink="google_contacts",
+            approved_by="tester",
+        )
+    except ValueError as exc:
+        assert "downstream duplicate assessment" in str(exc)
+    else:
+        raise AssertionError("expected unresolved downstream duplicate to block write pilot")
+
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="resolve_duplicate",
+        duplicate_resolution={"decision": "create_new", "reason": "verified separate contact"},
+    )
+    pilot = service.execute_sink_write_pilot_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        approved_by="tester",
+    )
+
+    assert pilot["pilot"]["schema"] == "business-card-watchdog.sink-write-pilot.v1"
+    assert pilot["pilot"]["simulated"] is True
+    assert pilot["pilot"]["writes_attempted"] == 0
+
+
 def test_service_next_actions_recommends_sink_lookup_for_ready_job(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, job_id = make_recorded_run(config)

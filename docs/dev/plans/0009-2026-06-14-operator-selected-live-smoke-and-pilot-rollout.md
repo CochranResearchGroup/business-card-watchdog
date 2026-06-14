@@ -155,6 +155,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_live_selection_requirements_report_writes_run_level_artifact tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_live_selection_requirements_reports_text_and_json tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
 
+### Slice 0009-A11 | 2026-06-14 | Downstream Duplicate Write Gate
+
+Implemented:
+
+- `BusinessCardService.execute_sink_write_pilot_for_job` now checks downstream duplicate evidence before writing pilot artifacts.
+- If `downstream_duplicate_assessment.json` exists and its state is not `no_match`, write pilots are blocked until `duplicate_resolution.json` contains a non-`noop` decision.
+- The gate applies before simulated or live write-pilot execution so pilot evidence cannot imply write eligibility while a strong downstream duplicate remains unresolved.
+
+Safety:
+
+- This slice adds a deterministic pre-write guard only.
+- It does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- Existing missing-assessment behavior is unchanged; the new block is tied to explicit downstream duplicate evidence.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_write_pilot_blocks_unresolved_downstream_duplicate tests/test_service.py::test_service_assess_downstream_duplicates_blocks_review_and_can_resolve tests/test_service.py::test_service_safe_loop_and_manual_steps_complete_simulated_pilot_chain tests/test_cli_surfaces.py::test_cli_sinks_apply_decision_writes_zero_write_artifact tests/test_api.py::test_api_sink_readback_pilot_writes_zero_write_artifact tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

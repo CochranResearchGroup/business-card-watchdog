@@ -3515,6 +3515,7 @@ class BusinessCardService:
     ) -> dict[str, Any]:
         job = self.get_job(job_id, run_id=run_id)
         artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
+        self._enforce_downstream_duplicate_write_gate(artifact_dir)
         decision_path = artifact_dir / "sink_apply_decision.json"
         if decision_path.exists():
             decision = json.loads(decision_path.read_text(encoding="utf-8"))
@@ -5388,6 +5389,21 @@ class BusinessCardService:
                 "non-simulated sink pilot selected target mismatch: " + ", ".join(mismatches)
             )
         return target
+
+    def _enforce_downstream_duplicate_write_gate(self, artifact_dir: Path) -> None:
+        assessment = _read_json_file(artifact_dir / "downstream_duplicate_assessment.json")
+        if assessment is None:
+            return
+        duplicate_state = str(assessment.get("state") or "missing")
+        if duplicate_state == "no_match":
+            return
+        resolution = _read_json_file(artifact_dir / "duplicate_resolution.json") or {}
+        decision = str(resolution.get("decision") or "").strip()
+        if decision and decision != "noop":
+            return
+        raise ValueError(
+            "sink write pilot blocked by downstream duplicate assessment; resolve duplicate before writing"
+        )
 
     def _contact_spec_for_artifact_dir(self, artifact_dir: Path) -> dict[str, Any]:
         reviewed_path = artifact_dir / "reviewed_contact.json"
