@@ -82,6 +82,11 @@ def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
     assert summary["review_workbook_preview_summary"]["has_preview"] is False
     assert phase_report["schema"] == "business-card-watchdog.phase-report.v1"
     assert phase_report["job_count"] == 1
+    assert phase_report["review_workbook_preview"]["schema"] == (
+        "business-card-watchdog.review-workbook-preview-phase.v1"
+    )
+    assert phase_report["review_workbook_preview"]["state"] == "not_started"
+    assert phase_report["review_workbook_preview"]["counts"]["not_started"] == 1
     assert phase_report["phases"][2]["phase"] == "review"
     assert phase_report["phases"][2]["counts"]["blocked"] == 1
     assert phase_report["jobs"][0]["phase_states"]["review"] == "blocked"
@@ -586,6 +591,13 @@ def test_service_preview_review_workbook_csv_can_persist_artifacts(tmp_path: Pat
     assert preview_summary["latest_error_count"] == 0
     assert preview_summary["latest_preview_path"] == str(preview_path)
     assert preview_summary["latest_validation_csv_path"] == str(validation_csv_path)
+    phase_report = service.phase_report(run_id)
+    preview_phase = phase_report["review_workbook_preview"]
+    assert preview_phase["state"] == "valid"
+    assert preview_phase["counts"]["valid"] == 1
+    assert preview_phase["latest_ready_count"] == 1
+    assert preview_phase["latest_preview_path"] == str(preview_path)
+    assert preview_phase["latest_validation_csv_path"] == str(validation_csv_path)
     assert not (config.runs_dir / run_id / "review_decisions_import.json").exists()
 
 

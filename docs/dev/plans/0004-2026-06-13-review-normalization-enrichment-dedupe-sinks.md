@@ -2267,3 +2267,21 @@ Validation:
 Remaining:
 
 - Future work can add phase-report grouping for preview validation status if operators need dashboard-level phase counts.
+
+### Slice 0004-BV | 2026-06-14 | Phase Report Preview Validation Readback
+
+Implemented:
+
+- Added run-level `review_workbook_preview` readback to phase reports.
+- The readback groups persisted review workbook preview validation into `not_started`, `valid`, `invalid`, or `unreadable` states without changing per-job phase rows.
+- Reused persisted preview artifacts and the run-summary preview summarizer for row counts, ready/error/skipped counts, warning counts, validity, and latest artifact paths.
+- Added regression coverage for both empty preview state and persisted valid preview state.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_run_summary_and_review_queue tests/test_service.py::test_service_preview_review_workbook_csv_can_persist_artifacts -q` passed with 2 tests.
+- `python -m py_compile src/business_card_watchdog/service.py` passed.
+
+Remaining:
+
+- Future work can surface this run-level preview phase in CLI/API/MCP dashboards if operators want it outside the existing phase-report payload.

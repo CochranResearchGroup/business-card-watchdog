@@ -386,6 +386,7 @@ class BusinessCardService:
             "run_state": run.get("state"),
             "job_count": len(jobs),
             "stop_rules": self._phase_stop_rules(),
+            "review_workbook_preview": self._review_workbook_preview_phase(artifacts),
             "phases": [phase_rows[phase] for phase in phases],
             "jobs": job_rows,
             "writes_attempted": 0,
@@ -426,6 +427,35 @@ class BusinessCardService:
                     "explicit_operator_actions": [],
                 },
             },
+        }
+
+    def _review_workbook_preview_phase(self, artifacts: list[dict[str, Any]]) -> dict[str, Any]:
+        summary = self._summarize_review_workbook_preview(artifacts)
+        if not summary["has_preview"]:
+            state = "not_started"
+        elif summary["unreadable_artifact_count"]:
+            state = "unreadable"
+        elif summary["latest_valid"] is False or summary["latest_error_count"] > 0:
+            state = "invalid"
+        else:
+            state = "valid"
+        counts = {name: 0 for name in ("not_started", "valid", "invalid", "unreadable")}
+        counts[state] = 1
+        return {
+            "schema": "business-card-watchdog.review-workbook-preview-phase.v1",
+            "state": state,
+            "counts": counts,
+            "preview_count": summary["preview_count"],
+            "validation_csv_count": summary["validation_csv_count"],
+            "latest_preview_path": summary["latest_preview_path"],
+            "latest_validation_csv_path": summary["latest_validation_csv_path"],
+            "latest_valid": summary["latest_valid"],
+            "latest_row_count": summary["latest_row_count"],
+            "latest_ready_count": summary["latest_ready_count"],
+            "latest_error_count": summary["latest_error_count"],
+            "latest_skipped_count": summary["latest_skipped_count"],
+            "latest_warning_count": summary["latest_warning_count"],
+            "unreadable_artifact_count": summary["unreadable_artifact_count"],
         }
 
     def _phase_states_for_job(

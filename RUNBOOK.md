@@ -1582,3 +1582,19 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_run_summary_and_review_queue tests/test_service.py::test_service_preview_review_workbook_csv_can_persist_artifacts -q` passed with 2 tests.
+
+## Turn 87 | 2026-06-14
+
+Continued Plan 0004 execution with phase-report preview validation readback.
+
+Implemented:
+
+- Added run-level `review_workbook_preview` to phase reports.
+- Preview validation state is grouped as `not_started`, `valid`, `invalid`, or `unreadable`.
+- The readback includes persisted preview counts, latest artifact paths, validity, ready/error/skipped row counts, and warning counts.
+- Per-job phase rows remain unchanged.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_run_summary_and_review_queue tests/test_service.py::test_service_preview_review_workbook_csv_can_persist_artifacts -q` passed with 2 tests.
+- `python -m py_compile src/business_card_watchdog/service.py` passed.
