@@ -114,6 +114,11 @@ def create_app(config_path: Path | None = None):
         scope: str = "lookup"
         reason: str = ""
 
+    class SelectedLiveTargetAuditRequest(BaseModel):
+        run_id: str
+        scope: str | None = None
+        write: bool = True
+
     class SelectedLookupSmokeRequest(BaseModel):
         run_id: str
 
@@ -479,6 +484,18 @@ def create_app(config_path: Path | None = None):
             operator=request.operator,
             scope=request.scope,
             reason=request.reason,
+        )
+
+    @app.post("/jobs/{job_id}/selected-live-target-audit")
+    def create_selected_live_target_audit(
+        job_id: str,
+        request: SelectedLiveTargetAuditRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().selected_live_target_audit(
+            job_id=job_id,
+            run_id=request.run_id,
+            scope=request.scope,
+            write=request.write,
         )
 
     @app.post("/jobs/{job_id}/selected-lookup-smoke")

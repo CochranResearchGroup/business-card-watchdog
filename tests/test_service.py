@@ -1811,6 +1811,19 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert any(artifact["kind"] == "selected_live_target" for artifact in job["artifacts"])
     assert "selected_live_target" in review_bundle["entries"][0]["artifact_kinds"]
 
+    audit = service.selected_live_target_audit(job_id=job_id, run_id=run_id, scope="lookup")
+    assert audit["schema"] == "business-card-watchdog.selected-live-target-audit.v1"
+    assert audit["state"] == "blocked"
+    assert audit["selected_target_exists"] is True
+    assert audit["sink"] == "google_contacts"
+    assert audit["operator"] == "tester"
+    assert audit["writes_attempted"] == 0
+    assert audit["network_calls_made"] == 0
+    assert "lookup:reviewed_contact_exists" in audit["blocked_reasons"]
+    assert "execute-lookup-smoke" in audit["commands"]["lookup_smoke"]
+    assert Path(audit["audit_path"]).exists()
+    assert any(artifact["kind"] == "selected_live_target_audit" for artifact in service.list_artifacts(run_id))
+
     result = service.execute_sink_lookup_pilot_for_job(
         job_id=job_id,
         run_id=run_id,

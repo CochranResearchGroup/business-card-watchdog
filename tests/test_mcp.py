@@ -48,6 +48,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_sink_lookup_readiness" in names
     assert "business_card_watchdog_sink_lookup_smoke_handoff" in names
     assert "business_card_watchdog_selected_live_target" in names
+    assert "business_card_watchdog_selected_live_target_audit" in names
     assert "business_card_watchdog_selected_lookup_smoke" in names
     assert "business_card_watchdog_sink_write_pilot" in names
     assert "business_card_watchdog_sink_readback_pilot" in names
@@ -188,6 +189,16 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
             "sink": "google_contacts",
             "operator": "mcp-test",
             "scope": "all",
+        },
+        config=config,
+    )
+    selected_target_audit = call_tool(
+        "business_card_watchdog_selected_live_target_audit",
+        {
+            "job_id": job_id,
+            "run_id": run_id,
+            "scope": "lookup",
+            "write": False,
         },
         config=config,
     )
@@ -392,6 +403,9 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert pilot_bundle["bundle"]["writes_attempted"] == 0
     assert selected_target["target"]["schema"] == "business-card-watchdog.selected-live-target.v1"
     assert selected_target["target"]["scope_allows"]["write"] is True
+    assert selected_target_audit["schema"] == "business-card-watchdog.selected-live-target-audit.v1"
+    assert selected_target_audit["selected_target_exists"] is True
+    assert selected_target_audit["writes_attempted"] == 0
     assert write_pilot["pilot"]["schema"] == "business-card-watchdog.sink-write-pilot.v1"
     assert write_pilot["pilot"]["writes_attempted"] == 0
     assert write_pilot["result"]["state"] == "mock_applied"

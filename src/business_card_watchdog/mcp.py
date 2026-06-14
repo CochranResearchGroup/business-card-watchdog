@@ -489,6 +489,20 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_selected_live_target_audit",
+                "description": "Verify selected_live_target.json and report allowed next live commands without executing them.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "job_id": {"type": "string"},
+                        "run_id": {"type": "string"},
+                        "scope": {"type": "string", "enum": ["lookup", "write", "readback", "all"]},
+                        "write": {"type": "boolean", "default": True},
+                    },
+                    "required": ["job_id", "run_id"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_selected_lookup_smoke",
                 "description": "Execute the selected read-only live lookup smoke from selected_live_target.json and import redacted duplicate evidence.",
                 "input_schema": {
@@ -883,6 +897,13 @@ def call_tool(
             operator=str(args["operator"]),
             scope=str(args.get("scope") or "lookup"),
             reason=str(args.get("reason") or ""),
+        )
+    if tool_name == "business_card_watchdog_selected_live_target_audit":
+        return service.selected_live_target_audit(
+            job_id=str(args["job_id"]),
+            run_id=str(args["run_id"]),
+            scope=str(args["scope"]) if args.get("scope") else None,
+            write=bool(args.get("write", True)),
         )
     if tool_name == "business_card_watchdog_selected_lookup_smoke":
         return service.execute_selected_lookup_smoke_for_job(

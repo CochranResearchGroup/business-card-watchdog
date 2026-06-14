@@ -60,6 +60,18 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert live_packet["job_id"] == job_id
     assert live_packet["approval_state"] == "pending_operator_approval"
     assert live_packet["writes_attempted"] == 0
+    selected = client.post(
+        f"/jobs/{job_id}/selected-live-target",
+        json={"run_id": run_id, "sink": "google_contacts", "operator": "api-test", "scope": "lookup"},
+    ).json()
+    assert selected["target"]["schema"] == "business-card-watchdog.selected-live-target.v1"
+    selected_audit = client.post(
+        f"/jobs/{job_id}/selected-live-target-audit",
+        json={"run_id": run_id, "scope": "lookup", "write": False},
+    ).json()
+    assert selected_audit["schema"] == "business-card-watchdog.selected-live-target-audit.v1"
+    assert selected_audit["selected_target_exists"] is True
+    assert selected_audit["writes_attempted"] == 0
     assert client.get("/runs").json()[0]["run_id"] == run_id
     assert client.get(f"/runs/{run_id}").json()["run_id"] == run_id
     assert client.get(f"/runs/{run_id}/summary").json()["needs_review_count"] == 1

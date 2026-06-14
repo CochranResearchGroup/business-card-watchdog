@@ -2443,3 +2443,30 @@ Validation:
 Safety:
 
 - This was pre-approval evidence only. It can write `live_selection_packet.json` under a selected job, but it did not create `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+## Turn 128 | 2026-06-14
+
+Continued Plan 0009 with Slice 0009-A4.
+
+Implemented:
+
+- Added `business-card-watchdog.selected-live-target-audit.v1`.
+- Added `BusinessCardService.selected_live_target_audit`.
+- Added CLI `bcw sinks selected-target-audit`.
+- Added API `POST /jobs/{job_id}/selected-live-target-audit`.
+- Added MCP tool `business_card_watchdog_selected_live_target_audit`.
+- Selected target audits read existing approval evidence, validate run/job/scope alignment, re-check lookup/apply readiness, and report matching next commands without executing them.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+- `.venv/bin/python -m pytest -q` passed with 209 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was post-approval verification only. It can write `selected_live_target_audit.json`, but it did not create or modify `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.

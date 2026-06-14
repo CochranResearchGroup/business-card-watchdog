@@ -96,6 +96,7 @@ _ROUTE_ARTIFACT_FILES = {
     "sink_adapter_request_lookup": "sink_adapter_request_lookup.json",
     "live_selection_packet": "live_selection_packet.json",
     "selected_live_target": "selected_live_target.json",
+    "selected_live_target_audit": "selected_live_target_audit.json",
     "sink_lookup_smoke_handoff": "sink_lookup_smoke_handoff.json",
     "selected_lookup_smoke": "selected_lookup_smoke.json",
     "sink_lookup_pilot": "sink_lookup_pilot.json",
@@ -2059,6 +2060,132 @@ class BusinessCardService:
             kind="selected_live_target",
         )
         return {"target_path": str(target_path), "target": payload}
+
+    def selected_live_target_audit(
+        self,
+        *,
+        job_id: str,
+        run_id: str,
+        scope: str | None = None,
+        write: bool = True,
+    ) -> dict[str, Any]:
+        if scope is not None and scope not in {"lookup", "write", "readback", "all"}:
+            raise ValueError("selected live target audit scope must be lookup, write, readback, all, or omitted")
+        job = self.get_job(job_id, run_id=run_id)
+        artifact_dir = (
+            Path(job["artifact_dir"])
+            if job.get("artifact_dir")
+            else self.config.runs_dir / run_id / "artifacts" / job_id
+        )
+        target_path = artifact_dir / "selected_live_target.json"
+        target = _read_json_file(target_path)
+        blocked_reasons: list[str] = []
+        mismatches: list[str] = []
+        sink = str((target or {}).get("sink") or "")
+        operator = str((target or {}).get("operator") or (target or {}).get("approved_by") or "")
+        target_scope = str((target or {}).get("scope") or "")
+        requested_scope = scope or target_scope or "lookup"
+        lookup_readiness = None
+        apply_readiness = None
+        if target is None:
+            blocked_reasons.append("selected_live_target.json is missing")
+        else:
+            for key, expected in [("run_id", run_id), ("job_id", job_id)]:
+                if target.get(key) != expected:
+                    mismatches.append(f"{key}={target.get(key)!r}")
+            if sink not in {"google_contacts", "odoo"}:
+                mismatches.append(f"sink={sink!r}")
+            allows = dict(target.get("scope_allows") or {})
+            if requested_scope == "all":
+                if not all(bool(allows.get(name)) for name in ["lookup", "write", "readback"]):
+                    mismatches.append(f"scope={target_scope!r}")
+            elif not bool(allows.get(requested_scope)):
+                mismatches.append(f"scope={target_scope!r}")
+            if mismatches:
+                blocked_reasons.extend(mismatches)
+            if sink in {"google_contacts", "odoo"} and requested_scope in {"lookup", "all"}:
+                lookup_readiness = self.live_lookup_readiness_report(job_id=job_id, run_id=run_id, sink=sink)
+                blocked_reasons.extend(
+                    f"lookup:{name}" for name in list(lookup_readiness.get("missing_requirements") or [])
+                )
+            if sink in {"google_contacts", "odoo"} and requested_scope in {"write", "readback", "all"}:
+                apply_readiness = self.build_sink_apply_pilot_readiness_for_job(
+                    job_id=job_id,
+                    run_id=run_id,
+                    sink=sink,
+                )["readiness"]
+                blocked_reasons.extend(
+                    f"apply:{name}" for name in list(apply_readiness.get("missing_requirements") or [])
+                )
+        state = "ready" if not blocked_reasons else "blocked"
+        payload = {
+            "schema": "business-card-watchdog.selected-live-target-audit.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_id,
+            "job_id": job_id,
+            "job_state": job.get("state"),
+            "scope": requested_scope,
+            "selected_target_path": str(target_path),
+            "selected_target_exists": target_path.exists(),
+            "selected_target": target,
+            "sink": sink or None,
+            "operator": operator or None,
+            "mismatches": mismatches,
+            "blocked_reasons": blocked_reasons,
+            "readiness": {
+                "lookup": lookup_readiness,
+                "apply": apply_readiness,
+            },
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "commands": {
+                "lookup_smoke": f"sinks execute-lookup-smoke {job_id} --run-id {run_id}",
+                "write_pilot": (
+                    f"sinks write-pilot {job_id} --run-id {run_id} --sink {sink} "
+                    f"--approved-by {operator} --no-simulate"
+                    if sink and operator
+                    else None
+                ),
+                "readback_pilot": (
+                    f"sinks readback-pilot {job_id} --run-id {run_id} --sink {sink} "
+                    f"--approved-by {operator} --no-simulate"
+                    if sink and operator
+                    else None
+                ),
+            },
+            "explicit_stop_conditions": [
+                "This audit is not a live execution command.",
+                "Do not run live lookup, live write, or live readback unless state is ready and the operator explicitly requests the matching command.",
+                "Do not proceed if selected_live_target.json does not match run, job, sink, operator, and scope.",
+                "Do not process private SyncThing images, run public-web search, or call paid enrichment from this audit.",
+            ],
+        }
+        if write:
+            audit_path = artifact_dir / "selected_live_target_audit.json"
+            audit_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            ledger = RunLedger(self.config.runs_dir / run_id)
+            ledger.record_artifact(job_id=job_id, kind="selected_live_target_audit", path=audit_path)
+            ledger.record_event(
+                "selected_live_target_audit_created",
+                {
+                    "job_id": job_id,
+                    "run_id": run_id,
+                    "scope": requested_scope,
+                    "audit_path": str(audit_path),
+                    "state": state,
+                    "writes_attempted": 0,
+                    "network_calls_made": 0,
+                },
+            )
+            self._mark_route_artifact_refreshed(
+                artifact_dir,
+                job_id=job_id,
+                run_id=run_id,
+                kind="selected_live_target_audit",
+            )
+            payload["audit_path"] = str(audit_path)
+        return payload
 
     def execute_selected_lookup_smoke_for_job(
         self,

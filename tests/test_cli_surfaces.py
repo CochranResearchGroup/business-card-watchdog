@@ -15,6 +15,7 @@ from business_card_watchdog.config import (
 )
 from business_card_watchdog.contact import build_contact_candidate
 from business_card_watchdog.orchestrator import BatchOrchestrator
+from business_card_watchdog.service import BusinessCardService
 from business_card_watchdog.service_ops import service_unit_path
 
 from synthetic_fixtures import SyntheticSkillAdapter, latest_jobs_by_id, write_synthetic_image
@@ -171,6 +172,54 @@ def test_cli_live_selection_packet_writes_no_selected_target(tmp_path: Path, cap
     assert payload["approval_state"] == "pending_operator_approval"
     assert Path(payload["packet_path"]).exists()
     assert not Path(payload["existing_selected_target"]["path"]).exists()
+
+
+def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    config_path.write_text(
+        f'data_dir = "{data_dir}"\n[watch]\ninputs = []\n[sink]\ngoogle_contacts = true\n',
+        encoding="utf-8",
+    )
+    config = AppConfig(
+        config_path=config_path,
+        data_dir=data_dir,
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
+    service.select_live_target_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        operator="tester",
+        scope="lookup",
+    )
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "sinks",
+                "selected-target-audit",
+                job_id,
+                "--run-id",
+                run_id,
+                "--scope",
+                "lookup",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["schema"] == "business-card-watchdog.selected-live-target-audit.v1"
+    assert payload["state"] == "blocked"
+    assert payload["selected_target_exists"] is True
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
 
 
 def test_cli_runs_and_jobs_use_recorded_runtime_state(
