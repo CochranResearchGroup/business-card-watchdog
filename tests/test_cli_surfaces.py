@@ -339,6 +339,34 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert closeout["report"]["writes_attempted"] == 0
     assert Path(closeout["closeout_path"]).exists()
 
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "sinks",
+                "live-pilot-closeout",
+                job_id,
+                "--run-id",
+                run_id,
+                "--no-write",
+            ]
+        )
+        == 0
+    )
+    closeout_text = capsys.readouterr().out
+    assert "Live pilot closeout: incomplete" in closeout_text
+    assert f"Run: {run_id}" in closeout_text
+    assert f"Job: {job_id}" in closeout_text
+    assert "Scope: lookup" in closeout_text
+    assert "Sink: google_contacts" in closeout_text
+    assert "Selected target audit: state=blocked safety_confirmed=True" in closeout_text
+    assert "Missing artifacts:" in closeout_text
+    assert "Blocked reasons:" in closeout_text
+    assert "Closeout: sinks live-pilot-closeout" in closeout_text
+    assert "Stop conditions:" in closeout_text
+    assert "{" not in closeout_text
+
     assert main(["--config", str(config_path), "runs", "live-pilot-status", run_id, "--json"]) == 0
     status = json.loads(capsys.readouterr().out)
     assert status["schema"] == "business-card-watchdog.live-pilot-status.v1"

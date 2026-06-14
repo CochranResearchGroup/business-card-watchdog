@@ -631,6 +631,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval -q` passed with 1 test.
 
+### Slice 0009-A37 | 2026-06-14 | Add Live Pilot Closeout Text Review
+
+Implemented:
+
+- `bcw sinks live-pilot-closeout` now renders a compact text review when `--json` is omitted.
+- The text review shows closeout state, run, job, scope, sink, operator, selected-target audit state, lookup summary, write summary, readback summary, apply-report summary, missing artifacts, blockers, commands, and stop conditions.
+- CLI tests now cover live-pilot closeout text output without exposing raw JSON.
+
+Safety:
+
+- This slice improves final closeout review ergonomics only.
+- It does not create or modify selected targets, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It keeps closeout evidence reviewable from CLI before retrying, replacing, or closing an operator-selected pilot.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval -q` passed with 1 test.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

@@ -364,6 +364,71 @@ def _render_selected_target_audit_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_live_pilot_closeout_text(payload: dict[str, object]) -> str:
+    report = dict(payload.get("report") or payload)
+    lookup = dict(report.get("lookup") or {})
+    audit = dict(report.get("selected_target_audit") or {})
+    write = dict(report.get("write") or {})
+    readback = dict(report.get("readback") or {})
+    apply_report = dict(report.get("apply_report") or {})
+    blocked_reasons = report.get("blocked_reasons") or []
+    missing_artifacts = report.get("missing_artifacts") or []
+    stop_conditions = report.get("explicit_stop_conditions") or []
+    commands = dict(report.get("commands") or {})
+    lines = [
+        f"Live pilot closeout: {report.get('state')}",
+        f"Run: {report.get('run_id')}",
+        f"Job: {report.get('job_id')}",
+        f"Scope: {report.get('scope')}",
+        f"Sink: {report.get('sink') or 'none'}",
+        f"Operator: {report.get('operator') or 'none'}",
+        "Selected target audit: "
+        f"state={audit.get('state') or 'none'} "
+        f"safety_confirmed={audit.get('target_safety_confirmed')}",
+        "Lookup: "
+        f"status={lookup.get('status') or 'none'} "
+        f"matches={lookup.get('match_count', 0)} "
+        f"duplicate={lookup.get('downstream_duplicate_state') or 'none'}",
+        "Write: "
+        f"state={write.get('state') or 'none'} "
+        f"simulated={write.get('simulated')} "
+        f"resource={write.get('resource_id') or 'none'}",
+        "Readback: "
+        f"state={readback.get('state') or 'none'} "
+        f"matched={readback.get('matched')} "
+        f"resource={readback.get('resource_id') or 'none'}",
+        "Apply report: "
+        f"state={apply_report.get('state') or 'none'} "
+        f"consistency_errors={len(apply_report.get('consistency_errors') or [])} "
+        f"closeout_errors={len(apply_report.get('closeout_consistency_errors') or [])}",
+        f"Observed: writes={report.get('writes_attempted', 0)} network={report.get('network_calls_made', 0)}",
+    ]
+    if payload.get("closeout_path"):
+        lines.append(f"Closeout path: {payload.get('closeout_path')}")
+    missing_rows = missing_artifacts if isinstance(missing_artifacts, list) else []
+    lines.append(f"Missing artifacts: {len(missing_rows)}")
+    for artifact in missing_rows:
+        lines.append(f" - {artifact}")
+    blocked_rows = blocked_reasons if isinstance(blocked_reasons, list) else []
+    lines.append(f"Blocked reasons: {len(blocked_rows)}")
+    for reason in blocked_rows:
+        lines.append(f" - {reason}")
+    for label, key in [
+        ("Selected target audit", "selected_target_audit"),
+        ("Lookup smoke", "lookup_smoke"),
+        ("Apply pilot report", "apply_pilot_report"),
+        ("Closeout", "closeout"),
+    ]:
+        command = commands.get(key)
+        if command:
+            lines.append(f"{label}: {command}")
+    stops = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stops)}")
+    for condition in stops:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_review_queue_text(entries: list[dict[str, object]]) -> str:
     lines = [f"Review queue: {len(entries)} jobs"]
     if not entries:
@@ -1140,6 +1205,9 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.sinks_command == "selected-target-audit" and not args.json:
             print(_render_selected_target_audit_text(payload), end="")
+            return 0
+        if args.sinks_command == "live-pilot-closeout" and not args.json:
+            print(_render_live_pilot_closeout_text(payload), end="")
             return 0
         print(json.dumps(payload, indent=2) if args.json else payload)
         return 0
