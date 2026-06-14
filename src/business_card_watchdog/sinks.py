@@ -380,10 +380,15 @@ def build_sink_lookup_result(
     *,
     adapter_request: dict[str, Any],
     matches_by_sink: dict[str, list[dict[str, Any]]] | None = None,
+    redact_sensitive: bool = False,
 ) -> dict[str, Any]:
     matches_by_sink = matches_by_sink or {}
     results = [
-        _lookup_result_for_request(request, matches_by_sink.get(str(request.get("sink") or ""), []))
+        _lookup_result_for_request(
+            request,
+            matches_by_sink.get(str(request.get("sink") or ""), []),
+            redact_sensitive=redact_sensitive,
+        )
         for request in list(adapter_request.get("requests") or [])
         if request.get("phase") == "lookup"
     ]
@@ -417,6 +422,7 @@ def build_sink_lookup_pilot(
     matches: list[dict[str, Any]] | None = None,
     simulate: bool = True,
     execution: dict[str, Any] | None = None,
+    redact_sensitive: bool = False,
 ) -> dict[str, Any]:
     if not approved_by.strip():
         raise ValueError("sink lookup pilot requires approved_by")
@@ -431,6 +437,7 @@ def build_sink_lookup_pilot(
         raise ValueError("live sink lookup execution requires adapter execution evidence")
     matches = matches or []
     network_calls_made = int((execution or {}).get("network_calls_made") or 0)
+    execution_payload = _redacted_lookup_execution(execution or {}) if redact_sensitive else execution or {}
     return {
         "schema": SINK_LOOKUP_PILOT_SCHEMA,
         "state": ("simulated_match" if matches else "simulated_no_match")
@@ -455,14 +462,15 @@ def build_sink_lookup_pilot(
         "writes_attempted": 0,
         "request": requests[0],
         "match_count": len(matches),
-        "execution": execution or {},
+        "execution": execution_payload,
+        "execution_redacted": bool(redact_sensitive),
         "matches": [
             {
                 "resource_id": str(match.get("resource_id") or ""),
                 "confidence": float(match.get("confidence", 0)),
                 "basis": list(match.get("basis") or []),
-                "display": str(match.get("display") or ""),
-                "raw": dict(match.get("raw") or {}),
+                "display": "[redacted]" if redact_sensitive and match.get("display") else str(match.get("display") or ""),
+                **_lookup_match_raw_payload(match, redact_sensitive=redact_sensitive),
             }
             for match in matches
         ],
@@ -1124,7 +1132,12 @@ def _odoo_id_from_resource(resource_id: Any) -> int | None:
     return None
 
 
-def _lookup_result_for_request(request: dict[str, Any], matches: list[dict[str, Any]]) -> dict[str, Any]:
+def _lookup_result_for_request(
+    request: dict[str, Any],
+    matches: list[dict[str, Any]],
+    *,
+    redact_sensitive: bool = False,
+) -> dict[str, Any]:
     sink = str(request.get("sink") or "")
     normalized_matches = [
         {
@@ -1132,8 +1145,8 @@ def _lookup_result_for_request(request: dict[str, Any], matches: list[dict[str, 
             "resource_id": str(match.get("resource_id") or ""),
             "confidence": float(match.get("confidence", 0)),
             "basis": list(match.get("basis") or []),
-            "display": str(match.get("display") or ""),
-            "raw": dict(match.get("raw") or {}),
+            "display": "[redacted]" if redact_sensitive and match.get("display") else str(match.get("display") or ""),
+            **_lookup_match_raw_payload(match, redact_sensitive=redact_sensitive),
         }
         for match in matches
     ]
@@ -1146,6 +1159,68 @@ def _lookup_result_for_request(request: dict[str, Any], matches: list[dict[str, 
         "match_keys": request.get("match_keys", {}),
         "query_count": len(list(request.get("queries") or [])),
         "matches": normalized_matches,
+    }
+
+
+def _lookup_match_raw_payload(match: dict[str, Any], *, redact_sensitive: bool) -> dict[str, Any]:
+    raw = dict(match.get("raw") or {})
+    if not redact_sensitive:
+        return {"raw": raw}
+    return {
+        "raw_redacted": _redact_sensitive_value(raw),
+        "raw_present": bool(raw),
+    }
+
+
+def _redacted_lookup_execution(execution: dict[str, Any]) -> dict[str, Any]:
+    matches = list(execution.get("matches") or [])
+    payload = {
+        "sink": execution.get("sink"),
+        "status": execution.get("status"),
+        "network_calls_made": int(execution.get("network_calls_made") or 0),
+        "writes_attempted": int(execution.get("writes_attempted") or 0),
+        "match_count": len(matches),
+        "raw_present": "raw" in execution,
+        "raw_type": type(execution.get("raw")).__name__ if "raw" in execution else None,
+    }
+    if "raw" in execution:
+        payload["raw_redacted"] = _redact_sensitive_value(execution.get("raw"))
+    return payload
+
+
+def _redact_sensitive_value(value: Any, *, depth: int = 0) -> Any:
+    if depth > 6:
+        return "[truncated]"
+    if isinstance(value, dict):
+        redacted: dict[str, Any] = {}
+        for key, item in list(value.items())[:25]:
+            key_text = str(key)
+            if _is_sensitive_key(key_text):
+                redacted[key_text] = "[redacted]"
+            else:
+                redacted[key_text] = _redact_sensitive_value(item, depth=depth + 1)
+        return redacted
+    if isinstance(value, list):
+        return [_redact_sensitive_value(item, depth=depth + 1) for item in value[:25]]
+    return value
+
+
+def _is_sensitive_key(key: str) -> bool:
+    normalized = key.lower().replace("_", "")
+    return normalized in {
+        "name",
+        "names",
+        "displayname",
+        "display",
+        "email",
+        "emailaddress",
+        "emailaddresses",
+        "phone",
+        "phonenumber",
+        "phonenumbers",
+        "mobile",
+        "value",
+        "formattedvalue",
     }
 
 

@@ -2753,12 +2753,14 @@ class BusinessCardService:
             matches=matches or [],
             simulate=simulate,
             execution=execution,
+            redact_sensitive=not simulate,
         )
         pilot_path = artifact_dir / "sink_lookup_pilot.json"
         pilot_path.write_text(json.dumps(pilot, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         result = build_sink_lookup_result(
             adapter_request=adapter_request,
             matches_by_sink={sink: matches or []},
+            redact_sensitive=not simulate,
         )
         result["source_pilot_schema"] = pilot["schema"]
         result["source_pilot_path"] = str(pilot_path)

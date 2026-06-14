@@ -365,6 +365,64 @@ def test_build_sink_lookup_pilot_requires_explicit_sink_and_approval() -> None:
     assert pilot["request"]["adapter"] == "gws.people"
 
 
+def test_build_sink_lookup_pilot_redacts_live_execution_payloads() -> None:
+    lookup_plan = build_sink_lookup_plan(
+        sinks=["google_contacts"],
+        spec={"full_name": "Ada Lovelace", "email": "ada@example.test"},
+        dry_run=True,
+        reason="matched email_domain=*",
+    )
+    adapter_request = build_sink_adapter_request(phase="lookup", lookup_plan=lookup_plan)
+
+    pilot = build_sink_lookup_pilot(
+        adapter_request=adapter_request,
+        sink="google_contacts",
+        approved_by="operator",
+        simulate=False,
+        redact_sensitive=True,
+        execution={
+            "sink": "google_contacts",
+            "status": "read_only_lookup_completed",
+            "network_calls_made": 1,
+            "writes_attempted": 0,
+            "raw": {
+                "results": [
+                    {
+                        "person": {
+                            "resourceName": "people/c123",
+                            "names": [{"displayName": "Ada Lovelace"}],
+                            "emailAddresses": [{"value": "ada@example.test"}],
+                        }
+                    }
+                ]
+            },
+        },
+        matches=[
+            {
+                "resource_id": "people/c123",
+                "confidence": 0.94,
+                "basis": ["email"],
+                "display": "Ada Lovelace",
+                "raw": {
+                    "person": {
+                        "resourceName": "people/c123",
+                        "names": [{"displayName": "Ada Lovelace"}],
+                        "emailAddresses": [{"value": "ada@example.test"}],
+                    }
+                },
+            }
+        ],
+    )
+
+    assert pilot["state"] == "read_only_match"
+    assert pilot["execution_redacted"] is True
+    assert pilot["execution"]["raw_present"] is True
+    assert pilot["execution"]["raw_redacted"]["results"][0]["person"]["names"] == "[redacted]"
+    assert pilot["matches"][0]["display"] == "[redacted]"
+    assert "raw" not in pilot["matches"][0]
+    assert pilot["matches"][0]["raw_redacted"]["person"]["emailAddresses"] == "[redacted]"
+
+
 def test_build_sink_apply_preflight_is_zero_write_and_explicitly_gated() -> None:
     plan = build_sink_plan(
         sinks=["google_contacts"],

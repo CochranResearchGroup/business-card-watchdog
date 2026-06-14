@@ -1407,12 +1407,30 @@ def test_service_lookup_pilot_uses_injected_read_only_executor(tmp_path: Path) -
             "status": "read_only_lookup_completed",
             "network_calls_made": 1,
             "writes_attempted": 0,
+            "raw": {
+                "results": [
+                    {
+                        "person": {
+                            "resourceName": "people/live123",
+                            "names": [{"displayName": "Live Fixture"}],
+                            "emailAddresses": [{"value": "live@example.test"}],
+                        }
+                    }
+                ]
+            },
             "matches": [
                 {
                     "resource_id": "people/live123",
                     "confidence": 0.91,
                     "basis": ["email"],
                     "display": "Live Fixture",
+                    "raw": {
+                        "person": {
+                            "resourceName": "people/live123",
+                            "names": [{"displayName": "Live Fixture"}],
+                            "emailAddresses": [{"value": "live@example.test"}],
+                        }
+                    },
                 }
             ],
         }
@@ -1433,9 +1451,17 @@ def test_service_lookup_pilot_uses_injected_read_only_executor(tmp_path: Path) -
     assert payload["pilot"]["simulated"] is False
     assert payload["pilot"]["network_calls_made"] == 1
     assert payload["pilot"]["writes_attempted"] == 0
+    assert payload["pilot"]["execution_redacted"] is True
+    assert payload["pilot"]["execution"]["raw_present"] is True
+    assert payload["pilot"]["execution"]["raw_redacted"]["results"][0]["person"]["names"] == "[redacted]"
+    assert "raw" not in payload["pilot"]["matches"][0]
+    assert payload["pilot"]["matches"][0]["display"] == "[redacted]"
+    assert payload["pilot"]["matches"][0]["raw_present"] is True
     assert payload["result"]["status"] == "read_only_lookup_matches"
     assert payload["result"]["network_calls_made"] == 1
     assert payload["result"]["results"][0]["matches"][0]["resource_id"] == "people/live123"
+    assert payload["result"]["results"][0]["matches"][0]["display"] == "[redacted]"
+    assert "raw" not in payload["result"]["results"][0]["matches"][0]
 
 
 def test_service_assess_downstream_duplicates_blocks_review_and_can_resolve(tmp_path: Path) -> None:

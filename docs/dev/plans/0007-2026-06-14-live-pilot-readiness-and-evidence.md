@@ -84,3 +84,29 @@ Validation:
 - `gitleaks detect --source . --no-banner --redact --exit-code 1` passed.
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed and reported the index is up to date.
+
+### Slice 0007-B | 2026-06-14 | Live Lookup Result Import
+
+Implemented:
+
+- Added redacted execution metadata for non-simulated lookup pilot artifacts.
+- Preserved normalized match evidence needed for downstream duplicate assessment: sink, resource ID, confidence, basis, and redacted display.
+- Redacted raw adapter execution payloads and raw per-match evidence before writing `sink_lookup_pilot.json` and `sink_lookup_result.json` for non-simulated lookup pilots.
+- Kept simulated/fixture lookup behavior unchanged so tests and offline review fixtures remain inspectable.
+- Added tests proving redaction on live-shaped injected lookup execution while preserving downstream duplicate blocking.
+
+Safety:
+
+- This slice changes artifact persistence for live-shaped read-only lookup results only.
+- No public-web search, paid enrichment provider, GWS, Odollo/Odoo, or live sink calls are made.
+- Redaction keeps source resource IDs for idempotency/dedupe while avoiding persistence of raw contact rows.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sinks.py::test_build_sink_lookup_pilot_redacts_live_execution_payloads tests/test_service.py::test_service_lookup_pilot_uses_injected_read_only_executor tests/test_service.py::test_service_assess_downstream_duplicates_blocks_review_and_can_resolve tests/test_api.py::test_api_executes_sink_lookup_pilot_with_mocked_matches tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+- `.venv/bin/python -m pytest -q` passed with 190 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed and reported the index is up to date.

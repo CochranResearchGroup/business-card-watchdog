@@ -2136,3 +2136,28 @@ Validation:
 Safety:
 
 - This was read-only readiness reporting only. It made no public-web search, paid enrichment, GWS, Odollo/Odoo, or live sink calls.
+
+## Turn 115 | 2026-06-14
+
+Continued Plan 0007 with live lookup result-import hardening.
+
+Implemented:
+
+- Added redacted execution metadata for non-simulated lookup pilot artifacts.
+- Redacted raw adapter execution payloads and raw per-match evidence before writing live-shaped `sink_lookup_pilot.json` and `sink_lookup_result.json`.
+- Preserved resource ID, confidence, basis, sink, network-call count, and write count for downstream duplicate assessment and audit.
+- Kept simulated/fixture lookup artifacts unchanged for offline review tests and fixtures.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sinks.py::test_build_sink_lookup_pilot_redacts_live_execution_payloads tests/test_service.py::test_service_lookup_pilot_uses_injected_read_only_executor tests/test_service.py::test_service_assess_downstream_duplicates_blocks_review_and_can_resolve tests/test_api.py::test_api_executes_sink_lookup_pilot_with_mocked_matches tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+- `.venv/bin/python -m pytest -q` passed with 190 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed and reported the index is up to date.
+
+Safety:
+
+- This was artifact-hardening work only. It made no public-web search, paid enrichment, GWS, Odollo/Odoo, or live sink calls.

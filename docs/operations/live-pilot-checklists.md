@@ -67,6 +67,8 @@ Review the downstream duplicate assessment before any write:
 .venv/bin/bcw runs phase-report <run-id>
 ```
 
+For non-simulated lookup pilots, persisted execution metadata is redacted. Use the normalized sink/resource ID, confidence, basis, and downstream duplicate assessment as the durable review evidence; do not paste raw contact rows into the repo or issue trackers.
+
 Stop conditions:
 
 - Lookup returns a strong duplicate that has not been reviewed.
