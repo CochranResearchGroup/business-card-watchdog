@@ -5042,12 +5042,20 @@ class BusinessCardService:
                 run_id=run_id,
                 job_id=job_id,
             )
+            closeout_missing_artifacts = list(closeout.get("missing_artifacts") or [])
+            closeout_blockers = [
+                str(reason)
+                for reason in list(closeout.get("blocked_reasons") or [])
+                if str(reason) not in closeout_missing_artifacts
+            ]
             if target_abandoned:
                 state = "abandoned"
             elif closeout.get("state") == "complete":
                 state = "complete"
             elif selected_target_audit_blockers:
                 state = "selected_target_audit_blocked"
+            elif closeout_blockers:
+                state = "live_pilot_closeout_blocked"
             elif artifacts["selected_live_target"] is not None:
                 state = "selected_target_active"
             elif packet.get("state") == "ready_for_operator_approval":
@@ -5082,7 +5090,8 @@ class BusinessCardService:
                     "write_pilot_state": (artifacts["sink_write_pilot"] or {}).get("state"),
                     "readback_pilot_state": (artifacts["sink_readback_pilot"] or {}).get("state"),
                     "closeout_state": closeout.get("state"),
-                    "closeout_missing_artifacts": closeout.get("missing_artifacts", []),
+                    "closeout_missing_artifacts": closeout_missing_artifacts,
+                    "closeout_blockers": closeout_blockers,
                     "abandonment_state": abandonment.get("state"),
                     "abandonment_reason": abandonment.get("reason"),
                     "commands": {
@@ -5186,6 +5195,11 @@ class BusinessCardService:
                 operator_required = True
                 command = commands.get("selected_target_audit")
                 reason = "selected target audit context does not match the current selected target; rerun or abandon before live commands"
+            elif job_state == "live_pilot_closeout_blocked":
+                next_action = "review_live_pilot_closeout"
+                operator_required = True
+                command = commands.get("closeout")
+                reason = "live pilot closeout has non-missing-artifact blockers; review evidence or abandon before live commands"
             elif job_state == "abandoned":
                 next_action = "select_new_live_target"
                 operator_required = True
@@ -5231,6 +5245,7 @@ class BusinessCardService:
                     "readback_pilot_state": entry.get("readback_pilot_state"),
                     "closeout_state": entry.get("closeout_state"),
                     "closeout_missing_artifacts": entry.get("closeout_missing_artifacts", []),
+                    "closeout_blockers": entry.get("closeout_blockers", []),
                     "abandonment_state": entry.get("abandonment_state"),
                     "abandonment_reason": entry.get("abandonment_reason"),
                     "commands": commands,

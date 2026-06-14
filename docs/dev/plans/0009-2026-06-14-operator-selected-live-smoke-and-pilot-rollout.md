@@ -374,6 +374,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_live_pilot_closeout_rejects_stale_selected_target_evidence tests/test_service.py::test_service_apply_pilot_report_blocks_inconsistent_write_readback tests/test_service.py::test_service_live_pilot_closeout_rejects_stale_selected_target_audit_scope -q` passed with 3 tests.
 
+### Slice 0009-A23 | 2026-06-14 | Status Routes Closeout Blockers
+
+Implemented:
+
+- Live pilot status now reports non-missing closeout blockers separately from ordinary missing closeout artifacts.
+- Status now marks a job `live_pilot_closeout_blocked` when closeout evidence exists but contains stale or inconsistent evidence blockers.
+- Live pilot handoff now routes those jobs to `review_live_pilot_closeout` with the closeout command and blocker list.
+
+Safety:
+
+- This slice surfaces existing closeout evidence only.
+- It does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It keeps normal missing-artifact closeout progress separate from stale/tampered evidence blockers.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_live_pilot_closeout_rejects_stale_selected_target_evidence tests/test_service.py::test_service_live_pilot_closeout_rejects_stale_selected_target_audit_scope tests/test_service.py::test_service_live_pilot_status_does_not_double_count_closeout_totals tests/test_service.py::test_service_live_pilot_abandonment_blocks_abandoned_selected_target -q` passed with 4 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

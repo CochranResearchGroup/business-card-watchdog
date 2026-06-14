@@ -2285,7 +2285,9 @@ def test_service_live_pilot_closeout_rejects_stale_selected_target_evidence(tmp_
     report_path = artifact_dir / "sink_apply_pilot_report.json"
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
-    closeout = service.build_live_pilot_closeout_for_job(job_id=job_id, run_id=run_id, write=False)
+    closeout = service.build_live_pilot_closeout_for_job(job_id=job_id, run_id=run_id)
+    status = service.live_pilot_status(run_id=run_id, write=False)
+    handoff = service.live_pilot_handoff(run_id=run_id, write=False)
 
     selected_identity = selected["selection_id"]
     blocked_reasons = closeout["report"]["blocked_reasons"]
@@ -2301,6 +2303,15 @@ def test_service_live_pilot_closeout_rejects_stale_selected_target_evidence(tmp_
     assert any("sink_apply_pilot_report:source_write_selected_target_mismatch" in reason for reason in blocked_reasons)
     assert closeout["report"]["apply_report"]["consistency_errors"]
     assert closeout["report"]["apply_report"]["closeout_consistency_errors"]
+    assert status["counts"]["live_pilot_closeout_blocked"] == 1
+    closeout_blockers = [
+        reason for reason in blocked_reasons if reason not in closeout["report"]["missing_artifacts"]
+    ]
+    assert status["entries"][0]["closeout_blockers"] == closeout_blockers
+    assert handoff["state"] == "blocked"
+    assert handoff["action_counts"]["review_live_pilot_closeout"] == 1
+    assert handoff["entries"][0]["command"].startswith("sinks live-pilot-closeout")
+    assert handoff["entries"][0]["closeout_blockers"] == closeout_blockers
 
 
 def test_service_selected_lookup_smoke_imports_redacted_duplicate_evidence(tmp_path: Path) -> None:
