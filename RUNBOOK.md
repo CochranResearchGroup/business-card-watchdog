@@ -1681,6 +1681,22 @@ Validation:
 - `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state -q` passed with 1 test.
 - `rg -n 'review-workflow|reviews preview-validation|reviews apply-decisions|sinks write-pilot|actions run-next|--allow-paid-enrichment' README.md docs/operations/review-workflow.md` passed.
 
+## Turn 97 | 2026-06-14
+
+Continued Plan 0004 execution with review workflow sample output.
+
+Implemented:
+
+- Added `docs/operations/review-workflow-sample-output.md`.
+- Documented representative text output for run discovery, run show, run summary, phase report, job list/show, review queue, empty filtered review queue, workbook preview validation CSV, persisted preview JSON, and safe continuation stops.
+- Linked the sample output from the review workflow and README.
+
+Validation:
+
+- `git diff --check` passed.
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state -q` passed with 1 test.
+- `rg -n 'review-workflow-sample-output|Run: run-001|Review queue: 1 jobs|row_number,status|actions run-next' README.md docs/operations/review-workflow.md docs/operations/review-workflow-sample-output.md` passed.
+
 ## Turn 94 | 2026-06-14
 
 Continued Plan 0004 execution with CLI run list/show text summaries.

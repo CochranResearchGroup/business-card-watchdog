@@ -2,6 +2,8 @@
 
 This runbook covers the operator path for reviewing imported business cards without relying on raw JSON output. Add `--json` to the same commands when feeding another tool or script.
 
+For representative command output, see `docs/operations/review-workflow-sample-output.md`.
+
 ## 1. Start Or Inspect Intake
 
 Run a dry batch from a folder:

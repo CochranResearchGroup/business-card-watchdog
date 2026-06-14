@@ -128,3 +128,4 @@ Operational details live in:
 
 - `docs/operations/user-scope-install-and-service.md`
 - `docs/operations/review-workflow.md`
+- `docs/operations/review-workflow-sample-output.md`
