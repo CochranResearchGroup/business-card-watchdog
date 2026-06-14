@@ -2161,3 +2161,31 @@ Validation:
 Safety:
 
 - This was artifact-hardening work only. It made no public-web search, paid enrichment, GWS, Odollo/Odoo, or live sink calls.
+
+## Turn 116 | 2026-06-14
+
+Continued Plan 0007 with selected-sink write/readback pilot readiness.
+
+Implemented:
+
+- Added optional selected-sink scoping to the one-job apply pilot readiness artifact.
+- Added CLI `bcw sinks apply-pilot-readiness <job-id> --run-id <run-id> --sink <sink>`.
+- Added API and MCP parity for selected-sink readiness.
+- Filtered readiness requirements and selected actions to the requested sink.
+- Added readiness commands for selected-sink mock/live write and readback pilots.
+- Guarded non-simulated write pilots from reusing a readiness artifact prepared for another sink.
+- Updated live pilot operator docs to require selected-sink readiness.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_apply_pilot_readiness_can_scope_to_selected_sink tests/test_api.py::test_api_sink_readback_pilot_writes_zero_write_artifact tests/test_cli_surfaces.py::test_cli_sinks_apply_decision_writes_zero_write_artifact tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 4 tests.
+- `.venv/bin/python -m pytest -q` passed with 191 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed and reported the index is up to date.
+
+Safety:
+
+- This was zero-network, zero-write readiness work only. It made no public-web search, paid enrichment, GWS, Odollo/Odoo, or live sink calls.

@@ -1001,6 +1001,43 @@ def test_service_write_pilot_writes_simulated_apply_result(tmp_path: Path) -> No
     assert any(artifact["kind"] == "sink_write_pilot" for artifact in job["artifacts"])
 
 
+def test_service_apply_pilot_readiness_can_scope_to_selected_sink(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, odoo=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts", "odoo"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="write")
+    service.preflight_sink_apply(job_id=job_id, run_id=run_id)
+    service.decide_sink_apply(job_id=job_id, run_id=run_id, decision="approve", reviewer="tester")
+
+    readiness = service.build_sink_apply_pilot_readiness_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+    )
+
+    payload = readiness["readiness"]
+    assert payload["schema"] == "business-card-watchdog.sink-apply-pilot-readiness.v1"
+    assert payload["readiness_scope"] == "selected_sink"
+    assert payload["selected_sink"] == "google_contacts"
+    assert payload["can_mock_apply_pilot"] is True
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert {check["sink"] for check in payload["selected_sink_readiness"]} == {"google_contacts"}
+    assert {action["sink"] for action in payload["selected_actions"]["preflight"]} == {"google_contacts"}
+    assert {request["sink"] for request in payload["selected_actions"]["write_adapter_requests"]} == {
+        "google_contacts"
+    }
+    assert " --sink google_contacts" in payload["commands"]["prepare"]
+    assert " --sink google_contacts " in payload["commands"]["live_write"]
+    assert "readback_adapter_available_after_apply" in payload["live_missing_requirements"]
+
+
 def test_service_write_pilot_uses_injected_executor(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",

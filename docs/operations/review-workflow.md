@@ -124,7 +124,7 @@ Live sink writes and readbacks remain explicit. Check readiness first:
 ```bash
 .venv/bin/bcw sinks check --json
 .venv/bin/bcw sinks apply-preflight <job-id> --run-id <run-id> --json
-.venv/bin/bcw sinks apply-pilot-readiness <job-id> --run-id <run-id> --json
+.venv/bin/bcw sinks apply-pilot-readiness <job-id> --run-id <run-id> --sink google_contacts --json
 ```
 
 Run simulated pilots before live operations:

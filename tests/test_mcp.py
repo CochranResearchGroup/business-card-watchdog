@@ -142,7 +142,7 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     )
     pilot_readiness = call_tool(
         "business_card_watchdog_sink_apply_pilot_readiness",
-        {"job_id": job_id, "run_id": run_id},
+        {"job_id": job_id, "run_id": run_id, "sink": "google_contacts"},
         config=config,
     )
     write_pilot = call_tool(
@@ -313,6 +313,7 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert apply_result["result"]["writes_attempted"] == 0
     assert apply_result["result"]["readback"][0]["simulated"] is True
     assert pilot_readiness["readiness"]["schema"] == "business-card-watchdog.sink-apply-pilot-readiness.v1"
+    assert pilot_readiness["readiness"]["selected_sink"] == "google_contacts"
     assert write_pilot["pilot"]["schema"] == "business-card-watchdog.sink-write-pilot.v1"
     assert write_pilot["pilot"]["writes_attempted"] == 0
     assert write_pilot["result"]["state"] == "mock_applied"

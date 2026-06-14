@@ -62,6 +62,7 @@ def create_app(config_path: Path | None = None):
         run_id: str
         apply: bool = False
         simulate: bool = False
+        sink: str | None = None
 
     class SinkApplyDecisionRequest(BaseModel):
         run_id: str
@@ -323,7 +324,11 @@ def create_app(config_path: Path | None = None):
         job_id: str,
         request: SinkApplyPreflightRequest = Body(...),
     ) -> dict[str, object]:
-        return service().build_sink_apply_pilot_readiness_for_job(job_id=job_id, run_id=request.run_id)
+        return service().build_sink_apply_pilot_readiness_for_job(
+            job_id=job_id,
+            run_id=request.run_id,
+            sink=request.sink,
+        )
 
     @app.post("/jobs/{job_id}/sink-apply-pilot-report")
     def create_sink_apply_pilot_report(

@@ -282,7 +282,11 @@ def test_api_sink_readback_pilot_writes_zero_write_artifact(tmp_path: Path) -> N
         f"/jobs/{job_id}/sink-apply-decision",
         json={"run_id": run_id, "decision": "approve", "reviewer": "api-test"},
     )
-    client.post(f"/jobs/{job_id}/sink-apply-pilot-readiness", json={"run_id": run_id})
+    readiness = client.post(
+        f"/jobs/{job_id}/sink-apply-pilot-readiness",
+        json={"run_id": run_id, "sink": "google_contacts"},
+    ).json()
+    assert readiness["readiness"]["selected_sink"] == "google_contacts"
     write_pilot = client.post(
         f"/jobs/{job_id}/sink-write-pilot",
         json={"run_id": run_id, "sink": "google_contacts", "approved_by": "api-test"},

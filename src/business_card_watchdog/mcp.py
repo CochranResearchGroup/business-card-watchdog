@@ -303,12 +303,13 @@ def tool_manifest() -> dict[str, object]:
             },
             {
                 "name": "business_card_watchdog_sink_apply_pilot_readiness",
-                "description": "Create a zero-write one-job live apply pilot readiness artifact.",
+                "description": "Create a zero-write one-job, optional selected-sink live apply pilot readiness artifact.",
                 "input_schema": {
                     "type": "object",
                     "properties": {
                         "job_id": {"type": "string"},
                         "run_id": {"type": "string"},
+                        "sink": {"type": "string", "enum": ["google_contacts", "odoo"]},
                     },
                     "required": ["job_id", "run_id"],
                 },
@@ -685,6 +686,7 @@ def call_tool(
         return service.build_sink_apply_pilot_readiness_for_job(
             job_id=str(args["job_id"]),
             run_id=str(args["run_id"]),
+            sink=str(args["sink"]) if args.get("sink") else None,
         )
     if tool_name == "business_card_watchdog_sink_apply_pilot_report":
         return service.build_sink_apply_pilot_report_for_job(

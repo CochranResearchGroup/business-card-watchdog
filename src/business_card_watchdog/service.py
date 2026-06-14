@@ -2481,7 +2481,13 @@ class BusinessCardService:
         )
         return {"result_path": str(result_path), "result": result}
 
-    def build_sink_apply_pilot_readiness_for_job(self, *, job_id: str, run_id: str) -> dict[str, Any]:
+    def build_sink_apply_pilot_readiness_for_job(
+        self,
+        *,
+        job_id: str,
+        run_id: str,
+        sink: str | None = None,
+    ) -> dict[str, Any]:
         job = self.get_job(job_id, run_id=run_id)
         artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
         preflight_path = artifact_dir / "sink_apply_preflight.json"
@@ -2494,6 +2500,33 @@ class BusinessCardService:
         write_adapter = json.loads(write_adapter_path.read_text(encoding="utf-8")) if write_adapter_path.exists() else None
         readback_adapter = json.loads(readback_adapter_path.read_text(encoding="utf-8")) if readback_adapter_path.exists() else None
         readiness = self.sink_readiness()
+        selected_sink = str(sink or "").strip()
+        preflight_actions = [
+            action
+            for action in list((preflight or {}).get("actions") or [])
+            if not selected_sink or action.get("sink") == selected_sink
+        ]
+        decision_actions = [
+            action
+            for action in list((decision or {}).get("actions") or [])
+            if not selected_sink or action.get("sink") == selected_sink
+        ]
+        write_adapter_requests = [
+            request
+            for request in list((write_adapter or {}).get("requests") or [])
+            if request.get("phase") == "write" and (not selected_sink or request.get("sink") == selected_sink)
+        ]
+        readback_adapter_requests = [
+            request
+            for request in list((readback_adapter or {}).get("requests") or [])
+            if request.get("phase") == "readback" and (not selected_sink or request.get("sink") == selected_sink)
+        ]
+        sink_readiness_checks = [
+            check
+            for check in list(readiness.get("sinks") or [])
+            if not selected_sink or check.get("sink") == selected_sink
+        ]
+        readiness_scope = f"selected sink {selected_sink}" if selected_sink else "all configured sinks"
         requirements = [
             {
                 "name": "preflight_exists",
@@ -2501,13 +2534,22 @@ class BusinessCardService:
                 "detail": str(preflight_path),
             },
             {
+                "name": "selected_sink_in_preflight",
+                "ok": bool(preflight and (preflight_actions or not selected_sink)),
+                "detail": readiness_scope,
+            },
+            {
                 "name": "apply_decision_approved",
-                "ok": bool(decision and decision.get("decision") == "approve"),
+                "ok": bool(
+                    decision
+                    and decision.get("decision") == "approve"
+                    and (not selected_sink or decision_actions)
+                ),
                 "detail": str(decision_path),
             },
             {
                 "name": "write_adapter_request_exists",
-                "ok": write_adapter is not None,
+                "ok": bool(write_adapter and (write_adapter_requests or not selected_sink)),
                 "detail": str(write_adapter_path),
             },
             {
@@ -2517,18 +2559,25 @@ class BusinessCardService:
             },
             {
                 "name": "live_sink_readiness_ready",
-                "ok": all(check.get("status") == "ready" for check in readiness["sinks"]),
-                "detail": "all configured sink readiness checks must be ready",
+                "ok": bool(sink_readiness_checks)
+                and all(check.get("status") == "ready" for check in sink_readiness_checks),
+                "detail": f"{readiness_scope} readiness checks must be ready",
             },
             {
                 "name": "readback_adapter_available_after_apply",
-                "ok": readback_adapter is not None,
+                "ok": bool(readback_adapter and (readback_adapter_requests or not selected_sink)),
                 "detail": str(readback_adapter_path),
             },
         ]
-        mock_requirements = {"preflight_exists", "apply_decision_approved", "mock_readback_available"}
+        mock_requirements = {
+            "preflight_exists",
+            "selected_sink_in_preflight",
+            "apply_decision_approved",
+            "mock_readback_available",
+        }
         live_requirements = {
             "preflight_exists",
+            "selected_sink_in_preflight",
             "apply_decision_approved",
             "write_adapter_request_exists",
             "live_sink_readiness_ready",
@@ -2545,10 +2594,13 @@ class BusinessCardService:
             "reason": (
                 "mock apply pilot is ready; live apply remains blocked until live readiness and readback adapter checks pass"
                 if can_mock_apply_pilot
-                else "apply pilot remains blocked until required review, preflight, and adapter request artifacts exist"
+                else "apply pilot remains blocked until required review, preflight, selected sink, and adapter request artifacts exist"
             ),
             "job_id": job_id,
             "run_id": run_id,
+            "sink": selected_sink or None,
+            "selected_sink": selected_sink or None,
+            "readiness_scope": "selected_sink" if selected_sink else "all_configured_sinks",
             "can_apply_pilot": can_mock_apply_pilot,
             "can_mock_apply_pilot": can_mock_apply_pilot,
             "can_live_apply_pilot": can_live_apply_pilot,
@@ -2558,6 +2610,13 @@ class BusinessCardService:
             "decision_state": decision.get("state") if decision else "missing",
             "decision": decision.get("decision") if decision else "",
             "sink_readiness": readiness,
+            "selected_sink_readiness": sink_readiness_checks,
+            "selected_actions": {
+                "preflight": preflight_actions,
+                "decision": decision_actions,
+                "write_adapter_requests": write_adapter_requests,
+                "readback_adapter_requests": readback_adapter_requests,
+            },
             "requirements": requirements,
             "missing_requirements": missing_requirements,
             "mock_missing_requirements": [
@@ -2567,7 +2626,23 @@ class BusinessCardService:
                 name for name in sorted(live_requirements) if not requirement_by_name[name]
             ],
             "commands": {
-                "prepare": "sinks apply-pilot-readiness",
+                "prepare": (
+                    f"sinks apply-pilot-readiness {job_id} --run-id {run_id}"
+                    + (f" --sink {selected_sink}" if selected_sink else "")
+                ),
+                "mock_write": (
+                    f"sinks write-pilot {job_id} --run-id {run_id} --sink {selected_sink or '<sink>'} "
+                    "--approved-by <operator> --simulate"
+                ),
+                "live_write": (
+                    f"sinks write-pilot {job_id} --run-id {run_id} --sink {selected_sink or '<sink>'} "
+                    "--approved-by <operator> --no-simulate"
+                ),
+                "readback_request": f"sinks adapter-request {job_id} --run-id {run_id} --phase readback",
+                "mock_readback": (
+                    f"sinks readback-pilot {job_id} --run-id {run_id} --sink {selected_sink or '<sink>'} "
+                    "--approved-by <operator> --simulate"
+                ),
                 "mock_apply": "sinks apply --apply --simulate",
                 "manual_apply": "sinks apply --apply --no-simulate",
                 "readback": "sinks adapter-request --phase readback",
@@ -2914,8 +2989,17 @@ class BusinessCardService:
                 readiness = (
                     json.loads(readiness_path.read_text(encoding="utf-8"))
                     if readiness_path.exists()
-                    else self.build_sink_apply_pilot_readiness_for_job(job_id=job_id, run_id=run_id)["readiness"]
+                    else self.build_sink_apply_pilot_readiness_for_job(
+                        job_id=job_id,
+                        run_id=run_id,
+                        sink=sink,
+                    )["readiness"]
                 )
+                readiness_sink = str(readiness.get("selected_sink") or readiness.get("sink") or "")
+                if readiness_sink and readiness_sink != sink:
+                    raise ValueError(
+                        f"live sink write pilot readiness was prepared for {readiness_sink}, not {sink}"
+                    )
                 if not readiness.get("can_live_apply_pilot"):
                     raise ValueError("live sink write pilot requires ready sink_apply_pilot_readiness.json")
                 execution = execute_sink_write_adapter(request)

@@ -679,6 +679,8 @@ def test_cli_sinks_apply_decision_writes_zero_write_artifact(tmp_path: Path, cap
                 job_id,
                 "--run-id",
                 run_id,
+                "--sink",
+                "google_contacts",
                 "--json",
             ]
         )
@@ -686,6 +688,7 @@ def test_cli_sinks_apply_decision_writes_zero_write_artifact(tmp_path: Path, cap
     )
     readiness = json.loads(capsys.readouterr().out)
     assert readiness["readiness"]["schema"] == "business-card-watchdog.sink-apply-pilot-readiness.v1"
+    assert readiness["readiness"]["selected_sink"] == "google_contacts"
     assert readiness["readiness"]["writes_attempted"] == 0
 
     assert (

@@ -104,8 +104,14 @@ Prepare apply artifacts:
   --reviewer <operator> \
   --reason "one-job pilot approved" \
   --json
-.venv/bin/bcw sinks apply-pilot-readiness <job-id> --run-id <run-id> --json
+.venv/bin/bcw sinks apply-pilot-readiness \
+  <job-id> \
+  --run-id <run-id> \
+  --sink google_contacts \
+  --json
 ```
+
+Use `--sink odoo` when the one-job pilot target is Odollo/Odoo. Treat readiness as valid only for the selected sink named in the artifact.
 
 Run one explicit live write pilot:
 

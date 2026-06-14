@@ -85,6 +85,34 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed and reported the index is up to date.
 
+### Slice 0007-C | 2026-06-14 | One-Job Write Pilot Readiness
+
+Implemented:
+
+- Added selected-sink scoping to `BusinessCardService.build_sink_apply_pilot_readiness_for_job`.
+- Added CLI `bcw sinks apply-pilot-readiness <job-id> --run-id <run-id> --sink <sink>`.
+- Added API and MCP parity for the optional selected sink.
+- Filtered readiness requirements, preflight actions, write adapter requests, readback adapter requests, and sink readiness checks to the selected sink when provided.
+- Added selected-sink write/readback commands to the readiness payload.
+- Guarded non-simulated write pilots so a selected-sink readiness artifact cannot be reused for a different sink.
+- Updated operator docs to require selected-sink readiness before a one-job live write/readback pilot.
+
+Safety:
+
+- This slice prepares zero-network, zero-write readiness artifacts only.
+- No public-web search, paid enrichment provider, GWS, Odollo/Odoo, or live sink calls are made.
+- Live write/readback remains an explicit operator command outside generic agent-loop continuation.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_apply_pilot_readiness_can_scope_to_selected_sink tests/test_api.py::test_api_sink_readback_pilot_writes_zero_write_artifact tests/test_cli_surfaces.py::test_cli_sinks_apply_decision_writes_zero_write_artifact tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 4 tests.
+- `.venv/bin/python -m pytest -q` passed with 191 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed and reported the index is up to date.
+
 ### Slice 0007-B | 2026-06-14 | Live Lookup Result Import
 
 Implemented:
