@@ -109,6 +109,18 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_live_pilot_status",
+                "description": "Report run-level selected-target, live pilot evidence, and closeout status without executing live calls.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "write": {"type": "boolean", "default": True},
+                    },
+                    "required": ["run_id"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_next_actions",
                 "description": "Return deterministic next actions for agent-loop batch orchestration.",
                 "input_schema": {
@@ -725,6 +737,11 @@ def call_tool(
         return service.phase_report(str(args["run_id"]))
     if tool_name == "business_card_watchdog_pilot_readiness_report":
         return service.pilot_readiness_report(str(args["run_id"]))
+    if tool_name == "business_card_watchdog_live_pilot_status":
+        return service.live_pilot_status(
+            run_id=str(args["run_id"]),
+            write=bool(args.get("write", True)),
+        )
     if tool_name == "business_card_watchdog_next_actions":
         return service.next_actions(
             run_id=str(args["run_id"]) if args.get("run_id") else None,

@@ -214,3 +214,31 @@ Validation:
 - `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed; index is up to date.
+
+### Slice 0009-A6 | 2026-06-14 | Run-Level Live Pilot Status
+
+Implemented:
+
+- Added `business-card-watchdog.live-pilot-status.v1`.
+- Added service `BusinessCardService.live_pilot_status`.
+- Added CLI `bcw runs live-pilot-status`.
+- Added API `GET /runs/{run_id}/live-pilot-status`.
+- Added MCP tool `business_card_watchdog_live_pilot_status`.
+- The status report aggregates candidate, pre-approval packet, selected-target, selected-target audit, lookup smoke, write/readback, and closeout state across every job in a run.
+
+Safety:
+
+- This slice is run-level readback only.
+- It can write `live_pilot_status.json` under the run, but it does not create or modify `selected_live_target.json` and does not execute lookup, write, or readback pilots.
+- It records status-operation counters as zero and separates already observed pilot counters into `observed_writes_attempted` and `observed_network_calls_made`.
+- It does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_service.py::test_service_live_pilot_status_does_not_double_count_closeout_totals tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
+- `.venv/bin/python -m pytest -q` passed with 210 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.

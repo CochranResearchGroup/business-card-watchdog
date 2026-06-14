@@ -4530,6 +4530,138 @@ class BusinessCardService:
             payload["audit_path"] = str(audit_path)
         return payload
 
+    def live_pilot_status(self, *, run_id: str, write: bool = True) -> dict[str, Any]:
+        run = self.get_run(run_id)
+        candidates_payload = self.live_target_candidates(run_id=run_id)
+        candidates_by_job: dict[str, list[dict[str, Any]]] = {}
+        for candidate in list(candidates_payload.get("candidates") or []):
+            if isinstance(candidate, dict):
+                candidates_by_job.setdefault(str(candidate.get("job_id") or ""), []).append(candidate)
+        jobs = self.list_jobs(run_id)
+        entries: list[dict[str, Any]] = []
+        observed_writes_attempted = 0
+        observed_network_calls_made = 0
+        for job in jobs:
+            job_id = str(job["job_id"])
+            artifact_dir = (
+                Path(str(job["artifact_dir"]))
+                if job.get("artifact_dir")
+                else self.config.runs_dir / run_id / "artifacts" / job_id
+            )
+            artifacts = {
+                "live_selection_packet": _read_json_file(artifact_dir / "live_selection_packet.json"),
+                "selected_live_target": _read_json_file(artifact_dir / "selected_live_target.json"),
+                "selected_live_target_audit": _read_json_file(artifact_dir / "selected_live_target_audit.json"),
+                "selected_lookup_smoke": _read_json_file(artifact_dir / "selected_lookup_smoke.json"),
+                "sink_write_pilot": _read_json_file(artifact_dir / "sink_write_pilot.json"),
+                "sink_readback_pilot": _read_json_file(artifact_dir / "sink_readback_pilot.json"),
+                "live_pilot_closeout": _read_json_file(artifact_dir / "live_pilot_closeout.json"),
+            }
+            closeout = artifacts["live_pilot_closeout"] or {}
+            selected_target = artifacts["selected_live_target"] or {}
+            packet = artifacts["live_selection_packet"] or {}
+            job_candidates = candidates_by_job.get(job_id, [])
+            ready_candidate_count = sum(1 for candidate in job_candidates if candidate.get("state") == "ready_for_selection")
+            if closeout.get("state") == "complete":
+                state = "complete"
+            elif artifacts["selected_live_target"] is not None:
+                state = "selected_target_active"
+            elif packet.get("state") == "ready_for_operator_approval":
+                state = "pending_operator_approval"
+            elif ready_candidate_count:
+                state = "ready_for_selection"
+            elif job_candidates:
+                state = "blocked"
+            else:
+                state = "no_candidate"
+            observed_writes_attempted += int((artifacts["sink_write_pilot"] or {}).get("writes_attempted") or 0)
+            observed_network_calls_made += int((artifacts["selected_lookup_smoke"] or {}).get("network_calls_made") or 0)
+            observed_network_calls_made += int((artifacts["sink_write_pilot"] or {}).get("network_calls_made") or 0)
+            observed_network_calls_made += int((artifacts["sink_readback_pilot"] or {}).get("network_calls_made") or 0)
+            entries.append(
+                {
+                    "schema": "business-card-watchdog.live-pilot-status-entry.v1",
+                    "state": state,
+                    "run_id": run_id,
+                    "job_id": job_id,
+                    "job_state": job.get("state"),
+                    "candidate_count": len(job_candidates),
+                    "ready_candidate_count": ready_candidate_count,
+                    "selected_target_exists": artifacts["selected_live_target"] is not None,
+                    "selected_target_scope": selected_target.get("scope"),
+                    "selected_target_sink": selected_target.get("sink"),
+                    "selected_target_operator": selected_target.get("operator") or selected_target.get("approved_by"),
+                    "selection_packet_state": packet.get("state"),
+                    "selected_target_audit_state": (artifacts["selected_live_target_audit"] or {}).get("state"),
+                    "lookup_smoke_state": (artifacts["selected_lookup_smoke"] or {}).get("state"),
+                    "write_pilot_state": (artifacts["sink_write_pilot"] or {}).get("state"),
+                    "readback_pilot_state": (artifacts["sink_readback_pilot"] or {}).get("state"),
+                    "closeout_state": closeout.get("state"),
+                    "closeout_missing_artifacts": closeout.get("missing_artifacts", []),
+                    "commands": {
+                        "selection_packet": f"sinks live-selection-packet {job_id} --run-id {run_id} --sink <sink> --operator <operator> --json",
+                        "select_target": f"sinks select-live-target {job_id} --run-id {run_id} --sink <sink> --operator <operator> --scope lookup --json",
+                        "selected_target_audit": f"sinks selected-target-audit {job_id} --run-id {run_id} --json",
+                        "lookup_smoke": f"sinks execute-lookup-smoke {job_id} --run-id {run_id} --json",
+                        "closeout": f"sinks live-pilot-closeout {job_id} --run-id {run_id} --json",
+                    },
+                }
+            )
+        counts: dict[str, int] = {}
+        for entry in entries:
+            counts[str(entry["state"])] = counts.get(str(entry["state"]), 0) + 1
+        state = (
+            "complete"
+            if entries and counts.get("complete") == len(entries)
+            else "operator_action_required"
+            if any(entry["state"] in {"pending_operator_approval", "selected_target_active", "ready_for_selection"} for entry in entries)
+            else "blocked"
+            if entries
+            else "empty"
+        )
+        payload = {
+            "schema": "business-card-watchdog.live-pilot-status.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_id,
+            "run_state": run.get("state"),
+            "job_count": len(entries),
+            "counts": counts,
+            "entries": entries,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "observed_writes_attempted": observed_writes_attempted,
+            "observed_network_calls_made": observed_network_calls_made,
+            "commands": {
+                "live_readiness_audit": f"live-readiness-audit --run-id {run_id} --json",
+                "live_target_candidates": f"live-target-candidates --run-id {run_id} --json",
+                "live_pilot_status": f"runs live-pilot-status {run_id} --json",
+            },
+            "explicit_stop_conditions": [
+                "This status report does not create selected_live_target.json.",
+                "Do not run live lookup, live write, or live readback from this status report.",
+                "Do not process private SyncThing images, run public-web search, or call paid enrichment from this status report.",
+            ],
+        }
+        if write:
+            status_path = self.config.runs_dir / run_id / "live_pilot_status.json"
+            status_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            ledger = RunLedger(self.config.runs_dir / run_id)
+            ledger.record_artifact(job_id="__run__", kind="live_pilot_status", path=status_path)
+            ledger.record_event(
+                "live_pilot_status_created",
+                {
+                    "run_id": run_id,
+                    "status_path": str(status_path),
+                    "state": state,
+                    "job_count": len(entries),
+                    "writes_attempted": 0,
+                    "network_calls_made": 0,
+                },
+            )
+            payload["status_path"] = str(status_path)
+        return payload
+
     def live_selection_packet(
         self,
         *,

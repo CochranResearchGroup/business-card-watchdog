@@ -242,6 +242,13 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert closeout["report"]["writes_attempted"] == 0
     assert Path(closeout["closeout_path"]).exists()
 
+    assert main(["--config", str(config_path), "runs", "live-pilot-status", run_id, "--json"]) == 0
+    status = json.loads(capsys.readouterr().out)
+    assert status["schema"] == "business-card-watchdog.live-pilot-status.v1"
+    assert status["counts"]["selected_target_active"] == 1
+    assert status["writes_attempted"] == 0
+    assert Path(status["status_path"]).exists()
+
 
 def test_cli_runs_and_jobs_use_recorded_runtime_state(
     tmp_path: Path, capsys

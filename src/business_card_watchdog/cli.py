@@ -59,6 +59,33 @@ def _render_pilot_readiness_report_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_live_pilot_status_text(payload: dict[str, object]) -> str:
+    counts = dict(payload.get("counts") or {})
+    entries = payload.get("entries") or []
+    lines = [
+        f"Run: {payload.get('run_id')}",
+        f"State: {payload.get('state')}",
+        f"Jobs: {payload.get('job_count')}",
+        "Counts: "
+        + " ".join(f"{key}={value}" for key, value in sorted(counts.items()))
+        if counts
+        else "Counts: none",
+        "Observed: "
+        f"writes={payload.get('observed_writes_attempted', 0)} "
+        f"network={payload.get('observed_network_calls_made', 0)}",
+    ]
+    for entry in entries if isinstance(entries, list) else []:
+        if isinstance(entry, dict):
+            lines.append(
+                " - "
+                f"{entry.get('job_id')} "
+                f"state={entry.get('state')} "
+                f"sink={entry.get('selected_target_sink') or 'none'} "
+                f"closeout={entry.get('closeout_state') or 'none'}"
+            )
+    return "\n".join(lines) + "\n"
+
+
 def _render_run_summary_text(payload: dict[str, object]) -> str:
     enrichment_budget = dict(payload.get("enrichment_budget") or {})
     public_web = dict(enrichment_budget.get("public_web") or {})
@@ -308,6 +335,10 @@ def build_parser() -> argparse.ArgumentParser:
     runs_pilot_readiness = runs_sub.add_parser("pilot-readiness")
     runs_pilot_readiness.add_argument("run_id")
     runs_pilot_readiness.add_argument("--json", action="store_true")
+    runs_live_pilot_status = runs_sub.add_parser("live-pilot-status")
+    runs_live_pilot_status.add_argument("run_id")
+    runs_live_pilot_status.add_argument("--no-write", action="store_true")
+    runs_live_pilot_status.add_argument("--json", action="store_true")
 
     jobs = sub.add_parser("jobs")
     jobs_sub = jobs.add_subparsers(dest="jobs_command", required=True)
@@ -649,8 +680,13 @@ def main(argv: list[str] | None = None) -> int:
             payload = service.phase_report(args.run_id)
         elif args.runs_command == "pilot-readiness":
             payload = service.pilot_readiness_report(args.run_id)
+        elif args.runs_command == "live-pilot-status":
+            payload = service.live_pilot_status(run_id=args.run_id, write=not args.no_write)
         else:
             payload = service.get_run(args.run_id)
+        if args.runs_command == "live-pilot-status" and not args.json:
+            print(_render_live_pilot_status_text(payload), end="")
+            return 0
         if args.runs_command == "pilot-readiness" and not args.json:
             print(_render_pilot_readiness_report_text(payload), end="")
             return 0

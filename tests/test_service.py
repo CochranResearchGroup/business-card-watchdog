@@ -1835,6 +1835,16 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert Path(closeout["closeout_path"]).exists()
     assert any(artifact["kind"] == "live_pilot_closeout" for artifact in service.list_artifacts(run_id))
 
+    live_status = service.live_pilot_status(run_id=run_id)
+    assert live_status["schema"] == "business-card-watchdog.live-pilot-status.v1"
+    assert live_status["run_id"] == run_id
+    assert live_status["job_count"] == 1
+    assert live_status["counts"]["selected_target_active"] == 1
+    assert live_status["writes_attempted"] == 0
+    assert live_status["network_calls_made"] == 0
+    assert live_status["observed_writes_attempted"] == 0
+    assert Path(live_status["status_path"]).exists()
+
     result = service.execute_sink_lookup_pilot_for_job(
         job_id=job_id,
         run_id=run_id,
@@ -1897,6 +1907,26 @@ def test_service_selected_lookup_smoke_imports_redacted_duplicate_evidence(tmp_p
     assert smoke["assessment"]["state"] == "strong_duplicate"
     assert any(artifact["kind"] == "selected_lookup_smoke" for artifact in job["artifacts"])
     assert "selected_lookup_smoke" in review_bundle["entries"][0]["artifact_kinds"]
+
+
+def test_service_live_pilot_status_does_not_double_count_closeout_totals(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    run_id, job_id = make_recorded_run(config)
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+    artifacts = {
+        "selected_lookup_smoke": {"state": "complete", "network_calls_made": 1, "writes_attempted": 0},
+        "sink_write_pilot": {"state": "complete", "network_calls_made": 1, "writes_attempted": 1},
+        "sink_readback_pilot": {"state": "complete", "network_calls_made": 1, "writes_attempted": 0},
+        "live_pilot_closeout": {"state": "complete", "network_calls_made": 3, "writes_attempted": 1},
+    }
+    for name, payload in artifacts.items():
+        (artifact_dir / f"{name}.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+    live_status = BusinessCardService(config).live_pilot_status(run_id=run_id, write=False)
+
+    assert live_status["counts"]["complete"] == 1
+    assert live_status["observed_writes_attempted"] == 1
+    assert live_status["observed_network_calls_made"] == 3
 
 
 def test_service_assess_downstream_duplicates_blocks_review_and_can_resolve(tmp_path: Path) -> None:

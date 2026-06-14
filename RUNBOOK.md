@@ -2459,8 +2459,8 @@ Implemented:
 
 Validation:
 
-- `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
-- `.venv/bin/python -m pytest -q` passed with 209 tests.
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_service.py::test_service_live_pilot_status_does_not_double_count_closeout_totals tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
+- `.venv/bin/python -m pytest -q` passed with 210 tests.
 - `.venv/bin/ruff check .` passed.
 - `uv build --out-dir dist` passed.
 - `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
@@ -2497,3 +2497,30 @@ Validation:
 Safety:
 
 - This was closeout evidence only. It can write `live_pilot_closeout.json`, but it did not create or modify `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+## Turn 130 | 2026-06-14
+
+Continued Plan 0009 with Slice 0009-A6.
+
+Implemented:
+
+- Added `business-card-watchdog.live-pilot-status.v1`.
+- Added `BusinessCardService.live_pilot_status`.
+- Added CLI `bcw runs live-pilot-status`.
+- Added API `GET /runs/{run_id}/live-pilot-status`.
+- Added MCP tool `business_card_watchdog_live_pilot_status`.
+- Live pilot status aggregates candidate, pre-approval packet, selected-target, selected-target audit, lookup smoke, write/readback, and closeout state across every job in a run.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+- `.venv/bin/python -m pytest -q` passed with 209 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was run-level readback only. It can write `live_pilot_status.json`, but it did not create or modify `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
