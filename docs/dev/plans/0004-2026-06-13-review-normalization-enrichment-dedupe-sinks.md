@@ -2303,3 +2303,21 @@ Validation:
 Remaining:
 
 - Future work can add formatted dashboard summaries if operators need a condensed view beyond the raw phase-report JSON payload.
+
+### Slice 0004-BX | 2026-06-14 | Phase Report Dashboard Summary
+
+Implemented:
+
+- Added additive `dashboard_summary` readback to phase reports.
+- Summary includes a compact status line, review workbook preview state, blocked phase count, explicit-required phase count, pending phase count, complete phase count, and grouped phase lists.
+- CLI/API/MCP phase-report payloads now carry a dashboard-ready summary without changing existing phase rows or transport contracts.
+- Added service, CLI, API, MCP direct-tool, and MCP JSON-RPC regression coverage.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_run_summary_and_review_queue tests/test_service.py::test_service_review_bundle_includes_sink_pilot_status tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service tests/test_mcp.py::test_mcp_jsonl_server_lists_and_calls_tools -q` passed with 6 tests.
+- `python -m py_compile src/business_card_watchdog/service.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+
+Remaining:
+
+- Future work can decide whether the CLI non-JSON output should render this summary as text instead of printing the raw Python object.

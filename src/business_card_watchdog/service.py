@@ -379,6 +379,8 @@ class BusinessCardService:
                     "phase_states": phase_states,
                 }
             )
+        phase_list = [phase_rows[phase] for phase in phases]
+        review_workbook_preview = self._review_workbook_preview_phase(artifacts)
         return {
             "schema": "business-card-watchdog.phase-report.v1",
             "run_id": run_id,
@@ -386,8 +388,12 @@ class BusinessCardService:
             "run_state": run.get("state"),
             "job_count": len(jobs),
             "stop_rules": self._phase_stop_rules(),
-            "review_workbook_preview": self._review_workbook_preview_phase(artifacts),
-            "phases": [phase_rows[phase] for phase in phases],
+            "review_workbook_preview": review_workbook_preview,
+            "dashboard_summary": self._phase_dashboard_summary(
+                phases=phase_list,
+                review_workbook_preview=review_workbook_preview,
+            ),
+            "phases": phase_list,
             "jobs": job_rows,
             "writes_attempted": 0,
             "network_calls_made": 0,
@@ -427,6 +433,47 @@ class BusinessCardService:
                     "explicit_operator_actions": [],
                 },
             },
+        }
+
+    def _phase_dashboard_summary(
+        self,
+        *,
+        phases: list[dict[str, Any]],
+        review_workbook_preview: dict[str, Any],
+    ) -> dict[str, Any]:
+        blocked_phases: list[dict[str, Any]] = []
+        explicit_required_phases: list[dict[str, Any]] = []
+        pending_phases: list[dict[str, Any]] = []
+        complete_phases: list[dict[str, Any]] = []
+        for phase in phases:
+            counts = dict(phase.get("counts") or {})
+            phase_name = str(phase.get("phase") or "")
+            if counts.get("blocked"):
+                blocked_phases.append({"phase": phase_name, "count": counts["blocked"]})
+            if counts.get("explicit_required"):
+                explicit_required_phases.append({"phase": phase_name, "count": counts["explicit_required"]})
+            if counts.get("pending"):
+                pending_phases.append({"phase": phase_name, "count": counts["pending"]})
+            if counts.get("complete"):
+                complete_phases.append({"phase": phase_name, "count": counts["complete"]})
+        preview_state = str(review_workbook_preview.get("state") or "unknown")
+        status_line = (
+            f"{len(blocked_phases)} blocked phases; "
+            f"{len(explicit_required_phases)} explicit-required phases; "
+            f"review workbook preview {preview_state}"
+        )
+        return {
+            "schema": "business-card-watchdog.phase-dashboard-summary.v1",
+            "status_line": status_line,
+            "review_workbook_preview_state": preview_state,
+            "blocked_phase_count": len(blocked_phases),
+            "explicit_required_phase_count": len(explicit_required_phases),
+            "pending_phase_count": len(pending_phases),
+            "complete_phase_count": len(complete_phases),
+            "blocked_phases": blocked_phases,
+            "explicit_required_phases": explicit_required_phases,
+            "pending_phases": pending_phases,
+            "complete_phases": complete_phases,
         }
 
     def _review_workbook_preview_phase(self, artifacts: list[dict[str, Any]]) -> dict[str, Any]:

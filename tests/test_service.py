@@ -87,6 +87,10 @@ def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
     )
     assert phase_report["review_workbook_preview"]["state"] == "not_started"
     assert phase_report["review_workbook_preview"]["counts"]["not_started"] == 1
+    assert phase_report["dashboard_summary"]["schema"] == "business-card-watchdog.phase-dashboard-summary.v1"
+    assert phase_report["dashboard_summary"]["review_workbook_preview_state"] == "not_started"
+    assert phase_report["dashboard_summary"]["blocked_phases"] == [{"phase": "review", "count": 1}]
+    assert phase_report["dashboard_summary"]["explicit_required_phase_count"] == 0
     assert phase_report["phases"][2]["phase"] == "review"
     assert phase_report["phases"][2]["counts"]["blocked"] == 1
     assert phase_report["jobs"][0]["phase_states"]["review"] == "blocked"
@@ -1139,6 +1143,8 @@ def test_service_review_bundle_includes_sink_pilot_status(tmp_path: Path) -> Non
     assert phase_counts["write_pilot"]["complete"] == 1
     assert phase_counts["readback_pilot"]["complete"] == 1
     assert phase_report["jobs"][0]["phase_states"]["pilot_report"] == "complete"
+    assert phase_report["dashboard_summary"]["complete_phase_count"] >= 3
+    assert phase_report["dashboard_summary"]["explicit_required_phase_count"] == 0
     assert "By Sink Pilot State" in html["html"]
     assert "pilot_report_complete" in html["html"]
 

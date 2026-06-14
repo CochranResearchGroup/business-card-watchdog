@@ -1614,3 +1614,19 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service tests/test_mcp.py::test_mcp_jsonl_server_lists_and_calls_tools -q` passed with 4 tests.
 - `python -m py_compile tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+
+## Turn 89 | 2026-06-14
+
+Continued Plan 0004 execution with a phase-report dashboard summary.
+
+Implemented:
+
+- Added additive `dashboard_summary` to phase reports.
+- Summary includes a compact status line, review workbook preview state, phase counts by attention category, and grouped blocked/explicit/pending/complete phase lists.
+- Existing phase rows and CLI/API/MCP transport contracts remain unchanged.
+- Added regression coverage across service, CLI, API, MCP direct-tool, and MCP JSON-RPC surfaces.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_run_summary_and_review_queue tests/test_service.py::test_service_review_bundle_includes_sink_pilot_status tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service tests/test_mcp.py::test_mcp_jsonl_server_lists_and_calls_tools -q` passed with 6 tests.
+- `python -m py_compile src/business_card_watchdog/service.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.

@@ -53,6 +53,8 @@ def test_cli_runs_and_jobs_use_recorded_runtime_state(
         "business-card-watchdog.review-workbook-preview-phase.v1"
     )
     assert phase_report["review_workbook_preview"]["state"] == "not_started"
+    assert phase_report["dashboard_summary"]["schema"] == "business-card-watchdog.phase-dashboard-summary.v1"
+    assert phase_report["dashboard_summary"]["blocked_phases"] == [{"phase": "review", "count": 1}]
     assert phase_report["phases"][2]["phase"] == "review"
     assert phase_report["phases"][2]["counts"]["blocked"] == 1
 

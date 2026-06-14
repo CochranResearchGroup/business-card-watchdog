@@ -41,6 +41,8 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
         "business-card-watchdog.review-workbook-preview-phase.v1"
     )
     assert phase_report["review_workbook_preview"]["state"] == "not_started"
+    assert phase_report["dashboard_summary"]["schema"] == "business-card-watchdog.phase-dashboard-summary.v1"
+    assert phase_report["dashboard_summary"]["blocked_phases"] == [{"phase": "review", "count": 1}]
     assert phase_report["phases"][2]["phase"] == "review"
     assert phase_report["phases"][2]["counts"]["blocked"] == 1
     assert client.get(f"/runs/{run_id}/jobs").json()[0]["job_id"] == job_id
