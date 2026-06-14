@@ -3698,6 +3698,7 @@ class BusinessCardService:
     ) -> dict[str, Any]:
         job = self.get_job(job_id, run_id=run_id)
         artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
+        source_write_pilot = self._require_write_pilot_for_readback(artifact_dir, sink=sink)
         request_path = artifact_dir / "sink_adapter_request_readback.json"
         if request_path.exists():
             adapter_request = json.loads(request_path.read_text(encoding="utf-8"))
@@ -3756,6 +3757,12 @@ class BusinessCardService:
             "request": request,
             "readback": readback_payload,
             "execution": execution,
+            "source_write_pilot": {
+                "path": str(artifact_dir / "sink_write_pilot.json"),
+                "state": source_write_pilot.get("state"),
+                "simulated": bool(source_write_pilot.get("simulated", False)),
+                "resource_id": (source_write_pilot.get("write") or {}).get("resource_id"),
+            },
         }
         pilot_path = artifact_dir / "sink_readback_pilot.json"
         pilot_path.write_text(json.dumps(pilot, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -5404,6 +5411,20 @@ class BusinessCardService:
         raise ValueError(
             "sink write pilot blocked by downstream duplicate assessment; resolve duplicate before writing"
         )
+
+    def _require_write_pilot_for_readback(self, artifact_dir: Path, *, sink: str) -> dict[str, Any]:
+        write_pilot = _read_json_file(artifact_dir / "sink_write_pilot.json")
+        if write_pilot is None:
+            raise ValueError("sink readback pilot requires sink_write_pilot.json")
+        if write_pilot.get("sink") != sink:
+            raise ValueError(
+                f"sink readback pilot requires sink_write_pilot.json for sink {sink}"
+            )
+        if write_pilot.get("state") not in {"mock_written", "live_written"}:
+            raise ValueError(
+                f"sink readback pilot requires completed write pilot, found state {write_pilot.get('state')!r}"
+            )
+        return write_pilot
 
     def _contact_spec_for_artifact_dir(self, artifact_dir: Path) -> dict[str, Any]:
         reviewed_path = artifact_dir / "reviewed_contact.json"

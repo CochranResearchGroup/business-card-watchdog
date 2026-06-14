@@ -173,6 +173,25 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_write_pilot_blocks_unresolved_downstream_duplicate tests/test_service.py::test_service_assess_downstream_duplicates_blocks_review_and_can_resolve tests/test_service.py::test_service_safe_loop_and_manual_steps_complete_simulated_pilot_chain tests/test_cli_surfaces.py::test_cli_sinks_apply_decision_writes_zero_write_artifact tests/test_api.py::test_api_sink_readback_pilot_writes_zero_write_artifact tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
 
+### Slice 0009-A12 | 2026-06-14 | Same-Sink Write-Before-Readback Gate
+
+Implemented:
+
+- `BusinessCardService.execute_sink_readback_pilot_for_job` now requires `sink_write_pilot.json` before creating readback evidence.
+- The readback pilot must target the same sink as the write pilot.
+- The source write pilot must be in `mock_written` or `live_written` state.
+- Readback pilot artifacts now include `source_write_pilot` state, simulation mode, and resource id context.
+
+Safety:
+
+- This slice adds a deterministic readback-ordering guard only.
+- It does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- The gate applies to simulated and non-simulated readback so dry-run evidence cannot imply a standalone readback path.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_readback_pilot_writes_simulated_evidence tests/test_service.py::test_service_readback_pilot_uses_injected_executor tests/test_service.py::test_service_apply_pilot_report_summarizes_write_and_readback tests/test_service.py::test_service_safe_loop_and_manual_steps_complete_simulated_pilot_chain tests/test_cli_surfaces.py::test_cli_sinks_apply_decision_writes_zero_write_artifact tests/test_api.py::test_api_sink_readback_pilot_writes_zero_write_artifact tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 7 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

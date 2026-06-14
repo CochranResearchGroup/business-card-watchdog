@@ -1266,11 +1266,30 @@ def test_service_readback_pilot_writes_simulated_evidence(tmp_path: Path) -> Non
     run_id, job_id = make_recorded_run(config)
     service = BusinessCardService(config)
     service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="write")
     service.preflight_sink_apply(job_id=job_id, run_id=run_id)
     service.decide_sink_apply(job_id=job_id, run_id=run_id, decision="approve", reviewer="tester")
     service.apply_sinks_for_job(job_id=job_id, run_id=run_id, apply=True, simulate=True)
     service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="readback")
 
+    try:
+        service.execute_sink_readback_pilot_for_job(
+            job_id=job_id,
+            run_id=run_id,
+            sink="google_contacts",
+            approved_by="tester",
+        )
+    except ValueError as exc:
+        assert "sink_write_pilot.json" in str(exc)
+    else:
+        raise AssertionError("expected readback pilot to require write pilot evidence")
+
+    service.execute_sink_write_pilot_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        approved_by="tester",
+    )
     pilot = service.execute_sink_readback_pilot_for_job(
         job_id=job_id,
         run_id=run_id,
@@ -1285,6 +1304,7 @@ def test_service_readback_pilot_writes_simulated_evidence(tmp_path: Path) -> Non
     assert pilot["pilot"]["writes_attempted"] == 0
     assert pilot["pilot"]["network_calls_made"] == 0
     assert pilot["pilot"]["readback"]["resource_id"].startswith("mock:google_contacts:")
+    assert pilot["pilot"]["source_write_pilot"]["state"] == "mock_written"
     assert any(artifact["kind"] == "sink_readback_pilot" for artifact in job["artifacts"])
 
 
@@ -1510,16 +1530,22 @@ def test_service_readback_pilot_uses_injected_executor(tmp_path: Path) -> None:
     service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="write")
     service.preflight_sink_apply(job_id=job_id, run_id=run_id)
     service.decide_sink_apply(job_id=job_id, run_id=run_id, decision="approve", reviewer="tester")
-    service.apply_sinks_for_job(job_id=job_id, run_id=run_id, apply=True)
-    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="readback")
     service.select_live_target_for_job(
         job_id=job_id,
         run_id=run_id,
         sink="google_contacts",
         operator="tester",
-        scope="readback",
+        scope="all",
         safety_confirmation="fixture contact is safe for google contacts test profile",
     )
+    service.execute_sink_write_pilot_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        approved_by="tester",
+        simulate=False,
+    )
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="readback")
 
     pilot = service.execute_sink_readback_pilot_for_job(
         job_id=job_id,
@@ -1536,6 +1562,7 @@ def test_service_readback_pilot_uses_injected_executor(tmp_path: Path) -> None:
     assert pilot["pilot"]["network_calls_made"] == 1
     assert pilot["pilot"]["writes_attempted"] == 0
     assert pilot["pilot"]["readback"]["emails"] == ["fixture@example.test"]
+    assert pilot["pilot"]["source_write_pilot"]["state"] == "live_written"
 
 
 def test_service_build_sink_adapter_request_writes_phase_artifact(tmp_path: Path) -> None:
