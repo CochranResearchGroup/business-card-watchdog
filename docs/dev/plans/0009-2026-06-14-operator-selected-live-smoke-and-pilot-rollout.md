@@ -612,6 +612,25 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_live_selection_packet_writes_no_selected_target tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval -q` passed with 2 tests.
 
+### Slice 0009-A36 | 2026-06-14 | Add Selected Target Audit Text Review
+
+Implemented:
+
+- `bcw sinks selected-target-audit` now renders a compact text review when `--json` is omitted.
+- The text review shows state, run, job, scope, sink, operator, selected-target identity, selected-target scope, safety-confirmation state, mismatches, blocked reasons, commands, and stop conditions.
+- The renderer intentionally omits raw safety-confirmation text while preserving the boolean safety gate.
+- CLI tests now cover selected-target audit text output without exposing raw JSON.
+
+Safety:
+
+- This slice improves operator review ergonomics only.
+- It does not create or modify selected targets beyond fixture audit artifacts, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It keeps the required selected-target audit gate reviewable from CLI before any operator-selected live pilot.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval -q` passed with 1 test.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

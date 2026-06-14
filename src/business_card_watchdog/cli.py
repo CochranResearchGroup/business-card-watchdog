@@ -319,6 +319,51 @@ def _render_live_selection_packet_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_selected_target_audit_text(payload: dict[str, object]) -> str:
+    selected_target = dict(payload.get("selected_target") or {})
+    blocked_reasons = payload.get("blocked_reasons") or []
+    mismatches = payload.get("mismatches") or []
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    commands = dict(payload.get("commands") or {})
+    lines = [
+        f"Selected target audit: {payload.get('state')}",
+        f"Run: {payload.get('run_id')}",
+        f"Job: {payload.get('job_id')}",
+        f"Scope: {payload.get('scope')}",
+        f"Sink: {payload.get('sink') or 'none'}",
+        f"Operator: {payload.get('operator') or 'none'}",
+        "Selected target: "
+        f"exists={payload.get('selected_target_exists', False)} "
+        f"identity={selected_target.get('selection_id') or selected_target.get('created_at') or 'none'} "
+        f"scope={selected_target.get('scope') or 'none'} "
+        f"safety_confirmed={payload.get('target_safety_confirmed', False)}",
+        f"Observed: writes={payload.get('writes_attempted', 0)} network={payload.get('network_calls_made', 0)}",
+    ]
+    if payload.get("audit_path"):
+        lines.append(f"Audit path: {payload.get('audit_path')}")
+    mismatch_rows = mismatches if isinstance(mismatches, list) else []
+    lines.append(f"Mismatches: {len(mismatch_rows)}")
+    for mismatch in mismatch_rows:
+        lines.append(f" - {mismatch}")
+    blocked_rows = blocked_reasons if isinstance(blocked_reasons, list) else []
+    lines.append(f"Blocked reasons: {len(blocked_rows)}")
+    for reason in blocked_rows:
+        lines.append(f" - {reason}")
+    for label, key in [
+        ("Lookup smoke", "lookup_smoke"),
+        ("Write pilot", "write_pilot"),
+        ("Readback pilot", "readback_pilot"),
+    ]:
+        command = commands.get(key)
+        if command:
+            lines.append(f"{label}: {command}")
+    stops = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stops)}")
+    for condition in stops:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_review_queue_text(entries: list[dict[str, object]]) -> str:
     lines = [f"Review queue: {len(entries)} jobs"]
     if not entries:
@@ -1092,6 +1137,9 @@ def main(argv: list[str] | None = None) -> int:
             )
         if args.sinks_command == "live-selection-packet" and not args.json:
             print(_render_live_selection_packet_text(payload), end="")
+            return 0
+        if args.sinks_command == "selected-target-audit" and not args.json:
+            print(_render_selected_target_audit_text(payload), end="")
             return 0
         print(json.dumps(payload, indent=2) if args.json else payload)
         return 0

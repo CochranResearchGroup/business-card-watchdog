@@ -295,6 +295,35 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
                 "--config",
                 str(config_path),
                 "sinks",
+                "selected-target-audit",
+                job_id,
+                "--run-id",
+                run_id,
+                "--scope",
+                "lookup",
+                "--no-write",
+            ]
+        )
+        == 0
+    )
+    audit_text = capsys.readouterr().out
+    assert "Selected target audit: blocked" in audit_text
+    assert f"Run: {run_id}" in audit_text
+    assert f"Job: {job_id}" in audit_text
+    assert "Scope: lookup" in audit_text
+    assert "Sink: google_contacts" in audit_text
+    assert "Operator: tester" in audit_text
+    assert "safety_confirmed=True" in audit_text
+    assert "Lookup smoke: sinks execute-lookup-smoke" in audit_text
+    assert "Stop conditions:" in audit_text
+    assert "{" not in audit_text
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "sinks",
                 "live-pilot-closeout",
                 job_id,
                 "--run-id",
