@@ -450,9 +450,13 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert live_closeout["report"]["writes_attempted"] == 0
     assert live_status["schema"] == "business-card-watchdog.live-pilot-status.v1"
     assert live_status["writes_attempted"] == 0
+    assert live_status["entries"][0]["selected_target_identity"] == selected_target["target"]["selection_id"]
+    assert live_status["entries"][0]["abandonment_identity"] is None
     assert live_handoff["schema"] == "business-card-watchdog.live-pilot-handoff.v1"
     assert live_handoff["action_counts"]["request_live_lookup_smoke"] == 1
     assert live_handoff["writes_attempted"] == 0
+    assert live_handoff["entries"][0]["selected_target_identity"] == selected_target["target"]["selection_id"]
+    assert live_handoff["entries"][0]["abandonment_identity"] is None
     assert abandonment["abandonment"]["schema"] == "business-card-watchdog.live-pilot-abandonment.v1"
     assert abandonment["abandonment"]["writes_attempted"] == 0
     assert write_pilot["pilot"]["schema"] == "business-card-watchdog.sink-write-pilot.v1"

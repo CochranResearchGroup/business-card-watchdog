@@ -446,6 +446,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval -q` passed with 1 test.
 
+### Slice 0009-A27 | 2026-06-14 | Assert Target Identity API/MCP Parity
+
+Implemented:
+
+- API live pilot status and handoff tests now assert selected-target identity propagation.
+- API live pilot status tests now assert abandonment identity propagation after live pilot abandonment.
+- MCP live pilot status and handoff tests now assert selected-target identity propagation.
+
+Safety:
+
+- This slice adds parity coverage only.
+- It does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It protects the JSON surfaces used by external operators and agents without exposing private card/contact contents.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 2 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:
