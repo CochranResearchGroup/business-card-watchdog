@@ -2163,3 +2163,21 @@ Validation:
 Remaining:
 
 - Future preview work can add richer sink-readiness warnings and spreadsheet-exported validation summaries, but the import boundary now has an operator-visible dry-run check.
+
+### Slice 0004-BP | 2026-06-13 | Spreadsheet Preview Validation Report
+
+Implemented:
+
+- Added `validation_csv` to review workbook preview responses.
+- Validation CSV rows summarize row number, status, run ID, job ID, action, errors, warnings, artifact kinds, field correction count, approved enrichment fields, duplicate decision, duplicate target identity, and duplicate reason.
+- Parse-level errors still return a CSV with an error row, so preview callers always have a spreadsheet-readable report.
+- Service, CLI, API, and MCP tests assert the CSV report is available on the preview surface.
+- Kept the preview path at `writes_attempted = 0` and `network_calls_made = 0`; applying decisions remains a separate explicit action.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_preview_review_workbook_csv_validates_without_writes tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 4 tests.
+
+Remaining:
+
+- Future preview work can add sink-readiness warnings and optional persisted validation artifacts, but the default preview remains zero-write.

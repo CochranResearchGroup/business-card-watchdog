@@ -506,6 +506,12 @@ def test_service_preview_review_workbook_csv_validates_without_writes(tmp_path: 
     assert preview["rows"][1]["status"] == "skipped"
     assert preview["rows"][2]["status"] == "error"
     assert "requires an enrichment_result artifact" in preview["rows"][2]["errors"][0]
+    validation_rows = list(csv.DictReader(StringIO(preview["validation_csv"])))
+    assert validation_rows[0]["status"] == "ready"
+    assert validation_rows[0]["job_id"] == job_id
+    assert validation_rows[1]["status"] == "skipped"
+    assert validation_rows[2]["status"] == "error"
+    assert "requires an enrichment_result artifact" in validation_rows[2]["errors"]
     assert preview["writes_attempted"] == 0
     assert preview["network_calls_made"] == 0
     assert not (config.runs_dir / run_id / "review_decisions_import.json").exists()

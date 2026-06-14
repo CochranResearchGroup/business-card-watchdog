@@ -1205,7 +1205,7 @@ class BusinessCardService:
         try:
             entries = self._review_workbook_decision_entries(csv_text)
         except ValueError as exc:
-            return {
+            payload = {
                 "schema": "business-card-watchdog.review-workbook-preview.v1",
                 "run_id": run_id,
                 "reviewer": reviewer,
@@ -1220,6 +1220,8 @@ class BusinessCardService:
                 "writes_attempted": 0,
                 "network_calls_made": 0,
             }
+            payload["validation_csv"] = self._render_review_workbook_preview_csv(payload["rows"], payload["errors"])
+            return payload
         rows: list[dict[str, Any]] = []
         jobs_by_run: dict[str, dict[str, dict[str, Any]]] = {}
         artifacts_by_run: dict[str, dict[str, set[str]]] = {}
@@ -1280,7 +1282,7 @@ class BusinessCardService:
         skipped_count = sum(1 for row in rows if row["status"] == "skipped")
         error_count = sum(1 for row in rows if row["status"] == "error")
         ready_count = sum(1 for row in rows if row["status"] == "ready")
-        return {
+        payload = {
             "schema": "business-card-watchdog.review-workbook-preview.v1",
             "run_id": run_id,
             "reviewer": reviewer,
@@ -1295,6 +1297,8 @@ class BusinessCardService:
             "writes_attempted": 0,
             "network_calls_made": 0,
         }
+        payload["validation_csv"] = self._render_review_workbook_preview_csv(payload["rows"], payload["errors"])
+        return payload
 
     def list_artifacts(self, run_id: str) -> list[dict[str, Any]]:
         artifacts_path = self.config.runs_dir / run_id / "artifacts.jsonl"
@@ -2967,8 +2971,63 @@ class BusinessCardService:
             writer.writerow(self._review_workbook_row(entry))
         return output.getvalue()
 
+    def _render_review_workbook_preview_csv(
+        self,
+        rows: list[dict[str, Any]],
+        errors: list[Any] | None = None,
+    ) -> str:
+        output = StringIO()
+        fieldnames = [
+            "row_number",
+            "status",
+            "run_id",
+            "job_id",
+            "action",
+            "errors",
+            "warnings",
+            "artifact_kinds",
+            "field_correction_count",
+            "approved_enrichment_fields",
+            "duplicate_decision",
+            "duplicate_target_identity",
+            "duplicate_reason",
+        ]
+        writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore", lineterminator="\n")
+        writer.writeheader()
+        if rows:
+            for row in rows:
+                duplicate_resolution = dict(row.get("duplicate_resolution") or {})
+                writer.writerow(
+                    {
+                        "row_number": row.get("row_number"),
+                        "status": row.get("status"),
+                        "run_id": row.get("run_id"),
+                        "job_id": row.get("job_id"),
+                        "action": row.get("action"),
+                        "errors": "; ".join(str(error) for error in row.get("errors") or []),
+                        "warnings": "; ".join(str(warning) for warning in row.get("warnings") or []),
+                        "artifact_kinds": ";".join(str(kind) for kind in row.get("artifact_kinds") or []),
+                        "field_correction_count": row.get("field_correction_count", ""),
+                        "approved_enrichment_fields": ";".join(
+                            str(field) for field in row.get("approved_enrichment_fields") or []
+                        ),
+                        "duplicate_decision": duplicate_resolution.get("decision", ""),
+                        "duplicate_target_identity": duplicate_resolution.get("target_identity", ""),
+                        "duplicate_reason": duplicate_resolution.get("reason", ""),
+                    }
+                )
+        else:
+            for error in errors or []:
+                message = error.get("message") if isinstance(error, dict) else str(error)
+                writer.writerow({"status": "error", "errors": message})
+        return output.getvalue()
+
     def _review_decisions_from_workbook_csv(self, csv_text: str) -> list[dict[str, Any]]:
-        return [dict(entry["decision"]) for entry in self._review_workbook_decision_entries(csv_text) if not entry.get("skipped")]
+        return [
+            dict(entry["decision"])
+            for entry in self._review_workbook_decision_entries(csv_text)
+            if not entry.get("skipped")
+        ]
 
     def _review_workbook_decision_entries(self, csv_text: str) -> list[dict[str, Any]]:
         reader = csv.DictReader(StringIO(csv_text))

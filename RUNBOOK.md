@@ -1492,3 +1492,18 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_preview_review_workbook_csv_validates_without_writes tests/test_service.py::test_service_apply_review_workbook_csv_uses_decision_template_json tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+
+## Turn 81 | 2026-06-13
+
+Continued Plan 0004 execution with spreadsheet-friendly review workbook preview validation.
+
+Implemented:
+
+- Review workbook preview now includes a `validation_csv` field for operator spreadsheet review.
+- Validation CSV rows include row number, status, run/job/action, errors, warnings, artifact kinds, field correction count, approved enrichment fields, and duplicate-resolution fields.
+- The same validation CSV is available through service, CLI, API, and MCP preview responses.
+- No review artifacts, job states, external calls, or live sink writes are changed by preview.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_preview_review_workbook_csv_validates_without_writes tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 4 tests.

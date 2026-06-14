@@ -74,6 +74,7 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     ).json()
     assert workbook_preview["schema"] == "business-card-watchdog.review-workbook-preview.v1"
     assert workbook_preview["ready_count"] == 1
+    assert "row_number,status,run_id,job_id,action,errors,warnings" in workbook_preview["validation_csv"]
     assert workbook_preview["writes_attempted"] == 0
     workbook_import = client.post(
         f"/runs/{run_id}/review-decisions",
