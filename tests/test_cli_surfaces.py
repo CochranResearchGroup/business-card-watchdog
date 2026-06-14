@@ -57,6 +57,13 @@ def test_cli_runs_and_jobs_use_recorded_runtime_state(
     assert phase_report["dashboard_summary"]["blocked_phases"] == [{"phase": "review", "count": 1}]
     assert phase_report["phases"][2]["phase"] == "review"
     assert phase_report["phases"][2]["counts"]["blocked"] == 1
+    assert main(["--config", str(config_path), "runs", "phase-report", run_id]) == 0
+    phase_text = capsys.readouterr().out
+    assert f"Run: {run_id}" in phase_text
+    assert "Status: 1 blocked phases; 0 explicit-required phases; review workbook preview not_started" in phase_text
+    assert "Review workbook preview: not_started" in phase_text
+    assert "Blocked phases: review=1" in phase_text
+    assert "{" not in phase_text
 
     assert main(["--config", str(config_path), "jobs", "show", job_id, "--run-id", run_id, "--json"]) == 0
     job = json.loads(capsys.readouterr().out)

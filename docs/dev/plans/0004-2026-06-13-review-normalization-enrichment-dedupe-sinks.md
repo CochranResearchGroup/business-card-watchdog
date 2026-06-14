@@ -2321,3 +2321,21 @@ Validation:
 Remaining:
 
 - Future work can decide whether the CLI non-JSON output should render this summary as text instead of printing the raw Python object.
+
+### Slice 0004-BY | 2026-06-14 | CLI Phase Report Text Summary
+
+Implemented:
+
+- Added human-readable text rendering for non-JSON `bcw runs phase-report`.
+- The text output includes run id, run state, job count, dashboard status line, review workbook preview state, and blocked/explicit/pending/complete phase groups.
+- `--json` phase-report output remains unchanged for API-style consumers.
+- Added CLI regression coverage to prevent raw Python dict output from returning for phase reports.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state -q` passed with 1 test.
+- `python -m py_compile src/business_card_watchdog/cli.py tests/test_cli_surfaces.py` passed.
+
+Remaining:
+
+- Future work can consider similar text renderers for other raw-object CLI paths if operators prefer command-line summaries over JSON.

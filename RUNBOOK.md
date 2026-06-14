@@ -1630,3 +1630,19 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_run_summary_and_review_queue tests/test_service.py::test_service_review_bundle_includes_sink_pilot_status tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service tests/test_mcp.py::test_mcp_jsonl_server_lists_and_calls_tools -q` passed with 6 tests.
 - `python -m py_compile src/business_card_watchdog/service.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+
+## Turn 90 | 2026-06-14
+
+Continued Plan 0004 execution with CLI phase-report text rendering.
+
+Implemented:
+
+- Added human-readable non-JSON output for `bcw runs phase-report`.
+- Output includes the run id, state, job count, dashboard status line, review workbook preview state, and grouped phase counts.
+- JSON output remains unchanged.
+- Added CLI regression coverage to keep phase-report text output from falling back to a raw Python dict.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state -q` passed with 1 test.
+- `python -m py_compile src/business_card_watchdog/cli.py tests/test_cli_surfaces.py` passed.

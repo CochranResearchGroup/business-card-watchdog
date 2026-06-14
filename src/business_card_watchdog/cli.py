@@ -13,6 +13,32 @@ from .service_ops import install_user_service, service_status, uninstall_user_se
 from .watcher import PollingWatcher
 
 
+def _render_phase_report_text(payload: dict[str, object]) -> str:
+    dashboard = dict(payload.get("dashboard_summary") or {})
+    preview = dict(payload.get("review_workbook_preview") or {})
+    lines = [
+        f"Run: {payload.get('run_id')}",
+        f"State: {payload.get('run_state')}",
+        f"Jobs: {payload.get('job_count')}",
+        f"Status: {dashboard.get('status_line') or 'unknown'}",
+        f"Review workbook preview: {preview.get('state') or dashboard.get('review_workbook_preview_state') or 'unknown'}",
+    ]
+    phase_groups = [
+        ("Blocked phases", dashboard.get("blocked_phases")),
+        ("Explicit-required phases", dashboard.get("explicit_required_phases")),
+        ("Pending phases", dashboard.get("pending_phases")),
+        ("Complete phases", dashboard.get("complete_phases")),
+    ]
+    for label, entries in phase_groups:
+        rows = entries if isinstance(entries, list) else []
+        if rows:
+            formatted = ", ".join(f"{row.get('phase')}={row.get('count')}" for row in rows if isinstance(row, dict))
+        else:
+            formatted = "none"
+        lines.append(f"{label}: {formatted}")
+    return "\n".join(lines) + "\n"
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="bcw")
     parser.add_argument("--config", type=Path, default=None)
@@ -310,6 +336,9 @@ def main(argv: list[str] | None = None) -> int:
             payload = service.phase_report(args.run_id)
         else:
             payload = service.get_run(args.run_id)
+        if args.runs_command == "phase-report" and not args.json:
+            print(_render_phase_report_text(payload), end="")
+            return 0
         print(json.dumps(payload, indent=2) if args.json else payload)
         return 0
 
