@@ -19,6 +19,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_service_recovery" in names
     assert "business_card_watchdog_live_target_candidates" in names
     assert "business_card_watchdog_live_readiness_audit" in names
+    assert "business_card_watchdog_live_selection_packet" in names
     assert "business_card_watchdog_runs_list" in names
     assert "business_card_watchdog_job_show" in names
     assert "business_card_watchdog_job_review" in names
@@ -106,6 +107,17 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     live_audit = call_tool(
         "business_card_watchdog_live_readiness_audit",
         {"run_id": run_id, "write": False},
+        config=config,
+    )
+    live_packet = call_tool(
+        "business_card_watchdog_live_selection_packet",
+        {
+            "job_id": job_id,
+            "run_id": run_id,
+            "sink": "google_contacts",
+            "operator": "mcp-test",
+            "write": False,
+        },
         config=config,
     )
     watch_dry_run = call_tool("business_card_watchdog_watch_dry_run", {}, config=config)
@@ -305,6 +317,9 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert live_audit["schema"] == "business-card-watchdog.live-readiness-audit.v1"
     assert live_audit["run_id"] == run_id
     assert live_audit["writes_attempted"] == 0
+    assert live_packet["schema"] == "business-card-watchdog.live-selection-packet.v1"
+    assert live_packet["approval_state"] == "pending_operator_approval"
+    assert live_packet["writes_attempted"] == 0
     assert watch_dry_run["schema"] == "business-card-watchdog.watch-dry-run-harness.v1"
     assert watch_dry_run["state"] == "passed"
     assert [entry["job_id"] for entry in reviews] == [job_id]

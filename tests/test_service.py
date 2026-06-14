@@ -149,6 +149,39 @@ def test_service_live_readiness_audit_writes_run_level_artifact(tmp_path: Path) 
     assert any(artifact["kind"] == "live_readiness_audit" for artifact in artifacts)
 
 
+def test_service_live_selection_packet_does_not_select_target(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    run_id, job_id = make_recorded_run(config)
+
+    packet = BusinessCardService(config).live_selection_packet(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        operator="tester",
+        scope="lookup",
+    )
+
+    assert packet["schema"] == "business-card-watchdog.live-selection-packet.v1"
+    assert packet["state"] == "blocked"
+    assert packet["approval_state"] == "pending_operator_approval"
+    assert packet["run_id"] == run_id
+    assert packet["job_id"] == job_id
+    assert packet["sink"] == "google_contacts"
+    assert packet["writes_attempted"] == 0
+    assert packet["network_calls_made"] == 0
+    assert "job state is needs_review" in packet["blocked_reasons"]
+    assert Path(packet["packet_path"]).exists()
+    assert not Path(packet["existing_selected_target"]["path"]).exists()
+    assert "select-live-target" in packet["commands"]["create_selected_target"]
+    artifacts = BusinessCardService(config).list_artifacts(run_id)
+    assert any(artifact["kind"] == "live_selection_packet" for artifact in artifacts)
+    assert not any(artifact["kind"] == "selected_live_target" for artifact in artifacts)
+
+
 def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, job_id = make_recorded_run(config)

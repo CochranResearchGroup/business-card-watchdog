@@ -456,6 +456,23 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_live_selection_packet",
+                "description": "Create or preview a no-network live target selection packet without approving selected_live_target.json.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "job_id": {"type": "string"},
+                        "run_id": {"type": "string"},
+                        "sink": {"type": "string", "enum": ["google_contacts", "odoo"]},
+                        "operator": {"type": "string"},
+                        "scope": {"type": "string", "enum": ["lookup", "write", "readback", "all"], "default": "lookup"},
+                        "reason": {"type": "string"},
+                        "write": {"type": "boolean", "default": True},
+                    },
+                    "required": ["job_id", "run_id", "sink", "operator"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_selected_live_target",
                 "description": "Create durable selected run/job/sink/operator approval evidence before non-simulated sink pilots.",
                 "input_schema": {
@@ -847,6 +864,16 @@ def call_tool(
             run_id=str(args["run_id"]),
             sink=str(args["sink"]),
             approved_by=str(args.get("approved_by") or "operator"),
+        )
+    if tool_name == "business_card_watchdog_live_selection_packet":
+        return service.live_selection_packet(
+            job_id=str(args["job_id"]),
+            run_id=str(args["run_id"]),
+            sink=str(args["sink"]),
+            operator=str(args["operator"]),
+            scope=str(args.get("scope") or "lookup"),
+            reason=str(args.get("reason") or ""),
+            write=bool(args.get("write", True)),
         )
     if tool_name == "business_card_watchdog_selected_live_target":
         return service.select_live_target_for_job(

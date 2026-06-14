@@ -99,6 +99,14 @@ def create_app(config_path: Path | None = None):
         sink: str
         approved_by: str = "operator"
 
+    class LiveSelectionPacketRequest(BaseModel):
+        run_id: str
+        sink: str
+        operator: str
+        scope: str = "lookup"
+        reason: str = ""
+        write: bool = True
+
     class SelectedLiveTargetRequest(BaseModel):
         run_id: str
         sink: str
@@ -442,6 +450,21 @@ def create_app(config_path: Path | None = None):
             run_id=request.run_id,
             sink=request.sink,
             approved_by=request.approved_by,
+        )
+
+    @app.post("/jobs/{job_id}/live-selection-packet")
+    def create_live_selection_packet(
+        job_id: str,
+        request: LiveSelectionPacketRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().live_selection_packet(
+            job_id=job_id,
+            run_id=request.run_id,
+            sink=request.sink,
+            operator=request.operator,
+            scope=request.scope,
+            reason=request.reason,
+            write=request.write,
         )
 
     @app.post("/jobs/{job_id}/selected-live-target")

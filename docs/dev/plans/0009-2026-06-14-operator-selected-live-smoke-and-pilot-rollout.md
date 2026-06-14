@@ -130,3 +130,31 @@ Validation:
 - `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed; index is up to date.
+
+### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
+
+Implemented:
+
+- Added `business-card-watchdog.live-selection-packet.v1`.
+- Added service `BusinessCardService.live_selection_packet`.
+- Added CLI `bcw sinks live-selection-packet`.
+- Added API `POST /jobs/{job_id}/live-selection-packet`.
+- Added MCP tool `business_card_watchdog_live_selection_packet`.
+- Selection packets compose the readiness audit, target candidate state, lookup readiness, and optional apply readiness for one proposed run/job/sink/scope.
+
+Safety:
+
+- This slice prepares operator approval evidence only.
+- It can write `live_selection_packet.json` under the selected job, but it does not create `selected_live_target.json`.
+- It records `approval_state = pending_operator_approval`, `writes_attempted = 0`, and `network_calls_made = 0`.
+- It does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_live_selection_packet_does_not_select_target tests/test_cli_surfaces.py::test_cli_live_selection_packet_writes_no_selected_target tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+- `.venv/bin/python -m pytest -q` passed with 208 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.

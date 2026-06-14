@@ -94,6 +94,7 @@ _SUPPORTED_REVIEW_ACTIONS = {
 _ROUTE_ARTIFACT_FILES = {
     "sink_lookup_plan": "sink_lookup_plan.json",
     "sink_adapter_request_lookup": "sink_adapter_request_lookup.json",
+    "live_selection_packet": "live_selection_packet.json",
     "selected_live_target": "selected_live_target.json",
     "sink_lookup_smoke_handoff": "sink_lookup_smoke_handoff.json",
     "selected_lookup_smoke": "selected_lookup_smoke.json",
@@ -4239,6 +4240,151 @@ class BusinessCardService:
                 },
             )
             payload["audit_path"] = str(audit_path)
+        return payload
+
+    def live_selection_packet(
+        self,
+        *,
+        job_id: str,
+        run_id: str,
+        sink: str,
+        operator: str,
+        scope: str = "lookup",
+        reason: str = "",
+        write: bool = True,
+    ) -> dict[str, Any]:
+        if sink not in {"google_contacts", "odoo"}:
+            raise ValueError("live selection packet requires sink google_contacts or odoo")
+        if scope not in {"lookup", "write", "readback", "all"}:
+            raise ValueError("live selection packet scope must be lookup, write, readback, or all")
+        if not operator.strip():
+            raise ValueError("live selection packet requires an operator")
+        job = self.get_job(job_id, run_id=run_id)
+        artifact_dir = (
+            Path(job["artifact_dir"])
+            if job.get("artifact_dir")
+            else self.config.runs_dir / run_id / "artifacts" / job_id
+        )
+        selected_target_path = artifact_dir / "selected_live_target.json"
+        readiness_audit = self.live_readiness_audit(run_id=run_id, sink=sink, write=False)
+        candidates_payload = dict(readiness_audit.get("live_target_candidates") or {})
+        candidates = [
+            candidate
+            for candidate in list(candidates_payload.get("candidates") or [])
+            if isinstance(candidate, dict)
+            and str(candidate.get("run_id")) == run_id
+            and str(candidate.get("job_id")) == job_id
+            and str(candidate.get("sink")) == sink
+        ]
+        candidate = dict(candidates[0]) if candidates else None
+        lookup_readiness = None
+        apply_readiness = None
+        missing_requirements: list[str] = []
+        blocked_reasons: list[str] = []
+        if candidate is None:
+            blocked_reasons.append("selected run/job/sink is not present in live target candidates")
+        elif candidate.get("state") != "ready_for_selection":
+            blocked_reasons.extend(str(reason) for reason in list(candidate.get("stop_reasons") or []))
+        if scope in {"lookup", "all"}:
+            lookup_readiness = self.live_lookup_readiness_report(job_id=job_id, run_id=run_id, sink=sink)
+            missing_requirements.extend(
+                f"lookup:{name}" for name in list(lookup_readiness.get("missing_requirements") or [])
+            )
+        if scope in {"write", "readback", "all"}:
+            apply_readiness = self.build_sink_apply_pilot_readiness_for_job(
+                job_id=job_id,
+                run_id=run_id,
+                sink=sink,
+            )["readiness"]
+            missing_requirements.extend(
+                f"apply:{name}" for name in list(apply_readiness.get("missing_requirements") or [])
+            )
+        if missing_requirements:
+            blocked_reasons.extend(missing_requirements)
+        state = "ready_for_operator_approval" if not blocked_reasons else "blocked"
+        payload = {
+            "schema": "business-card-watchdog.live-selection-packet.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "approval_state": "pending_operator_approval",
+            "reason": reason or "operator selection packet prepared without creating selected_live_target.json",
+            "run_id": run_id,
+            "job_id": job_id,
+            "sink": sink,
+            "operator": operator,
+            "scope": scope,
+            "scope_allows": {
+                "lookup": scope in {"lookup", "all"},
+                "write": scope in {"write", "all"},
+                "readback": scope in {"readback", "all"},
+            },
+            "job_state": job.get("state"),
+            "candidate": candidate,
+            "readiness": {
+                "audit_state": readiness_audit.get("state"),
+                "lookup": lookup_readiness,
+                "apply": apply_readiness,
+            },
+            "missing_requirements": missing_requirements,
+            "blocked_reasons": blocked_reasons,
+            "existing_selected_target": {
+                "path": str(selected_target_path),
+                "exists": selected_target_path.exists(),
+            },
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "commands": {
+                "create_selected_target": (
+                    f"sinks select-live-target {job_id} --run-id {run_id} --sink {sink} "
+                    f"--operator {operator} --scope {scope}"
+                    + (f" --reason {json.dumps(reason)}" if reason else "")
+                ),
+                "lookup_pilot": (
+                    f"sinks lookup-pilot {job_id} --run-id {run_id} --sink {sink} "
+                    f"--approved-by {operator} --no-simulate"
+                ),
+                "write_pilot": (
+                    f"sinks write-pilot {job_id} --run-id {run_id} --sink {sink} "
+                    f"--approved-by {operator} --no-simulate"
+                ),
+                "readback_pilot": (
+                    f"sinks readback-pilot {job_id} --run-id {run_id} --sink {sink} "
+                    f"--approved-by {operator} --no-simulate"
+                ),
+            },
+            "explicit_stop_conditions": [
+                "This packet is not selected-target approval.",
+                "Do not create selected_live_target.json unless the operator explicitly runs create_selected_target.",
+                "Do not run live lookup, live write, or live readback from this packet alone.",
+                "Do not process private SyncThing images, run public-web search, or call paid enrichment from this packet.",
+            ],
+        }
+        if write:
+            packet_path = artifact_dir / "live_selection_packet.json"
+            packet_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            ledger = RunLedger(self.config.runs_dir / run_id)
+            ledger.record_artifact(job_id=job_id, kind="live_selection_packet", path=packet_path)
+            ledger.record_event(
+                "live_selection_packet_created",
+                {
+                    "job_id": job_id,
+                    "run_id": run_id,
+                    "sink": sink,
+                    "operator": operator,
+                    "scope": scope,
+                    "packet_path": str(packet_path),
+                    "state": state,
+                    "writes_attempted": 0,
+                    "network_calls_made": 0,
+                },
+            )
+            self._mark_route_artifact_refreshed(
+                artifact_dir,
+                job_id=job_id,
+                run_id=run_id,
+                kind="live_selection_packet",
+            )
+            payload["packet_path"] = str(packet_path)
         return payload
 
     def watch_status(self) -> dict[str, Any]:

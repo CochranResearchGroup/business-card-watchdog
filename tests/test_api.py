@@ -52,6 +52,14 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert live_audit["run_id"] == run_id
     assert live_audit["network_calls_made"] == 0
     assert live_audit["writes_attempted"] == 0
+    live_packet = client.post(
+        f"/jobs/{job_id}/live-selection-packet",
+        json={"run_id": run_id, "sink": "google_contacts", "operator": "api-test", "write": False},
+    ).json()
+    assert live_packet["schema"] == "business-card-watchdog.live-selection-packet.v1"
+    assert live_packet["job_id"] == job_id
+    assert live_packet["approval_state"] == "pending_operator_approval"
+    assert live_packet["writes_attempted"] == 0
     assert client.get("/runs").json()[0]["run_id"] == run_id
     assert client.get(f"/runs/{run_id}").json()["run_id"] == run_id
     assert client.get(f"/runs/{run_id}/summary").json()["needs_review_count"] == 1
