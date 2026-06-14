@@ -90,6 +90,30 @@ def _render_run_summary_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_runtime_readiness_text(payload: dict[str, object]) -> str:
+    checks = payload.get("checks") or []
+    blocked = payload.get("blocked_checks") or []
+    warnings = payload.get("warning_checks") or []
+    config = dict(payload.get("config") or {})
+    service = dict(payload.get("service") or {})
+    watch = dict(payload.get("watch") or {})
+    lines = [
+        f"Runtime readiness: {payload.get('state')}",
+        f"Config: {config.get('config_path')} exists={config.get('config_exists')}",
+        f"Data: {config.get('data_dir')}",
+        f"Service: installed={service.get('installed')} unit={service.get('unit_path')}",
+        "Watch: "
+        f"inputs={len(watch.get('inputs') or [])} "
+        f"backlog={watch.get('backlog_count', 0)} "
+        f"unsettled={watch.get('unsettled_count', 0)} "
+        f"last_error={watch.get('last_error') or 'none'}",
+        f"Checks: total={len(checks) if isinstance(checks, list) else 0} "
+        f"blocked={len(blocked) if isinstance(blocked, list) else 0} "
+        f"warnings={len(warnings) if isinstance(warnings, list) else 0}",
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def _render_review_queue_text(entries: list[dict[str, object]]) -> str:
     lines = [f"Review queue: {len(entries)} jobs"]
     if not entries:
@@ -179,6 +203,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     doctor = sub.add_parser("doctor")
     doctor.add_argument("--json", action="store_true")
+
+    runtime_readiness = sub.add_parser("runtime-readiness")
+    runtime_readiness.add_argument("--json", action="store_true")
 
     process = sub.add_parser("process")
     process.add_argument("source")
@@ -466,6 +493,11 @@ def main(argv: list[str] | None = None) -> int:
         payload = service.doctor()
         print(json.dumps(payload, indent=2) if args.json else payload)
         return 0 if payload["ok"] else 2
+
+    if args.command == "runtime-readiness":
+        payload = service.runtime_readiness()
+        print(json.dumps(payload, indent=2) if args.json else _render_runtime_readiness_text(payload), end="")
+        return 0 if payload["state"] != "blocked" else 2
 
     if args.command == "process":
         run = service.process_source(

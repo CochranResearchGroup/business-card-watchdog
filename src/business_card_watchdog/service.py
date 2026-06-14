@@ -49,6 +49,7 @@ from .sinks import (
     check_sink_lookup_readiness,
 )
 from .skill_adapter import BusinessCardSkillAdapter
+from .service_ops import service_status
 from .watcher import PollingWatcher
 
 
@@ -3612,6 +3613,99 @@ class BusinessCardService:
         ]
         return {"ok": all(check["ok"] for check in checks), "checks": checks}
 
+    def runtime_readiness(self) -> dict[str, Any]:
+        status = self.status()
+        doctor = self.doctor()
+        service = service_status().to_dict()
+        watch_status = dict(status["watch"])
+        config_exists = self.config.config_path.exists()
+        runtime_checks = [
+            _readiness_check(
+                "config_file",
+                "ready" if config_exists else "blocked",
+                str(self.config.config_path) if config_exists else f"config file not found: {self.config.config_path}",
+            ),
+            *[
+                _readiness_check(
+                    str(check["name"]),
+                    "ready" if check["ok"] else "blocked",
+                    str(check["detail"]),
+                )
+                for check in doctor["checks"]
+                if str(check.get("name")) in {"config_parent", "data_dir", "cache_dir", "runs_dir", "watch_dir"}
+            ],
+            _readiness_check(
+                "business_card_skill",
+                "ready" if status["skill_ready"] else "blocked",
+                str(status["skill_message"]),
+            ),
+        ]
+        service_checks = [
+            _readiness_check(
+                "user_service_unit",
+                "ready" if service["installed"] else "warning",
+                str(service["unit_path"]) if service["installed"] else f"user service unit not installed: {service['unit_path']}",
+            )
+        ]
+        watch_inputs = list(watch_status.get("inputs") or [])
+        watch_error = watch_status.get("last_error")
+        watch_checks = [
+            _readiness_check(
+                "watch_inputs_configured",
+                "ready" if watch_inputs else "warning",
+                f"{len(watch_inputs)} configured watch input(s)" if watch_inputs else "no watched inputs configured",
+            ),
+            _readiness_check(
+                "watch_inputs_readable",
+                "ready" if watch_error is None else "blocked",
+                str(watch_error or "configured watched inputs are readable or no inputs are configured"),
+            ),
+            _readiness_check(
+                "watch_scan_not_truncated",
+                "warning" if watch_status.get("scan_truncated") else "ready",
+                "watch status scan was truncated"
+                if watch_status.get("scan_truncated")
+                else "watch status scan was not truncated",
+            ),
+        ]
+        checks = runtime_checks + service_checks + watch_checks
+        blocked = [check for check in checks if check["status"] == "blocked"]
+        warnings = [check for check in checks if check["status"] == "warning"]
+        state = "blocked" if blocked else "warning" if warnings else "ready"
+        return {
+            "schema": "business-card-watchdog.runtime-readiness.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "ready": state == "ready",
+            "network_calls_made": 0,
+            "writes_attempted": 0,
+            "config": {
+                "config_path": str(self.config.config_path),
+                "config_exists": config_exists,
+                "data_dir": str(self.config.data_dir),
+                "cache_dir": str(self.config.cache_dir),
+                "runs_dir": str(self.config.runs_dir),
+                "watch_dir": str(self.config.watch_dir),
+            },
+            "service": service,
+            "watch": watch_status,
+            "checks": checks,
+            "blocked_checks": blocked,
+            "warning_checks": warnings,
+            "safe_next_actions": _runtime_safe_next_actions(
+                state=state,
+                config_exists=config_exists,
+                service_installed=bool(service["installed"]),
+                watch_error=str(watch_error) if watch_error else "",
+                watch_inputs=watch_inputs,
+            ),
+            "explicit_stop_conditions": [
+                "Do not process private SyncThing images from generic continuation.",
+                "Do not run public-web search or paid API enrichment without an explicit selected run policy.",
+                "Do not run live GWS/Odollo/Odoo lookup, write, or readback without selected target approval.",
+            ],
+        }
+
     def watch_status(self) -> dict[str, Any]:
         return PollingWatcher(self.config).status().to_dict()
 
@@ -4911,3 +5005,69 @@ def _path_check(name: str, path: Path) -> dict[str, Any]:
         return {"name": name, "ok": True, "detail": str(path)}
     except OSError as exc:
         return {"name": name, "ok": False, "detail": f"{path}: {exc}"}
+
+
+def _readiness_check(name: str, status: str, detail: str) -> dict[str, Any]:
+    return {"name": name, "status": status, "detail": detail}
+
+
+def _runtime_safe_next_actions(
+    *,
+    state: str,
+    config_exists: bool,
+    service_installed: bool,
+    watch_error: str,
+    watch_inputs: list[str],
+) -> list[dict[str, Any]]:
+    actions: list[dict[str, Any]] = []
+    if not config_exists:
+        actions.append(
+            {
+                "action": "initialize_user_config",
+                "command": "init-config",
+                "reason": "runtime readiness requires a user-scoped config file",
+                "safe_to_auto_continue": True,
+                "requires_explicit_operator_action": False,
+            }
+        )
+    if not service_installed:
+        actions.append(
+            {
+                "action": "install_user_service_unit",
+                "command": "service install",
+                "reason": "watched-folder operation is not installed as a user service yet",
+                "safe_to_auto_continue": True,
+                "requires_explicit_operator_action": False,
+            }
+        )
+    if not watch_inputs:
+        actions.append(
+            {
+                "action": "configure_watch_inputs",
+                "command": "edit user config [watch].inputs",
+                "reason": "no watched inputs are configured",
+                "safe_to_auto_continue": False,
+                "requires_explicit_operator_action": True,
+            }
+        )
+    if watch_error:
+        actions.append(
+            {
+                "action": "repair_watch_input",
+                "command": "watch-status --json",
+                "reason": watch_error,
+                "safe_to_auto_continue": False,
+                "requires_explicit_operator_action": True,
+            }
+        )
+    if state != "blocked":
+        actions.append(
+            {
+                "action": "run_fixture_watch_dry_run",
+                "command": "watch --once --dry-run",
+                "reason": "runtime prerequisites are sufficient for the next fixture-backed Plan 0008 slice",
+                "safe_to_auto_continue": True,
+                "requires_explicit_operator_action": False,
+            }
+        )
+    return actions

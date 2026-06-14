@@ -30,6 +30,25 @@ def test_cli_has_mcp_stdio_command() -> None:
     assert args.command == "mcp-stdio"
 
 
+def test_cli_runtime_readiness_reports_local_runtime_state(tmp_path: Path, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+
+    assert main(["--config", str(config_path), "runtime-readiness", "--json"]) in {0, 2}
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["schema"] == "business-card-watchdog.runtime-readiness.v1"
+    assert payload["config"]["config_exists"] is True
+    assert payload["network_calls_made"] == 0
+    assert payload["writes_attempted"] == 0
+
+    assert main(["--config", str(config_path), "runtime-readiness"]) in {0, 2}
+    text = capsys.readouterr().out
+    assert "Runtime readiness:" in text
+    assert "Config:" in text
+    assert "{" not in text
+
+
 def test_cli_runs_and_jobs_use_recorded_runtime_state(
     tmp_path: Path, capsys
 ) -> None:

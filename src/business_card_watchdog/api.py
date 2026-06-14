@@ -130,6 +130,10 @@ def create_app(config_path: Path | None = None):
     def status() -> dict[str, object]:
         return service().status()
 
+    @app.get("/runtime/readiness")
+    def runtime_readiness() -> dict[str, object]:
+        return service().runtime_readiness()
+
     @app.post("/runs")
     def create_run(request: ProcessRequest) -> dict[str, object]:
         return service().process_source(

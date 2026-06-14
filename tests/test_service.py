@@ -62,6 +62,28 @@ def test_service_lists_and_shows_runs_jobs_and_artifacts(tmp_path: Path) -> None
     assert job["artifacts"][0]["kind"] == "contact_spec"
 
 
+def test_service_runtime_readiness_reports_user_scope_runtime_state(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    config_path.write_text(f'data_dir = "{data_dir}"\n[watch]\ninputs = []\n', encoding="utf-8")
+    config = AppConfig(config_path=config_path, data_dir=data_dir)
+    report = BusinessCardService(config).runtime_readiness()
+
+    assert report["schema"] == "business-card-watchdog.runtime-readiness.v1"
+    assert report["state"] in {"ready", "warning"}
+    assert report["network_calls_made"] == 0
+    assert report["writes_attempted"] == 0
+    assert report["config"]["config_exists"] is True
+    assert report["watch"]["inputs"] == []
+    checks = {check["name"]: check for check in report["checks"]}
+    assert checks["config_file"]["status"] == "ready"
+    assert checks["data_dir"]["status"] == "ready"
+    assert checks["business_card_skill"]["status"] == "ready"
+    assert checks["watch_inputs_configured"]["status"] == "warning"
+    assert any(action["action"] == "configure_watch_inputs" for action in report["safe_next_actions"])
+    assert any("Do not process private SyncThing images" in item for item in report["explicit_stop_conditions"])
+
+
 def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, job_id = make_recorded_run(config)

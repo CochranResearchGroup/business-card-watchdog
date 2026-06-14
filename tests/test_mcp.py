@@ -15,6 +15,7 @@ def test_manifest_has_process_tool() -> None:
     manifest = tool_manifest()
     names = {tool["name"] for tool in manifest["tools"]}
     assert "business_card_watchdog_process" in names
+    assert "business_card_watchdog_runtime_readiness" in names
     assert "business_card_watchdog_runs_list" in names
     assert "business_card_watchdog_job_show" in names
     assert "business_card_watchdog_job_review" in names
@@ -93,6 +94,7 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     summary = call_tool("business_card_watchdog_run_summary", {"run_id": run_id}, config=config)
     phase_report = call_tool("business_card_watchdog_phase_report", {"run_id": run_id}, config=config)
     readiness_report = call_tool("business_card_watchdog_pilot_readiness_report", {"run_id": run_id}, config=config)
+    runtime_readiness = call_tool("business_card_watchdog_runtime_readiness", {}, config=config)
     reviews = call_tool(
         "business_card_watchdog_reviews_list",
         {
@@ -266,6 +268,8 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert phase_report["phases"][2]["counts"]["blocked"] == 1
     assert readiness_report["schema"] == "business-card-watchdog.pilot-readiness-report.v1"
     assert readiness_report["blocked_job_ids"] == [job_id]
+    assert runtime_readiness["schema"] == "business-card-watchdog.runtime-readiness.v1"
+    assert runtime_readiness["network_calls_made"] == 0
     assert [entry["job_id"] for entry in reviews] == [job_id]
     assert review_bundle["schema"] == "business-card-watchdog.review-bundle.v1"
     assert review_bundle["entries"][0]["job_id"] == job_id

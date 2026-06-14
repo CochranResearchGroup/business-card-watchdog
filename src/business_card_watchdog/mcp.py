@@ -32,6 +32,11 @@ def tool_manifest() -> dict[str, object]:
                 "input_schema": {"type": "object", "properties": {}},
             },
             {
+                "name": "business_card_watchdog_runtime_readiness",
+                "description": "Report user-scope install, config, runtime directory, watcher, and service readiness without network calls.",
+                "input_schema": {"type": "object", "properties": {}},
+            },
+            {
                 "name": "business_card_watchdog_runs_list",
                 "description": "List known run records from the user-scoped run index.",
                 "input_schema": {"type": "object", "properties": {}},
@@ -585,6 +590,8 @@ def call_tool(
         )
     if tool_name == "business_card_watchdog_status":
         return service.status()
+    if tool_name == "business_card_watchdog_runtime_readiness":
+        return service.runtime_readiness()
     if tool_name == "business_card_watchdog_runs_list":
         return service.list_runs()
     if tool_name == "business_card_watchdog_run_show":

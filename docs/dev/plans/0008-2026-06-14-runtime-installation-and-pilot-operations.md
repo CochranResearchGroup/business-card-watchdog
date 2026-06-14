@@ -1,6 +1,6 @@
 # Plan 0008 | Runtime Installation And Pilot Operations
 
-State: READY
+State: IN_PROGRESS
 Product authority: `PRODUCT_SPEC.md`
 Predecessors:
 
@@ -83,4 +83,23 @@ Recommended subagent split:
 
 ## Execution Log
 
-No slices executed yet.
+### Slice 0008-A | 2026-06-14 | Runtime Readiness Report
+
+Implemented:
+
+- Added `business-card-watchdog.runtime-readiness.v1` as a zero-network, zero-private-data runtime readiness report.
+- Added service `BusinessCardService.runtime_readiness`.
+- Added CLI `bcw runtime-readiness`.
+- Added API `GET /runtime/readiness`.
+- Added MCP tool `business_card_watchdog_runtime_readiness`.
+- Report now composes config-file evidence, user-scope runtime directory writability, business-card skill readiness, user service unit status, watcher input status, blocked checks, warning checks, safe next actions, and explicit stop conditions.
+
+Safety:
+
+- This slice creates/probes user-scope runtime directories only.
+- It does not process private SyncThing images.
+- It does not run public-web search, paid enrichment, GWS, Odollo/Odoo, live lookup, live write, or live readback commands.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_runtime_readiness_reports_user_scope_runtime_state tests/test_cli_surfaces.py::test_cli_runtime_readiness_reports_local_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.

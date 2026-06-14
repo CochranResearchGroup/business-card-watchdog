@@ -2261,3 +2261,24 @@ Completed:
 Next plan:
 
 - Plan 0008 focuses on user-scope runtime readiness, watched SyncThing dry-run proof, service/watch diagnostics, durable selected-target approval records, and a read-only live smoke only after explicit operator approval.
+
+## Turn 120 | 2026-06-14
+
+Started Plan 0008 execution with Slice 0008-A.
+
+Implemented:
+
+- Added `business-card-watchdog.runtime-readiness.v1` runtime readiness reports.
+- Added `BusinessCardService.runtime_readiness`.
+- Added CLI `bcw runtime-readiness`.
+- Added API `GET /runtime/readiness`.
+- Added MCP tool `business_card_watchdog_runtime_readiness`.
+- Report includes config-file evidence, user runtime directory checks, service unit status, watcher status, blocked/warning checks, safe next actions, and explicit stop conditions.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_runtime_readiness_reports_user_scope_runtime_state tests/test_cli_surfaces.py::test_cli_runtime_readiness_reports_local_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+
+Safety:
+
+- This was local runtime readiness work only. It made no public-web search, paid enrichment, GWS, Odollo/Odoo, live lookup, live write, live readback, or private SyncThing image processing calls.
