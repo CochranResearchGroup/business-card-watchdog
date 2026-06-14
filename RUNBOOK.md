@@ -1552,3 +1552,18 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_service.py::test_service_preview_review_workbook_csv_can_persist_artifacts tests/test_service.py::test_service_preview_review_workbook_csv_validates_without_writes -q` passed with 3 tests.
+
+## Turn 85 | 2026-06-14
+
+Continued Plan 0004 execution with API and MCP validation-only aliases.
+
+Implemented:
+
+- Added API `POST /runs/{run_id}/review-workbook-validation`.
+- Added MCP tool `business_card_watchdog_review_workbook_validation`.
+- Both aliases reuse the shared workbook preview parser and return `validation_csv` without applying review decisions.
+- Optional preview artifact persistence remains explicit through `preview_write`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 3 tests.

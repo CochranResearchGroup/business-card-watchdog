@@ -169,6 +169,18 @@ def create_app(config_path: Path | None = None):
     def create_review_workbook(run_id: str, state: str = "all", write: bool = True) -> dict[str, object]:
         return service().review_workbook(run_id=run_id, state=state, write=write)
 
+    @app.post("/runs/{run_id}/review-workbook-validation")
+    def create_review_workbook_validation(
+        run_id: str,
+        request: ReviewDecisionsRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().preview_review_workbook_csv(
+            run_id=run_id,
+            reviewer=request.reviewer,
+            csv_text=request.decisions_csv,
+            write=request.preview_write,
+        )
+
     @app.post("/runs/{run_id}/review-decisions")
     def apply_review_decisions(run_id: str, request: ReviewDecisionsRequest = Body(...)) -> dict[str, object]:
         if request.decisions_csv:

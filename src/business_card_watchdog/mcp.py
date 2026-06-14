@@ -162,6 +162,20 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_review_workbook_validation",
+                "description": "Validate an edited review workbook CSV and return the spreadsheet-friendly validation CSV without applying decisions.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "reviewer": {"type": "string", "default": "operator"},
+                        "decisions_csv": {"type": "string"},
+                        "preview_write": {"type": "boolean", "default": False},
+                    },
+                    "required": ["run_id", "decisions_csv"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_job_show",
                 "description": "Show one job and its artifact records.",
                 "input_schema": {
@@ -583,6 +597,13 @@ def call_tool(
             run_id=str(args["run_id"]),
             reviewer=str(args.get("reviewer") or "operator"),
             decisions=list(args.get("decisions") or []),
+        )
+    if tool_name == "business_card_watchdog_review_workbook_validation":
+        return service.preview_review_workbook_csv(
+            run_id=str(args["run_id"]),
+            reviewer=str(args.get("reviewer") or "operator"),
+            csv_text=str(args["decisions_csv"]),
+            write=bool(args.get("preview_write", False)),
         )
     if tool_name == "business_card_watchdog_job_show":
         return service.get_job(

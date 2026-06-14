@@ -82,6 +82,14 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert "row_number,status,run_id,job_id,action,errors,warnings" in workbook_preview["validation_csv"]
     assert Path(workbook_preview["validation_csv_path"]).exists()
     assert workbook_preview["writes_attempted"] == 0
+    workbook_validation = client.post(
+        f"/runs/{run_id}/review-workbook-validation",
+        json={"reviewer": "api-workbook", "decisions_csv": workbook_csv.getvalue()},
+    ).json()
+    assert workbook_validation["schema"] == "business-card-watchdog.review-workbook-preview.v1"
+    assert workbook_validation["ready_count"] == 1
+    assert "row_number,status,run_id,job_id,action,errors,warnings" in workbook_validation["validation_csv"]
+    assert "validation_csv_path" not in workbook_validation
     workbook_import = client.post(
         f"/runs/{run_id}/review-decisions",
         json={"reviewer": "api-workbook", "decisions_csv": workbook_csv.getvalue()},

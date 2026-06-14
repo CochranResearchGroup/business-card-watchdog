@@ -2233,3 +2233,20 @@ Validation:
 Remaining:
 
 - Future work can add API/MCP aliases for validation-only export if needed, while the structured preview payload already carries `validation_csv` on those surfaces.
+
+### Slice 0004-BT | 2026-06-14 | API And MCP Validation-Only Aliases
+
+Implemented:
+
+- Added API `POST /runs/{run_id}/review-workbook-validation`.
+- Added MCP tool `business_card_watchdog_review_workbook_validation`.
+- Both surfaces call the shared review workbook preview service and return `validation_csv` without applying decisions.
+- Optional preview artifact persistence stays explicit via `preview_write`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 3 tests.
+
+Remaining:
+
+- Workbook review now has validation-only exports across CLI, API, and MCP; future work can focus on routing/run-level summary integration rather than additional validation transport aliases.
