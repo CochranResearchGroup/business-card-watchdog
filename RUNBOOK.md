@@ -2084,3 +2084,28 @@ Safety:
 
 - This was readback-only. It made no public-web search, paid enrichment, GWS, Odollo/Odoo, or live sink calls.
 - The report identifies explicit write/readback pilot readiness but does not approve or execute pilots.
+
+## Turn 113 | 2026-06-14
+
+Closed Plan 0005 with the MCP/API/CLI parity and simulated pilot-chain slice.
+
+Implemented:
+
+- Audited Plan 0005 parity for the new pilot readiness report across service, CLI, API, direct MCP, and JSONL MCP transport.
+- Added `test_service_safe_loop_and_manual_steps_complete_simulated_pilot_chain`.
+- The acceptance test proves reviewer approval, safe agent-loop progression, explicit apply approval, explicit simulated write pilot, simulated apply result, explicit readback pilot, safe pilot-report generation, and final pilot readiness `complete` state.
+- Marked `docs/dev/plans/0005-2026-06-13-review-routing-normalization-enrichment-dedupe.md` complete.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_safe_loop_and_manual_steps_complete_simulated_pilot_chain -q` passed with 1 test.
+- `.venv/bin/python -m pytest -q` passed with 187 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed and reported the index is up to date.
+
+Safety:
+
+- This was fixture-backed validation only. It made no public-web search, paid enrichment, GWS, Odollo/Odoo, or live sink calls.

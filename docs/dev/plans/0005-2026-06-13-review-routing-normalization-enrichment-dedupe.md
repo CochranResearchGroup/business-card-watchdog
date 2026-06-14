@@ -1,6 +1,6 @@
 # Plan 0005 | Review, Routing, Normalization, Enrichment, And Dedupe Hardening
 
-State: IN_PROGRESS
+State: COMPLETE
 Product authority: `PRODUCT_SPEC.md`
 Predecessor:
 
@@ -312,6 +312,44 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_run_summary_and_review_queue tests/test_service.py::test_service_review_bundle_includes_sink_pilot_status tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service tests/test_mcp.py::test_mcp_jsonl_server_lists_and_calls_tools -q` passed with 7 tests.
 - `.venv/bin/python -m pytest -q` passed with 186 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed and reported the index is up to date.
+
+### Slice 0005-H | 2026-06-14 | MCP/API/CLI Parity And Simulated Pilot Chain
+
+Implemented:
+
+- Audited the Plan 0005 service methods against CLI, API, and MCP surfaces.
+- Verified the new pilot readiness report is exposed through:
+  - CLI `bcw runs pilot-readiness <run_id>`
+  - API `GET /runs/{run_id}/pilot-readiness`
+  - MCP `business_card_watchdog_pilot_readiness_report`
+- Added an explicit service acceptance test for the full simulated pilot chain:
+  - reviewer approval
+  - safe agent-loop lookup/route/preflight prefix
+  - explicit apply decision
+  - safe apply-pilot-readiness preparation
+  - explicit simulated write pilot
+  - simulated apply result
+  - safe readback adapter request
+  - explicit simulated readback pilot
+  - safe apply-pilot report generation
+  - final pilot readiness report state `complete`
+- Confirmed the simulated chain records zero writes and zero network calls in the readiness report.
+
+Safety:
+
+- This slice is parity and fixture-backed validation work only.
+- No public-web search, paid enrichment provider, GWS, Odollo/Odoo, or live sink calls are made.
+- Agent-loop execution continues to stop before explicit review, approval, write-pilot, and readback-pilot actions.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_safe_loop_and_manual_steps_complete_simulated_pilot_chain -q` passed with 1 test.
+- `.venv/bin/python -m pytest -q` passed with 187 tests.
 - `.venv/bin/ruff check .` passed.
 - `uv build --out-dir dist` passed.
 - `gitleaks detect --source . --no-banner --redact --exit-code 1` passed.
