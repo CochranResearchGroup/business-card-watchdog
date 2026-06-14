@@ -85,6 +85,34 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed and reported the index is up to date.
 
+### Slice 0007-E | 2026-06-14 | Live Smoke Handoff
+
+Implemented:
+
+- Added `business-card-watchdog.sink-lookup-smoke-handoff.v1` for selected run/job/sink read-only live lookup smoke handoff.
+- Added service `BusinessCardService.build_sink_lookup_smoke_handoff_for_job`.
+- Added CLI `bcw sinks lookup-smoke-handoff <job-id> --run-id <run-id> --sink <sink> --approved-by <operator>`.
+- Added API `POST /jobs/{job_id}/sink-lookup-smoke-handoff`.
+- Added MCP tool `business_card_watchdog_sink_lookup_smoke_handoff`.
+- Registered `sink_lookup_smoke_handoff.json` for route-refresh staleness and review-bundle visibility.
+- Handoff payload includes readiness, selected-target commands, CLI/API/MCP next steps, artifact paths, stop conditions, and an explicit note that the handoff is not live approval.
+
+Safety:
+
+- This slice creates zero-network, zero-write handoff artifacts only.
+- No public-web search, paid enrichment provider, GWS, Odollo/Odoo, or live sink calls are made.
+- No `lookup-pilot --no-simulate` command was executed because no explicit operator-selected live target was provided in this turn.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_lookup_smoke_handoff_packages_selected_target_without_network tests/test_api.py::test_api_executes_sink_lookup_pilot_with_mocked_matches tests/test_cli_surfaces.py::test_cli_sinks_lookup_result_writes_zero_network_artifact tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+- `.venv/bin/python -m pytest -q` passed with 193 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed and reported the index is up to date.
+
 ### Slice 0007-D | 2026-06-14 | Operator Pilot Bundle
 
 Implemented:

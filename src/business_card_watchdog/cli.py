@@ -351,6 +351,12 @@ def build_parser() -> argparse.ArgumentParser:
     sinks_lookup_readiness.add_argument("--run-id", required=True)
     sinks_lookup_readiness.add_argument("--sink", choices=["google_contacts", "odoo"], required=True)
     sinks_lookup_readiness.add_argument("--json", action="store_true")
+    sinks_lookup_smoke_handoff = sinks_sub.add_parser("lookup-smoke-handoff")
+    sinks_lookup_smoke_handoff.add_argument("job_id")
+    sinks_lookup_smoke_handoff.add_argument("--run-id", required=True)
+    sinks_lookup_smoke_handoff.add_argument("--sink", choices=["google_contacts", "odoo"], required=True)
+    sinks_lookup_smoke_handoff.add_argument("--approved-by", default="operator")
+    sinks_lookup_smoke_handoff.add_argument("--json", action="store_true")
     sinks_write_pilot = sinks_sub.add_parser("write-pilot")
     sinks_write_pilot.add_argument("job_id")
     sinks_write_pilot.add_argument("--run-id", required=True)
@@ -670,6 +676,13 @@ def main(argv: list[str] | None = None) -> int:
                 job_id=args.job_id,
                 run_id=args.run_id,
                 sink=args.sink,
+            )
+        elif args.sinks_command == "lookup-smoke-handoff":
+            payload = service.build_sink_lookup_smoke_handoff_for_job(
+                job_id=args.job_id,
+                run_id=args.run_id,
+                sink=args.sink,
+                approved_by=args.approved_by,
             )
         elif args.sinks_command == "write-pilot":
             payload = service.execute_sink_write_pilot_for_job(

@@ -94,6 +94,11 @@ def create_app(config_path: Path | None = None):
         run_id: str
         sink: str
 
+    class SinkLookupSmokeHandoffRequest(BaseModel):
+        run_id: str
+        sink: str
+        approved_by: str = "operator"
+
     class SinkWritePilotRequest(BaseModel):
         run_id: str
         sink: str
@@ -390,6 +395,18 @@ def create_app(config_path: Path | None = None):
             job_id=job_id,
             run_id=request.run_id,
             sink=request.sink,
+        )
+
+    @app.post("/jobs/{job_id}/sink-lookup-smoke-handoff")
+    def create_sink_lookup_smoke_handoff(
+        job_id: str,
+        request: SinkLookupSmokeHandoffRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().build_sink_lookup_smoke_handoff_for_job(
+            job_id=job_id,
+            run_id=request.run_id,
+            sink=request.sink,
+            approved_by=request.approved_by,
         )
 
     @app.post("/jobs/{job_id}/sink-write-pilot")

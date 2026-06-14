@@ -41,6 +41,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_sink_adapter_request" in names
     assert "business_card_watchdog_sink_lookup_pilot" in names
     assert "business_card_watchdog_sink_lookup_readiness" in names
+    assert "business_card_watchdog_sink_lookup_smoke_handoff" in names
     assert "business_card_watchdog_sink_write_pilot" in names
     assert "business_card_watchdog_sink_readback_pilot" in names
     assert "business_card_watchdog_sink_lookup_result" in names
@@ -199,6 +200,16 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
         {"job_id": job_id, "run_id": run_id, "sink": "google_contacts"},
         config=config,
     )
+    lookup_handoff = call_tool(
+        "business_card_watchdog_sink_lookup_smoke_handoff",
+        {
+            "job_id": job_id,
+            "run_id": run_id,
+            "sink": "google_contacts",
+            "approved_by": "mcp-operator",
+        },
+        config=config,
+    )
     lookup_result = call_tool(
         "business_card_watchdog_sink_lookup_result",
         {
@@ -338,6 +349,8 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert lookup_pilot["pilot"]["writes_attempted"] == 0
     assert lookup_readiness["schema"] == "business-card-watchdog.live-lookup-readiness.v1"
     assert lookup_readiness["state"] == "blocked"
+    assert lookup_handoff["handoff"]["schema"] == "business-card-watchdog.sink-lookup-smoke-handoff.v1"
+    assert lookup_handoff["handoff"]["network_calls_made"] == 0
     assert lookup_result["result"]["state"] == "possible_duplicate"
     assert lookup_result["result"]["network_calls_made"] == 0
     assert downstream_duplicate["assessment"]["state"] == "strong_duplicate"

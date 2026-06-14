@@ -878,6 +878,30 @@ def test_cli_sinks_lookup_result_writes_zero_network_artifact(tmp_path: Path, ca
                 "--config",
                 str(config_path),
                 "sinks",
+                "lookup-smoke-handoff",
+                job_id,
+                "--run-id",
+                run_id,
+                "--sink",
+                "google_contacts",
+                "--approved-by",
+                "cli-operator",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    handoff = json.loads(capsys.readouterr().out)
+    assert handoff["handoff"]["schema"] == "business-card-watchdog.sink-lookup-smoke-handoff.v1"
+    assert handoff["handoff"]["writes_attempted"] == 0
+    assert handoff["handoff"]["network_calls_made"] == 0
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "sinks",
                 "lookup-pilot",
                 job_id,
                 "--run-id",

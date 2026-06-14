@@ -406,6 +406,20 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_sink_lookup_smoke_handoff",
+                "description": "Create a zero-network selected-target handoff before an explicit read-only live lookup smoke.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "job_id": {"type": "string"},
+                        "run_id": {"type": "string"},
+                        "sink": {"type": "string", "enum": ["google_contacts", "odoo"]},
+                        "approved_by": {"type": "string", "default": "operator"},
+                    },
+                    "required": ["job_id", "run_id", "sink"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_sink_write_pilot",
                 "description": "Execute an explicit one-job sink write pilot, simulated by default, with approval metadata.",
                 "input_schema": {
@@ -740,6 +754,13 @@ def call_tool(
             job_id=str(args["job_id"]),
             run_id=str(args["run_id"]),
             sink=str(args["sink"]),
+        )
+    if tool_name == "business_card_watchdog_sink_lookup_smoke_handoff":
+        return service.build_sink_lookup_smoke_handoff_for_job(
+            job_id=str(args["job_id"]),
+            run_id=str(args["run_id"]),
+            sink=str(args["sink"]),
+            approved_by=str(args.get("approved_by") or "operator"),
         )
     if tool_name == "business_card_watchdog_sink_write_pilot":
         return service.execute_sink_write_pilot_for_job(

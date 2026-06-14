@@ -435,6 +435,13 @@ def test_api_executes_sink_lookup_pilot_with_mocked_matches(tmp_path: Path) -> N
     client = TestClient(create_app(config_path))
     client.post(f"/jobs/{job_id}/sink-lookup-plan", params={"run_id": run_id})
     client.post(f"/jobs/{job_id}/sink-adapter-request", json={"run_id": run_id, "phase": "lookup"})
+    handoff = client.post(
+        f"/jobs/{job_id}/sink-lookup-smoke-handoff",
+        json={"run_id": run_id, "sink": "google_contacts", "approved_by": "api-operator"},
+    ).json()
+    assert handoff["handoff"]["schema"] == "business-card-watchdog.sink-lookup-smoke-handoff.v1"
+    assert handoff["handoff"]["writes_attempted"] == 0
+    assert handoff["handoff"]["network_calls_made"] == 0
 
     payload = client.post(
         f"/jobs/{job_id}/sink-lookup-pilot",

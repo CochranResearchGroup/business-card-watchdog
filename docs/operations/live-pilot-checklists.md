@@ -34,7 +34,15 @@ Prepare lookup artifacts:
   --run-id <run-id> \
   --sink google_contacts \
   --json
+.venv/bin/bcw sinks lookup-smoke-handoff \
+  <job-id> \
+  --run-id <run-id> \
+  --sink google_contacts \
+  --approved-by <operator> \
+  --json
 ```
+
+Use `--sink odoo` when the read-only smoke target is Odollo/Odoo. Review `sink_lookup_smoke_handoff.json` before running `lookup-pilot --no-simulate`; it is target-selection evidence, not live approval by itself.
 
 Run one explicit read-only lookup pilot:
 
@@ -71,6 +79,7 @@ For non-simulated lookup pilots, persisted execution metadata is redacted. Use t
 
 Stop conditions:
 
+- `sink_lookup_smoke_handoff.json` is missing, blocked, or names a different run/job/sink/operator.
 - Lookup returns a strong duplicate that has not been reviewed.
 - Sink readiness is blocked or references an unexpected profile/tenant.
 - The job, run, sink, or reviewer is not the intended pilot target.

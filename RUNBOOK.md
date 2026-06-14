@@ -2217,3 +2217,32 @@ Validation:
 Safety:
 
 - This was zero-network, zero-write handoff work only. It made no public-web search, paid enrichment, GWS, Odollo/Odoo, or live sink calls.
+
+## Turn 118 | 2026-06-14
+
+Continued Plan 0007 with the live lookup smoke handoff slice.
+
+Implemented:
+
+- Added `business-card-watchdog.sink-lookup-smoke-handoff.v1` for selected run/job/sink read-only live lookup smoke handoff.
+- Added service `build_sink_lookup_smoke_handoff_for_job`.
+- Added CLI `bcw sinks lookup-smoke-handoff <job-id> --run-id <run-id> --sink <sink> --approved-by <operator>`.
+- Added API `POST /jobs/{job_id}/sink-lookup-smoke-handoff`.
+- Added MCP `business_card_watchdog_sink_lookup_smoke_handoff`.
+- Registered `sink_lookup_smoke_handoff.json` for route-refresh staleness and review-bundle visibility.
+- Updated live pilot docs to require reviewing the handoff before `lookup-pilot --no-simulate`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_lookup_smoke_handoff_packages_selected_target_without_network tests/test_api.py::test_api_executes_sink_lookup_pilot_with_mocked_matches tests/test_cli_surfaces.py::test_cli_sinks_lookup_result_writes_zero_network_artifact tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+- `.venv/bin/python -m pytest -q` passed with 193 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed and reported the index is up to date.
+
+Safety:
+
+- This was zero-network, zero-write handoff work only. It made no public-web search, paid enrichment, GWS, Odollo/Odoo, or live sink calls.
+- No live lookup smoke was executed because no explicit operator-selected live target was provided in this turn.

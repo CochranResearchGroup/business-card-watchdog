@@ -1484,6 +1484,59 @@ def test_service_lookup_pilot_writes_result_and_blocks_duplicate_review(tmp_path
     assert any(event["event_type"] == "sink_lookup_pilot_executed" for event in events)
 
 
+def test_service_lookup_smoke_handoff_packages_selected_target_without_network(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+        field_corrections={"full_name": "Reviewed Fixture", "email": "fixture@example.test"},
+    )
+    service.plan_sink_lookup_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
+
+    handoff = service.build_sink_lookup_smoke_handoff_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        approved_by="tester",
+    )
+    job = service.get_job(job_id, run_id=run_id)
+    review_bundle = service.review_bundle(run_id=run_id)
+    events = [
+        json.loads(line)
+        for line in (config.runs_dir / run_id / "events.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+
+    payload = handoff["handoff"]
+    assert payload["schema"] == "business-card-watchdog.sink-lookup-smoke-handoff.v1"
+    assert payload["state"] == "blocked"
+    assert payload["sink"] == "google_contacts"
+    assert payload["approved_by"] == "tester"
+    assert payload["read_only"] is True
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert payload["readiness"]["schema"] == "business-card-watchdog.live-lookup-readiness.v1"
+    assert "live_lookup_readiness_ready" in payload["missing_requirements"]
+    assert payload["artifacts"]["sink_lookup_plan"]["exists"] is True
+    assert payload["artifacts"]["sink_adapter_request_lookup"]["exists"] is True
+    assert "--no-simulate" in payload["commands"]["live_lookup_pilot"]
+    assert payload["mcp"]["live_lookup_pilot"] == "business_card_watchdog_sink_lookup_pilot"
+    assert "not live approval" in payload["operator_note"]
+    assert Path(handoff["handoff_path"]).exists()
+    assert any(artifact["kind"] == "sink_lookup_smoke_handoff" for artifact in job["artifacts"])
+    assert "sink_lookup_smoke_handoff" in review_bundle["entries"][0]["artifact_kinds"]
+    assert any(event["event_type"] == "sink_lookup_smoke_handoff_created" for event in events)
+
+
 def test_service_lookup_pilot_uses_injected_read_only_executor(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",

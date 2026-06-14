@@ -55,6 +55,7 @@ from .watcher import PollingWatcher
 _SAFE_NEXT_ACTIONS = {
     "plan_sink_lookup",
     "prepare_sink_lookup_adapter",
+    "prepare_sink_lookup_smoke_handoff",
     "record_sink_lookup_result",
     "assess_downstream_duplicates",
     "plan_sinks",
@@ -92,6 +93,7 @@ _SUPPORTED_REVIEW_ACTIONS = {
 _ROUTE_ARTIFACT_FILES = {
     "sink_lookup_plan": "sink_lookup_plan.json",
     "sink_adapter_request_lookup": "sink_adapter_request_lookup.json",
+    "sink_lookup_smoke_handoff": "sink_lookup_smoke_handoff.json",
     "sink_lookup_pilot": "sink_lookup_pilot.json",
     "sink_lookup_result": "sink_lookup_result.json",
     "downstream_duplicate_assessment": "downstream_duplicate_assessment.json",
@@ -120,6 +122,12 @@ _ROUTE_REFRESH_STEPS = [
         "action": "prepare_sink_lookup_adapter",
         "command": "sinks adapter-request --phase lookup",
         "reason": "review changed routing-relevant contact data; refresh lookup adapter request",
+    },
+    {
+        "kind": "sink_lookup_smoke_handoff",
+        "action": "prepare_sink_lookup_smoke_handoff",
+        "command": "sinks lookup-smoke-handoff",
+        "reason": "review changed routing-relevant contact data; refresh read-only live lookup smoke handoff",
     },
     {
         "kind": "sink_lookup_pilot",
@@ -229,6 +237,7 @@ _REVIEW_BUNDLE_ARTIFACT_KINDS = {
     "duplicate_resolution",
     "sink_lookup_plan",
     "sink_adapter_request_lookup",
+    "sink_lookup_smoke_handoff",
     "sink_lookup_pilot",
     "sink_lookup_result",
     "sink_plan",
@@ -1812,6 +1821,126 @@ class BusinessCardService:
                 ),
             },
         }
+
+    def build_sink_lookup_smoke_handoff_for_job(
+        self,
+        *,
+        job_id: str,
+        run_id: str,
+        sink: str,
+        approved_by: str = "operator",
+    ) -> dict[str, Any]:
+        if sink not in {"google_contacts", "odoo"}:
+            raise ValueError("lookup smoke handoff requires sink google_contacts or odoo")
+        job = self.get_job(job_id, run_id=run_id)
+        artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
+        readiness = self.live_lookup_readiness_report(job_id=job_id, run_id=run_id, sink=sink)
+        lookup_plan_path = artifact_dir / "sink_lookup_plan.json"
+        adapter_request_path = artifact_dir / "sink_adapter_request_lookup.json"
+        lookup_pilot_path = artifact_dir / "sink_lookup_pilot.json"
+        lookup_result_path = artifact_dir / "sink_lookup_result.json"
+        downstream_assessment_path = artifact_dir / "downstream_duplicate_assessment.json"
+        state = "ready_for_live_lookup" if readiness.get("state") == "ready" else "blocked"
+        payload = {
+            "schema": "business-card-watchdog.sink-lookup-smoke-handoff.v1",
+            "state": state,
+            "status": state,
+            "reason": (
+                "selected job and sink have readiness evidence for an explicit read-only live lookup smoke"
+                if state == "ready_for_live_lookup"
+                else "read-only live lookup smoke is blocked until selected-target readiness requirements pass"
+            ),
+            "run_id": run_id,
+            "job_id": job_id,
+            "sink": sink,
+            "approved_by": approved_by,
+            "created_at": utc_now(),
+            "read_only": True,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "readiness": readiness,
+            "missing_requirements": list(readiness.get("missing_requirements") or []),
+            "artifacts": {
+                "sink_lookup_plan": {
+                    "path": str(lookup_plan_path),
+                    "exists": lookup_plan_path.exists(),
+                },
+                "sink_adapter_request_lookup": {
+                    "path": str(adapter_request_path),
+                    "exists": adapter_request_path.exists(),
+                },
+                "sink_lookup_pilot": {
+                    "path": str(lookup_pilot_path),
+                    "exists": lookup_pilot_path.exists(),
+                },
+                "sink_lookup_result": {
+                    "path": str(lookup_result_path),
+                    "exists": lookup_result_path.exists(),
+                },
+                "downstream_duplicate_assessment": {
+                    "path": str(downstream_assessment_path),
+                    "exists": downstream_assessment_path.exists(),
+                },
+            },
+            "commands": {
+                "inspect_job": f"jobs show {job_id} --run-id {run_id}",
+                "lookup_plan": f"sinks lookup-plan {job_id} --run-id {run_id}",
+                "lookup_adapter_request": f"sinks adapter-request {job_id} --run-id {run_id} --phase lookup",
+                "lookup_readiness": f"sinks lookup-readiness {job_id} --run-id {run_id} --sink {sink}",
+                "live_lookup_pilot": (
+                    f"sinks lookup-pilot {job_id} --run-id {run_id} --sink {sink} "
+                    f"--approved-by {approved_by} --no-simulate"
+                ),
+                "assess_duplicates": f"sinks assess-duplicates {job_id} --run-id {run_id}",
+                "review_bundle": f"reviews bundle --run-id {run_id} --state all",
+            },
+            "api": {
+                "readiness": f"POST /jobs/{job_id}/sink-lookup-readiness",
+                "live_lookup_pilot": f"POST /jobs/{job_id}/sink-lookup-pilot",
+                "assess_duplicates": f"POST /jobs/{job_id}/downstream-duplicate-assessment",
+            },
+            "mcp": {
+                "readiness": "business_card_watchdog_sink_lookup_readiness",
+                "live_lookup_pilot": "business_card_watchdog_sink_lookup_pilot",
+                "assess_duplicates": "business_card_watchdog_downstream_duplicate_assessment",
+            },
+            "stop_conditions": [
+                "readiness state is not ready",
+                "run, job, sink, or approver is not the explicit operator-selected target",
+                "sink readiness references an unexpected Google profile or Odollo/Odoo tenant",
+                "any command would write to a sink",
+                "lookup returns possible duplicates that have not been reviewed",
+                "raw live contact rows would be pasted into repo docs, issue trackers, or chat",
+            ],
+            "operator_note": (
+                "This handoff is not live approval. It only packages the selected target and commands; "
+                "the operator must explicitly run lookup-pilot with --no-simulate."
+            ),
+        }
+        handoff_path = artifact_dir / "sink_lookup_smoke_handoff.json"
+        handoff_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        ledger.record_artifact(job_id=job_id, kind="sink_lookup_smoke_handoff", path=handoff_path)
+        ledger.record_event(
+            "sink_lookup_smoke_handoff_created",
+            {
+                "job_id": job_id,
+                "run_id": run_id,
+                "sink": sink,
+                "approved_by": approved_by,
+                "handoff_path": str(handoff_path),
+                "state": state,
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        self._mark_route_artifact_refreshed(
+            artifact_dir,
+            job_id=job_id,
+            run_id=run_id,
+            kind="sink_lookup_smoke_handoff",
+        )
+        return {"handoff_path": str(handoff_path), "handoff": payload}
 
     def enrichment_readiness(
         self,
@@ -4602,6 +4731,9 @@ class BusinessCardService:
             return self.plan_sink_lookup_for_job(job_id=job_id, run_id=run_id)
         if action_name == "prepare_sink_lookup_adapter":
             return self.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
+        if action_name == "prepare_sink_lookup_smoke_handoff":
+            sink = self._default_sink_for_job(job_id=job_id, run_id=run_id)
+            return self.build_sink_lookup_smoke_handoff_for_job(job_id=job_id, run_id=run_id, sink=sink)
         if action_name == "record_sink_lookup_result":
             return self.record_sink_lookup_result_for_job(job_id=job_id, run_id=run_id)
         if action_name == "assess_downstream_duplicates":
