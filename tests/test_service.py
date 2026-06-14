@@ -1384,13 +1384,19 @@ def test_service_apply_pilot_report_blocks_inconsistent_write_readback(tmp_path:
     readback = json.loads(readback_path.read_text(encoding="utf-8"))
     readback["sink"] = "odoo"
     readback["source_write_pilot"]["resource_id"] = "mock:odoo:wrong"
+    readback["source_write_pilot"]["selected_target"] = {"selection_id": "stale-target"}
     readback_path.write_text(json.dumps(readback, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    write_path = config.runs_dir / run_id / "artifacts" / job_id / "sink_write_pilot.json"
+    write = json.loads(write_path.read_text(encoding="utf-8"))
+    write["selected_target"] = {"selection_id": "current-target"}
+    write_path.write_text(json.dumps(write, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     report = service.build_sink_apply_pilot_report_for_job(job_id=job_id, run_id=run_id)
 
     assert report["report"]["state"] == "incomplete"
     assert any("sink_mismatch" in error for error in report["report"]["consistency_errors"])
     assert any("source_write_resource_mismatch" in error for error in report["report"]["consistency_errors"])
+    assert any("source_write_selected_target_mismatch" in error for error in report["report"]["consistency_errors"])
 
 
 def test_service_apply_pilot_bundle_collects_selected_sink_commands_and_stops(tmp_path: Path) -> None:

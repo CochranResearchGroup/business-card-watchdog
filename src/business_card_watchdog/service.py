@@ -3802,6 +3802,7 @@ class BusinessCardService:
                 "state": source_write_pilot.get("state"),
                 "simulated": bool(source_write_pilot.get("simulated", False)),
                 "resource_id": (source_write_pilot.get("write") or {}).get("resource_id"),
+                "selected_target": source_write_pilot.get("selected_target"),
             },
         }
         pilot_path = artifact_dir / "sink_readback_pilot.json"
@@ -3956,6 +3957,16 @@ class BusinessCardService:
                 f"source_write_resource_mismatch:write={write_resource_id or 'missing'} "
                 f"source={source_resource_id or 'missing'}"
             )
+        write_selected_target = dict(write_pilot.get("selected_target") or {})
+        source_selected_target = dict(source_write.get("selected_target") or {})
+        if write_selected_target or source_selected_target:
+            write_identity = _selected_target_identity(write_selected_target)
+            source_identity = _selected_target_identity(source_selected_target)
+            if write_identity != source_identity:
+                errors.append(
+                    f"source_write_selected_target_mismatch:write={write_identity or 'missing'} "
+                    f"source={source_identity or 'missing'}"
+                )
         return errors
 
     def _selected_target_audit_context_mismatches(

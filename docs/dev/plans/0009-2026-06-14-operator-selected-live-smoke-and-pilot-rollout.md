@@ -338,6 +338,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_readback_pilot_rejects_stale_selected_target_write tests/test_service.py::test_service_readback_pilot_uses_injected_executor tests/test_service.py::test_service_select_live_target_requires_abandonment_before_replacement tests/test_service.py::test_service_live_pilot_abandonment_blocks_abandoned_selected_target tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 8 tests.
 
+### Slice 0009-A21 | 2026-06-14 | Apply Report Checks Selected Target Evidence
+
+Implemented:
+
+- Readback pilot artifacts now copy the write pilot selected-target reference into `source_write_pilot.selected_target`.
+- Apply pilot report consistency checks now compare write-pilot selected-target identity with readback source-write selected-target identity.
+- Tampered or stale write/readback evidence now leaves `sink_apply_pilot_report.json` incomplete with `source_write_selected_target_mismatch`.
+
+Safety:
+
+- This slice validates final pilot evidence only.
+- It does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It catches stale or hand-edited readback artifacts even if execution-time selected-target gates were bypassed.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_apply_pilot_report_blocks_inconsistent_write_readback tests/test_service.py::test_service_readback_pilot_uses_injected_executor tests/test_service.py::test_service_readback_pilot_rejects_stale_selected_target_write tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 7 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:
