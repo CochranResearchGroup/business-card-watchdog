@@ -214,6 +214,7 @@ _REVIEW_BUNDLE_ARTIFACT_KINDS = {
     "enrichment_result",
     "enrichment_provider_result",
     "enrichment_merge_review",
+    "enrichment_proposal_review",
     "duplicate_assessment",
     "downstream_duplicate_assessment",
     "duplicate_resolution",
@@ -1149,8 +1150,23 @@ class BusinessCardService:
                 json.dumps(merge_review, indent=2, sort_keys=True) + "\n",
                 encoding="utf-8",
             )
+            proposal_review = self._build_enrichment_proposal_review(
+                enrichment_result=enrichment_result,
+                merge_review=merge_review,
+                reviewer=reviewer,
+            )
+            proposal_review_path = artifact_dir / "enrichment_proposal_review.json"
+            proposal_review_path.write_text(
+                json.dumps(proposal_review, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
             ledger.record_artifact(job_id=job_id, kind="reviewed_contact", path=reviewed_contact_path)
             ledger.record_artifact(job_id=job_id, kind="enrichment_merge_review", path=merge_review_path)
+            ledger.record_artifact(
+                job_id=job_id,
+                kind="enrichment_proposal_review",
+                path=proposal_review_path,
+            )
             job.transition_to("ready_to_route" if merge_review["applied"] else "needs_review")
             ledger.record_job(job)
             ledger.record_event(
@@ -1161,7 +1177,9 @@ class BusinessCardService:
                     "reviewer": reviewer,
                     "approved_fields": merge_review["approved_fields"],
                     "applied_count": len(merge_review["applied"]),
+                    "rejected_count": proposal_review["rejected_count"],
                     "merge_review_path": str(merge_review_path),
+                    "proposal_review_path": str(proposal_review_path),
                 },
             )
             if merge_review["applied"]:
@@ -2961,6 +2979,49 @@ class BusinessCardService:
                 return json.loads(path.read_text(encoding="utf-8"))
         return None
 
+    def _build_enrichment_proposal_review(
+        self,
+        *,
+        enrichment_result: dict[str, Any],
+        merge_review: dict[str, Any],
+        reviewer: str,
+    ) -> dict[str, Any]:
+        applied_by_field = {
+            str(row.get("field") or ""): row
+            for row in list(merge_review.get("applied") or [])
+            if isinstance(row, dict)
+        }
+        proposals = []
+        for index, proposal in enumerate(list(enrichment_result.get("merge_proposals") or []), start=1):
+            field = str(proposal.get("field") or "")
+            accepted = field in applied_by_field
+            proposals.append(
+                {
+                    "index": index,
+                    "field": field,
+                    "value": proposal.get("value"),
+                    "source": proposal.get("source"),
+                    "requires_review": bool(proposal.get("requires_review", True)),
+                    "decision": "accepted" if accepted else "rejected",
+                    "reason": "field approved by reviewer"
+                    if accepted
+                    else "field was not approved by reviewer",
+                }
+            )
+        accepted = [proposal for proposal in proposals if proposal["decision"] == "accepted"]
+        rejected = [proposal for proposal in proposals if proposal["decision"] == "rejected"]
+        return {
+            "schema": "business-card-watchdog.enrichment-proposal-review.v1",
+            "reviewer": reviewer,
+            "source_result_schema": enrichment_result.get("schema"),
+            "source_provider": enrichment_result.get("provider"),
+            "approved_fields": list(merge_review.get("approved_fields") or []),
+            "proposal_count": len(proposals),
+            "accepted_count": len(accepted),
+            "rejected_count": len(rejected),
+            "proposals": proposals,
+        }
+
     def _artifact_bundle_entry(self, record: dict[str, Any]) -> dict[str, Any]:
         path = Path(str(record.get("path") or ""))
         entry = {
@@ -3070,6 +3131,7 @@ class BusinessCardService:
         ).get("payload") or (
             artifacts.get("enrichment_provider_result") or {}
         ).get("payload") or {}
+        proposal_review = (artifacts.get("enrichment_proposal_review") or {}).get("payload") or {}
         sink_plan = (artifacts.get("sink_plan") or {}).get("payload") or {}
         sink_lookup = (artifacts.get("sink_lookup_result") or {}).get("payload") or {}
         route_refresh = (artifacts.get("route_refresh") or {}).get("payload") or {}
@@ -3083,7 +3145,9 @@ class BusinessCardService:
         duplicate_state = str(duplicate.get("state") or "not_assessed")
         enrichment_proposals = list(enrichment.get("merge_proposals") or [])
         enrichment_state = (
-            "proposed"
+            "reviewed"
+            if proposal_review
+            else "proposed"
             if enrichment_proposals
             else "requested"
             if any(kind in artifacts for kind in ("enrichment_request", "enrichment_public_web_request", "enrichment_provider_request"))
@@ -3111,6 +3175,8 @@ class BusinessCardService:
             "duplicate_match_count": _int(duplicate.get("match_count") or len(duplicate.get("matches") or [])),
             "enrichment_state": enrichment_state,
             "enrichment_proposal_count": len(enrichment_proposals),
+            "enrichment_accepted_count": _int(proposal_review.get("accepted_count") or 0),
+            "enrichment_rejected_count": _int(proposal_review.get("rejected_count") or 0),
             "route_state": route_state,
             "planned_sinks": planned_sinks,
             "sink_lookup_state": lookup_state,
@@ -3218,6 +3284,8 @@ class BusinessCardService:
             "matrix_sink_lookup_state",
             "matrix_normalization_warning_count",
             "matrix_sink_lookup_match_count",
+            "matrix_enrichment_accepted_count",
+            "matrix_enrichment_rejected_count",
             "full_name",
             "organization",
             "title",
@@ -3479,6 +3547,8 @@ class BusinessCardService:
             "matrix_sink_lookup_state": matrix.get("sink_lookup_state"),
             "matrix_normalization_warning_count": matrix.get("normalization_warning_count"),
             "matrix_sink_lookup_match_count": matrix.get("sink_lookup_match_count"),
+            "matrix_enrichment_accepted_count": matrix.get("enrichment_accepted_count"),
+            "matrix_enrichment_rejected_count": matrix.get("enrichment_rejected_count"),
             "full_name": self._review_contact_value(contact, "full_name"),
             "organization": self._review_contact_value(contact, "organization"),
             "title": self._review_contact_value(contact, "title"),

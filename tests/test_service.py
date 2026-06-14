@@ -2182,14 +2182,22 @@ def test_service_submit_review_approves_enrichment_merge(tmp_path: Path) -> None
     artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
     candidate = build_contact_candidate({"full_name": "Ada Lovelace", "notes": "Card note"})
     (artifact_dir / "contact_candidate.json").write_text(json.dumps(candidate, indent=2), encoding="utf-8")
-    (artifact_dir / "enrichment_result.json").write_text(
+    enrichment_result_path = artifact_dir / "enrichment_result.json"
+    enrichment_result_path.write_text(
         json.dumps(
             {
                 "schema": "business-card-watchdog.enrichment-result.v1",
+                "provider": "public_web",
                 "merge_proposals": [
                     {
                         "field": "notes",
                         "value": "Public-web corroboration candidate: https://example.test/ada",
+                        "source": "public_web",
+                        "requires_review": True,
+                    },
+                    {
+                        "field": "title",
+                        "value": "Principal Engineer",
                         "source": "public_web",
                         "requires_review": True,
                     }
@@ -2198,6 +2206,11 @@ def test_service_submit_review_approves_enrichment_merge(tmp_path: Path) -> None
             indent=2,
         ),
         encoding="utf-8",
+    )
+    RunLedger(config.runs_dir / run_id).record_artifact(
+        job_id=job_id,
+        kind="enrichment_result",
+        path=enrichment_result_path,
     )
     service = BusinessCardService(config)
 
@@ -2210,7 +2223,13 @@ def test_service_submit_review_approves_enrichment_merge(tmp_path: Path) -> None
     )
     reviewed = json.loads((artifact_dir / "reviewed_contact.json").read_text(encoding="utf-8"))
     merge_review = json.loads((artifact_dir / "enrichment_merge_review.json").read_text(encoding="utf-8"))
+    proposal_review = json.loads(
+        (artifact_dir / "enrichment_proposal_review.json").read_text(encoding="utf-8")
+    )
     job = service.get_job(job_id, run_id=run_id)
+    bundle = service.review_bundle(run_id=run_id)
+    workbook = service.review_workbook(run_id=run_id, write=False)
+    workbook_rows = list(csv.DictReader(StringIO(workbook["csv"])))
     events = [
         json.loads(line)
         for line in (config.runs_dir / run_id / "events.jsonl").read_text(encoding="utf-8").splitlines()
@@ -2221,8 +2240,20 @@ def test_service_submit_review_approves_enrichment_merge(tmp_path: Path) -> None
     assert reviewed["observed"]["notes"]["source"] == "approved_enrichment"
     assert "Card note" in reviewed["flat"]["notes"]
     assert merge_review["applied"][0]["field"] == "notes"
+    assert proposal_review["schema"] == "business-card-watchdog.enrichment-proposal-review.v1"
+    assert proposal_review["accepted_count"] == 1
+    assert proposal_review["rejected_count"] == 1
+    assert proposal_review["proposals"][0]["decision"] == "accepted"
+    assert proposal_review["proposals"][1]["decision"] == "rejected"
+    assert bundle["entries"][0]["review_matrix"]["enrichment_state"] == "reviewed"
+    assert bundle["entries"][0]["review_matrix"]["enrichment_accepted_count"] == 1
+    assert bundle["entries"][0]["review_matrix"]["enrichment_rejected_count"] == 1
+    assert workbook_rows[0]["matrix_enrichment_accepted_count"] == "1"
+    assert workbook_rows[0]["matrix_enrichment_rejected_count"] == "1"
     assert any(artifact["kind"] == "enrichment_merge_review" for artifact in job["artifacts"])
+    assert any(artifact["kind"] == "enrichment_proposal_review" for artifact in job["artifacts"])
     assert any(event["event_type"] == "enrichment_merge_reviewed" for event in events)
+    assert any(event["payload"].get("rejected_count") == 1 for event in events if event["event_type"] == "enrichment_merge_reviewed")
 
 
 def test_service_submit_review_resolves_duplicate_for_routing(tmp_path: Path) -> None:

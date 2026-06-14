@@ -264,6 +264,33 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed and reported the index is up to date.
 
+### Slice 0005-F | 2026-06-14 | Enrichment Proposal Review
+
+Implemented:
+
+- Added `business-card-watchdog.enrichment-proposal-review.v1` artifacts.
+- Recorded every enrichment merge proposal as `accepted` or `rejected` during `approve_enrichment_merge`.
+- Preserved existing `enrichment_merge_review.json` behavior while adding first-class accepted/rejected proposal evidence.
+- Added accepted/rejected enrichment counts to review matrix entries.
+- Added accepted/rejected enrichment count columns to the CSV review workbook.
+- Recorded rejected proposal counts and proposal-review artifact paths in `enrichment_merge_reviewed` events.
+
+Safety:
+
+- This slice records explicit operator review decisions only.
+- No public-web search, paid enrichment provider, GWS, Odollo/Odoo, or live sink calls are made.
+- Rejected enrichment proposals remain visible as review evidence and are not merged into contacts or sink payloads.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_submit_review_approves_enrichment_merge tests/test_service.py::test_service_apply_review_workbook_csv_supports_enrichment_columns -q` passed with 2 tests.
+- `.venv/bin/python -m pytest -q` passed with 186 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed and reported the index is up to date.
+
 ## Workstreams
 
 ### WS1. Review Surface And Operator Queue

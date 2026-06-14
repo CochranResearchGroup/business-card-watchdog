@@ -2032,3 +2032,29 @@ Validation:
 Safety:
 
 - This was local helper adaptation and fixture scoring only. It made no public-web search, paid enrichment, GWS, Odollo/Odoo, or live sink calls.
+
+## Turn 111 | 2026-06-14
+
+Continued Plan 0005 execution with the enrichment proposal review slice.
+
+Implemented:
+
+- Added `business-card-watchdog.enrichment-proposal-review.v1` artifacts.
+- Recorded each enrichment merge proposal as accepted or rejected during `approve_enrichment_merge`.
+- Preserved `enrichment_merge_review.json` while adding first-class accepted/rejected proposal evidence.
+- Added accepted/rejected enrichment counts to review matrix entries and CSV review workbook columns.
+- Recorded rejected counts and proposal-review artifact paths in `enrichment_merge_reviewed` events.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_submit_review_approves_enrichment_merge tests/test_service.py::test_service_apply_review_workbook_csv_supports_enrichment_columns -q` passed with 2 tests.
+- `.venv/bin/python -m pytest -q` passed with 186 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed and reported the index is up to date.
+
+Safety:
+
+- This recorded explicit operator enrichment-review decisions only. It made no public-web search, paid enrichment, GWS, Odollo/Odoo, or live sink calls.
