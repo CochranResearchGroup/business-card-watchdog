@@ -482,6 +482,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_select_live_target_requires_abandonment_before_replacement tests/test_service.py::test_service_live_pilot_abandonment_blocks_abandoned_selected_target -q` passed with 2 tests.
 
+### Slice 0009-A29 | 2026-06-14 | Hide Stale Abandonment State After Replacement
+
+Implemented:
+
+- Live selection requirements now report abandonment reason only when the abandonment matches the current selected target.
+- Live pilot status and handoff now suppress stale abandonment state and reason after target replacement.
+- Replacement tests now prove the active replacement target is reported without the previous target's abandonment state, reason, or identity.
+
+Safety:
+
+- This slice changes report interpretation only.
+- It does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It keeps historical abandonment artifacts from appearing as current-target state after replacement.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_select_live_target_requires_abandonment_before_replacement tests/test_service.py::test_service_live_pilot_abandonment_blocks_abandoned_selected_target -q` passed with 2 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

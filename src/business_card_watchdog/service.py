@@ -4874,6 +4874,7 @@ class BusinessCardService:
                 abandonment.get("selected_target_identity") or abandonment.get("selected_target_created_at") or ""
             )
             abandonment_identity = raw_abandonment_identity if target_abandoned else ""
+            abandonment_reason = abandonment.get("reason") if target_abandoned else None
             target_safety_confirmed = bool(
                 selected_target.get("target_safety_confirmed")
                 and str(selected_target.get("target_safety_confirmation") or "").strip()
@@ -4912,7 +4913,7 @@ class BusinessCardService:
                     "selected_target_safety_confirmed": target_safety_confirmed,
                     "selected_target_abandoned": target_abandoned,
                     "abandonment_identity": abandonment_identity or None,
-                    "abandonment_reason": abandonment.get("reason"),
+                    "abandonment_reason": abandonment_reason,
                     "missing_operator_fields": missing_operator_fields,
                     "required_operator_fields": requirement_fields,
                     "commands": {
@@ -5049,6 +5050,8 @@ class BusinessCardService:
                 abandonment.get("selected_target_identity") or abandonment.get("selected_target_created_at") or ""
             )
             abandonment_identity = raw_abandonment_identity if target_abandoned else ""
+            abandonment_state = abandonment.get("state") if target_abandoned else None
+            abandonment_reason = abandonment.get("reason") if target_abandoned else None
             selected_target_audit_blockers = self._selected_target_audit_context_mismatches(
                 selected_target=selected_target,
                 selected_target_audit=selected_target_audit,
@@ -5106,9 +5109,9 @@ class BusinessCardService:
                     "closeout_state": closeout.get("state"),
                     "closeout_missing_artifacts": closeout_missing_artifacts,
                     "closeout_blockers": closeout_blockers,
-                    "abandonment_state": abandonment.get("state"),
+                    "abandonment_state": abandonment_state,
                     "abandonment_identity": abandonment_identity or None,
-                    "abandonment_reason": abandonment.get("reason"),
+                    "abandonment_reason": abandonment_reason,
                     "commands": {
                         "selection_packet": f"sinks live-selection-packet {job_id} --run-id {run_id} --sink <sink> --operator <operator> --json",
                         "select_target": (

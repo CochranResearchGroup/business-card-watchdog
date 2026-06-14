@@ -2520,10 +2520,15 @@ def test_service_select_live_target_requires_abandonment_before_replacement(tmp_
     assert requirements["entries"][0]["selected_target_identity"] == replacement["target"]["selection_id"]
     assert requirements["entries"][0]["selected_target_abandoned"] is False
     assert requirements["entries"][0]["abandonment_identity"] is None
+    assert requirements["entries"][0]["abandonment_reason"] is None
     assert status["entries"][0]["selected_target_identity"] == replacement["target"]["selection_id"]
+    assert status["entries"][0]["abandonment_state"] is None
     assert status["entries"][0]["abandonment_identity"] is None
+    assert status["entries"][0]["abandonment_reason"] is None
     assert handoff["entries"][0]["selected_target_identity"] == replacement["target"]["selection_id"]
+    assert handoff["entries"][0]["abandonment_state"] is None
     assert handoff["entries"][0]["abandonment_identity"] is None
+    assert handoff["entries"][0]["abandonment_reason"] is None
 
 
 def test_service_live_pilot_status_does_not_double_count_closeout_totals(tmp_path: Path) -> None:
