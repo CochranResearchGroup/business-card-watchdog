@@ -2321,6 +2321,11 @@ class BusinessCardService:
         pilot = dict(pilot_payload["pilot"])
         result = dict(pilot_payload["result"])
         duplicate = dict(duplicate_payload["assessment"])
+        result_redacted = bool(pilot.get("execution_redacted", False) or result.get("result_redacted", False))
+        if int(pilot.get("writes_attempted") or 0):
+            raise ValueError("selected lookup smoke reported writes attempted")
+        if not result_redacted:
+            raise ValueError("selected lookup smoke requires redacted lookup evidence")
         payload = {
             "schema": "business-card-watchdog.selected-lookup-smoke.v1",
             "state": "complete",
@@ -2339,7 +2344,7 @@ class BusinessCardService:
             "downstream_duplicate_state": duplicate.get("state"),
             "writes_attempted": int(pilot.get("writes_attempted") or 0),
             "network_calls_made": int(pilot.get("network_calls_made") or 0),
-            "result_redacted": bool(pilot.get("execution_redacted", False) or result.get("result_redacted", False)),
+            "result_redacted": result_redacted,
             "artifacts": {
                 "selected_live_target": str(artifact_dir / "selected_live_target.json"),
                 "sink_lookup_pilot": pilot_payload["pilot_path"],
@@ -3402,6 +3407,8 @@ class BusinessCardService:
                 execution = self.sink_lookup_executor(requests[0])
             else:
                 execution = execute_sink_lookup_adapter(requests[0])
+            if int(execution.get("writes_attempted") or 0):
+                raise ValueError("live sink lookup pilot reported writes attempted")
             matches = list(execution.get("matches") or [])
         pilot = build_sink_lookup_pilot(
             adapter_request=adapter_request,

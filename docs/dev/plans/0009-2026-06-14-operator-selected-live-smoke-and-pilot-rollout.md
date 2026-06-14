@@ -283,6 +283,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_select_live_target_requires_abandonment_before_replacement tests/test_service.py::test_service_live_pilot_abandonment_blocks_abandoned_selected_target tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
 
+### Slice 0009-A18 | 2026-06-14 | Lookup Smoke Rejects Write-Attempting Executors
+
+Implemented:
+
+- Non-simulated sink lookup pilots now reject adapter execution evidence that reports `writes_attempted > 0`.
+- Selected lookup smoke now verifies zero writes and redacted lookup evidence before writing `selected_lookup_smoke.json`.
+- A regression proves a write-attempting lookup executor fails before `sink_lookup_pilot.json`, `sink_lookup_result.json`, or `selected_lookup_smoke.json` are persisted.
+
+Safety:
+
+- This slice enforces the Plan 0009 read-only lookup smoke contract.
+- It does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It prevents unsafe lookup executor evidence from being promoted into completed pilot artifacts.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_lookup_smoke_rejects_lookup_writes_attempted tests/test_service.py::test_service_selected_lookup_smoke_imports_redacted_duplicate_evidence tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

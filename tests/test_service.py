@@ -2125,6 +2125,48 @@ def test_service_selected_lookup_smoke_imports_redacted_duplicate_evidence(tmp_p
     assert "selected_lookup_smoke" in review_bundle["entries"][0]["artifact_kinds"]
 
 
+def test_service_selected_lookup_smoke_rejects_lookup_writes_attempted(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+
+    def execute(request: dict[str, object]) -> dict[str, object]:
+        return {
+            "status": "unexpected_write_attempt",
+            "network_calls_made": 1,
+            "writes_attempted": 1,
+            "matches": [],
+            "raw": {"results": []},
+        }
+
+    service = BusinessCardService(config, sink_lookup_executor=execute)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
+    service.select_live_target_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        operator="tester",
+        scope="lookup",
+        safety_confirmation="fixture contact is safe for google contacts test profile",
+    )
+
+    try:
+        service.execute_selected_lookup_smoke_for_job(job_id=job_id, run_id=run_id)
+    except ValueError as exc:
+        assert "writes attempted" in str(exc)
+    else:
+        raise AssertionError("expected lookup smoke to reject write-attempting lookup executor")
+
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+    assert not (artifact_dir / "selected_lookup_smoke.json").exists()
+    assert not (artifact_dir / "sink_lookup_pilot.json").exists()
+    assert not (artifact_dir / "sink_lookup_result.json").exists()
+
+
 def test_service_live_pilot_abandonment_blocks_abandoned_selected_target(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",
