@@ -45,6 +45,14 @@ def test_cli_runs_and_jobs_use_recorded_runtime_state(
     assert main(["--config", str(config_path), "runs", "summary", run_id, "--json"]) == 0
     summary = json.loads(capsys.readouterr().out)
     assert summary["needs_review_count"] == 1
+    assert main(["--config", str(config_path), "runs", "summary", run_id]) == 0
+    summary_text = capsys.readouterr().out
+    assert f"Run: {run_id}" in summary_text
+    assert "Needs review: 1" in summary_text
+    assert "Enrichment: public_web_requests=0 paid_provider_requests=0 paid_api_calls_attempted=0" in summary_text
+    assert "Sink pilots: write=0 readback=0 reports=0 complete_reports=0" in summary_text
+    assert "Review workbook preview: has_preview=False latest_valid=None errors=0 warnings=0" in summary_text
+    assert "{" not in summary_text
 
     assert main(["--config", str(config_path), "runs", "phase-report", run_id, "--json"]) == 0
     phase_report = json.loads(capsys.readouterr().out)

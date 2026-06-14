@@ -2339,3 +2339,21 @@ Validation:
 Remaining:
 
 - Future work can consider similar text renderers for other raw-object CLI paths if operators prefer command-line summaries over JSON.
+
+### Slice 0004-BZ | 2026-06-14 | CLI Run Summary Text Summary
+
+Implemented:
+
+- Added human-readable text rendering for non-JSON `bcw runs summary`.
+- The text output includes run id, state, job count, review/routing/failure counts, enrichment budget counters, sink pilot counters, and review workbook preview validation state.
+- `--json` run summary output remains unchanged for automation.
+- Added CLI regression coverage to prevent raw Python dict output from returning for run summaries.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state -q` passed with 1 test.
+- `python -m py_compile src/business_card_watchdog/cli.py tests/test_cli_surfaces.py` passed.
+
+Remaining:
+
+- Future work can decide whether list/show/review queue CLI paths also need custom text renderers or should remain JSON-first for operator use.

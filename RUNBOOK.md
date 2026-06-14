@@ -1646,3 +1646,19 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state -q` passed with 1 test.
 - `python -m py_compile src/business_card_watchdog/cli.py tests/test_cli_surfaces.py` passed.
+
+## Turn 91 | 2026-06-14
+
+Continued Plan 0004 execution with CLI run-summary text rendering.
+
+Implemented:
+
+- Added human-readable non-JSON output for `bcw runs summary`.
+- Output includes run id, state, job count, review/routing/failure counts, enrichment budget counters, sink pilot counters, and review workbook preview validation state.
+- JSON output remains unchanged.
+- Added CLI regression coverage to keep run-summary text output from falling back to a raw Python dict.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state -q` passed with 1 test.
+- `python -m py_compile src/business_card_watchdog/cli.py tests/test_cli_surfaces.py` passed.

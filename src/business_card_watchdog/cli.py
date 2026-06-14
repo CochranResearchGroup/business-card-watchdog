@@ -39,6 +39,37 @@ def _render_phase_report_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_run_summary_text(payload: dict[str, object]) -> str:
+    enrichment_budget = dict(payload.get("enrichment_budget") or {})
+    public_web = dict(enrichment_budget.get("public_web") or {})
+    paid_provider = dict(enrichment_budget.get("paid_provider") or {})
+    sink_pilot = dict(payload.get("sink_pilot_summary") or {})
+    preview = dict(payload.get("review_workbook_preview_summary") or {})
+    lines = [
+        f"Run: {payload.get('run_id')}",
+        f"State: {payload.get('state')}",
+        f"Jobs: {payload.get('job_count')}",
+        f"Needs review: {payload.get('needs_review_count')}",
+        f"Ready to route: {payload.get('ready_to_route_count')}",
+        f"Failed: {payload.get('failed_count')}",
+        "Enrichment: "
+        f"public_web_requests={public_web.get('request_count', 0)} "
+        f"paid_provider_requests={paid_provider.get('request_count', 0)} "
+        f"paid_api_calls_attempted={paid_provider.get('paid_api_calls_attempted', 0)}",
+        "Sink pilots: "
+        f"write={sink_pilot.get('write_pilot_count', 0)} "
+        f"readback={sink_pilot.get('readback_pilot_count', 0)} "
+        f"reports={sink_pilot.get('pilot_report_count', 0)} "
+        f"complete_reports={sink_pilot.get('complete_report_count', 0)}",
+        "Review workbook preview: "
+        f"has_preview={preview.get('has_preview', False)} "
+        f"latest_valid={preview.get('latest_valid')} "
+        f"errors={preview.get('latest_error_count', 0)} "
+        f"warnings={preview.get('latest_warning_count', 0)}",
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="bcw")
     parser.add_argument("--config", type=Path, default=None)
@@ -338,6 +369,9 @@ def main(argv: list[str] | None = None) -> int:
             payload = service.get_run(args.run_id)
         if args.runs_command == "phase-report" and not args.json:
             print(_render_phase_report_text(payload), end="")
+            return 0
+        if args.runs_command == "summary" and not args.json:
+            print(_render_run_summary_text(payload), end="")
             return 0
         print(json.dumps(payload, indent=2) if args.json else payload)
         return 0
