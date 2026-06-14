@@ -1,6 +1,6 @@
 # Plan 0008 | Runtime Installation And Pilot Operations
 
-State: IN_PROGRESS
+State: COMPLETE
 Product authority: `PRODUCT_SPEC.md`
 Predecessors:
 
@@ -192,3 +192,15 @@ Safety:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_recovery_report_composes_status_and_recovery_commands tests/test_cli_surfaces.py::test_cli_service_recovery_reports_status_shape tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+
+## Completion Evidence
+
+Plan 0008 is complete as of commit `47430ac` and GitHub Actions run `27510473471`.
+
+- Runtime readiness is exposed through CLI, API, and MCP.
+- Fixture-backed watch dry-run evidence is exposed without touching configured private watch inputs.
+- Selected-target approval is represented by `business-card-watchdog.selected-live-target.v1`.
+- Non-simulated live lookup smoke remains gated by selected-target approval.
+- Service recovery commands are exposed by `business-card-watchdog.service-recovery.v1` and `bcw service recovery`.
+- Full local gate passed with `202 passed`, `ruff`, `uv build`, `gitleaks`, `git diff --check`, and `codegraph sync && codegraph status`.
+- Public upstream CI passed on `upstream/main`.
