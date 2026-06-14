@@ -2472,3 +2472,36 @@ Validation:
 Remaining:
 
 - Future training docs can add screenshots if a richer visual guide is needed.
+
+### Slice 0004-CG | 2026-06-14 | Current Completion And Residual Backlog Audit
+
+Implemented:
+
+- Added a current-state audit for Plan 0004 after the review, normalization, enrichment, dedupe, routing, sink-pilot, agent-loop, CLI, API, MCP, and operator-documentation slices.
+- Separated implemented repo-local capabilities from work that still requires explicit live operator pilots or future production hardening.
+- Confirmed that earlier "next high-level plan" items for route refresh, lookup pilots, write/readback pilot surfaces, review workflow docs, and batch readback have been superseded by later execution-log slices.
+
+Current repo-local capability baseline:
+
+- Operators can inspect batches through human-readable run, phase-report, job, review queue, review bundle, offline HTML, workbook, sample-output, and walkthrough surfaces.
+- Service/CLI/API/MCP surfaces cover review submission/import, enrichment requests and fixture/provider result intake, local and downstream duplicate assessment, route refresh, sink lookup planning, sink plans, apply preflight, apply decisions, write pilots, readback pilots, and apply-pilot reports.
+- Safe agent-loop execution remains deterministic and limited to zero-write/no-paid-call actions.
+- Paid enrichment remains disabled unless explicitly requested and approved by config plus request flags.
+- Live sink lookup/write/readback paths are explicit one-job pilot commands with simulated defaults and mocked test coverage.
+
+Residual backlog:
+
+- Run an explicit live read-only lookup smoke test for a selected GWS profile and selected Odollo tenant once local auth and a safe test card/job are selected.
+- Run at most one explicit live write/readback pilot after lookup, duplicate assessment, apply preflight, apply decision, pilot readiness, and operator target selection all pass.
+- Decide which enrichment provider key names from `~/credentials/API-keys.env` should be first-class production adapters, then add live smoke documentation without printing secret values.
+- Add screenshots only if the review workflow needs operator training material beyond the existing text walkthrough and sample output.
+- Configure a git remote before push; local commits cannot be pushed from this repo until a remote URL exists.
+
+Validation:
+
+- `git diff --check` passed.
+- `rg -n 'Slice 0004-CG|Current repo-local capability baseline|Residual backlog|git remote' docs/dev/plans/0004-2026-06-13-review-normalization-enrichment-dedupe-sinks.md` passed.
+
+Remaining:
+
+- Plan 0004 is repo-complete for offline/simulated control-plane development. Production rollout still requires explicitly selected live smoke targets and a configured git remote for push.

@@ -1647,6 +1647,21 @@ Validation:
 - `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state -q` passed with 1 test.
 - `python -m py_compile src/business_card_watchdog/cli.py tests/test_cli_surfaces.py` passed.
 
+## Turn 98 | 2026-06-14
+
+Continued Plan 0004 execution with a current completion and residual backlog audit.
+
+Implemented:
+
+- Added Slice 0004-CG to `docs/dev/plans/0004-2026-06-13-review-normalization-enrichment-dedupe-sinks.md`.
+- Documented the current repo-local capability baseline after the later review, route-refresh, enrichment, sink-pilot, CLI/API/MCP, agent-loop, and operations-documentation slices.
+- Separated remaining work into explicit live lookup/write/readback smoke pilots, paid-provider production adapter decisions, optional screenshots, and git remote configuration.
+
+Validation:
+
+- `git diff --check` passed.
+- `rg -n 'Slice 0004-CG|Current repo-local capability baseline|Residual backlog|git remote' docs/dev/plans/0004-2026-06-13-review-normalization-enrichment-dedupe-sinks.md` passed.
+
 ## Turn 95 | 2026-06-14
 
 Continued Plan 0004 execution with README CLI review-surface readback.
