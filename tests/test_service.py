@@ -1341,8 +1341,56 @@ def test_service_apply_pilot_report_summarizes_write_and_readback(tmp_path: Path
     assert report["report"]["writes_attempted"] == 0
     assert report["report"]["network_calls_made"] == 0
     assert report["report"]["missing_artifacts"] == []
+    assert report["report"]["consistency_errors"] == []
     assert report["report"]["sinks"][0]["readback_matched"] is True
     assert any(artifact["kind"] == "sink_apply_pilot_report" for artifact in job["artifacts"])
+
+
+def test_service_apply_pilot_report_blocks_inconsistent_write_readback(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, odoo=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts", "odoo"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+        field_corrections={"full_name": "Reviewed Fixture", "email": "fixture@example.test"},
+    )
+    service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="write")
+    service.preflight_sink_apply(job_id=job_id, run_id=run_id)
+    service.decide_sink_apply(job_id=job_id, run_id=run_id, decision="approve", reviewer="tester")
+    service.build_sink_apply_pilot_readiness_for_job(job_id=job_id, run_id=run_id, sink="google_contacts")
+    service.execute_sink_write_pilot_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        approved_by="tester",
+    )
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="readback")
+    service.execute_sink_readback_pilot_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        approved_by="tester",
+    )
+    readback_path = config.runs_dir / run_id / "artifacts" / job_id / "sink_readback_pilot.json"
+    readback = json.loads(readback_path.read_text(encoding="utf-8"))
+    readback["sink"] = "odoo"
+    readback["source_write_pilot"]["resource_id"] = "mock:odoo:wrong"
+    readback_path.write_text(json.dumps(readback, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    report = service.build_sink_apply_pilot_report_for_job(job_id=job_id, run_id=run_id)
+
+    assert report["report"]["state"] == "incomplete"
+    assert any("sink_mismatch" in error for error in report["report"]["consistency_errors"])
+    assert any("source_write_resource_mismatch" in error for error in report["report"]["consistency_errors"])
 
 
 def test_service_apply_pilot_bundle_collects_selected_sink_commands_and_stops(tmp_path: Path) -> None:

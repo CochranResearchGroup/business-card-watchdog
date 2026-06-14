@@ -192,6 +192,25 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_readback_pilot_writes_simulated_evidence tests/test_service.py::test_service_readback_pilot_uses_injected_executor tests/test_service.py::test_service_apply_pilot_report_summarizes_write_and_readback tests/test_service.py::test_service_safe_loop_and_manual_steps_complete_simulated_pilot_chain tests/test_cli_surfaces.py::test_cli_sinks_apply_decision_writes_zero_write_artifact tests/test_api.py::test_api_sink_readback_pilot_writes_zero_write_artifact tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 7 tests.
 
+### Slice 0009-A13 | 2026-06-14 | Apply Pilot Evidence Consistency Gate
+
+Implemented:
+
+- `BusinessCardService.build_sink_apply_pilot_report_for_job` now checks write/readback evidence consistency before reporting completion.
+- The report is incomplete when write and readback pilot artifacts name different sinks.
+- The report is incomplete when readback evidence is missing `source_write_pilot` context or that context disagrees with the write-pilot state/resource id.
+- Apply pilot reports now include `consistency_errors` for review and remediation.
+
+Safety:
+
+- This slice validates final evidence only.
+- It does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It catches stale or hand-edited artifacts that bypassed earlier execution-time gates.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_apply_pilot_report_summarizes_write_and_readback tests/test_service.py::test_service_apply_pilot_report_blocks_inconsistent_write_readback tests/test_service.py::test_service_readback_pilot_writes_simulated_evidence tests/test_service.py::test_service_safe_loop_and_manual_steps_complete_simulated_pilot_chain tests/test_cli_surfaces.py::test_cli_sinks_apply_decision_writes_zero_write_artifact tests/test_api.py::test_api_sink_readback_pilot_writes_zero_write_artifact tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 7 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

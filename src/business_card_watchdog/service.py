@@ -3829,7 +3829,11 @@ class BusinessCardService:
         ]
         readback_verified = bool(readback_pilot and readback_pilot.get("state") == "verified")
         write_present = bool(write_pilot)
-        state = "complete" if write_present and readback_verified and not missing else "incomplete"
+        consistency_errors = self._apply_pilot_report_consistency_errors(
+            write_pilot=write_pilot,
+            readback_pilot=readback_pilot,
+        )
+        state = "complete" if write_present and readback_verified and not missing and not consistency_errors else "incomplete"
         writes_attempted = int((write_pilot or {}).get("writes_attempted") or 0)
         network_calls_made = int((write_pilot or {}).get("network_calls_made") or 0) + int(
             (readback_pilot or {}).get("network_calls_made") or 0
@@ -3841,13 +3845,14 @@ class BusinessCardService:
             "reason": (
                 "write pilot and readback pilot evidence are present"
                 if state == "complete"
-                else "apply pilot report is missing one or more required artifacts"
+                else "apply pilot report is missing required artifacts or has inconsistent evidence"
             ),
             "job_id": job_id,
             "run_id": run_id,
             "writes_attempted": writes_attempted,
             "network_calls_made": network_calls_made,
             "missing_artifacts": missing,
+            "consistency_errors": consistency_errors,
             "readiness_state": (readiness or {}).get("state", "missing"),
             "apply_result_state": (apply_result or {}).get("state", "missing"),
             "readback_request_state": (readback_request or {}).get("state", "missing"),
@@ -3882,6 +3887,36 @@ class BusinessCardService:
             kind="sink_apply_pilot_report",
         )
         return {"report_path": str(report_path), "report": payload}
+
+    def _apply_pilot_report_consistency_errors(
+        self,
+        *,
+        write_pilot: dict[str, Any] | None,
+        readback_pilot: dict[str, Any] | None,
+    ) -> list[str]:
+        if not write_pilot or not readback_pilot:
+            return []
+        errors: list[str] = []
+        write_sink = str(write_pilot.get("sink") or "")
+        readback_sink = str(readback_pilot.get("sink") or "")
+        if write_sink != readback_sink:
+            errors.append(f"sink_mismatch:write={write_sink or 'missing'} readback={readback_sink or 'missing'}")
+        source_write = readback_pilot.get("source_write_pilot")
+        if not isinstance(source_write, dict):
+            errors.append("readback_source_write_pilot=missing")
+            return errors
+        write_state = str(write_pilot.get("state") or "")
+        source_state = str(source_write.get("state") or "")
+        if source_state != write_state:
+            errors.append(f"source_write_state_mismatch:write={write_state or 'missing'} source={source_state or 'missing'}")
+        write_resource_id = str((write_pilot.get("write") or {}).get("resource_id") or "")
+        source_resource_id = str(source_write.get("resource_id") or "")
+        if write_resource_id != source_resource_id:
+            errors.append(
+                f"source_write_resource_mismatch:write={write_resource_id or 'missing'} "
+                f"source={source_resource_id or 'missing'}"
+            )
+        return errors
 
     def build_live_pilot_closeout_for_job(self, *, job_id: str, run_id: str, write: bool = True) -> dict[str, Any]:
         job = self.get_job(job_id, run_id=run_id)
