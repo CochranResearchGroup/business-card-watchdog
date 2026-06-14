@@ -6,6 +6,7 @@ from html import escape
 from io import StringIO
 from pathlib import Path
 from typing import Any, Callable
+from uuid import uuid4
 
 from .config import AppConfig, WatchConfig, ensure_runtime_dirs
 from .contact import (
@@ -67,6 +68,10 @@ _SAFE_NEXT_ACTIONS = {
     "prepare_sink_readback_adapter",
     "prepare_sink_apply_pilot_report",
 }
+
+
+def _selected_target_identity(payload: dict[str, Any]) -> str:
+    return str(payload.get("selection_id") or payload.get("created_at") or "")
 
 _EXPLICIT_OPERATOR_ACTIONS = {
     "decide_sink_apply",
@@ -1976,7 +1981,8 @@ class BusinessCardService:
         existing_abandoned = (
             existing_target is not None
             and abandonment.get("state") == "abandoned"
-            and abandonment.get("selected_target_created_at") == existing_target.get("created_at")
+            and str(abandonment.get("selected_target_identity") or abandonment.get("selected_target_created_at") or "")
+            == _selected_target_identity(existing_target)
         )
         if existing_target is not None and not existing_abandoned:
             raise ValueError("selected live target already exists; abandon it before selecting a replacement")
@@ -2010,6 +2016,7 @@ class BusinessCardService:
             "operator": operator,
             "approved_by": operator,
             "scope": scope,
+            "selection_id": str(uuid4()),
             "target_safety_confirmed": True,
             "target_safety_confirmation": safety_confirmation,
             "scope_allows": {
@@ -2243,6 +2250,7 @@ class BusinessCardService:
             "reason": reason,
             "selected_target_path": str(target_path),
             "selected_target_created_at": selected_target.get("created_at"),
+            "selected_target_identity": _selected_target_identity(selected_target),
             "selected_target_operator": selected_target.get("operator") or selected_target.get("approved_by"),
             "selected_target": selected_target,
             "writes_attempted": 0,
@@ -2263,7 +2271,7 @@ class BusinessCardService:
             "explicit_stop_conditions": [
                 "This abandonment artifact does not delete selected_live_target.json.",
                 "Do not run live lookup, live write, or live readback for the abandoned selected target.",
-                "A later selected_live_target.json with a different created_at is required before another non-simulated live command.",
+                "A later selected_live_target.json with a different selection identity is required before another non-simulated live command.",
                 "Do not process private SyncThing images, run public-web search, or call paid enrichment from this abandonment artifact.",
             ],
         }
@@ -3563,6 +3571,7 @@ class BusinessCardService:
             raise ValueError(f"sink write pilot request not found for sink: {sink}")
         request = requests[0]
         execution = None
+        selected_target_ref = None
         if simulate:
             write = {
                 "sink": sink,
@@ -3574,7 +3583,7 @@ class BusinessCardService:
             writes_attempted = 0
             status = "mock_write_completed"
         else:
-            self._require_selected_live_target(
+            selected_target = self._require_selected_live_target(
                 artifact_dir=artifact_dir,
                 job_id=job_id,
                 run_id=run_id,
@@ -3582,6 +3591,15 @@ class BusinessCardService:
                 approved_by=approved_by,
                 scope="write",
             )
+            selected_target_ref = {
+                "selection_id": selected_target.get("selection_id"),
+                "created_at": selected_target.get("created_at"),
+                "run_id": selected_target.get("run_id"),
+                "job_id": selected_target.get("job_id"),
+                "sink": selected_target.get("sink"),
+                "operator": selected_target.get("operator") or selected_target.get("approved_by"),
+                "scope": selected_target.get("scope"),
+            }
             if self.sink_write_executor is None:
                 readiness_path = artifact_dir / "sink_apply_pilot_readiness.json"
                 readiness = (
@@ -3622,6 +3640,7 @@ class BusinessCardService:
             "request": request,
             "write": write,
             "execution": execution,
+            "selected_target": selected_target_ref,
         }
         pilot_path = artifact_dir / "sink_write_pilot.json"
         pilot_path.write_text(json.dumps(pilot, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -3742,7 +3761,7 @@ class BusinessCardService:
             network_calls_made = 0
             status = "mock_readback_verified" if readback_payload.get("matched") else "mock_readback_missing"
         else:
-            self._require_selected_live_target(
+            selected_target = self._require_selected_live_target(
                 artifact_dir=artifact_dir,
                 job_id=job_id,
                 run_id=run_id,
@@ -3750,6 +3769,9 @@ class BusinessCardService:
                 approved_by=approved_by,
                 scope="readback",
             )
+            source_selected_target = dict(source_write_pilot.get("selected_target") or {})
+            if _selected_target_identity(source_selected_target) != _selected_target_identity(selected_target):
+                raise ValueError("sink readback pilot requires write pilot from current selected live target")
             if self.sink_readback_executor is not None:
                 execution = self.sink_readback_executor(request)
             else:
@@ -4801,7 +4823,8 @@ class BusinessCardService:
             target_abandoned = (
                 selected_target_exists
                 and abandonment.get("state") == "abandoned"
-                and abandonment.get("selected_target_created_at") == selected_target.get("created_at")
+                and str(abandonment.get("selected_target_identity") or abandonment.get("selected_target_created_at") or "")
+                == _selected_target_identity(selected_target)
             )
             target_safety_confirmed = bool(
                 selected_target.get("target_safety_confirmed")
@@ -4967,7 +4990,8 @@ class BusinessCardService:
             target_abandoned = (
                 artifacts["selected_live_target"] is not None
                 and abandonment.get("state") == "abandoned"
-                and abandonment.get("selected_target_created_at") == selected_target.get("created_at")
+                and str(abandonment.get("selected_target_identity") or abandonment.get("selected_target_created_at") or "")
+                == _selected_target_identity(selected_target)
             )
             selected_target_audit_blockers = self._selected_target_audit_context_mismatches(
                 selected_target=selected_target,
@@ -5490,7 +5514,8 @@ class BusinessCardService:
         abandonment = _read_json_file(artifact_dir / "live_pilot_abandonment.json") or {}
         if (
             abandonment.get("state") == "abandoned"
-            and abandonment.get("selected_target_created_at") == target.get("created_at")
+            and str(abandonment.get("selected_target_identity") or abandonment.get("selected_target_created_at") or "")
+            == _selected_target_identity(target)
         ):
             raise ValueError("non-simulated sink pilot selected target was abandoned")
         mismatches = []

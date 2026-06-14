@@ -319,6 +319,25 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_readback_pilot_rejects_executor_writes_attempted tests/test_service.py::test_service_readback_pilot_uses_injected_executor tests/test_service.py::test_service_readback_pilot_writes_simulated_evidence tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 7 tests.
 
+### Slice 0009-A20 | 2026-06-14 | Readback Requires Current Selected Target Write
+
+Implemented:
+
+- Selected live target artifacts now include a durable `selection_id`.
+- Live write pilot artifacts now record the selected-target identity that authorized the write.
+- Non-simulated readback pilots now reject stale write evidence if the write pilot was authorized by a different selected-target identity than the current selected target.
+- Abandonment, requirements, status, and non-simulated selected-target gates now match selected targets by identity with `created_at` fallback for older artifacts.
+
+Safety:
+
+- This slice validates selected-target/write/readback evidence only.
+- It does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It prevents a write from an abandoned target from being reused as readback evidence for a replacement target.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_readback_pilot_rejects_stale_selected_target_write tests/test_service.py::test_service_readback_pilot_uses_injected_executor tests/test_service.py::test_service_select_live_target_requires_abandonment_before_replacement tests/test_service.py::test_service_live_pilot_abandonment_blocks_abandoned_selected_target tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 8 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

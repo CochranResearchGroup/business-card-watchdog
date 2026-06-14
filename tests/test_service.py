@@ -1611,6 +1611,9 @@ def test_service_readback_pilot_uses_injected_executor(tmp_path: Path) -> None:
     assert pilot["pilot"]["writes_attempted"] == 0
     assert pilot["pilot"]["readback"]["emails"] == ["fixture@example.test"]
     assert pilot["pilot"]["source_write_pilot"]["state"] == "live_written"
+    write_pilot_path = config.runs_dir / run_id / "artifacts" / job_id / "sink_write_pilot.json"
+    write_pilot = json.loads(write_pilot_path.read_text(encoding="utf-8"))
+    assert write_pilot["selected_target"]["selection_id"]
 
 
 def test_service_readback_pilot_rejects_executor_writes_attempted(tmp_path: Path) -> None:
@@ -1674,6 +1677,89 @@ def test_service_readback_pilot_rejects_executor_writes_attempted(tmp_path: Path
     else:
         raise AssertionError("expected readback pilot to reject write-attempting readback executor")
 
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+    assert not (artifact_dir / "sink_readback_pilot.json").exists()
+
+
+def test_service_readback_pilot_rejects_stale_selected_target_write(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    readback_calls: list[dict[str, object]] = []
+
+    def write(request: dict[str, object]) -> dict[str, object]:
+        return {
+            "sink": "google_contacts",
+            "network_calls_made": 1,
+            "writes_attempted": 1,
+            "write": {"resource_id": "people/live123", "serialization_key": request.get("serialization_key")},
+        }
+
+    def readback(request: dict[str, object]) -> dict[str, object]:
+        readback_calls.append(request)
+        return {
+            "sink": "google_contacts",
+            "status": "live_readback_completed",
+            "network_calls_made": 1,
+            "writes_attempted": 0,
+            "readback": {"resource_id": "people/live123", "matched": True},
+        }
+
+    service = BusinessCardService(config, sink_write_executor=write, sink_readback_executor=readback)
+    service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="write")
+    service.preflight_sink_apply(job_id=job_id, run_id=run_id)
+    service.decide_sink_apply(job_id=job_id, run_id=run_id, decision="approve", reviewer="tester")
+    first_target = service.select_live_target_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        operator="tester",
+        scope="all",
+        safety_confirmation="fixture contact is safe for google contacts test profile",
+    )
+    service.execute_sink_write_pilot_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        approved_by="tester",
+        simulate=False,
+    )
+    service.live_pilot_abandon_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        operator="tester",
+        reason="replace target before readback",
+    )
+    replacement_target = service.select_live_target_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        operator="tester",
+        scope="all",
+        safety_confirmation="fixture contact is safe for google contacts test profile",
+    )
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="readback")
+
+    try:
+        service.execute_sink_readback_pilot_for_job(
+            job_id=job_id,
+            run_id=run_id,
+            sink="google_contacts",
+            approved_by="tester",
+            simulate=False,
+        )
+    except ValueError as exc:
+        assert "current selected live target" in str(exc)
+    else:
+        raise AssertionError("expected stale selected target write evidence to block readback")
+
+    assert first_target["target"]["selection_id"] != replacement_target["target"]["selection_id"]
+    assert readback_calls == []
     artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
     assert not (artifact_dir / "sink_readback_pilot.json").exists()
 
