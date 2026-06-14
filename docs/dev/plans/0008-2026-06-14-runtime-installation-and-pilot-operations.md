@@ -171,3 +171,24 @@ Safety:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_lookup_smoke_imports_redacted_duplicate_evidence tests/test_api.py::test_api_executes_sink_lookup_pilot_with_mocked_matches tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_selected_lookup_smoke_uses_selected_target -q` passed with 4 tests.
+
+### Slice 0008-E | 2026-06-14 | Service Recovery Runbook
+
+Implemented:
+
+- Added `business-card-watchdog.service-recovery.v1`.
+- Added service `BusinessCardService.service_recovery_report`.
+- Added CLI `bcw service recovery`.
+- Added API `GET /service/recovery`.
+- Added MCP tool `business_card_watchdog_service_recovery`.
+- The recovery report composes runtime readiness, service unit status, watcher status, latest run state, phase/pilot readiness, deterministic next actions, blocked reasons, copy-paste install/start/status/restart/resume/recover commands, and explicit stop conditions.
+
+Safety:
+
+- This slice is report-only.
+- It does not run `systemctl`, scan configured SyncThing inputs, process private images, execute safe next actions, run public-web search, call paid enrichment, or call GWS/Odollo/Odoo.
+- Recovery guidance stops at deterministic zero-network/zero-write resume unless operator action or selected-target approval exists.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_recovery_report_composes_status_and_recovery_commands tests/test_cli_surfaces.py::test_cli_service_recovery_reports_status_shape tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.

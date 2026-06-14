@@ -37,6 +37,14 @@ def tool_manifest() -> dict[str, object]:
                 "input_schema": {"type": "object", "properties": {}},
             },
             {
+                "name": "business_card_watchdog_service_recovery",
+                "description": "Report install/start/status/restart/resume/recover commands and recovery stop conditions without executing them.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"run_id": {"type": "string"}},
+                },
+            },
+            {
                 "name": "business_card_watchdog_runs_list",
                 "description": "List known run records from the user-scoped run index.",
                 "input_schema": {"type": "object", "properties": {}},
@@ -625,6 +633,10 @@ def call_tool(
         return service.status()
     if tool_name == "business_card_watchdog_runtime_readiness":
         return service.runtime_readiness()
+    if tool_name == "business_card_watchdog_service_recovery":
+        return service.service_recovery_report(
+            run_id=str(args["run_id"]) if args.get("run_id") else None,
+        )
     if tool_name == "business_card_watchdog_runs_list":
         return service.list_runs()
     if tool_name == "business_card_watchdog_run_show":

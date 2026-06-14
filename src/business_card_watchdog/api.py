@@ -144,6 +144,10 @@ def create_app(config_path: Path | None = None):
     def runtime_readiness() -> dict[str, object]:
         return service().runtime_readiness()
 
+    @app.get("/service/recovery")
+    def service_recovery(run_id: str | None = None) -> dict[str, object]:
+        return service().service_recovery_report(run_id=run_id)
+
     @app.post("/runs")
     def create_run(request: ProcessRequest) -> dict[str, object]:
         return service().process_source(

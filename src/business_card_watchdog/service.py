@@ -3932,6 +3932,153 @@ class BusinessCardService:
             ],
         }
 
+    def service_recovery_report(self, *, run_id: str | None = None) -> dict[str, Any]:
+        readiness = self.runtime_readiness()
+        service = dict(readiness["service"])
+        watch = dict(readiness["watch"])
+        runs = self.list_runs()
+        selected_run_id = run_id or (str(runs[0]["run_id"]) if runs else None)
+        run_summary: dict[str, Any] | None = None
+        phase_report: dict[str, Any] | None = None
+        pilot_readiness: dict[str, Any] | None = None
+        next_actions: dict[str, Any] | None = None
+        if selected_run_id:
+            run_summary = self.run_summary(selected_run_id)
+            phase_report = self.phase_report(selected_run_id)
+            pilot_readiness = self.pilot_readiness_report(selected_run_id)
+            next_actions = self.next_actions(run_id=selected_run_id, limit=20)
+
+        command_prefix = f"bcw --config {self.config.config_path} "
+        service_name = str(service.get("service_name") or "business-card-watchdog.service")
+        commands = {
+            "install": f"{command_prefix}service install --json",
+            "start": f"systemctl --user start {service_name}",
+            "status": f"{command_prefix}service status --json",
+            "runtime_status": f"{command_prefix}runtime-readiness --json",
+            "watch_status": f"{command_prefix}watch-status --json",
+            "restart": f"systemctl --user restart {service_name}",
+            "resume": f"{command_prefix}actions run-next --run-id {selected_run_id} --limit 10 --json"
+            if selected_run_id
+            else f"{command_prefix}runs list --json",
+            "recover": f"{command_prefix}service recovery --run-id {selected_run_id} --json"
+            if selected_run_id
+            else f"{command_prefix}service recovery --json",
+        }
+        blocked_reasons: list[dict[str, Any]] = []
+        if readiness["state"] == "blocked":
+            blocked_reasons.extend(
+                {
+                    "source": "runtime_readiness",
+                    "name": str(check.get("name") or "unknown"),
+                    "detail": str(check.get("detail") or ""),
+                }
+                for check in readiness.get("blocked_checks", [])
+                if isinstance(check, dict)
+            )
+        if watch.get("last_error"):
+            blocked_reasons.append(
+                {
+                    "source": "watch",
+                    "name": "watch_inputs",
+                    "detail": str(watch["last_error"]),
+                }
+            )
+        explicit_action_count = 0
+        safe_action_count = 0
+        if pilot_readiness:
+            counts = dict(pilot_readiness.get("counts") or {})
+            explicit_action_count = int(counts.get("explicit_operator_required") or 0)
+            safe_action_count = int(counts.get("safe_auto_available") or 0)
+        if blocked_reasons:
+            state = "blocked"
+        elif explicit_action_count:
+            state = "operator_required"
+        elif safe_action_count:
+            state = "safe_resume_available"
+        elif readiness["state"] == "warning":
+            state = "warning"
+        else:
+            state = "ready"
+        safe_next_actions = [
+            {
+                "action": "inspect_runtime_readiness",
+                "command": commands["runtime_status"],
+                "reason": "confirm config, runtime paths, watcher, and service readiness before recovery",
+                "safe_to_auto_continue": True,
+                "requires_explicit_operator_action": False,
+            },
+            {
+                "action": "inspect_watch_status",
+                "command": commands["watch_status"],
+                "reason": "confirm watched inputs, backlog, unsettled files, and last watcher error",
+                "safe_to_auto_continue": True,
+                "requires_explicit_operator_action": False,
+            },
+        ]
+        if selected_run_id and safe_action_count:
+            safe_next_actions.append(
+                {
+                    "action": "resume_safe_next_actions",
+                    "command": commands["resume"],
+                    "reason": "run has deterministic zero-network/zero-write actions available",
+                    "safe_to_auto_continue": True,
+                    "requires_explicit_operator_action": False,
+                }
+            )
+        return {
+            "schema": "business-card-watchdog.service-recovery.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": selected_run_id,
+            "network_calls_made": 0,
+            "writes_attempted": 0,
+            "service": service,
+            "runtime_readiness": readiness,
+            "watch": watch,
+            "latest_runs": runs[:5],
+            "run_summary": run_summary,
+            "phase_dashboard_summary": (phase_report or {}).get("dashboard_summary") if phase_report else None,
+            "pilot_readiness": pilot_readiness,
+            "next_actions": (next_actions or {}).get("actions", []) if next_actions else [],
+            "blocked_reasons": blocked_reasons,
+            "commands": commands,
+            "safe_next_actions": safe_next_actions,
+            "explicit_operator_actions": [
+                action
+                for action in ((next_actions or {}).get("actions", []) if next_actions else [])
+                if action.get("requires_explicit_operator_action")
+                or action.get("action") in _EXPLICIT_OPERATOR_ACTIONS
+            ],
+            "recovery_sequence": [
+                {
+                    "step": "status",
+                    "command": commands["runtime_status"],
+                    "purpose": "confirm user-scope config, runtime directories, service unit, and watched inputs",
+                },
+                {
+                    "step": "restart",
+                    "command": commands["restart"],
+                    "purpose": "restart the user-scoped watched-folder daemon if it is installed but stale",
+                },
+                {
+                    "step": "resume",
+                    "command": commands["resume"],
+                    "purpose": "resume only deterministic zero-network/zero-write actions for the selected run",
+                },
+                {
+                    "step": "recover",
+                    "command": commands["recover"],
+                    "purpose": "re-read recovery state after any restart, config repair, or safe resume",
+                },
+            ],
+            "explicit_stop_conditions": [
+                "Do not scan or process private SyncThing images from generic recovery.",
+                "Do not run public-web search or paid enrichment from recovery.",
+                "Do not execute live GWS/Odollo/Odoo lookup, write, or readback without selected-target approval.",
+                "Stop when next actions require review, duplicate resolution, selected target approval, live lookup, live write, or readback.",
+            ],
+        }
+
     def watch_status(self) -> dict[str, Any]:
         return PollingWatcher(self.config).status().to_dict()
 

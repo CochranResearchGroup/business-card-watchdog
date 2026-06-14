@@ -2347,3 +2347,24 @@ Validation:
 Safety:
 
 - This was execution-surface and injected-adapter proof only. It made no real GWS/Odollo/Odoo lookup, write, readback, public-web search, or paid enrichment calls.
+
+## Turn 124 | 2026-06-14
+
+Continued Plan 0008 with Slice 0008-E.
+
+Implemented:
+
+- Added `business-card-watchdog.service-recovery.v1`.
+- Added `BusinessCardService.service_recovery_report`.
+- Added CLI `bcw service recovery`.
+- Added API `GET /service/recovery`.
+- Added MCP tool `business_card_watchdog_service_recovery`.
+- Recovery reports now compose runtime readiness, service status, watcher status, latest run state, phase/pilot readiness, deterministic next actions, blocked reasons, copy-paste install/start/status/restart/resume/recover commands, and explicit stop conditions.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_recovery_report_composes_status_and_recovery_commands tests/test_cli_surfaces.py::test_cli_service_recovery_reports_status_shape tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+
+Safety:
+
+- This was report-only recovery guidance. It did not run `systemctl`, scan configured SyncThing inputs, process private images, execute safe next actions, run public-web search, call paid enrichment, or call GWS/Odollo/Odoo.

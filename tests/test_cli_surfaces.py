@@ -49,6 +49,29 @@ def test_cli_runtime_readiness_reports_local_runtime_state(tmp_path: Path, capsy
     assert "{" not in text
 
 
+def test_cli_service_recovery_reports_status_shape(tmp_path: Path, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+    run_id, _job_id = make_recorded_run(AppConfig(config_path=config_path, data_dir=data_dir))
+
+    assert main(["--config", str(config_path), "service", "recovery", "--run-id", run_id, "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["schema"] == "business-card-watchdog.service-recovery.v1"
+    assert payload["run_id"] == run_id
+    assert payload["commands"]["status"].startswith(f"bcw --config {config_path} service status")
+    assert payload["network_calls_made"] == 0
+    assert payload["writes_attempted"] == 0
+
+    assert main(["--config", str(config_path), "service", "recovery", "--run-id", run_id]) == 0
+    text = capsys.readouterr().out
+    assert "Service recovery:" in text
+    assert f"Run: {run_id}" in text
+    assert "Restart: systemctl --user restart business-card-watchdog.service" in text
+    assert "Resume: bcw --config" in text
+    assert "{" not in text
+
+
 def test_cli_runs_and_jobs_use_recorded_runtime_state(
     tmp_path: Path, capsys
 ) -> None:

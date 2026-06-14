@@ -84,6 +84,24 @@ def test_service_runtime_readiness_reports_user_scope_runtime_state(tmp_path: Pa
     assert any("Do not process private SyncThing images" in item for item in report["explicit_stop_conditions"])
 
 
+def test_service_recovery_report_composes_status_and_recovery_commands(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    run_id, _job_id = make_recorded_run(config)
+
+    report = BusinessCardService(config).service_recovery_report(run_id=run_id)
+
+    assert report["schema"] == "business-card-watchdog.service-recovery.v1"
+    assert report["run_id"] == run_id
+    assert report["network_calls_made"] == 0
+    assert report["writes_attempted"] == 0
+    assert report["commands"]["install"].startswith(f"bcw --config {config.config_path} service install")
+    assert report["commands"]["restart"] == "systemctl --user restart business-card-watchdog.service"
+    assert f"actions run-next --run-id {run_id}" in report["commands"]["resume"]
+    assert report["recovery_sequence"][0]["step"] == "status"
+    assert any(action["action"] == "inspect_watch_status" for action in report["safe_next_actions"])
+    assert "Do not scan or process private SyncThing images from generic recovery." in report["explicit_stop_conditions"]
+
+
 def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, job_id = make_recorded_run(config)

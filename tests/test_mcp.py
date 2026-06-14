@@ -16,6 +16,7 @@ def test_manifest_has_process_tool() -> None:
     names = {tool["name"] for tool in manifest["tools"]}
     assert "business_card_watchdog_process" in names
     assert "business_card_watchdog_runtime_readiness" in names
+    assert "business_card_watchdog_service_recovery" in names
     assert "business_card_watchdog_runs_list" in names
     assert "business_card_watchdog_job_show" in names
     assert "business_card_watchdog_job_review" in names
@@ -98,6 +99,7 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     phase_report = call_tool("business_card_watchdog_phase_report", {"run_id": run_id}, config=config)
     readiness_report = call_tool("business_card_watchdog_pilot_readiness_report", {"run_id": run_id}, config=config)
     runtime_readiness = call_tool("business_card_watchdog_runtime_readiness", {}, config=config)
+    service_recovery = call_tool("business_card_watchdog_service_recovery", {"run_id": run_id}, config=config)
     watch_dry_run = call_tool("business_card_watchdog_watch_dry_run", {}, config=config)
     reviews = call_tool(
         "business_card_watchdog_reviews_list",
@@ -285,6 +287,10 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert readiness_report["blocked_job_ids"] == [job_id]
     assert runtime_readiness["schema"] == "business-card-watchdog.runtime-readiness.v1"
     assert runtime_readiness["network_calls_made"] == 0
+    assert service_recovery["schema"] == "business-card-watchdog.service-recovery.v1"
+    assert service_recovery["run_id"] == run_id
+    assert service_recovery["commands"]["restart"] == "systemctl --user restart business-card-watchdog.service"
+    assert service_recovery["writes_attempted"] == 0
     assert watch_dry_run["schema"] == "business-card-watchdog.watch-dry-run-harness.v1"
     assert watch_dry_run["state"] == "passed"
     assert [entry["job_id"] for entry in reviews] == [job_id]

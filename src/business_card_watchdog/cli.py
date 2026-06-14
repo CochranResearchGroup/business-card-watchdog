@@ -114,6 +114,29 @@ def _render_runtime_readiness_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_service_recovery_text(payload: dict[str, object]) -> str:
+    commands = dict(payload.get("commands") or {})
+    blocked = payload.get("blocked_reasons") or []
+    safe_actions = payload.get("safe_next_actions") or []
+    explicit_actions = payload.get("explicit_operator_actions") or []
+    lines = [
+        f"Service recovery: {payload.get('state')}",
+        f"Run: {payload.get('run_id') or 'none'}",
+        f"Service installed: {dict(payload.get('service') or {}).get('installed')}",
+        f"Watch last error: {dict(payload.get('watch') or {}).get('last_error') or 'none'}",
+        f"Blocked reasons: {len(blocked) if isinstance(blocked, list) else 0}",
+        f"Safe next actions: {len(safe_actions) if isinstance(safe_actions, list) else 0}",
+        f"Explicit operator actions: {len(explicit_actions) if isinstance(explicit_actions, list) else 0}",
+        f"Install: {commands.get('install')}",
+        f"Start: {commands.get('start')}",
+        f"Status: {commands.get('status')}",
+        f"Restart: {commands.get('restart')}",
+        f"Resume: {commands.get('resume')}",
+        f"Recover: {commands.get('recover')}",
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def _render_review_queue_text(entries: list[dict[str, object]]) -> str:
     lines = [f"Review queue: {len(entries)} jobs"]
     if not entries:
@@ -480,6 +503,9 @@ def build_parser() -> argparse.ArgumentParser:
     service_install.add_argument("--json", action="store_true")
     service_uninstall = service_sub.add_parser("uninstall")
     service_uninstall.add_argument("--json", action="store_true")
+    service_recovery = service_sub.add_parser("recovery")
+    service_recovery.add_argument("--run-id", default=None)
+    service_recovery.add_argument("--json", action="store_true")
 
     sub.add_parser("mcp-manifest")
     sub.add_parser("mcp-stdio")
@@ -855,9 +881,14 @@ def main(argv: list[str] | None = None) -> int:
             payload = install_user_service(config).to_dict()
         elif args.service_command == "uninstall":
             payload = uninstall_user_service().to_dict()
+        elif args.service_command == "recovery":
+            payload = service.service_recovery_report(run_id=args.run_id)
         else:
             payload = service_status().to_dict()
-        print(json.dumps(payload, indent=2) if args.json else payload)
+        if args.service_command == "recovery" and not args.json:
+            print(_render_service_recovery_text(payload), end="")
+        else:
+            print(json.dumps(payload, indent=2) if args.json else payload)
         return 0
 
     if args.command == "mcp-manifest":
