@@ -1,6 +1,6 @@
 # Plan 0005 | Review, Routing, Normalization, Enrichment, And Dedupe Hardening
 
-State: PLANNED
+State: IN_PROGRESS
 Product authority: `PRODUCT_SPEC.md`
 Predecessor:
 
@@ -127,6 +127,35 @@ Suggested main `/goal` prompt:
 ```text
 Execute Plan 0005 in bounded, committed slices. Use safe agent-loop defaults: no paid API calls, no public-web search unless explicitly requested for that slice, and no live GWS/Odollo writes. Start with the next incomplete slice in docs/dev/plans/0005-2026-06-13-review-routing-normalization-enrichment-dedupe.md, validate it, commit it, and retry git push.
 ```
+
+## Execution Log
+
+### Slice 0005-A | 2026-06-14 | Review Matrix
+
+Implemented:
+
+- Added a per-job `review_matrix` object to review bundle entries.
+- Summarized contact source and key contact fields, normalization warning count, duplicate state, enrichment state/proposals, route state/planned sinks, sink lookup state/matches, sink pilot state, next action, and safe/explicit action flags.
+- Added review bundle groups for duplicate, enrichment, route, and sink lookup states.
+- Rendered the review matrix into the static offline HTML review surface.
+- Added CSV workbook columns for matrix contact source, duplicate state, enrichment state, route state, sink lookup state, normalization warning count, and sink lookup match count.
+- Excluded local `.codegraph` state from Hatch source distributions after `uv build` exposed that transient local indexes could otherwise destabilize package builds.
+
+Safety:
+
+- This slice is readback-only.
+- No public-web search, paid enrichment provider, GWS, Odollo/Odoo, or live sink calls are made.
+- Safe agent-loop boundaries remain unchanged: the matrix reports blocked states; it does not approve or execute them.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_run_summary_and_review_queue tests/test_service.py::test_service_review_bundle_includes_sink_pilot_status -q` passed with 2 tests.
+- `.venv/bin/python -m pytest -q` passed with 179 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed after the `.codegraph` sdist exclusion.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed and reported the index is up to date.
 
 ## Workstreams
 

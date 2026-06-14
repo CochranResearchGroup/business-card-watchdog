@@ -1901,3 +1901,30 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state -q` passed with 1 test.
 - `python -m py_compile src/business_card_watchdog/cli.py tests/test_cli_surfaces.py` passed.
+
+## Turn 106 | 2026-06-14
+
+Continued Plan 0005 execution with the first review-matrix slice.
+
+Implemented:
+
+- Added per-job review matrix data to review bundle entries.
+- Summarized contact source, key contact fields, normalization warning count, duplicate state, enrichment state, route state, sink lookup state, sink pilot state, next action, and safe/explicit action flags.
+- Added review bundle groups by duplicate, enrichment, route, and sink lookup states.
+- Rendered the review matrix into the offline HTML review surface and CSV workbook export.
+- Excluded local `.codegraph` state from Hatch source distributions so transient local index files cannot enter or destabilize package builds.
+- Updated the roadmap so Plan 0005 is the active product-hardening plan now that Plan 0006 public upstream hardening is closed.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_run_summary_and_review_queue tests/test_service.py::test_service_review_bundle_includes_sink_pilot_status -q` passed with 2 tests.
+- `.venv/bin/python -m pytest -q` passed with 179 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed and reported the index is up to date.
+
+Safety:
+
+- This was a readback/reporting slice only. It made no public-web search, paid enrichment, GWS, Odollo/Odoo, or live sink calls.

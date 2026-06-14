@@ -26,6 +26,11 @@ business-card-watchdog = "business_card_watchdog.cli:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/business_card_watchdog"]
 
+[tool.hatch.build.targets.sdist]
+exclude = [
+  "/.codegraph",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 

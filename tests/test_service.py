@@ -116,8 +116,18 @@ def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
     assert bundle["entries"][0]["next_action"]["action"] == "review_contact"
     assert bundle["entries"][0]["decision_template"]["action"] == "approve_for_routing"
     assert bundle["entries"][0]["commands"]["review"] == f"jobs review {job_id} --run-id {run_id}"
+    assert bundle["entries"][0]["review_matrix"]["schema"] == "business-card-watchdog.review-matrix-entry.v1"
+    assert bundle["entries"][0]["review_matrix"]["contact_source"] == "missing"
+    assert bundle["entries"][0]["review_matrix"]["duplicate_state"] == "not_assessed"
+    assert bundle["entries"][0]["review_matrix"]["enrichment_state"] == "not_requested"
+    assert bundle["entries"][0]["review_matrix"]["route_state"] == "not_planned"
+    assert bundle["entries"][0]["review_matrix"]["sink_lookup_state"] == "not_started"
     assert bundle["groups"]["by_state"]["needs_review"]["job_ids"] == [job_id]
     assert bundle["groups"]["by_next_action"]["review_contact"]["count"] == 1
+    assert bundle["groups"]["by_duplicate_state"]["not_assessed"]["job_ids"] == [job_id]
+    assert bundle["groups"]["by_enrichment_state"]["not_requested"]["count"] == 1
+    assert bundle["groups"]["by_route_state"]["not_planned"]["count"] == 1
+    assert bundle["groups"]["by_sink_lookup_state"]["not_started"]["count"] == 1
     assert bundle["decision_import_template"][0]["job_id"] == job_id
     assert bundle["commands"]["apply_decisions"] == f"reviews apply-decisions --run-id {run_id} --decisions-file <path>"
     assert bundle["commands"]["phase_report"] == f"runs phase-report {run_id}"
@@ -136,6 +146,9 @@ def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
     assert html["html_path"] == str(html_path)
     assert "Business Card Review" in html["html"]
     assert "Commands" in html["html"]
+    assert "By Duplicate State" in html["html"]
+    assert "By Enrichment State" in html["html"]
+    assert "Review Matrix" in html["html"]
     assert f"runs phase-report {run_id}" in html["html"]
     assert f"actions run-next --run-id {run_id}" in html["html"]
     assert job_id in html["html"]
@@ -155,6 +168,11 @@ def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
     assert rows[0]["next_action"] == "review_contact"
     assert rows[0]["decision_action"] == "approve_for_routing"
     assert rows[0]["review_action"] == "approve_for_routing"
+    assert rows[0]["matrix_contact_source"] == "missing"
+    assert rows[0]["matrix_duplicate_state"] == "not_assessed"
+    assert rows[0]["matrix_enrichment_state"] == "not_requested"
+    assert rows[0]["matrix_route_state"] == "not_planned"
+    assert rows[0]["matrix_sink_lookup_state"] == "not_started"
     assert "corrected_full_name" in rows[0]
     assert "corrected_email" in rows[0]
     assert "contact_spec" in rows[0]["artifact_kinds"]
@@ -1115,6 +1133,7 @@ def test_service_review_bundle_includes_sink_pilot_status(tmp_path: Path) -> Non
 
     bundle = service.review_bundle(run_id=run_id)
     status = bundle["entries"][0]["sink_pilot_status"]
+    matrix = bundle["entries"][0]["review_matrix"]
     summary = service.run_summary(run_id)
     pilot_summary = summary["sink_pilot_summary"]
     html = service.review_html(run_id=run_id)
@@ -1128,7 +1147,17 @@ def test_service_review_bundle_includes_sink_pilot_status(tmp_path: Path) -> Non
     assert status["readback_verified"] is True
     assert status["safe_to_auto_continue"] is False
     assert status["requires_explicit_operator_action"] is False
+    assert matrix["contact_source"] == "reviewed_contact"
+    assert matrix["contact"]["full_name"] == "Reviewed Fixture"
+    assert matrix["duplicate_state"] == "no_match"
+    assert matrix["route_state"] == "dry_run"
+    assert matrix["planned_sinks"] == "google_contacts"
+    assert matrix["sink_lookup_state"] == "no_match"
+    assert matrix["sink_pilot_state"] == "pilot_report_complete"
     assert bundle["groups"]["by_sink_pilot_state"]["pilot_report_complete"]["job_ids"] == [job_id]
+    assert bundle["groups"]["by_duplicate_state"]["no_match"]["job_ids"] == [job_id]
+    assert bundle["groups"]["by_route_state"]["dry_run"]["job_ids"] == [job_id]
+    assert bundle["groups"]["by_sink_lookup_state"]["no_match"]["job_ids"] == [job_id]
     assert pilot_summary["schema"] == "business-card-watchdog.sink-pilot-summary.v1"
     assert pilot_summary["by_state"]["pilot_report_complete"] == 1
     assert pilot_summary["write_pilot_count"] == 1
@@ -1146,7 +1175,9 @@ def test_service_review_bundle_includes_sink_pilot_status(tmp_path: Path) -> Non
     assert phase_report["dashboard_summary"]["complete_phase_count"] >= 3
     assert phase_report["dashboard_summary"]["explicit_required_phase_count"] == 0
     assert "By Sink Pilot State" in html["html"]
+    assert "By Route State" in html["html"]
     assert "pilot_report_complete" in html["html"]
+    assert "Reviewed Fixture" in html["html"]
 
 
 def test_service_readback_pilot_uses_injected_executor(tmp_path: Path) -> None:

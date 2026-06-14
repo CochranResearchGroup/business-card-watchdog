@@ -915,6 +915,16 @@ class BusinessCardService:
             by_kind = artifacts_by_job.get(str(job["job_id"]), {})
             next_action = next_by_job.get(str(job["job_id"]))
             sink_pilot_status = self._sink_pilot_status(by_kind=by_kind, next_action=next_action)
+            artifact_entries = {
+                kind: self._artifact_bundle_entry(record)
+                for kind, record in sorted(by_kind.items())
+            }
+            review_matrix = self._review_matrix_entry(
+                job=job,
+                artifacts=artifact_entries,
+                next_action=next_action,
+                sink_pilot_status=sink_pilot_status,
+            )
             entries.append(
                 {
                     "run_id": run_id,
@@ -925,11 +935,9 @@ class BusinessCardService:
                     "artifact_dir": job.get("artifact_dir"),
                     "next_action": next_action,
                     "sink_pilot_status": sink_pilot_status,
+                    "review_matrix": review_matrix,
                     "artifact_kinds": sorted(by_kind),
-                    "artifacts": {
-                        kind: self._artifact_bundle_entry(record)
-                        for kind, record in sorted(by_kind.items())
-                    },
+                    "artifacts": artifact_entries,
                     "decision_template": self._review_decision_template(
                         run_id=run_id,
                         job_id=str(job["job_id"]),
@@ -2964,6 +2972,10 @@ class BusinessCardService:
         by_state: dict[str, dict[str, Any]] = {}
         by_next_action: dict[str, dict[str, Any]] = {}
         by_sink_pilot_state: dict[str, dict[str, Any]] = {}
+        by_duplicate_state: dict[str, dict[str, Any]] = {}
+        by_enrichment_state: dict[str, dict[str, Any]] = {}
+        by_route_state: dict[str, dict[str, Any]] = {}
+        by_sink_lookup_state: dict[str, dict[str, Any]] = {}
         for entry in entries:
             state = str(entry.get("state") or "unknown")
             state_group = by_state.setdefault(state, {"count": 0, "job_ids": []})
@@ -2977,10 +2989,98 @@ class BusinessCardService:
             pilot_group = by_sink_pilot_state.setdefault(pilot_state, {"count": 0, "job_ids": []})
             pilot_group["count"] += 1
             pilot_group["job_ids"].append(entry["job_id"])
+            matrix = entry.get("review_matrix") or {}
+            for groups, key in [
+                (by_duplicate_state, "duplicate_state"),
+                (by_enrichment_state, "enrichment_state"),
+                (by_route_state, "route_state"),
+                (by_sink_lookup_state, "sink_lookup_state"),
+            ]:
+                value = str(matrix.get(key) or "unknown")
+                group = groups.setdefault(value, {"count": 0, "job_ids": []})
+                group["count"] += 1
+                group["job_ids"].append(entry["job_id"])
         return {
             "by_state": dict(sorted(by_state.items())),
             "by_next_action": dict(sorted(by_next_action.items())),
             "by_sink_pilot_state": dict(sorted(by_sink_pilot_state.items())),
+            "by_duplicate_state": dict(sorted(by_duplicate_state.items())),
+            "by_enrichment_state": dict(sorted(by_enrichment_state.items())),
+            "by_route_state": dict(sorted(by_route_state.items())),
+            "by_sink_lookup_state": dict(sorted(by_sink_lookup_state.items())),
+        }
+
+    def _review_matrix_entry(
+        self,
+        *,
+        job: dict[str, Any],
+        artifacts: dict[str, dict[str, Any]],
+        next_action: dict[str, Any] | None,
+        sink_pilot_status: dict[str, Any],
+    ) -> dict[str, Any]:
+        reviewed = (artifacts.get("reviewed_contact") or {}).get("payload") or {}
+        candidate = (artifacts.get("contact_candidate") or {}).get("payload") or {}
+        contact = reviewed if reviewed else candidate
+        contact_source = "reviewed_contact" if reviewed else "contact_candidate" if candidate else "missing"
+        duplicate = (artifacts.get("downstream_duplicate_assessment") or {}).get("payload") or (
+            artifacts.get("duplicate_assessment") or {}
+        ).get("payload") or {}
+        enrichment = (artifacts.get("enrichment_result") or {}).get("payload") or (
+            artifacts.get("enrichment_public_web_result") or {}
+        ).get("payload") or (
+            artifacts.get("enrichment_provider_result") or {}
+        ).get("payload") or {}
+        sink_plan = (artifacts.get("sink_plan") or {}).get("payload") or {}
+        sink_lookup = (artifacts.get("sink_lookup_result") or {}).get("payload") or {}
+        route_refresh = (artifacts.get("route_refresh") or {}).get("payload") or {}
+        normalized = contact.get("normalized") if isinstance(contact.get("normalized"), dict) else {}
+        review_warnings = [
+            field
+            for field, payload in normalized.items()
+            if isinstance(payload, dict) and str(payload.get("confidence") or "") == "review"
+        ]
+        planned_sinks = self._review_sink_names(sink_plan)
+        duplicate_state = str(duplicate.get("state") or "not_assessed")
+        enrichment_proposals = list(enrichment.get("merge_proposals") or [])
+        enrichment_state = (
+            "proposed"
+            if enrichment_proposals
+            else "requested"
+            if any(kind in artifacts for kind in ("enrichment_request", "enrichment_public_web_request", "enrichment_provider_request"))
+            else "not_requested"
+        )
+        route_state = str(sink_plan.get("state") or route_refresh.get("state") or "not_planned")
+        lookup_state = str(sink_lookup.get("state") or "not_started")
+        next_action_name = str((next_action or {}).get("action") or "none")
+        return {
+            "schema": "business-card-watchdog.review-matrix-entry.v1",
+            "job_id": job.get("job_id"),
+            "review_state": job.get("state"),
+            "contact_source": contact_source,
+            "contact": {
+                "full_name": self._review_contact_value(contact, "full_name"),
+                "organization": self._review_contact_value(contact, "organization"),
+                "title": self._review_contact_value(contact, "title"),
+                "email": self._review_contact_value(contact, "email"),
+                "phone": self._review_contact_value(contact, "phone"),
+                "website": self._review_contact_value(contact, "website"),
+            },
+            "normalization_warning_fields": review_warnings,
+            "normalization_warning_count": len(review_warnings),
+            "duplicate_state": duplicate_state,
+            "duplicate_match_count": _int(duplicate.get("match_count") or len(duplicate.get("matches") or [])),
+            "enrichment_state": enrichment_state,
+            "enrichment_proposal_count": len(enrichment_proposals),
+            "route_state": route_state,
+            "planned_sinks": planned_sinks,
+            "sink_lookup_state": lookup_state,
+            "sink_lookup_match_count": _int(sink_lookup.get("match_count") or 0),
+            "sink_pilot_state": sink_pilot_status.get("state") or "not_started",
+            "next_action": next_action_name,
+            "safe_to_auto_continue": bool(sink_pilot_status.get("safe_to_auto_continue")),
+            "requires_explicit_operator_action": bool(
+                sink_pilot_status.get("requires_explicit_operator_action")
+            ),
         }
 
     def _sink_pilot_status(
@@ -3071,6 +3171,13 @@ class BusinessCardService:
             "sink_pilot_state",
             "safe_to_auto_continue",
             "requires_explicit_operator_action",
+            "matrix_contact_source",
+            "matrix_duplicate_state",
+            "matrix_enrichment_state",
+            "matrix_route_state",
+            "matrix_sink_lookup_state",
+            "matrix_normalization_warning_count",
+            "matrix_sink_lookup_match_count",
             "full_name",
             "organization",
             "title",
@@ -3302,6 +3409,7 @@ class BusinessCardService:
 
     def _review_workbook_row(self, entry: dict[str, Any]) -> dict[str, Any]:
         artifacts = entry.get("artifacts") or {}
+        matrix = entry.get("review_matrix") or {}
         reviewed = (artifacts.get("reviewed_contact") or {}).get("payload") or {}
         candidate = (artifacts.get("contact_candidate") or {}).get("payload") or {}
         contact = reviewed if reviewed else candidate
@@ -3324,6 +3432,13 @@ class BusinessCardService:
             "sink_pilot_state": pilot_status.get("state"),
             "safe_to_auto_continue": pilot_status.get("safe_to_auto_continue"),
             "requires_explicit_operator_action": pilot_status.get("requires_explicit_operator_action"),
+            "matrix_contact_source": matrix.get("contact_source"),
+            "matrix_duplicate_state": matrix.get("duplicate_state"),
+            "matrix_enrichment_state": matrix.get("enrichment_state"),
+            "matrix_route_state": matrix.get("route_state"),
+            "matrix_sink_lookup_state": matrix.get("sink_lookup_state"),
+            "matrix_normalization_warning_count": matrix.get("normalization_warning_count"),
+            "matrix_sink_lookup_match_count": matrix.get("sink_lookup_match_count"),
             "full_name": self._review_contact_value(contact, "full_name"),
             "organization": self._review_contact_value(contact, "organization"),
             "title": self._review_contact_value(contact, "title"),
@@ -3397,6 +3512,10 @@ class BusinessCardService:
         state_groups = self._review_html_groups(bundle["groups"]["by_state"])
         action_groups = self._review_html_groups(bundle["groups"]["by_next_action"])
         pilot_groups = self._review_html_groups(bundle["groups"].get("by_sink_pilot_state", {}))
+        duplicate_groups = self._review_html_groups(bundle["groups"].get("by_duplicate_state", {}))
+        enrichment_groups = self._review_html_groups(bundle["groups"].get("by_enrichment_state", {}))
+        route_groups = self._review_html_groups(bundle["groups"].get("by_route_state", {}))
+        lookup_groups = self._review_html_groups(bundle["groups"].get("by_sink_lookup_state", {}))
         commands = self._review_html_commands(bundle.get("commands") or {})
         return f"""<!doctype html>
 <html lang="en">
@@ -3440,6 +3559,22 @@ class BusinessCardService:
       <h2>By Sink Pilot State</h2>
       {pilot_groups}
     </div>
+    <div>
+      <h2>By Duplicate State</h2>
+      {duplicate_groups}
+    </div>
+    <div>
+      <h2>By Enrichment State</h2>
+      {enrichment_groups}
+    </div>
+    <div>
+      <h2>By Route State</h2>
+      {route_groups}
+    </div>
+    <div>
+      <h2>By Sink Lookup State</h2>
+      {lookup_groups}
+    </div>
   </section>
   <h2>Jobs</h2>
   <table>
@@ -3449,6 +3584,7 @@ class BusinessCardService:
         <th>State</th>
         <th>Image</th>
         <th>Next Action</th>
+        <th>Review Matrix</th>
         <th>Sink Pilot</th>
         <th>Artifacts</th>
         <th>Decision Template</th>
@@ -3479,6 +3615,8 @@ class BusinessCardService:
     def _review_html_row(self, entry: dict[str, Any]) -> str:
         next_action = entry.get("next_action") or {}
         pilot_status = entry.get("sink_pilot_status") or {}
+        matrix = entry.get("review_matrix") or {}
+        contact = matrix.get("contact") if isinstance(matrix.get("contact"), dict) else {}
         artifacts = ", ".join(escape(kind) for kind in entry.get("artifact_kinds") or [])
         decision_template = escape(json.dumps(entry["decision_template"], sort_keys=True, indent=2))
         image_path = escape(str(entry.get("image_path") or ""))
@@ -3487,6 +3625,15 @@ class BusinessCardService:
   <td>{escape(str(entry.get("state") or ""))}</td>
   <td><code>{image_path}</code></td>
   <td><code>{escape(str(next_action.get("action") or "none"))}</code><br>{escape(str(next_action.get("reason") or ""))}</td>
+  <td>
+    <strong>{escape(str(contact.get("full_name") or ""))}</strong><br>
+    {escape(str(contact.get("organization") or ""))}<br>
+    <code>{escape(str(contact.get("email") or ""))}</code><br>
+    duplicate: <code>{escape(str(matrix.get("duplicate_state") or "unknown"))}</code><br>
+    enrichment: <code>{escape(str(matrix.get("enrichment_state") or "unknown"))}</code><br>
+    route: <code>{escape(str(matrix.get("route_state") or "unknown"))}</code><br>
+    lookup: <code>{escape(str(matrix.get("sink_lookup_state") or "unknown"))}</code>
+  </td>
   <td><code>{escape(str(pilot_status.get("state") or "not_started"))}</code><br>safe: {escape(str(pilot_status.get("safe_to_auto_continue")))}<br>explicit: {escape(str(pilot_status.get("requires_explicit_operator_action")))}</td>
   <td>{artifacts}</td>
   <td><pre>{decision_template}</pre></td>
