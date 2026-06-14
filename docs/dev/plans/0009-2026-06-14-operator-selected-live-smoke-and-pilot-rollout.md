@@ -886,6 +886,23 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_live_selection_requirements_report_writes_run_level_artifact tests/test_cli_surfaces.py::test_cli_live_selection_requirements_reports_text_and_json -q` passed with 2 tests.
 
+### Slice 0009-A51 | 2026-06-14 | API/MCP Operator Selection Contract Parity
+
+Implemented:
+
+- API regression coverage now asserts that `POST /live-selection-requirements` exposes the operator response contract.
+- MCP regression coverage now asserts that `business_card_watchdog_live_selection_requirements` exposes both the top-level contract and per-entry response template fields.
+- The parity tests protect `/goal`, subagent, API, and MCP clients from losing the same explicit operator-selection handoff available in the CLI.
+
+Safety:
+
+- This slice adds test coverage only.
+- It does not create `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 2 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

@@ -390,6 +390,15 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert live_requirements["run_id"] == run_id
     assert live_requirements["writes_attempted"] == 0
     assert live_requirements["network_calls_made"] == 0
+    assert live_requirements["operator_response_contract"]["schema"] == (
+        "business-card-watchdog.operator-selection-response-contract.v1"
+    )
+    assert live_requirements["operator_response_contract"]["creates_selected_live_target"] is False
+    assert live_requirements["entries"][0]["operator_response_template"] == (
+        f"run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=<operator> scope=lookup safety_confirmation=<confirmation>"
+    )
+    assert live_requirements["entries"][0]["copyable_approval_fields"]["job_id"] == job_id
     assert live_packet["schema"] == "business-card-watchdog.live-selection-packet.v1"
     assert live_packet["approval_state"] == "pending_operator_approval"
     assert live_packet["writes_attempted"] == 0
