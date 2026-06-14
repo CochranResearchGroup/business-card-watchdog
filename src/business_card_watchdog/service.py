@@ -5358,6 +5358,19 @@ class BusinessCardService:
             else self.config.runs_dir / run_id / "artifacts" / job_id
         )
         selected_target_path = artifact_dir / "selected_live_target.json"
+        existing_selected_target = _read_json_file(selected_target_path) or {}
+        existing_abandonment = _read_json_file(artifact_dir / "live_pilot_abandonment.json") or {}
+        existing_target_identity = _selected_target_identity(existing_selected_target)
+        existing_target_abandoned = (
+            selected_target_path.exists()
+            and existing_abandonment.get("state") == "abandoned"
+            and str(
+                existing_abandonment.get("selected_target_identity")
+                or existing_abandonment.get("selected_target_created_at")
+                or ""
+            )
+            == existing_target_identity
+        )
         readiness_audit = self.live_readiness_audit(run_id=run_id, sink=sink, write=False)
         candidates_payload = dict(readiness_audit.get("live_target_candidates") or {})
         candidates = [
@@ -5422,6 +5435,13 @@ class BusinessCardService:
             "existing_selected_target": {
                 "path": str(selected_target_path),
                 "exists": selected_target_path.exists(),
+                "identity": existing_target_identity or None,
+                "sink": existing_selected_target.get("sink"),
+                "scope": existing_selected_target.get("scope"),
+                "operator": existing_selected_target.get("operator") or existing_selected_target.get("approved_by"),
+                "abandoned": existing_target_abandoned,
+                "abandonment_identity": existing_target_identity if existing_target_abandoned else None,
+                "abandonment_reason": existing_abandonment.get("reason") if existing_target_abandoned else None,
             },
             "writes_attempted": 0,
             "network_calls_made": 0,

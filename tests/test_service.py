@@ -219,6 +219,81 @@ def test_service_live_selection_packet_does_not_select_target(tmp_path: Path) ->
     assert not any(artifact["kind"] == "selected_live_target" for artifact in artifacts)
 
 
+def test_service_live_selection_packet_reports_existing_selected_target_context(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    first = service.select_live_target_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        operator="tester",
+        scope="lookup",
+        safety_confirmation="fixture contact is safe for google contacts test profile",
+    )["target"]
+
+    active_packet = service.live_selection_packet(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        operator="tester",
+        scope="lookup",
+        write=False,
+    )
+
+    assert active_packet["existing_selected_target"]["exists"] is True
+    assert active_packet["existing_selected_target"]["identity"] == first["selection_id"]
+    assert active_packet["existing_selected_target"]["abandoned"] is False
+    assert active_packet["existing_selected_target"]["abandonment_identity"] is None
+
+    service.live_pilot_abandon_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        operator="tester",
+        reason="replace with broader scope",
+    )
+    abandoned_packet = service.live_selection_packet(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        operator="tester",
+        scope="all",
+        write=False,
+    )
+
+    assert abandoned_packet["existing_selected_target"]["identity"] == first["selection_id"]
+    assert abandoned_packet["existing_selected_target"]["abandoned"] is True
+    assert abandoned_packet["existing_selected_target"]["abandonment_identity"] == first["selection_id"]
+    assert abandoned_packet["existing_selected_target"]["abandonment_reason"] == "replace with broader scope"
+
+    replacement = service.select_live_target_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        operator="tester",
+        scope="all",
+        safety_confirmation="fixture contact is safe for google contacts test profile",
+    )["target"]
+    replacement_packet = service.live_selection_packet(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        operator="tester",
+        scope="all",
+        write=False,
+    )
+
+    assert replacement_packet["existing_selected_target"]["identity"] == replacement["selection_id"]
+    assert replacement_packet["existing_selected_target"]["abandoned"] is False
+    assert replacement_packet["existing_selected_target"]["abandonment_identity"] is None
+    assert replacement_packet["existing_selected_target"]["abandonment_reason"] is None
+
+
 def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, job_id = make_recorded_run(config)

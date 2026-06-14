@@ -500,6 +500,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_select_live_target_requires_abandonment_before_replacement tests/test_service.py::test_service_live_pilot_abandonment_blocks_abandoned_selected_target -q` passed with 2 tests.
 
+### Slice 0009-A30 | 2026-06-14 | Add Existing Target Context to Selection Packets
+
+Implemented:
+
+- Live selection packets now include existing selected-target identity, sink, scope, operator, and current abandonment context.
+- Existing target context uses current-target abandonment semantics, so stale historical abandonment is not shown after replacement.
+- Service and CLI tests now cover missing, active, abandoned, and replaced selected-target packet context.
+
+Safety:
+
+- This slice enriches approval-packet evidence only.
+- It does not create or modify selected targets, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It helps operators see whether a packet would be prepared while a target already exists or has been abandoned.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_live_selection_packet_does_not_select_target tests/test_service.py::test_service_live_selection_packet_reports_existing_selected_target_context tests/test_cli_surfaces.py::test_cli_live_selection_packet_writes_no_selected_target -q` passed with 3 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

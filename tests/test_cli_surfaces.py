@@ -205,6 +205,8 @@ def test_cli_live_selection_packet_writes_no_selected_target(tmp_path: Path, cap
     assert payload["approval_state"] == "pending_operator_approval"
     assert Path(payload["packet_path"]).exists()
     assert not Path(payload["existing_selected_target"]["path"]).exists()
+    assert payload["existing_selected_target"]["identity"] is None
+    assert payload["existing_selected_target"]["abandoned"] is False
 
 
 def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, capsys) -> None:
