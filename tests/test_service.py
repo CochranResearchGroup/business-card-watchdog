@@ -76,6 +76,10 @@ def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
     assert summary["run_id"] == run_id
     assert summary["needs_review_count"] == 1
     assert summary["artifact_counts"]["contact_spec"] == 1
+    assert summary["review_workbook_preview_summary"]["schema"] == (
+        "business-card-watchdog.review-workbook-preview-summary.v1"
+    )
+    assert summary["review_workbook_preview_summary"]["has_preview"] is False
     assert phase_report["schema"] == "business-card-watchdog.phase-report.v1"
     assert phase_report["job_count"] == 1
     assert phase_report["phases"][2]["phase"] == "review"
@@ -572,6 +576,16 @@ def test_service_preview_review_workbook_csv_can_persist_artifacts(tmp_path: Pat
     assert "row_number,status,run_id,job_id,action,errors,warnings" in validation_csv_path.read_text(encoding="utf-8")
     assert any(artifact["kind"] == "review_workbook_preview" for artifact in artifacts)
     assert any(artifact["kind"] == "review_workbook_preview_validation_csv" for artifact in artifacts)
+    summary = service.run_summary(run_id)
+    preview_summary = summary["review_workbook_preview_summary"]
+    assert preview_summary["has_preview"] is True
+    assert preview_summary["preview_count"] == 1
+    assert preview_summary["validation_csv_count"] == 1
+    assert preview_summary["latest_valid"] is True
+    assert preview_summary["latest_ready_count"] == 1
+    assert preview_summary["latest_error_count"] == 0
+    assert preview_summary["latest_preview_path"] == str(preview_path)
+    assert preview_summary["latest_validation_csv_path"] == str(validation_csv_path)
     assert not (config.runs_dir / run_id / "review_decisions_import.json").exists()
 
 

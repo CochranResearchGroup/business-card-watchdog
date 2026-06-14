@@ -298,6 +298,7 @@ class BusinessCardService:
             artifact_counts[kind] = artifact_counts.get(kind, 0) + 1
         enrichment_budget = self._summarize_enrichment_budget(artifacts)
         sink_pilot_summary = self._summarize_sink_pilot_progress(jobs=jobs, artifacts=artifacts)
+        review_workbook_preview_summary = self._summarize_review_workbook_preview(artifacts)
         return {
             "run_id": run_id,
             "state": run["state"],
@@ -306,6 +307,7 @@ class BusinessCardService:
             "artifact_counts": artifact_counts,
             "enrichment_budget": enrichment_budget,
             "sink_pilot_summary": sink_pilot_summary,
+            "review_workbook_preview_summary": review_workbook_preview_summary,
             "needs_review_count": state_counts.get("needs_review", 0),
             "ready_to_route_count": state_counts.get("ready_to_route", 0),
             "failed_count": state_counts.get("failed", 0),
@@ -555,6 +557,53 @@ class BusinessCardService:
             "paid_provider": paid_provider,
             "unreadable_artifact_count": unreadable_artifact_count,
         }
+
+    def _summarize_review_workbook_preview(self, artifacts: list[dict[str, Any]]) -> dict[str, Any]:
+        preview_artifacts = [
+            artifact
+            for artifact in artifacts
+            if str(artifact.get("kind") or "") == "review_workbook_preview"
+        ]
+        validation_artifacts = [
+            artifact
+            for artifact in artifacts
+            if str(artifact.get("kind") or "") == "review_workbook_preview_validation_csv"
+        ]
+        latest_preview = preview_artifacts[-1] if preview_artifacts else None
+        latest_validation = validation_artifacts[-1] if validation_artifacts else None
+        summary: dict[str, Any] = {
+            "schema": "business-card-watchdog.review-workbook-preview-summary.v1",
+            "preview_count": len(preview_artifacts),
+            "validation_csv_count": len(validation_artifacts),
+            "has_preview": latest_preview is not None,
+            "latest_preview_path": str(latest_preview.get("path") or "") if latest_preview else None,
+            "latest_validation_csv_path": str(latest_validation.get("path") or "") if latest_validation else None,
+            "latest_valid": None,
+            "latest_row_count": 0,
+            "latest_ready_count": 0,
+            "latest_error_count": 0,
+            "latest_skipped_count": 0,
+            "latest_warning_count": 0,
+            "unreadable_artifact_count": 0,
+        }
+        if latest_preview is None:
+            return summary
+        payload = _read_json_file(Path(str(latest_preview.get("path") or "")))
+        if payload is None:
+            summary["unreadable_artifact_count"] = 1
+            return summary
+        rows = list(payload.get("rows") or [])
+        summary.update(
+            {
+                "latest_valid": bool(payload.get("valid")),
+                "latest_row_count": _int(payload.get("row_count")),
+                "latest_ready_count": _int(payload.get("ready_count")),
+                "latest_error_count": _int(payload.get("error_count")),
+                "latest_skipped_count": _int(payload.get("skipped_count")),
+                "latest_warning_count": sum(len(row.get("warnings") or []) for row in rows if isinstance(row, dict)),
+            }
+        )
+        return summary
 
     def _summarize_sink_pilot_progress(
         self,

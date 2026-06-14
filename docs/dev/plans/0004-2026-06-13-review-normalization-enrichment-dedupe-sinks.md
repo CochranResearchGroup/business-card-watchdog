@@ -2250,3 +2250,20 @@ Validation:
 Remaining:
 
 - Workbook review now has validation-only exports across CLI, API, and MCP; future work can focus on routing/run-level summary integration rather than additional validation transport aliases.
+
+### Slice 0004-BU | 2026-06-14 | Run Summary Preview Validation Readback
+
+Implemented:
+
+- Added `review_workbook_preview_summary` to run summaries.
+- Summary readback includes preview/validation artifact counts, latest artifact paths, latest validity, row counts, error counts, skipped counts, ready counts, and warning counts.
+- Missing or unreadable persisted preview artifacts are counted instead of failing run summary generation.
+- Added service regression coverage for empty preview state and persisted preview readback.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_run_summary_and_review_queue tests/test_service.py::test_service_preview_review_workbook_csv_can_persist_artifacts -q` passed with 2 tests.
+
+Remaining:
+
+- Future work can add phase-report grouping for preview validation status if operators need dashboard-level phase counts.

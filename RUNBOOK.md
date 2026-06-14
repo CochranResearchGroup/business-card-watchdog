@@ -1567,3 +1567,18 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 3 tests.
+
+## Turn 86 | 2026-06-14
+
+Continued Plan 0004 execution with run-summary preview validation readback.
+
+Implemented:
+
+- Added `review_workbook_preview_summary` to run summaries.
+- Summary reports preview/validation artifact counts, latest preview paths, validity, ready/error/skipped row counts, and warning count.
+- Missing or unreadable persisted preview artifacts are counted without failing run summary generation.
+- Added service regression coverage for both no-preview and persisted-preview summary states.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_run_summary_and_review_queue tests/test_service.py::test_service_preview_review_workbook_csv_can_persist_artifacts -q` passed with 2 tests.
