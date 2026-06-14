@@ -1201,6 +1201,7 @@ class BusinessCardService:
         run_id: str,
         csv_text: str,
         reviewer: str = "operator",
+        write: bool = False,
     ) -> dict[str, Any]:
         try:
             entries = self._review_workbook_decision_entries(csv_text)
@@ -1221,6 +1222,8 @@ class BusinessCardService:
                 "network_calls_made": 0,
             }
             payload["validation_csv"] = self._render_review_workbook_preview_csv(payload["rows"], payload["errors"])
+            if write:
+                self._write_review_workbook_preview_artifacts(run_id, payload)
             return payload
         rows: list[dict[str, Any]] = []
         jobs_by_run: dict[str, dict[str, dict[str, Any]]] = {}
@@ -1301,6 +1304,8 @@ class BusinessCardService:
             "network_calls_made": 0,
         }
         payload["validation_csv"] = self._render_review_workbook_preview_csv(payload["rows"], payload["errors"])
+        if write:
+            self._write_review_workbook_preview_artifacts(run_id, payload)
         return payload
 
     def list_artifacts(self, run_id: str) -> list[dict[str, Any]]:
@@ -3029,6 +3034,33 @@ class BusinessCardService:
                 message = error.get("message") if isinstance(error, dict) else str(error)
                 writer.writerow({"status": "error", "errors": message})
         return output.getvalue()
+
+    def _write_review_workbook_preview_artifacts(self, run_id: str, payload: dict[str, Any]) -> None:
+        run_dir = self.config.runs_dir / run_id
+        preview_path = run_dir / "review_workbook_preview.json"
+        validation_csv_path = run_dir / "review_workbook_preview_validation.csv"
+        preview_payload = {key: value for key, value in payload.items() if key not in {"preview_path", "validation_csv_path"}}
+        preview_path.write_text(json.dumps(preview_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        validation_csv_path.write_text(str(payload.get("validation_csv") or ""), encoding="utf-8")
+        ledger = RunLedger(run_dir)
+        ledger.record_artifact(job_id="__run__", kind="review_workbook_preview", path=preview_path)
+        ledger.record_artifact(job_id="__run__", kind="review_workbook_preview_validation_csv", path=validation_csv_path)
+        ledger.record_event(
+            "review_workbook_preview_created",
+            {
+                "run_id": run_id,
+                "preview_path": str(preview_path),
+                "validation_csv_path": str(validation_csv_path),
+                "row_count": payload.get("row_count", 0),
+                "ready_count": payload.get("ready_count", 0),
+                "error_count": payload.get("error_count", 0),
+                "skipped_count": payload.get("skipped_count", 0),
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        payload["preview_path"] = str(preview_path)
+        payload["validation_csv_path"] = str(validation_csv_path)
 
     def _review_workbook_sink_readiness_warnings(self, decision: dict[str, Any]) -> list[dict[str, Any]]:
         action = str(decision.get("action") or "keep_needs_review")

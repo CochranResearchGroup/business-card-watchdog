@@ -108,6 +108,7 @@ def build_parser() -> argparse.ArgumentParser:
     reviews_apply.add_argument("--decisions-file", type=Path, default=None)
     reviews_apply.add_argument("--decisions-csv-file", type=Path, default=None)
     reviews_apply.add_argument("--preview", action="store_true")
+    reviews_apply.add_argument("--preview-write", action="store_true")
     reviews_apply.add_argument("--json", action="store_true")
 
     actions = sub.add_parser("actions")
@@ -324,6 +325,7 @@ def main(argv: list[str] | None = None) -> int:
                         run_id=args.run_id,
                         reviewer=args.reviewer,
                         csv_text=csv_text,
+                        write=args.preview_write,
                     )
                 else:
                     payload = service.apply_review_workbook_csv(

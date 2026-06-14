@@ -548,6 +548,33 @@ def test_service_preview_review_workbook_csv_warns_on_blocked_sink_readiness(tmp
     assert preview["network_calls_made"] == 0
 
 
+def test_service_preview_review_workbook_csv_can_persist_artifacts(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    workbook = service.review_workbook(run_id=run_id)
+
+    preview = service.preview_review_workbook_csv(
+        run_id=run_id,
+        reviewer="previewer",
+        csv_text=workbook["csv"],
+        write=True,
+    )
+    preview_path = Path(preview["preview_path"])
+    validation_csv_path = Path(preview["validation_csv_path"])
+    artifacts = service.list_artifacts(run_id)
+    persisted = json.loads(preview_path.read_text(encoding="utf-8"))
+
+    assert preview["rows"][0]["job_id"] == job_id
+    assert preview_path.exists()
+    assert validation_csv_path.exists()
+    assert persisted["schema"] == "business-card-watchdog.review-workbook-preview.v1"
+    assert "row_number,status,run_id,job_id,action,errors,warnings" in validation_csv_path.read_text(encoding="utf-8")
+    assert any(artifact["kind"] == "review_workbook_preview" for artifact in artifacts)
+    assert any(artifact["kind"] == "review_workbook_preview_validation_csv" for artifact in artifacts)
+    assert not (config.runs_dir / run_id / "review_decisions_import.json").exists()
+
+
 def test_service_apply_review_workbook_csv_supports_enrichment_columns(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, job_id = make_recorded_run(config)

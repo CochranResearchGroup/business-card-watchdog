@@ -156,6 +156,7 @@ def tool_manifest() -> dict[str, object]:
                         "decisions": {"type": "array", "items": {"type": "object"}},
                         "decisions_csv": {"type": "string"},
                         "preview": {"type": "boolean", "default": False},
+                        "preview_write": {"type": "boolean", "default": False},
                     },
                     "required": ["run_id"],
                 },
@@ -571,6 +572,7 @@ def call_tool(
                     run_id=str(args["run_id"]),
                     reviewer=str(args.get("reviewer") or "operator"),
                     csv_text=str(args["decisions_csv"]),
+                    write=bool(args.get("preview_write", False)),
                 )
             return service.apply_review_workbook_csv(
                 run_id=str(args["run_id"]),

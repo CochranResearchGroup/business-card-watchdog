@@ -31,6 +31,7 @@ def create_app(config_path: Path | None = None):
         decisions: list[dict[str, object]] = Field(default_factory=list)
         decisions_csv: str = ""
         preview: bool = False
+        preview_write: bool = False
 
     class EnrichmentRequest(BaseModel):
         run_id: str
@@ -176,6 +177,7 @@ def create_app(config_path: Path | None = None):
                     run_id=run_id,
                     reviewer=request.reviewer,
                     csv_text=request.decisions_csv,
+                    write=request.preview_write,
                 )
             return service().apply_review_workbook_csv(
                 run_id=run_id,

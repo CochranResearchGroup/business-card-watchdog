@@ -2198,3 +2198,21 @@ Validation:
 Remaining:
 
 - Future preview work can optionally persist validation artifacts, but default preview responses remain non-mutating.
+
+### Slice 0004-BR | 2026-06-14 | Optional Preview Artifact Persistence
+
+Implemented:
+
+- Added optional persistence for review workbook preview results.
+- `preview_review_workbook_csv(..., write=True)` now writes run-level `review_workbook_preview.json` and `review_workbook_preview_validation.csv` artifacts.
+- CLI/API/MCP preview surfaces expose explicit preview persistence through `--preview-write` / `preview_write`.
+- Persisted preview artifacts record ledger artifact entries and a `review_workbook_preview_created` event.
+- Default preview remains non-mutating; applying review decisions remains a separate explicit action.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_preview_review_workbook_csv_validates_without_writes tests/test_service.py::test_service_preview_review_workbook_csv_can_persist_artifacts tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+
+Remaining:
+
+- Future work can add a dedicated command for exporting only the validation CSV, but the preview artifact surface now has durable run-level evidence when explicitly requested.
