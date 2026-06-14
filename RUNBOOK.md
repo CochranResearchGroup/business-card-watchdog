@@ -2303,3 +2303,25 @@ Validation:
 Safety:
 
 - This was fixture-backed watcher proof only. It did not inspect or process configured SyncThing/private watch inputs and made no public-web search, paid enrichment, GWS, Odollo/Odoo, live lookup, live write, or live readback calls.
+
+## Turn 122 | 2026-06-14
+
+Continued Plan 0008 with Slice 0008-C.
+
+Implemented:
+
+- Added `business-card-watchdog.selected-live-target.v1`.
+- Added `BusinessCardService.select_live_target_for_job`.
+- Added CLI `bcw sinks select-live-target`.
+- Added API `POST /jobs/{job_id}/selected-live-target`.
+- Added MCP tool `business_card_watchdog_selected_live_target`.
+- Registered `selected_live_target.json` for route-refresh staleness and review-bundle visibility.
+- Non-simulated lookup, write, and readback pilots now require selected-target evidence matching run, job, sink, operator, and scope.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_service.py::test_service_lookup_pilot_uses_injected_read_only_executor tests/test_service.py::test_service_write_pilot_uses_injected_executor tests/test_service.py::test_service_readback_pilot_uses_injected_executor tests/test_cli_surfaces.py::test_cli_sinks_apply_decision_writes_zero_write_artifact tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 8 tests.
+
+Safety:
+
+- This was zero-network, zero-write approval-artifact work only. It made no live lookup, live write, live readback, public-web search, paid enrichment, GWS, or Odollo/Odoo calls.

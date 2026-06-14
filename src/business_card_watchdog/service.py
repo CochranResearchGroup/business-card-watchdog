@@ -94,6 +94,7 @@ _SUPPORTED_REVIEW_ACTIONS = {
 _ROUTE_ARTIFACT_FILES = {
     "sink_lookup_plan": "sink_lookup_plan.json",
     "sink_adapter_request_lookup": "sink_adapter_request_lookup.json",
+    "selected_live_target": "selected_live_target.json",
     "sink_lookup_smoke_handoff": "sink_lookup_smoke_handoff.json",
     "sink_lookup_pilot": "sink_lookup_pilot.json",
     "sink_lookup_result": "sink_lookup_result.json",
@@ -238,6 +239,7 @@ _REVIEW_BUNDLE_ARTIFACT_KINDS = {
     "duplicate_resolution",
     "sink_lookup_plan",
     "sink_adapter_request_lookup",
+    "selected_live_target",
     "sink_lookup_smoke_handoff",
     "sink_lookup_pilot",
     "sink_lookup_result",
@@ -1943,6 +1945,118 @@ class BusinessCardService:
         )
         return {"handoff_path": str(handoff_path), "handoff": payload}
 
+    def select_live_target_for_job(
+        self,
+        *,
+        job_id: str,
+        run_id: str,
+        sink: str,
+        operator: str,
+        scope: str = "lookup",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        if sink not in {"google_contacts", "odoo"}:
+            raise ValueError("selected live target requires sink google_contacts or odoo")
+        if scope not in {"lookup", "write", "readback", "all"}:
+            raise ValueError("selected live target scope must be lookup, write, readback, or all")
+        if not operator.strip():
+            raise ValueError("selected live target requires an operator")
+        job = self.get_job(job_id, run_id=run_id)
+        artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
+        lookup_readiness = None
+        apply_readiness = None
+        if scope in {"lookup", "all"}:
+            lookup_readiness = self.live_lookup_readiness_report(job_id=job_id, run_id=run_id, sink=sink)
+        if scope in {"write", "readback", "all"}:
+            apply_readiness = self.build_sink_apply_pilot_readiness_for_job(
+                job_id=job_id,
+                run_id=run_id,
+                sink=sink,
+            )["readiness"]
+        missing_requirements = []
+        if lookup_readiness is not None:
+            missing_requirements.extend(
+                f"lookup:{name}" for name in list(lookup_readiness.get("missing_requirements") or [])
+            )
+        if apply_readiness is not None:
+            missing_requirements.extend(
+                f"apply:{name}" for name in list(apply_readiness.get("missing_requirements") or [])
+            )
+        payload = {
+            "schema": "business-card-watchdog.selected-live-target.v1",
+            "state": "selected",
+            "status": "selected",
+            "reason": reason or "operator selected this exact run/job/sink/scope for explicit live pilot commands",
+            "run_id": run_id,
+            "job_id": job_id,
+            "sink": sink,
+            "operator": operator,
+            "approved_by": operator,
+            "scope": scope,
+            "scope_allows": {
+                "lookup": scope in {"lookup", "all"},
+                "write": scope in {"write", "all"},
+                "readback": scope in {"readback", "all"},
+            },
+            "created_at": utc_now(),
+            "job_state": job.get("state"),
+            "readiness": {
+                "lookup": lookup_readiness,
+                "apply": apply_readiness,
+            },
+            "missing_requirements": missing_requirements,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "commands": {
+                "lookup_pilot": (
+                    f"sinks lookup-pilot {job_id} --run-id {run_id} --sink {sink} "
+                    f"--approved-by {operator} --no-simulate"
+                ),
+                "write_pilot": (
+                    f"sinks write-pilot {job_id} --run-id {run_id} --sink {sink} "
+                    f"--approved-by {operator} --no-simulate"
+                ),
+                "readback_pilot": (
+                    f"sinks readback-pilot {job_id} --run-id {run_id} --sink {sink} "
+                    f"--approved-by {operator} --no-simulate"
+                ),
+            },
+            "stop_conditions": [
+                "the live command names a different run, job, sink, operator, or scope",
+                "readiness artifacts are stale or reference a different sink",
+                "operator did not explicitly request the non-simulated command after this record was created",
+                "public-web search, paid enrichment, or duplicate merge decisions would be needed first",
+            ],
+            "operator_note": (
+                "This is durable selected-target approval evidence. It is not a command execution; "
+                "the operator must still explicitly run the non-simulated pilot command."
+            ),
+        }
+        target_path = artifact_dir / "selected_live_target.json"
+        target_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        ledger.record_artifact(job_id=job_id, kind="selected_live_target", path=target_path)
+        ledger.record_event(
+            "selected_live_target_created",
+            {
+                "job_id": job_id,
+                "run_id": run_id,
+                "sink": sink,
+                "operator": operator,
+                "scope": scope,
+                "target_path": str(target_path),
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        self._mark_route_artifact_refreshed(
+            artifact_dir,
+            job_id=job_id,
+            run_id=run_id,
+            kind="selected_live_target",
+        )
+        return {"target_path": str(target_path), "target": payload}
+
     def enrichment_readiness(
         self,
         *,
@@ -2948,6 +3062,14 @@ class BusinessCardService:
             )["request"]
         execution = None
         if not simulate:
+            self._require_selected_live_target(
+                artifact_dir=artifact_dir,
+                job_id=job_id,
+                run_id=run_id,
+                sink=sink,
+                approved_by=approved_by,
+                scope="lookup",
+            )
             requests = [
                 request
                 for request in list(adapter_request.get("requests") or [])
@@ -3123,6 +3245,14 @@ class BusinessCardService:
             writes_attempted = 0
             status = "mock_write_completed"
         else:
+            self._require_selected_live_target(
+                artifact_dir=artifact_dir,
+                job_id=job_id,
+                run_id=run_id,
+                sink=sink,
+                approved_by=approved_by,
+                scope="write",
+            )
             if self.sink_write_executor is None:
                 readiness_path = artifact_dir / "sink_apply_pilot_readiness.json"
                 readiness = (
@@ -3282,6 +3412,14 @@ class BusinessCardService:
             network_calls_made = 0
             status = "mock_readback_verified" if readback_payload.get("matched") else "mock_readback_missing"
         else:
+            self._require_selected_live_target(
+                artifact_dir=artifact_dir,
+                job_id=job_id,
+                run_id=run_id,
+                sink=sink,
+                approved_by=approved_by,
+                scope="readback",
+            )
             if self.sink_readback_executor is not None:
                 execution = self.sink_readback_executor(request)
             else:
@@ -3801,6 +3939,39 @@ class BusinessCardService:
     def watch_reset(self) -> dict[str, Any]:
         PollingWatcher(self.config).reset()
         return {"reset": True, "watch_dir": str(self.config.watch_dir)}
+
+    def _require_selected_live_target(
+        self,
+        *,
+        artifact_dir: Path,
+        job_id: str,
+        run_id: str,
+        sink: str,
+        approved_by: str,
+        scope: str,
+    ) -> dict[str, Any]:
+        target_path = artifact_dir / "selected_live_target.json"
+        target = _read_json_file(target_path)
+        if target is None:
+            raise ValueError("non-simulated sink pilot requires selected_live_target.json")
+        mismatches = []
+        for key, expected in [
+            ("job_id", job_id),
+            ("run_id", run_id),
+            ("sink", sink),
+        ]:
+            if target.get(key) != expected:
+                mismatches.append(f"{key}={target.get(key)!r}")
+        if target.get("approved_by") != approved_by and target.get("operator") != approved_by:
+            mismatches.append(f"operator={target.get('operator')!r}")
+        allows = dict(target.get("scope_allows") or {})
+        if not bool(allows.get(scope)):
+            mismatches.append(f"scope={target.get('scope')!r}")
+        if mismatches:
+            raise ValueError(
+                "non-simulated sink pilot selected target mismatch: " + ", ".join(mismatches)
+            )
+        return target
 
     def _contact_spec_for_artifact_dir(self, artifact_dir: Path) -> dict[str, Any]:
         reviewed_path = artifact_dir / "reviewed_contact.json"

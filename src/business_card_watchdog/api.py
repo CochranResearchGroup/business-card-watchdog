@@ -99,6 +99,13 @@ def create_app(config_path: Path | None = None):
         sink: str
         approved_by: str = "operator"
 
+    class SelectedLiveTargetRequest(BaseModel):
+        run_id: str
+        sink: str
+        operator: str
+        scope: str = "lookup"
+        reason: str = ""
+
     class SinkWritePilotRequest(BaseModel):
         run_id: str
         sink: str
@@ -411,6 +418,20 @@ def create_app(config_path: Path | None = None):
             run_id=request.run_id,
             sink=request.sink,
             approved_by=request.approved_by,
+        )
+
+    @app.post("/jobs/{job_id}/selected-live-target")
+    def create_selected_live_target(
+        job_id: str,
+        request: SelectedLiveTargetRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().select_live_target_for_job(
+            job_id=job_id,
+            run_id=request.run_id,
+            sink=request.sink,
+            operator=request.operator,
+            scope=request.scope,
+            reason=request.reason,
         )
 
     @app.post("/jobs/{job_id}/sink-write-pilot")

@@ -125,3 +125,26 @@ Safety:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_watcher.py::test_service_watch_dry_run_harness_uses_synthetic_source_only tests/test_watcher.py::test_watch_dry_run_cli_outputs_fixture_harness tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+
+### Slice 0008-C | 2026-06-14 | Operator Target Selection Record
+
+Implemented:
+
+- Added `business-card-watchdog.selected-live-target.v1` as durable selected run/job/sink/operator/scope approval evidence.
+- Added service `BusinessCardService.select_live_target_for_job`.
+- Added CLI `bcw sinks select-live-target`.
+- Added API `POST /jobs/{job_id}/selected-live-target`.
+- Added MCP tool `business_card_watchdog_selected_live_target`.
+- Registered `selected_live_target.json` for route-refresh staleness and review-bundle visibility.
+- Non-simulated lookup, write, and readback pilots now require a matching `selected_live_target.json` for the same run, job, sink, operator, and scope.
+
+Safety:
+
+- This slice creates zero-network, zero-write approval artifacts only.
+- Simulated pilots remain usable without selected-target approval.
+- Non-simulated pilots fail before adapter execution when selected-target evidence is missing or mismatched.
+- No live GWS/Odollo/Odoo lookup, write, or readback command was executed.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_service.py::test_service_lookup_pilot_uses_injected_read_only_executor tests/test_service.py::test_service_write_pilot_uses_injected_executor tests/test_service.py::test_service_readback_pilot_uses_injected_executor tests/test_cli_surfaces.py::test_cli_sinks_apply_decision_writes_zero_write_artifact tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 8 tests.

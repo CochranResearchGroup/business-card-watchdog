@@ -740,6 +740,32 @@ def test_cli_sinks_apply_decision_writes_zero_write_artifact(tmp_path: Path, cap
                 "--config",
                 str(config_path),
                 "sinks",
+                "select-live-target",
+                job_id,
+                "--run-id",
+                run_id,
+                "--sink",
+                "google_contacts",
+                "--operator",
+                "cli-test",
+                "--scope",
+                "all",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    selected_target = json.loads(capsys.readouterr().out)
+    assert selected_target["target"]["schema"] == "business-card-watchdog.selected-live-target.v1"
+    assert selected_target["target"]["scope_allows"]["lookup"] is True
+    assert selected_target["target"]["scope_allows"]["write"] is True
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "sinks",
                 "write-pilot",
                 job_id,
                 "--run-id",

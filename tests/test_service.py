@@ -1001,6 +1001,13 @@ def test_service_write_pilot_writes_simulated_apply_result(tmp_path: Path) -> No
     service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="write")
     service.preflight_sink_apply(job_id=job_id, run_id=run_id)
     service.decide_sink_apply(job_id=job_id, run_id=run_id, decision="approve", reviewer="tester")
+    service.select_live_target_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        operator="tester",
+        scope="write",
+    )
 
     pilot = service.execute_sink_write_pilot_for_job(
         job_id=job_id,
@@ -1089,6 +1096,13 @@ def test_service_write_pilot_uses_injected_executor(tmp_path: Path) -> None:
     service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="write")
     service.preflight_sink_apply(job_id=job_id, run_id=run_id)
     service.decide_sink_apply(job_id=job_id, run_id=run_id, decision="approve", reviewer="tester")
+    service.select_live_target_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        operator="tester",
+        scope="write",
+    )
 
     pilot = service.execute_sink_write_pilot_for_job(
         job_id=job_id,
@@ -1363,6 +1377,13 @@ def test_service_readback_pilot_uses_injected_executor(tmp_path: Path) -> None:
     service.decide_sink_apply(job_id=job_id, run_id=run_id, decision="approve", reviewer="tester")
     service.apply_sinks_for_job(job_id=job_id, run_id=run_id, apply=True)
     service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="readback")
+    service.select_live_target_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        operator="tester",
+        scope="readback",
+    )
 
     pilot = service.execute_sink_readback_pilot_for_job(
         job_id=job_id,
@@ -1606,6 +1627,13 @@ def test_service_lookup_pilot_uses_injected_read_only_executor(tmp_path: Path) -
 
     service = BusinessCardService(config, sink_lookup_executor=execute)
     service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
+    service.select_live_target_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        operator="operator",
+        scope="lookup",
+    )
 
     payload = service.execute_sink_lookup_pilot_for_job(
         job_id=job_id,
@@ -1631,6 +1659,69 @@ def test_service_lookup_pilot_uses_injected_read_only_executor(tmp_path: Path) -
     assert payload["result"]["results"][0]["matches"][0]["resource_id"] == "people/live123"
     assert payload["result"]["results"][0]["matches"][0]["display"] == "[redacted]"
     assert "raw" not in payload["result"]["results"][0]["matches"][0]
+
+
+def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    calls: list[dict[str, object]] = []
+
+    def execute(request: dict[str, object]) -> dict[str, object]:
+        calls.append(request)
+        return {"matches": [], "network_calls_made": 1, "writes_attempted": 0}
+
+    service = BusinessCardService(config, sink_lookup_executor=execute)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
+
+    try:
+        service.execute_sink_lookup_pilot_for_job(
+            job_id=job_id,
+            run_id=run_id,
+            sink="google_contacts",
+            approved_by="tester",
+            simulate=False,
+        )
+    except ValueError as exc:
+        assert "selected_live_target.json" in str(exc)
+    else:
+        raise AssertionError("expected selected target gate")
+
+    target = service.select_live_target_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        operator="tester",
+        scope="lookup",
+        reason="fixture live lookup approval",
+    )
+    payload = target["target"]
+    job = service.get_job(job_id, run_id=run_id)
+    review_bundle = service.review_bundle(run_id=run_id)
+
+    assert payload["schema"] == "business-card-watchdog.selected-live-target.v1"
+    assert payload["scope_allows"]["lookup"] is True
+    assert payload["scope_allows"]["write"] is False
+    assert payload["operator"] == "tester"
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert Path(target["target_path"]).exists()
+    assert any(artifact["kind"] == "selected_live_target" for artifact in job["artifacts"])
+    assert "selected_live_target" in review_bundle["entries"][0]["artifact_kinds"]
+
+    result = service.execute_sink_lookup_pilot_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        approved_by="tester",
+        simulate=False,
+    )
+    assert result["pilot"]["simulated"] is False
+    assert calls
 
 
 def test_service_assess_downstream_duplicates_blocks_review_and_can_resolve(tmp_path: Path) -> None:
