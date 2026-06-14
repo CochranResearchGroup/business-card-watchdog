@@ -536,6 +536,25 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 2 tests.
 
+### Slice 0009-A32 | 2026-06-14 | Gate Replacement Packets on Abandonment
+
+Implemented:
+
+- Live selection packets now expose whether an existing selected target is safety-confirmed.
+- Live selection packets now expose whether replacement requires abandonment and whether a new selection can proceed immediately.
+- Active existing targets add a packet blocker matching the selected-target write path: abandon the current target before selecting a replacement.
+- Active existing target context now includes an explicit `abandon-live-pilot` command; missing or already-abandoned targets do not.
+
+Safety:
+
+- This slice enriches approval-packet evidence only.
+- It does not create or modify selected targets, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It prevents operator/API/MCP clients from treating a replacement packet as runnable while an active selected target still exists.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_live_selection_packet_does_not_select_target tests/test_service.py::test_service_live_selection_packet_reports_existing_selected_target_context tests/test_cli_surfaces.py::test_cli_live_selection_packet_writes_no_selected_target -q` passed with 3 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

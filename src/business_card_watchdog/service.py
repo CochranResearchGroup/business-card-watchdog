@@ -5361,8 +5361,9 @@ class BusinessCardService:
         existing_selected_target = _read_json_file(selected_target_path) or {}
         existing_abandonment = _read_json_file(artifact_dir / "live_pilot_abandonment.json") or {}
         existing_target_identity = _selected_target_identity(existing_selected_target)
+        existing_target_exists = selected_target_path.exists()
         existing_target_abandoned = (
-            selected_target_path.exists()
+            existing_target_exists
             and existing_abandonment.get("state") == "abandoned"
             and str(
                 existing_abandonment.get("selected_target_identity")
@@ -5371,6 +5372,8 @@ class BusinessCardService:
             )
             == existing_target_identity
         )
+        replacement_requires_abandonment = existing_target_exists and not existing_target_abandoned
+        can_select_replacement_now = not existing_target_exists or existing_target_abandoned
         readiness_audit = self.live_readiness_audit(run_id=run_id, sink=sink, write=False)
         candidates_payload = dict(readiness_audit.get("live_target_candidates") or {})
         candidates = [
@@ -5406,6 +5409,8 @@ class BusinessCardService:
             )
         if missing_requirements:
             blocked_reasons.extend(missing_requirements)
+        if replacement_requires_abandonment:
+            blocked_reasons.append("selected live target already exists; abandon it before selecting a replacement")
         state = "ready_for_operator_approval" if not blocked_reasons else "blocked"
         payload = {
             "schema": "business-card-watchdog.live-selection-packet.v1",
@@ -5434,14 +5439,26 @@ class BusinessCardService:
             "blocked_reasons": blocked_reasons,
             "existing_selected_target": {
                 "path": str(selected_target_path),
-                "exists": selected_target_path.exists(),
+                "exists": existing_target_exists,
                 "identity": existing_target_identity or None,
                 "sink": existing_selected_target.get("sink"),
                 "scope": existing_selected_target.get("scope"),
                 "operator": existing_selected_target.get("operator") or existing_selected_target.get("approved_by"),
+                "target_safety_confirmed": bool(
+                    existing_target_exists
+                    and existing_selected_target.get("target_safety_confirmed")
+                    and existing_selected_target.get("target_safety_confirmation")
+                ),
                 "abandoned": existing_target_abandoned,
                 "abandonment_identity": existing_target_identity if existing_target_abandoned else None,
                 "abandonment_reason": existing_abandonment.get("reason") if existing_target_abandoned else None,
+                "replacement_requires_abandonment": replacement_requires_abandonment,
+                "can_select_replacement_now": can_select_replacement_now,
+                "abandon_command": (
+                    f"sinks abandon-live-pilot {job_id} --run-id {run_id} --operator {operator} --reason <reason> --json"
+                    if replacement_requires_abandonment
+                    else None
+                ),
             },
             "writes_attempted": 0,
             "network_calls_made": 0,

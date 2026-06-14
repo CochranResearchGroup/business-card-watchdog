@@ -213,6 +213,10 @@ def test_service_live_selection_packet_does_not_select_target(tmp_path: Path) ->
     assert "job state is needs_review" in packet["blocked_reasons"]
     assert Path(packet["packet_path"]).exists()
     assert not Path(packet["existing_selected_target"]["path"]).exists()
+    assert packet["existing_selected_target"]["target_safety_confirmed"] is False
+    assert packet["existing_selected_target"]["replacement_requires_abandonment"] is False
+    assert packet["existing_selected_target"]["can_select_replacement_now"] is True
+    assert packet["existing_selected_target"]["abandon_command"] is None
     assert "select-live-target" in packet["commands"]["create_selected_target"]
     artifacts = BusinessCardService(config).list_artifacts(run_id)
     assert any(artifact["kind"] == "live_selection_packet" for artifact in artifacts)
@@ -248,8 +252,14 @@ def test_service_live_selection_packet_reports_existing_selected_target_context(
 
     assert active_packet["existing_selected_target"]["exists"] is True
     assert active_packet["existing_selected_target"]["identity"] == first["selection_id"]
+    assert active_packet["existing_selected_target"]["target_safety_confirmed"] is True
     assert active_packet["existing_selected_target"]["abandoned"] is False
     assert active_packet["existing_selected_target"]["abandonment_identity"] is None
+    assert active_packet["existing_selected_target"]["replacement_requires_abandonment"] is True
+    assert active_packet["existing_selected_target"]["can_select_replacement_now"] is False
+    assert "abandon-live-pilot" in active_packet["existing_selected_target"]["abandon_command"]
+    assert active_packet["state"] == "blocked"
+    assert "selected live target already exists; abandon it before selecting a replacement" in active_packet["blocked_reasons"]
 
     service.live_pilot_abandon_for_job(
         job_id=job_id,
@@ -270,6 +280,9 @@ def test_service_live_selection_packet_reports_existing_selected_target_context(
     assert abandoned_packet["existing_selected_target"]["abandoned"] is True
     assert abandoned_packet["existing_selected_target"]["abandonment_identity"] == first["selection_id"]
     assert abandoned_packet["existing_selected_target"]["abandonment_reason"] == "replace with broader scope"
+    assert abandoned_packet["existing_selected_target"]["replacement_requires_abandonment"] is False
+    assert abandoned_packet["existing_selected_target"]["can_select_replacement_now"] is True
+    assert abandoned_packet["existing_selected_target"]["abandon_command"] is None
 
     replacement = service.select_live_target_for_job(
         job_id=job_id,
@@ -292,6 +305,8 @@ def test_service_live_selection_packet_reports_existing_selected_target_context(
     assert replacement_packet["existing_selected_target"]["abandoned"] is False
     assert replacement_packet["existing_selected_target"]["abandonment_identity"] is None
     assert replacement_packet["existing_selected_target"]["abandonment_reason"] is None
+    assert replacement_packet["existing_selected_target"]["replacement_requires_abandonment"] is True
+    assert replacement_packet["existing_selected_target"]["can_select_replacement_now"] is False
 
 
 def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:

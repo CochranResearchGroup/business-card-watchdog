@@ -206,7 +206,11 @@ def test_cli_live_selection_packet_writes_no_selected_target(tmp_path: Path, cap
     assert Path(payload["packet_path"]).exists()
     assert not Path(payload["existing_selected_target"]["path"]).exists()
     assert payload["existing_selected_target"]["identity"] is None
+    assert payload["existing_selected_target"]["target_safety_confirmed"] is False
     assert payload["existing_selected_target"]["abandoned"] is False
+    assert payload["existing_selected_target"]["replacement_requires_abandonment"] is False
+    assert payload["existing_selected_target"]["can_select_replacement_now"] is True
+    assert payload["existing_selected_target"]["abandon_command"] is None
 
 
 def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, capsys) -> None:
