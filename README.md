@@ -127,3 +127,4 @@ This is an initial scaffold. It has deterministic run ledgers, config loading, r
 Operational details live in:
 
 - `docs/operations/user-scope-install-and-service.md`
+- `docs/operations/review-workflow.md`

@@ -2435,3 +2435,22 @@ Validation:
 Remaining:
 
 - Future documentation work can add a longer operator walkthrough once Plan 0004 reaches a stable end-to-end review workflow.
+
+### Slice 0004-CE | 2026-06-14 | Review Workflow Operations Walkthrough
+
+Implemented:
+
+- Added `docs/operations/review-workflow.md`.
+- Documented the operator path from intake through run/job inspection, review queue inspection, workbook preview/import, enrichment guardrails, duplicate/routing checks, explicit sink-pilot gates, and safe deterministic continuation.
+- Linked the workflow from README operational details.
+- Kept automation guidance aligned with existing `--json` surfaces.
+
+Validation:
+
+- `git diff --check` passed.
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state -q` passed with 1 test.
+- `rg -n 'review-workflow|reviews preview-validation|reviews apply-decisions|sinks write-pilot|actions run-next|--allow-paid-enrichment' README.md docs/operations/review-workflow.md` passed.
+
+Remaining:
+
+- Future docs can add screenshots or sample fixture output if the review workflow needs training material.
