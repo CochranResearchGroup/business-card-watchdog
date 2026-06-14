@@ -1647,6 +1647,25 @@ Validation:
 - `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state -q` passed with 1 test.
 - `python -m py_compile src/business_card_watchdog/cli.py tests/test_cli_surfaces.py` passed.
 
+## Turn 99 | 2026-06-14
+
+Started Plan 0006 for public upstream hardening and executed the first CI/leak-gate slice.
+
+Implemented:
+
+- Added `docs/dev/plans/0006-2026-06-14-public-upstream-hardening.md`.
+- Updated `ROADMAP.md` to make Plan 0006 the active implementation plan.
+- Added `.github/workflows/ci.yml` for public push/PR validation.
+- The workflow installs Python 3.11 with `uv`, installs `.[dev]`, runs pytest, runs ruff, builds package artifacts, and scans repository history with gitleaks.
+- Fixed small ruff findings in `dedupe.py` and `sinks.py` so the new lint gate is enforceable.
+
+Validation:
+
+- `.venv/bin/python -m pytest -q` passed with 179 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` built source and wheel distributions.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` scanned 92 commits and found no leaks.
+
 ## Turn 98 | 2026-06-14
 
 Continued Plan 0004 execution with a current completion and residual backlog audit.

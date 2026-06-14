@@ -658,10 +658,10 @@ def check_sink_lookup_readiness(sink: str, *, dry_run: bool) -> SinkReadiness:
 
 def contact_serialization_key(spec: dict[str, Any], fingerprint: str | None = None) -> str:
     fingerprint = fingerprint or canonical_contact_fingerprint(spec)
-    for field in ("email", "phone", "full_name"):
-        value = _normalize_value(spec.get(field)).lower()
+    for key in ("email", "phone", "full_name"):
+        value = _normalize_value(spec.get(key)).lower()
         if value:
-            return f"{field}:{value}"
+            return f"{key}:{value}"
     return f"fingerprint:{fingerprint}"
 
 
@@ -693,10 +693,10 @@ def _payload_for_sink(sink: str, spec: dict[str, Any], fingerprint: str) -> dict
 
 def _match_keys(spec: dict[str, Any], fingerprint: str) -> dict[str, str]:
     keys = {"fingerprint": fingerprint}
-    for field in ("email", "phone", "full_name"):
-        value = _normalize_value(spec.get(field))
+    for key in ("email", "phone", "full_name"):
+        value = _normalize_value(spec.get(key))
         if value:
-            keys[field] = value
+            keys[key] = value
     return keys
 
 
