@@ -356,6 +356,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_apply_pilot_report_blocks_inconsistent_write_readback tests/test_service.py::test_service_readback_pilot_uses_injected_executor tests/test_service.py::test_service_readback_pilot_rejects_stale_selected_target_write tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 7 tests.
 
+### Slice 0009-A22 | 2026-06-14 | Closeout Checks Selected Target Evidence
+
+Implemented:
+
+- Live pilot closeout now recomputes write/readback selected-target consistency instead of trusting only the prior apply report state.
+- Closeout blocks if `sink_write_pilot.json` or `sink_readback_pilot.json` carries selected-target evidence that differs from the current selected live target.
+- Closeout now copies apply-report consistency errors into its own report and blocks even if a stale or hand-edited apply report claims `state = complete`.
+
+Safety:
+
+- This slice validates closeout evidence only.
+- It does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It prevents stale or hand-edited final evidence from advancing a pilot closeout after selected-target replacement or artifact tampering.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_live_pilot_closeout_rejects_stale_selected_target_evidence tests/test_service.py::test_service_apply_pilot_report_blocks_inconsistent_write_readback tests/test_service.py::test_service_live_pilot_closeout_rejects_stale_selected_target_audit_scope -q` passed with 3 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

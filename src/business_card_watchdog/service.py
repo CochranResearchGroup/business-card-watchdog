@@ -4057,8 +4057,38 @@ class BusinessCardService:
             blocked_reasons.append(f"write_pilot_state:{write_pilot.get('state')}")
         if readback_pilot and readback_pilot.get("state") != "verified":
             blocked_reasons.append(f"readback_pilot_state:{readback_pilot.get('state')}")
+        consistency_errors = self._apply_pilot_report_consistency_errors(
+            write_pilot=write_pilot or None,
+            readback_pilot=readback_pilot or None,
+        )
+        blocked_reasons.extend(f"sink_apply_pilot_report:{reason}" for reason in consistency_errors)
+        if selected_target and write_pilot:
+            write_selected_target = dict(write_pilot.get("selected_target") or {})
+            if write_selected_target:
+                expected_identity = _selected_target_identity(selected_target)
+                write_identity = _selected_target_identity(write_selected_target)
+                if write_identity != expected_identity:
+                    blocked_reasons.append(
+                        f"write_pilot_selected_target_mismatch:current={expected_identity or 'missing'} "
+                        f"write={write_identity or 'missing'}"
+                    )
+        if selected_target and readback_pilot:
+            readback_source_write = dict(readback_pilot.get("source_write_pilot") or {})
+            readback_selected_target = dict(readback_source_write.get("selected_target") or {})
+            if readback_selected_target:
+                expected_identity = _selected_target_identity(selected_target)
+                readback_identity = _selected_target_identity(readback_selected_target)
+                if readback_identity != expected_identity:
+                    blocked_reasons.append(
+                        f"readback_source_selected_target_mismatch:current={expected_identity or 'missing'} "
+                        f"readback={readback_identity or 'missing'}"
+                    )
         if apply_report and apply_report.get("state") != "complete":
             blocked_reasons.append(f"sink_apply_pilot_report_state:{apply_report.get('state')}")
+        apply_report_consistency_errors = list(apply_report.get("consistency_errors") or [])
+        blocked_reasons.extend(
+            f"sink_apply_pilot_report:{reason}" for reason in apply_report_consistency_errors
+        )
         state = "complete" if not blocked_reasons else "incomplete"
         writes_attempted = int(write_pilot.get("writes_attempted") or 0)
         network_calls_made = (
@@ -4129,6 +4159,8 @@ class BusinessCardService:
             },
             "apply_report": {
                 "state": apply_report.get("state"),
+                "consistency_errors": apply_report_consistency_errors,
+                "closeout_consistency_errors": consistency_errors,
                 "path": artifact_paths["sink_apply_pilot_report"],
             },
             "artifact_paths": artifact_paths,

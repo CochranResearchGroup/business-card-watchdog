@@ -2228,6 +2228,81 @@ def test_service_live_pilot_closeout_rejects_stale_selected_target_audit_scope(t
     assert "selected_target_audit_blocked" not in aligned_status["counts"]
 
 
+def test_service_live_pilot_closeout_rejects_stale_selected_target_evidence(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}],
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    selected = service.select_live_target_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        operator="tester",
+        scope="all",
+        safety_confirmation="fixture contact is safe for google contacts test profile",
+    )["target"]
+    service.selected_live_target_audit(job_id=job_id, run_id=run_id, scope="all")
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+        field_corrections={"full_name": "Reviewed Fixture", "email": "fixture@example.test"},
+    )
+    service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="write")
+    service.preflight_sink_apply(job_id=job_id, run_id=run_id)
+    service.decide_sink_apply(job_id=job_id, run_id=run_id, decision="approve", reviewer="tester")
+    service.build_sink_apply_pilot_readiness_for_job(job_id=job_id, run_id=run_id, sink="google_contacts")
+    service.execute_sink_write_pilot_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        approved_by="tester",
+    )
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="readback")
+    service.execute_sink_readback_pilot_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        approved_by="tester",
+    )
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+    write_path = artifact_dir / "sink_write_pilot.json"
+    write = json.loads(write_path.read_text(encoding="utf-8"))
+    write["selected_target"] = {"selection_id": "stale-write-target"}
+    write_path.write_text(json.dumps(write, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    readback_path = artifact_dir / "sink_readback_pilot.json"
+    readback = json.loads(readback_path.read_text(encoding="utf-8"))
+    readback["source_write_pilot"]["selected_target"] = {"selection_id": "stale-readback-target"}
+    readback_path.write_text(json.dumps(readback, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    report = service.build_sink_apply_pilot_report_for_job(job_id=job_id, run_id=run_id)["report"]
+    report["state"] = "complete"
+    report_path = artifact_dir / "sink_apply_pilot_report.json"
+    report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    closeout = service.build_live_pilot_closeout_for_job(job_id=job_id, run_id=run_id, write=False)
+
+    selected_identity = selected["selection_id"]
+    blocked_reasons = closeout["report"]["blocked_reasons"]
+    assert closeout["report"]["state"] == "incomplete"
+    assert (
+        f"write_pilot_selected_target_mismatch:current={selected_identity} write=stale-write-target"
+        in blocked_reasons
+    )
+    assert (
+        f"readback_source_selected_target_mismatch:current={selected_identity} readback=stale-readback-target"
+        in blocked_reasons
+    )
+    assert any("sink_apply_pilot_report:source_write_selected_target_mismatch" in reason for reason in blocked_reasons)
+    assert closeout["report"]["apply_report"]["consistency_errors"]
+    assert closeout["report"]["apply_report"]["closeout_consistency_errors"]
+
+
 def test_service_selected_lookup_smoke_imports_redacted_duplicate_evidence(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",
