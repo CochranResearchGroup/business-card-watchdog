@@ -2216,3 +2216,20 @@ Validation:
 Remaining:
 
 - Future work can add a dedicated command for exporting only the validation CSV, but the preview artifact surface now has durable run-level evidence when explicitly requested.
+
+### Slice 0004-BS | 2026-06-14 | Dedicated Validation CSV Export Command
+
+Implemented:
+
+- Added CLI `bcw reviews preview-validation`.
+- The command reads an edited review workbook CSV and prints only the spreadsheet-friendly validation CSV by default.
+- Added `--write-artifacts --json` support to persist and return the structured preview artifact paths when the operator wants durable run-level evidence.
+- Reused the same preview parser and validation logic as `reviews apply-decisions --preview`; the command never applies review decisions.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_service.py::test_service_preview_review_workbook_csv_can_persist_artifacts tests/test_service.py::test_service_preview_review_workbook_csv_validates_without_writes -q` passed with 3 tests.
+
+Remaining:
+
+- Future work can add API/MCP aliases for validation-only export if needed, while the structured preview payload already carries `validation_csv` on those surfaces.

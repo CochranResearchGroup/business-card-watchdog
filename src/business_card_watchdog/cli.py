@@ -101,6 +101,12 @@ def build_parser() -> argparse.ArgumentParser:
     reviews_workbook.add_argument("--state", default="all")
     reviews_workbook.add_argument("--no-write", action="store_true")
     reviews_workbook.add_argument("--json", action="store_true")
+    reviews_preview_validation = reviews_sub.add_parser("preview-validation")
+    reviews_preview_validation.add_argument("--run-id", required=True)
+    reviews_preview_validation.add_argument("--reviewer", default="operator")
+    reviews_preview_validation.add_argument("--decisions-csv-file", type=Path, required=True)
+    reviews_preview_validation.add_argument("--write-artifacts", action="store_true")
+    reviews_preview_validation.add_argument("--json", action="store_true")
     reviews_apply = reviews_sub.add_parser("apply-decisions")
     reviews_apply.add_argument("--run-id", required=True)
     reviews_apply.add_argument("--reviewer", default="operator")
@@ -316,6 +322,16 @@ def main(argv: list[str] | None = None) -> int:
             payload = service.review_workbook(run_id=args.run_id, state=args.state, write=not args.no_write)
             if not args.json:
                 print(payload["csv"], end="")
+                return 0
+        elif args.reviews_command == "preview-validation":
+            payload = service.preview_review_workbook_csv(
+                run_id=args.run_id,
+                reviewer=args.reviewer,
+                csv_text=args.decisions_csv_file.read_text(encoding="utf-8"),
+                write=args.write_artifacts,
+            )
+            if not args.json:
+                print(payload["validation_csv"], end="")
                 return 0
         elif args.reviews_command == "apply-decisions":
             if args.decisions_csv_file is not None:

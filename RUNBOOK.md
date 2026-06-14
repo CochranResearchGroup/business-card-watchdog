@@ -1537,3 +1537,18 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_preview_review_workbook_csv_validates_without_writes tests/test_service.py::test_service_preview_review_workbook_csv_can_persist_artifacts tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+
+## Turn 84 | 2026-06-14
+
+Continued Plan 0004 execution with a dedicated validation CSV export command.
+
+Implemented:
+
+- Added CLI `bcw reviews preview-validation`.
+- The command reads an edited review workbook CSV and prints only the validation CSV by default.
+- Optional `--write-artifacts --json` persists and returns the same preview artifacts as the structured preview path.
+- The command reuses the existing preview parser and does not apply review decisions.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_service.py::test_service_preview_review_workbook_csv_can_persist_artifacts tests/test_service.py::test_service_preview_review_workbook_csv_validates_without_writes -q` passed with 3 tests.

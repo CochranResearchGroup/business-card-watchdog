@@ -153,6 +153,47 @@ def test_cli_runs_and_jobs_use_recorded_runtime_state(
                 "--config",
                 str(config_path),
                 "reviews",
+                "preview-validation",
+                "--run-id",
+                run_id,
+                "--reviewer",
+                "cli-workbook",
+                "--decisions-csv-file",
+                str(workbook_import_path),
+            ]
+        )
+        == 0
+    )
+    validation_csv = capsys.readouterr().out
+    assert "row_number,status,run_id,job_id,action,errors,warnings" in validation_csv
+    assert "ready" in validation_csv
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "reviews",
+                "preview-validation",
+                "--run-id",
+                run_id,
+                "--reviewer",
+                "cli-workbook",
+                "--decisions-csv-file",
+                str(workbook_import_path),
+                "--write-artifacts",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    validation_preview = json.loads(capsys.readouterr().out)
+    assert Path(validation_preview["validation_csv_path"]).exists()
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "reviews",
                 "apply-decisions",
                 "--run-id",
                 run_id,
