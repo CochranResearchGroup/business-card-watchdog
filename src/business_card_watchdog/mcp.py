@@ -561,6 +561,11 @@ def tool_manifest() -> dict[str, object]:
                 "input_schema": {"type": "object", "properties": {}},
             },
             {
+                "name": "business_card_watchdog_watch_dry_run",
+                "description": "Run a fixture-backed watched-folder dry-run harness without touching configured private watch inputs.",
+                "input_schema": {"type": "object", "properties": {}},
+            },
+            {
                 "name": "business_card_watchdog_doctor",
                 "description": "Run user-scope runtime directory, skill, and watcher readiness checks.",
                 "input_schema": {"type": "object", "properties": {}},
@@ -833,6 +838,8 @@ def call_tool(
         )
     if tool_name == "business_card_watchdog_watch_status":
         return service.watch_status()
+    if tool_name == "business_card_watchdog_watch_dry_run":
+        return service.watch_dry_run_harness()
     if tool_name == "business_card_watchdog_doctor":
         return service.doctor()
     raise ValueError(f"unknown MCP tool: {tool_name}")

@@ -9,6 +9,7 @@ import pytest
 
 from business_card_watchdog.cli import main
 from business_card_watchdog.config import AppConfig, WatchConfig
+from business_card_watchdog.service import BusinessCardService
 from business_card_watchdog.watcher import PollingWatcher, WatchStateStore
 
 from synthetic_fixtures import write_synthetic_image
@@ -110,6 +111,30 @@ def test_watch_status_reports_missing_input_error(tmp_path: Path) -> None:
     assert "watch input not found" in status.last_error
 
 
+def test_service_watch_dry_run_harness_uses_synthetic_source_only(tmp_path: Path) -> None:
+    private_source = tmp_path / "private-sync"
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        cache_dir=tmp_path / "cache",
+        watch=WatchConfig(inputs=[str(private_source)], settle_seconds=0.0),
+    )
+
+    payload = BusinessCardService(config).watch_dry_run_harness()
+
+    assert payload["schema"] == "business-card-watchdog.watch-dry-run-harness.v1"
+    assert payload["state"] == "passed"
+    assert payload["network_calls_made"] == 0
+    assert payload["writes_attempted"] == 0
+    assert payload["private_sources_used"] is False
+    assert payload["first_scan_processed"] == payload["synthetic_images"]
+    assert payload["second_scan_processed"] == []
+    assert payload["final_status"]["seen_count"] == 1
+    assert payload["final_status"]["inputs"] == [payload["source_dir"]]
+    assert all(payload["assertions"].values())
+    assert not private_source.exists()
+
+
 def test_watch_status_scan_can_be_bounded_and_non_recursive(tmp_path: Path) -> None:
     source = tmp_path / "cards"
     nested = source / "nested"
@@ -146,6 +171,18 @@ def test_watch_status_cli_outputs_json(tmp_path: Path, capsys: pytest.CaptureFix
     payload = json.loads(capsys.readouterr().out)
     assert payload["inputs"] == []
     assert payload["seen_count"] == 0
+
+
+def test_watch_dry_run_cli_outputs_fixture_harness(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    config_path = tmp_path / "config.toml"
+    cache_dir = tmp_path / "cache"
+    config_path.write_text(f'cache_dir = "{cache_dir}"\n[watch]\ninputs = []\n', encoding="utf-8")
+
+    assert main(["--config", str(config_path), "watch-dry-run", "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["schema"] == "business-card-watchdog.watch-dry-run-harness.v1"
+    assert payload["state"] == "passed"
+    assert payload["private_sources_used"] is False
 
 
 def test_main_status_includes_watch_status(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

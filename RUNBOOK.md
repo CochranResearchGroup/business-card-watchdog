@@ -2282,3 +2282,24 @@ Validation:
 Safety:
 
 - This was local runtime readiness work only. It made no public-web search, paid enrichment, GWS, Odollo/Odoo, live lookup, live write, live readback, or private SyncThing image processing calls.
+
+## Turn 121 | 2026-06-14
+
+Continued Plan 0008 with Slice 0008-B.
+
+Implemented:
+
+- Added `business-card-watchdog.watch-dry-run-harness.v1`.
+- Added `BusinessCardService.watch_dry_run_harness`.
+- Added CLI `bcw watch-dry-run`.
+- Added API `POST /watch/dry-run`.
+- Added MCP tool `business_card_watchdog_watch_dry_run`.
+- Harness creates a synthetic cache-local watch source, processes it through watcher dry-run state once, restarts watcher state, and proves the second scan does not reprocess the seen file.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_watcher.py::test_service_watch_dry_run_harness_uses_synthetic_source_only tests/test_watcher.py::test_watch_dry_run_cli_outputs_fixture_harness tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+
+Safety:
+
+- This was fixture-backed watcher proof only. It did not inspect or process configured SyncThing/private watch inputs and made no public-web search, paid enrichment, GWS, Odollo/Odoo, live lookup, live write, or live readback calls.

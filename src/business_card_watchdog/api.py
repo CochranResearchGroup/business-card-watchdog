@@ -449,4 +449,8 @@ def create_app(config_path: Path | None = None):
     def watch_status() -> dict[str, object]:
         return service().watch_status()
 
+    @app.post("/watch/dry-run")
+    def watch_dry_run() -> dict[str, object]:
+        return service().watch_dry_run_harness()
+
     return app

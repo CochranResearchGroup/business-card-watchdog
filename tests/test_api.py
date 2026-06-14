@@ -417,6 +417,10 @@ def test_api_enrichment_request_accepts_paid_provider_results(tmp_path: Path) ->
     assert result["provider_result"]["paid_api_calls_attempted"] == 0
     assert client.post("/sinks/check").json()["dry_run"] is True
     assert client.get("/watch/status").json()["seen_count"] == 0
+    watch_dry_run = client.post("/watch/dry-run").json()
+    assert watch_dry_run["schema"] == "business-card-watchdog.watch-dry-run-harness.v1"
+    assert watch_dry_run["state"] == "passed"
+    assert watch_dry_run["private_sources_used"] is False
 
 
 def test_api_executes_sink_lookup_pilot_with_mocked_matches(tmp_path: Path) -> None:

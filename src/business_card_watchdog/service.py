@@ -7,7 +7,7 @@ from io import StringIO
 from pathlib import Path
 from typing import Any, Callable
 
-from .config import AppConfig, ensure_runtime_dirs
+from .config import AppConfig, WatchConfig, ensure_runtime_dirs
 from .contact import (
     apply_enrichment_proposals,
     apply_review_corrections,
@@ -3709,6 +3709,95 @@ class BusinessCardService:
     def watch_status(self) -> dict[str, Any]:
         return PollingWatcher(self.config).status().to_dict()
 
+    def watch_dry_run_harness(self) -> dict[str, Any]:
+        ensure_runtime_dirs(self.config)
+        harness_id = utc_now().replace(":", "-")
+        harness_root = self.config.cache_dir / "watch-dry-run-harness" / harness_id
+        source_dir = harness_root / "source"
+        data_dir = harness_root / "data"
+        cache_dir = harness_root / "cache"
+        image_path = _write_synthetic_business_card_image(source_dir / "synthetic-business-card.png")
+        probe_config = AppConfig(
+            config_path=self.config.config_path,
+            skill_root=self.config.skill_root,
+            data_dir=data_dir,
+            cache_dir=cache_dir,
+            path_aliases=dict(self.config.path_aliases),
+            watch=WatchConfig(inputs=[str(source_dir)], settle_seconds=0.0),
+            prefilter=self.config.prefilter,
+            normalization=self.config.normalization,
+            enrichment=self.config.enrichment,
+            sink=self.config.sink,
+            routing_rules=list(self.config.routing_rules),
+        )
+        processed: list[dict[str, Any]] = []
+
+        def process_source(source: str, *, dry_run: bool = True, workers: int = 1) -> Path:
+            run_dir = probe_config.runs_dir / f"watch-dry-run-{len(processed) + 1}"
+            ledger = RunLedger(run_dir)
+            ledger.initialize(source=source, dry_run=dry_run)
+            ledger.transition_run("discovering")
+            ledger.set_job_count(1)
+            ledger.transition_run("processing")
+            ledger.record_event(
+                "watch_dry_run_harness_processed",
+                {"source": source, "dry_run": dry_run, "workers": workers},
+            )
+            ledger.transition_run("completed")
+            processed.append({"source": source, "dry_run": dry_run, "workers": workers, "run_dir": str(run_dir)})
+            return run_dir
+
+        first = PollingWatcher(probe_config)
+        first.orchestrator.process_source = process_source  # type: ignore[method-assign]
+        first_scan = [str(path) for path in first.scan_once(dry_run=True)]
+
+        restarted = PollingWatcher(probe_config)
+        restarted.orchestrator.process_source = process_source  # type: ignore[method-assign]
+        second_scan = [str(path) for path in restarted.scan_once(dry_run=True)]
+        final_status = restarted.status().to_dict()
+
+        assertions = {
+            "synthetic_source_only": str(image_path).startswith(str(harness_root)),
+            "first_scan_processed_one": len(first_scan) == 1,
+            "restart_processed_zero": len(second_scan) == 0,
+            "seen_file_persisted": int(final_status.get("seen_count", 0)) == 1,
+            "dry_run_only": all(item["dry_run"] is True for item in processed),
+            "no_configured_watch_inputs_used": final_status.get("inputs") == [str(source_dir)],
+        }
+        state = "passed" if all(assertions.values()) else "failed"
+        return {
+            "schema": "business-card-watchdog.watch-dry-run-harness.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "harness_id": harness_id,
+            "harness_root": str(harness_root),
+            "source_dir": str(source_dir),
+            "data_dir": str(data_dir),
+            "watch_dir": str(probe_config.watch_dir),
+            "synthetic_images": [str(image_path)],
+            "first_scan_processed": first_scan,
+            "second_scan_processed": second_scan,
+            "processed": processed,
+            "final_status": final_status,
+            "assertions": assertions,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "private_sources_used": False,
+            "safe_next_actions": [
+                {
+                    "action": "inspect_watch_harness",
+                    "command": "watch-dry-run --json",
+                    "reason": "review fixture-backed watcher proof before using configured SyncThing inputs",
+                    "safe_to_auto_continue": True,
+                    "requires_explicit_operator_action": False,
+                }
+            ],
+            "explicit_stop_conditions": [
+                "Do not process private SyncThing images from generic continuation.",
+                "Do not replace the configured watch inputs from this harness.",
+            ],
+        }
+
     def watch_reset(self) -> dict[str, Any]:
         PollingWatcher(self.config).reset()
         return {"reset": True, "watch_dir": str(self.config.watch_dir)}
@@ -5071,3 +5160,20 @@ def _runtime_safe_next_actions(
             }
         )
     return actions
+
+
+def _write_synthetic_business_card_image(path: Path) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    width = 350
+    height = 200
+    payload = (
+        b"\x89PNG\r\n\x1a\n"
+        b"\x00\x00\x00\rIHDR"
+        + width.to_bytes(4, "big")
+        + height.to_bytes(4, "big")
+        + b"\x08\x02\x00\x00\x00"
+        + b"\x00\x00\x00\x00"
+        + b"\x00\x00\x00\x00IEND\xaeB`\x82"
+    )
+    path.write_bytes(payload)
+    return path

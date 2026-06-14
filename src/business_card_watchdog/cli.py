@@ -450,6 +450,9 @@ def build_parser() -> argparse.ArgumentParser:
     watch_status = sub.add_parser("watch-status")
     watch_status.add_argument("--json", action="store_true")
 
+    watch_dry_run = sub.add_parser("watch-dry-run")
+    watch_dry_run.add_argument("--json", action="store_true")
+
     watch_reset = sub.add_parser("watch-reset")
     watch_reset.add_argument("--yes", action="store_true")
 
@@ -801,6 +804,11 @@ def main(argv: list[str] | None = None) -> int:
         payload = service.watch_status()
         print(json.dumps(payload, indent=2) if args.json else payload)
         return 0 if payload["last_error"] is None else 2
+
+    if args.command == "watch-dry-run":
+        payload = service.watch_dry_run_harness()
+        print(json.dumps(payload, indent=2) if args.json else payload)
+        return 0 if payload["state"] == "passed" else 2
 
     if args.command == "watch-reset":
         if not args.yes:

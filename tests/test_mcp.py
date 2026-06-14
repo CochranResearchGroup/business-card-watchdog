@@ -53,6 +53,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_public_web_enrichment_results" in names
     assert "business_card_watchdog_provider_enrichment_handoff" in names
     assert "business_card_watchdog_provider_enrichment_results" in names
+    assert "business_card_watchdog_watch_dry_run" in names
     assert "business_card_watchdog_doctor" in names
     review_tool = next(tool for tool in manifest["tools"] if tool["name"] == "business_card_watchdog_job_review")
     assert "approve_enrichment_merge" in review_tool["input_schema"]["properties"]["action"]["enum"]
@@ -95,6 +96,7 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     phase_report = call_tool("business_card_watchdog_phase_report", {"run_id": run_id}, config=config)
     readiness_report = call_tool("business_card_watchdog_pilot_readiness_report", {"run_id": run_id}, config=config)
     runtime_readiness = call_tool("business_card_watchdog_runtime_readiness", {}, config=config)
+    watch_dry_run = call_tool("business_card_watchdog_watch_dry_run", {}, config=config)
     reviews = call_tool(
         "business_card_watchdog_reviews_list",
         {
@@ -270,6 +272,8 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert readiness_report["blocked_job_ids"] == [job_id]
     assert runtime_readiness["schema"] == "business-card-watchdog.runtime-readiness.v1"
     assert runtime_readiness["network_calls_made"] == 0
+    assert watch_dry_run["schema"] == "business-card-watchdog.watch-dry-run-harness.v1"
+    assert watch_dry_run["state"] == "passed"
     assert [entry["job_id"] for entry in reviews] == [job_id]
     assert review_bundle["schema"] == "business-card-watchdog.review-bundle.v1"
     assert review_bundle["entries"][0]["job_id"] == job_id
