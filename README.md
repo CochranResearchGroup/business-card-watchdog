@@ -99,6 +99,21 @@ Inspect runs, jobs, review queue, sinks, and watcher state:
 
 Add `--json` to run, job, and review commands when consuming them from automation.
 
+## Operator-Selected Live Pilots
+
+Live lookup, write, and readback are not part of generic continuation or broad batch automation. Use one explicit `run_id`, `job_id`, `sink`, `operator`, and scope at a time, starting with non-sensitive test card data.
+
+Review the selected target gates before any non-simulated sink call:
+
+```bash
+.venv/bin/bcw sinks live-selection-packet <job-id> --run-id <run-id> --sink google_contacts --operator <operator> --scope lookup
+.venv/bin/bcw sinks select-live-target <job-id> --run-id <run-id> --sink google_contacts --operator <operator> --scope lookup --safety-confirmation "<operator confirms intended tenant/profile>" --json
+.venv/bin/bcw sinks selected-target-audit <job-id> --run-id <run-id> --scope lookup --no-write
+.venv/bin/bcw runs live-pilot-status <run-id> --no-write
+```
+
+Use `--sink odoo` for Odollo/Odoo targets. If the selection packet reports that replacement requires abandonment, run `sinks abandon-live-pilot` for the current target before selecting a replacement. Use `docs/operations/live-pilot-checklists.md` for the full lookup, write, readback, and closeout procedure.
+
 Install a user-scope systemd unit file without enabling or starting it:
 
 ```bash

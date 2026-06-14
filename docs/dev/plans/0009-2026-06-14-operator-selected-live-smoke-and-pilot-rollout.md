@@ -667,6 +667,25 @@ Validation:
 
 - `.venv/bin/python -m pytest -q` passed with 223 tests.
 
+### Slice 0009-A39 | 2026-06-14 | Add README Live Pilot Front Door
+
+Implemented:
+
+- README now includes an operator-selected live pilot section.
+- The section states that live lookup/write/readback are not part of generic continuation or broad batch automation.
+- The section shows the current text-mode selected-target review sequence before any non-simulated sink call.
+- The section points operators to the full live pilot checklist for lookup, write, readback, and closeout.
+
+Safety:
+
+- This slice updates operator documentation only.
+- It does not create or modify selected targets, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+- It makes the repo front door match Plan 0009's explicit one-run, one-job, one-sink live-pilot boundary.
+
+Validation:
+
+- `.venv/bin/python -m pytest -q` passed with 223 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:
