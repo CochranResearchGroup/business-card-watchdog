@@ -95,6 +95,19 @@ def test_cli_review_routing_drill_outputs_fixture_artifact(tmp_path: Path, capsy
     )
     assert Path(payload["drill_path"]).exists()
 
+    assert main(["--config", str(config_path), "drills", "review-routing"]) == 0
+    text = capsys.readouterr().out
+    assert "Review routing drill:" in text
+    assert "Fixture sinks: google_contacts, odoo" in text
+    assert "Review: needs_review -> ready_to_route" in text
+    assert "Observed: writes=0 network=0 private_sources=False live_sinks=False" in text
+    assert "Safe actions executed: 7" in text
+    assert "Manual actions skipped: 1" in text
+    assert "decide_sink_apply" in text
+    assert "Review workbook: reviews workbook --run-id" in text
+    assert "Stop conditions: 3" in text
+    assert "{" not in text
+
 
 def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.toml"

@@ -111,6 +111,72 @@ def _render_watch_dry_run_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_review_routing_drill_text(payload: dict[str, object]) -> str:
+    review = dict(payload.get("review") or {})
+    safe_actions = dict(payload.get("safe_actions") or {})
+    sink_context = dict(payload.get("fixture_sink_context") or {})
+    commands = dict(payload.get("commands") or {})
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    route_artifacts = payload.get("route_artifact_kinds") or []
+    executed = safe_actions.get("executed_actions") or []
+    skipped = safe_actions.get("skipped_actions") or []
+    next_actions = payload.get("next_actions") or []
+    lines = [
+        "Review routing drill:",
+        f"Run: {payload.get('run_id')}",
+        f"Job: {payload.get('job_id')}",
+        f"Fixture image: {payload.get('fixture_image_path')}",
+        "Fixture sinks: " + ", ".join(str(sink) for sink in payload.get("configured_fixture_sinks") or []),
+        "Fixture context: "
+        f"gws={sink_context.get('google_contacts_profile') or 'none'} "
+        f"odollo={sink_context.get('odollo_tenant') or 'none'} "
+        f"dry_run={sink_context.get('dry_run', True)}",
+        f"Review: {review.get('initial_state') or 'unknown'} -> {review.get('final_state') or 'unknown'}",
+        "Observed: "
+        f"writes={payload.get('writes_attempted', 0)} "
+        f"network={payload.get('network_calls_made', 0)} "
+        f"private_sources={payload.get('private_sources_used', False)} "
+        f"live_sinks={payload.get('live_sink_calls_made', False)}",
+        f"Drill path: {payload.get('drill_path')}",
+        f"Review bundle: {payload.get('review_bundle_path')}",
+        f"Review workbook: {payload.get('review_workbook_path')}",
+    ]
+    artifact_rows = route_artifacts if isinstance(route_artifacts, list) else []
+    lines.append(f"Route artifacts: {len(artifact_rows)}")
+    for artifact in artifact_rows:
+        lines.append(f" - {artifact}")
+    executed_rows = executed if isinstance(executed, list) else []
+    lines.append(f"Safe actions executed: {len(executed_rows)}")
+    for action in executed_rows:
+        lines.append(f" - {action}")
+    skipped_rows = skipped if isinstance(skipped, list) else []
+    lines.append(f"Manual actions skipped: {len(skipped_rows)}")
+    for action in skipped_rows:
+        lines.append(f" - {action}")
+    next_rows = next_actions if isinstance(next_actions, list) else []
+    if next_rows:
+        lines.append("Next actions:")
+        for action in next_rows:
+            if isinstance(action, dict):
+                lines.append(f" - {action.get('action')}: {action.get('command')}")
+    lines.append("Commands:")
+    for label, key in [
+        ("Review bundle", "review_bundle"),
+        ("Review workbook", "review_workbook"),
+        ("Next actions", "next_actions"),
+        ("Run next safe", "run_next_safe"),
+        ("Phase report", "phase_report"),
+    ]:
+        command = commands.get(key)
+        if command:
+            lines.append(f" - {label}: {command}")
+    stops = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stops)}")
+    for condition in stops:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
     runtime = dict(payload.get("runtime_readiness") or {})
     recovery = dict(payload.get("service_recovery") or {})
@@ -1572,6 +1638,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "drills":
         if args.drills_command == "review-routing":
             payload = service.review_routing_drill()
+            if not args.json:
+                print(_render_review_routing_drill_text(payload), end="")
+                return 0
         print(json.dumps(payload, indent=2) if args.json else payload)
         return 0
 

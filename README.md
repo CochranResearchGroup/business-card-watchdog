@@ -101,6 +101,7 @@ Inspect runs, jobs, review queue, sinks, and watcher state:
 .venv/bin/bcw runs summary <run-id>
 .venv/bin/bcw runs phase-report <run-id>
 .venv/bin/bcw operator-dashboard --run-id <run-id>
+.venv/bin/bcw drills review-routing
 .venv/bin/bcw sinks lookup-readiness <job-id> --run-id <run-id> --sink google_contacts --json
 .venv/bin/bcw jobs list --run-id <run-id>
 .venv/bin/bcw jobs show <job-id> --run-id <run-id>
@@ -111,6 +112,11 @@ Inspect runs, jobs, review queue, sinks, and watcher state:
 ```
 
 Add `--json` to run, job, and review commands when consuming them from automation.
+
+`drills review-routing` creates a synthetic fixture run and proves review approval,
+review bundle/workbook export, duplicate lookup planning, dry-run sink routing, and
+apply preflight without configured watch inputs, private images, enrichment calls, or
+live sink operations.
 
 ## Operator-Selected Live Pilots
 

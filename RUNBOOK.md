@@ -3789,3 +3789,29 @@ Validation:
 Safety:
 
 - This was synthetic review/export/routing drill execution only. It did not process configured/private SyncThing inputs, run public-web search, call paid enrichment, validate a real operator response, create or modify `selected_live_target.json`, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+## Turn 184 | 2026-06-15
+
+Continued Plan 0009 with Slice 0009-A108.
+
+Implemented:
+
+- Added operator-readable text output for `bcw drills review-routing`.
+- The text readback summarizes run/job IDs, fixture sink context, review transition, zero write/network counters, route artifacts, safe executed actions, skipped manual actions, next commands, and stop conditions.
+- Added README front-door documentation for the review/routing drill command and its no-live boundary.
+- CLI coverage now asserts both JSON and text drill output.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_review_routing_drill_outputs_fixture_artifact -q` passed with 1 test.
+- `.venv/bin/python -m pytest -q` passed with 229 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/cli.py tests/test_cli_surfaces.py` passed.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was presentation and documentation hardening for the synthetic drill only. It did not process configured/private SyncThing inputs, run public-web search, call paid enrichment, validate a real operator response, create or modify `selected_live_target.json`, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
