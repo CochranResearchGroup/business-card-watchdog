@@ -976,6 +976,23 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_live_readiness_audit_writes_run_level_artifact tests/test_service.py::test_service_live_selection_requirements_report_writes_run_level_artifact tests/test_cli_surfaces.py::test_cli_live_target_candidates_reports_text_and_json tests/test_cli_surfaces.py::test_cli_live_readiness_audit_reports_text_and_json tests/test_cli_surfaces.py::test_cli_live_selection_requirements_reports_text_and_json -q` passed with 5 tests.
 
+### Slice 0009-A56 | 2026-06-14 | API/MCP Handoff Link Parity
+
+Implemented:
+
+- API regression coverage now asserts live target candidates, live readiness audits, and live selection requirements expose `live_pilot_handoff`.
+- MCP regression coverage now asserts the same no-call handoff links.
+- Parity tests protect external orchestrators from losing the handoff prompt discovery path available in CLI text and service payloads.
+
+Safety:
+
+- This slice adds test coverage only.
+- It does not create `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 2 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

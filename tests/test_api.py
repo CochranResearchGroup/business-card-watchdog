@@ -47,17 +47,20 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert live_targets["schema"] == "business-card-watchdog.live-target-candidates.v1"
     assert live_targets["network_calls_made"] == 0
     assert live_targets["writes_attempted"] == 0
+    assert live_targets["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id}"
     live_audit = client.post("/live-readiness-audit", json={"run_id": run_id, "write": False}).json()
     assert live_audit["schema"] == "business-card-watchdog.live-readiness-audit.v1"
     assert live_audit["run_id"] == run_id
     assert live_audit["network_calls_made"] == 0
     assert live_audit["writes_attempted"] == 0
+    assert live_audit["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id}"
     live_requirements = client.post("/live-selection-requirements", json={"run_id": run_id, "write": False}).json()
     assert live_requirements["schema"] == "business-card-watchdog.live-selection-requirements.v1"
     assert live_requirements["run_id"] == run_id
     assert live_requirements["entry_count"] == 0
     assert live_requirements["network_calls_made"] == 0
     assert live_requirements["writes_attempted"] == 0
+    assert live_requirements["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id}"
     assert live_requirements["operator_response_contract"]["schema"] == (
         "business-card-watchdog.operator-selection-response-contract.v1"
     )
