@@ -174,6 +174,16 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
                     lines.append(f"   Operator response: {entry.get('operator_response_template')}")
                 if entry.get("validation_command_prefilled"):
                     lines.append(f"   Validate prefilled response: {entry.get('validation_command_prefilled')}")
+    live_stop_conditions = live.get("explicit_stop_conditions") or []
+    live_stop_rows = live_stop_conditions if isinstance(live_stop_conditions, list) else []
+    lines.append(f"Live pilot stop conditions: {len(live_stop_rows)}")
+    for condition in live_stop_rows:
+        lines.append(f" - {condition}")
+    handoff_stop_conditions = live_handoff.get("operator_stop_conditions") or []
+    handoff_stop_rows = handoff_stop_conditions if isinstance(handoff_stop_conditions, list) else []
+    lines.append(f"Live handoff stop conditions: {len(handoff_stop_rows)}")
+    for condition in handoff_stop_rows:
+        lines.append(f" - {condition}")
     blocked_rows = blocked if isinstance(blocked, list) else []
     lines.append(f"Blocked reasons: {len(blocked_rows)}")
     for reason in blocked_rows:

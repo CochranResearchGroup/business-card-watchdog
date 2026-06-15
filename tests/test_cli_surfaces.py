@@ -100,6 +100,14 @@ def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) 
     assert payload["next_action_summary"]["by_action"] == {"review_contact": 1}
     assert payload["live_pilot_handoff_summary"]["action_counts"] == {"no_live_candidate": 1}
     assert payload["live_pilot_handoff_summary"]["operator_required_count"] == 0
+    assert len(payload["live_pilot_summary"]["explicit_stop_conditions"]) == 3
+    assert "Do not run live lookup, live write, or live readback from this status report." in (
+        payload["live_pilot_summary"]["explicit_stop_conditions"]
+    )
+    assert len(payload["live_pilot_handoff_summary"]["operator_stop_conditions"]) == 4
+    assert "Do not create selected_live_target.json unless the selected card/contact is safe" in (
+        payload["live_pilot_handoff_summary"]["operator_stop_conditions"][1]
+    )
     assert payload["writes_attempted"] == 0
     assert payload["network_calls_made"] == 0
 
@@ -123,6 +131,10 @@ def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) 
     assert f"Operator dashboard: business_card_watchdog_operator_dashboard args=run_id={run_id}" in text
     assert f"Next actions: business_card_watchdog_next_actions args=limit=20, run_id={run_id}" in text
     assert f"Live pilot status: business_card_watchdog_live_pilot_status args=run_id={run_id}, write=False" in text
+    assert "Live pilot stop conditions: 3" in text
+    assert "Do not run live lookup, live write, or live readback from this status report." in text
+    assert "Live handoff stop conditions: 4" in text
+    assert "Do not create selected_live_target.json unless the selected card/contact is safe" in text
     assert (
         "Live pilot validate response: "
         f"business_card_watchdog_live_pilot_operator_response_validation "

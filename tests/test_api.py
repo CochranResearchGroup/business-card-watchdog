@@ -46,6 +46,14 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert operator_dashboard["next_action_summary"]["by_action"] == {"review_contact": 1}
     assert operator_dashboard["live_pilot_handoff_summary"]["action_counts"] == {"no_live_candidate": 1}
     assert operator_dashboard["live_pilot_handoff_summary"]["operator_required_count"] == 0
+    assert len(operator_dashboard["live_pilot_summary"]["explicit_stop_conditions"]) == 3
+    assert "This status report does not create selected_live_target.json." in (
+        operator_dashboard["live_pilot_summary"]["explicit_stop_conditions"]
+    )
+    assert len(operator_dashboard["live_pilot_handoff_summary"]["operator_stop_conditions"]) == 4
+    assert "Do not run live lookup, live write, or live readback from this handoff artifact." in (
+        operator_dashboard["live_pilot_handoff_summary"]["operator_stop_conditions"]
+    )
     assert operator_dashboard["commands"]["next_actions"] == f"actions next --run-id {run_id} --json"
     assert operator_dashboard["api_routes"]["next_actions"] == f"GET /actions/next?run_id={run_id}&limit=20"
     assert operator_dashboard["commands"]["live_pilot_validate_response"] == (

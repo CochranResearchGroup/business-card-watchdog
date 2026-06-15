@@ -400,6 +400,14 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     }
     assert operator_dashboard["next_action_summary"]["by_action"] == {"review_contact": 1}
     assert operator_dashboard["live_pilot_handoff_summary"]["operator_required_count"] == 1
+    assert len(operator_dashboard["live_pilot_summary"]["explicit_stop_conditions"]) == 3
+    assert "This status report does not create selected_live_target.json." in (
+        operator_dashboard["live_pilot_summary"]["explicit_stop_conditions"]
+    )
+    assert len(operator_dashboard["live_pilot_handoff_summary"]["operator_stop_conditions"]) == 4
+    assert "Do not run live lookup, live write, or live readback from this handoff artifact." in (
+        operator_dashboard["live_pilot_handoff_summary"]["operator_stop_conditions"]
+    )
     assert operator_dashboard["live_pilot_handoff_summary"]["operator_entries"][0][
         "validation_command_prefilled"
     ].startswith(f"runs live-pilot-validate-response {run_id} --response 'run_id={run_id}")

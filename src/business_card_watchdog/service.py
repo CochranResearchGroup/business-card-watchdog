@@ -382,6 +382,7 @@ class BusinessCardService:
                 "observed_writes_attempted": live_status.get("observed_writes_attempted", 0),
                 "observed_network_calls_made": live_status.get("observed_network_calls_made", 0),
                 "commands": live_status.get("commands") or {},
+                "explicit_stop_conditions": live_status.get("explicit_stop_conditions") or [],
             }
             handoff = self.live_pilot_handoff(run_id=selected_run_id, write=False)
             operator_entries = [
@@ -414,6 +415,7 @@ class BusinessCardService:
                 "network_calls_made": handoff.get("network_calls_made", 0),
                 "observed_writes_attempted": handoff.get("observed_writes_attempted", 0),
                 "observed_network_calls_made": handoff.get("observed_network_calls_made", 0),
+                "operator_stop_conditions": handoff.get("operator_stop_conditions") or [],
             }
             next_actions = self.next_actions(run_id=selected_run_id, limit=20)
             action_counts: dict[str, int] = {}
