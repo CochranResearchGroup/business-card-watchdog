@@ -1842,6 +1842,78 @@ def test_service_close_lookup_prerequisites_executes_only_lookup_safe_actions(
     assert "close_lookup_prerequisites_created" in events
 
 
+def test_service_selected_target_approval_boundary_previews_explicit_selection(
+    tmp_path: Path,
+) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+    )
+    service.close_lookup_prerequisites(
+        run_id,
+        operator="tester",
+        sink="google_contacts",
+        limit=4,
+        write=True,
+    )
+
+    awaiting = service.selected_target_approval_boundary(
+        run_id,
+        operator="tester",
+        sink="google_contacts",
+        job_id=job_id,
+        write=False,
+    )
+
+    assert awaiting["schema"] == "business-card-watchdog.selected-target-approval-boundary.v1"
+    assert awaiting["state"] == "awaiting_operator_response"
+    assert awaiting["selected_entry"]["operator"] == "<operator>"
+    assert awaiting["operator_response_template"].startswith(f"run_id={run_id} job_id={job_id}")
+    assert awaiting["would_create_selected_live_target"] is False
+    assert awaiting["creates_selected_live_target"] is False
+    assert awaiting["writes_attempted"] == 0
+    assert awaiting["network_calls_made"] == 0
+    assert awaiting["runtime_artifact_written"] is False
+
+    response = (
+        f"run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=tester scope=lookup safety_confirmation=fixture contact is safe for google contacts test profile"
+    )
+    ready = service.selected_target_approval_boundary(
+        run_id,
+        operator="tester",
+        sink="google_contacts",
+        job_id=job_id,
+        response=response,
+        write=True,
+    )
+
+    assert ready["state"] == "ready_for_explicit_selected_target_creation"
+    assert ready["blocked_reasons"] == []
+    assert ready["validation"]["state"] == "ready_to_select_live_target"
+    assert ready["preflight"]["state"] == "ready_to_create_selected_target"
+    assert ready["preview"]["state"] == "ready"
+    assert ready["commands"]["select_target"].startswith(f"sinks select-live-target {job_id}")
+    assert ready["would_create_selected_live_target"] is True
+    assert ready["creates_selected_live_target"] is False
+    assert ready["writes_attempted"] == 0
+    assert ready["network_calls_made"] == 0
+    assert ready["runtime_artifact_written"] is True
+    assert Path(ready["boundary_path"]).exists()
+    artifact_kinds = {artifact["kind"] for artifact in service.get_run(run_id)["artifacts"]}
+    assert "selected_target_approval_boundary" in artifact_kinds
+    assert "selected_live_target" not in artifact_kinds
+
+
 def test_service_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",

@@ -53,6 +53,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_live_pilot_handoff" in names
     assert "business_card_watchdog_live_pilot_approval_packet" in names
     assert "business_card_watchdog_live_pilot_operator_response_validation" in names
+    assert "business_card_watchdog_selected_target_approval_boundary" in names
     assert "business_card_watchdog_selected_live_target_preflight" in names
     assert "business_card_watchdog_selected_live_target_artifact_preview" in names
     assert "business_card_watchdog_selected_live_target_from_response" in names
@@ -412,6 +413,71 @@ def test_mcp_close_lookup_prerequisites_executes_lookup_steps(tmp_path: Path) ->
     assert payload["writes_attempted"] == 0
     assert payload["network_calls_made"] == 0
     assert payload["runtime_artifact_written"] is False
+
+
+def test_mcp_selected_target_approval_boundary_previews_selection(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+    )
+    service.close_lookup_prerequisites(
+        run_id,
+        operator="tester",
+        sink="google_contacts",
+        limit=4,
+        write=True,
+    )
+
+    awaiting = call_tool(
+        "business_card_watchdog_selected_target_approval_boundary",
+        {
+            "run_id": run_id,
+            "operator": "tester",
+            "sink": "google_contacts",
+            "job_id": job_id,
+            "write": False,
+        },
+        config=config,
+    )
+    assert awaiting["schema"] == "business-card-watchdog.selected-target-approval-boundary.v1"
+    assert awaiting["state"] == "awaiting_operator_response"
+    assert awaiting["would_create_selected_live_target"] is False
+    assert awaiting["creates_selected_live_target"] is False
+
+    response = (
+        f"run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=tester scope=lookup safety_confirmation=fixture contact is safe for google contacts test profile"
+    )
+    ready = call_tool(
+        "business_card_watchdog_selected_target_approval_boundary",
+        {
+            "run_id": run_id,
+            "operator": "tester",
+            "sink": "google_contacts",
+            "job_id": job_id,
+            "response": response,
+            "write": False,
+        },
+        config=config,
+    )
+    assert ready["state"] == "ready_for_explicit_selected_target_creation"
+    assert ready["validation"]["state"] == "ready_to_select_live_target"
+    assert ready["preflight"]["state"] == "ready_to_create_selected_target"
+    assert ready["preview"]["state"] == "ready"
+    assert ready["would_create_selected_live_target"] is True
+    assert ready["creates_selected_live_target"] is False
+    assert ready["writes_attempted"] == 0
+    assert ready["network_calls_made"] == 0
+    assert ready["runtime_artifact_written"] is False
 
 
 def test_mcp_multi_card_preclassification_drill_records_candidate_boxes(tmp_path: Path) -> None:

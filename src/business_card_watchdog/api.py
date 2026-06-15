@@ -187,6 +187,13 @@ def create_app(config_path: Path | None = None):
         limit: int = 5
         write: bool = True
 
+    class SelectedTargetApprovalBoundaryRequest(BaseModel):
+        operator: str
+        sink: str | None = None
+        job_id: str | None = None
+        response: str | None = None
+        write: bool = True
+
     class SelectedLiveTargetRequest(BaseModel):
         run_id: str
         sink: str
@@ -446,6 +453,20 @@ def create_app(config_path: Path | None = None):
     @app.get("/runs/{run_id}/live-pilot-approval-packet")
     def get_run_live_pilot_approval_packet(run_id: str, job_id: str | None = None) -> dict[str, object]:
         return service().live_pilot_approval_packet(run_id=run_id, job_id=job_id)
+
+    @app.post("/runs/{run_id}/selected-target-approval-boundary")
+    def create_run_selected_target_approval_boundary(
+        run_id: str,
+        request: SelectedTargetApprovalBoundaryRequest,
+    ) -> dict[str, object]:
+        return service().selected_target_approval_boundary(
+            run_id,
+            operator=request.operator,
+            sink=request.sink,
+            job_id=request.job_id,
+            response=request.response,
+            write=request.write,
+        )
 
     @app.post("/runs/{run_id}/live-pilot-operator-response-validation")
     def validate_run_live_pilot_operator_response(

@@ -643,6 +643,95 @@ def test_cli_runs_close_lookup_prerequisites_executes_lookup_steps(tmp_path: Pat
     assert "{" not in text
 
 
+def test_cli_runs_selected_target_approval_boundary_previews_selection(tmp_path: Path, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    config_path.write_text(
+        f'data_dir = "{data_dir}"\n[watch]\ninputs = []\n[sink]\ngoogle_contacts = true\n',
+        encoding="utf-8",
+    )
+    config = AppConfig(
+        config_path=config_path,
+        data_dir=data_dir,
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+    )
+    service.close_lookup_prerequisites(
+        run_id,
+        operator="tester",
+        sink="google_contacts",
+        limit=4,
+        write=True,
+    )
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "selected-target-approval-boundary",
+                run_id,
+                "--operator",
+                "tester",
+                "--sink",
+                "google_contacts",
+                "--job-id",
+                job_id,
+                "--no-write",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    awaiting = json.loads(capsys.readouterr().out)
+    assert awaiting["schema"] == "business-card-watchdog.selected-target-approval-boundary.v1"
+    assert awaiting["state"] == "awaiting_operator_response"
+    assert awaiting["would_create_selected_live_target"] is False
+    assert awaiting["creates_selected_live_target"] is False
+    assert awaiting["runtime_artifact_written"] is False
+
+    response = (
+        f"run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=tester scope=lookup safety_confirmation=fixture contact is safe for google contacts test profile"
+    )
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "selected-target-approval-boundary",
+                run_id,
+                "--operator",
+                "tester",
+                "--sink",
+                "google_contacts",
+                "--job-id",
+                job_id,
+                "--response",
+                response,
+                "--no-write",
+            ]
+        )
+        == 0
+    )
+    text = capsys.readouterr().out
+    assert "Selected-target approval boundary: ready_for_explicit_selected_target_creation" in text
+    assert "Would create selected target: True" in text
+    assert "Creates selected target: False" in text
+    assert "Select target: sinks select-live-target" in text
+    assert "Stop conditions: 4" in text
+    assert "{" not in text
+
+
 def test_cli_child_reviews_lists_promoted_child_candidates(
     tmp_path: Path,
     monkeypatch,

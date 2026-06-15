@@ -267,6 +267,22 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_selected_target_approval_boundary",
+                "description": "Compose approval packet, response validation, preflight, and selected-target preview without creating selected_live_target.json.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "operator": {"type": "string"},
+                        "sink": {"type": "string"},
+                        "job_id": {"type": "string"},
+                        "response": {"type": "string"},
+                        "write": {"type": "boolean", "default": True},
+                    },
+                    "required": ["run_id", "operator"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_selected_live_target_preflight",
                 "description": "Preflight whether an operator response would be allowed to create selected_live_target.json without writing it.",
                 "input_schema": {
@@ -1529,6 +1545,15 @@ def call_tool(
         return service.validate_live_pilot_operator_response(
             run_id=str(args["run_id"]),
             response=str(args["response"]),
+        )
+    if tool_name == "business_card_watchdog_selected_target_approval_boundary":
+        return service.selected_target_approval_boundary(
+            str(args["run_id"]),
+            operator=str(args["operator"]),
+            sink=str(args["sink"]) if args.get("sink") else None,
+            job_id=str(args["job_id"]) if args.get("job_id") else None,
+            response=str(args["response"]) if args.get("response") else None,
+            write=bool(args.get("write", True)),
         )
     if tool_name == "business_card_watchdog_selected_live_target_preflight":
         return service.selected_live_target_preflight(

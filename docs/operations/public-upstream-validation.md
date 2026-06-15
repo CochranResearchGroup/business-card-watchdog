@@ -623,3 +623,23 @@ Validation:
 Safety:
 
 - The Plan 0048 closer executes only local lookup prerequisite actions and stops before selected-target approval. It did not approve contact review; create `selected_live_target.json`; process configured SyncThing/private watch inputs; run OCR/App Intelligence; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.
+
+## 2026-06-15 Local Gate For Plan 0049
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_target_approval_boundary_previews_explicit_selection tests/test_cli_surfaces.py::test_cli_runs_selected_target_approval_boundary_previews_selection tests/test_api.py::test_api_run_selected_target_approval_boundary_previews_selection tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_selected_target_approval_boundary_previews_selection -q` passed with 5 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/api.py src/business_card_watchdog/mcp.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 325 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `rg -n "selected-target-approval-boundary|selected_target_approval_boundary|Selected-target approval boundary|business_card_watchdog_selected_target_approval_boundary|Plan 0049" README.md ROADMAP.md RUNBOOK.md docs src tests` passed.
+- `uv build --out-dir dist` built source and wheel distributions.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `codegraph sync && codegraph status` passed; index is up to date.
+- `.venv/bin/bcw drills watch-dry-run-execution --json` passed with one synthetic fixture file processed through a completed dry-run batch and no writes or network calls.
+- Synthetic CLI selected-target approval boundary smoke passed with `state=ready_for_explicit_selected_target_creation`, validation state `ready_to_select_live_target`, preflight state `ready_to_create_selected_target`, preview state `ready`, zero writes, zero network calls, no selected-target creation, and no runtime artifact write under `--no-write`.
+
+Safety:
+
+- The Plan 0049 boundary packet composes approval templates, response validation, selected-target preflight, and selected-target preview while stopping before selected-target creation. It did not create `selected_live_target.json`; process configured SyncThing/private watch inputs; run OCR/App Intelligence; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.

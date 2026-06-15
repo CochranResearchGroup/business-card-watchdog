@@ -5762,3 +5762,33 @@ Validation:
 Safety:
 
 - This added a local lookup prerequisite closer only. It did not approve contact review; create `selected_live_target.json`; process configured SyncThing/private watch inputs; run OCR/App Intelligence; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.
+
+## Turn 255 | 2026-06-15
+
+Executed Plan 0049 with Slice 0049-A.
+
+Implemented:
+
+- Added `BusinessCardService.selected_target_approval_boundary`.
+- Added CLI `bcw runs selected-target-approval-boundary`.
+- Added API `POST /runs/{run_id}/selected-target-approval-boundary`.
+- Added MCP tool `business_card_watchdog_selected_target_approval_boundary`.
+- Updated README and ROADMAP for the no-live selected-target approval boundary packet.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_target_approval_boundary_previews_explicit_selection tests/test_cli_surfaces.py::test_cli_runs_selected_target_approval_boundary_previews_selection tests/test_api.py::test_api_run_selected_target_approval_boundary_previews_selection tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_selected_target_approval_boundary_previews_selection -q` passed with 5 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/api.py src/business_card_watchdog/mcp.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 325 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `rg -n "selected-target-approval-boundary|selected_target_approval_boundary|Selected-target approval boundary|business_card_watchdog_selected_target_approval_boundary|Plan 0049" README.md ROADMAP.md RUNBOOK.md docs src tests` passed.
+- `uv build --out-dir dist` built source and wheel distributions.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `codegraph sync && codegraph status` passed; index is up to date.
+- `.venv/bin/bcw drills watch-dry-run-execution --json` passed with one synthetic fixture file processed through a completed dry-run batch and no writes or network calls.
+- Synthetic CLI selected-target approval boundary smoke passed with `state=ready_for_explicit_selected_target_creation`, validation state `ready_to_select_live_target`, preflight state `ready_to_create_selected_target`, preview state `ready`, zero writes, zero network calls, no selected-target creation, and no runtime artifact write under `--no-write`.
+
+Safety:
+
+- This added a local selected-target approval boundary packet only. It did not create `selected_live_target.json`; process configured SyncThing/private watch inputs; run OCR/App Intelligence; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.
