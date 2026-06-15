@@ -1157,6 +1157,55 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
                 "--config",
                 str(config_path),
                 "runs",
+                "selected-lookup-smoke-execution-packet-from-response",
+                run_id,
+                "--response",
+                response,
+                "--json",
+            ]
+        )
+        == 0
+    )
+    execution_packet = json.loads(capsys.readouterr().out)
+    assert execution_packet["schema"] == (
+        "business-card-watchdog.selected-lookup-smoke-execution-packet-from-response.v1"
+    )
+    assert execution_packet["state"] == "blocked"
+    assert execution_packet["execute_selected_lookup_smoke"] is False
+    assert execution_packet["would_execute_selected_lookup_smoke"] is False
+    assert execution_packet["smoke"] is None
+    assert execution_packet["smoke_path"] is None
+    assert execution_packet["writes_attempted"] == 0
+    assert execution_packet["network_calls_made"] == 0
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "selected-lookup-smoke-execution-packet-from-response",
+                run_id,
+                "--response",
+                response,
+            ]
+        )
+        == 0
+    )
+    execution_packet_text = capsys.readouterr().out
+    assert "State: blocked" in execution_packet_text
+    assert "Execute selected lookup smoke: False" in execution_packet_text
+    assert "Would execute selected lookup smoke: False" in execution_packet_text
+    assert "Smoke path: none" in execution_packet_text
+    assert "Stop conditions: 4" in execution_packet_text
+    assert "{" not in execution_packet_text
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
                 "live-pilot-validate-response",
                 run_id,
                 "--response",

@@ -651,6 +651,12 @@ class BusinessCardService:
                     if selected_run_id
                     else "runs list --json"
                 ),
+                "selected_lookup_smoke_execution_packet_from_response": (
+                    f"runs selected-lookup-smoke-execution-packet-from-response {selected_run_id} "
+                    "--response <operator-response> --json"
+                    if selected_run_id
+                    else "runs list --json"
+                ),
                 "mcp_manifest": "mcp-manifest",
             },
             "api_routes": {
@@ -710,6 +716,11 @@ class BusinessCardService:
                     f"POST /runs/{selected_run_id}/lookup-smoke-handoff-from-response"
                     if selected_run_id
                     else "POST /runs/{run_id}/lookup-smoke-handoff-from-response"
+                ),
+                "selected_lookup_smoke_execution_packet_from_response": (
+                    f"POST /runs/{selected_run_id}/selected-lookup-smoke-execution-packet-from-response"
+                    if selected_run_id
+                    else "POST /runs/{run_id}/selected-lookup-smoke-execution-packet-from-response"
                 ),
             },
             "mcp_tools": {
@@ -788,6 +799,20 @@ class BusinessCardService:
                     }
                     if selected_run_id
                     else {"run_id": "<run-id>", "response": "<operator-response>", "write_handoff": False},
+                },
+                "selected_lookup_smoke_execution_packet_from_response": {
+                    "tool": "business_card_watchdog_selected_lookup_smoke_execution_packet_from_response",
+                    "arguments": {
+                        "run_id": selected_run_id,
+                        "response": "<operator-response>",
+                        "execute_selected_lookup_smoke": False,
+                    }
+                    if selected_run_id
+                    else {
+                        "run_id": "<run-id>",
+                        "response": "<operator-response>",
+                        "execute_selected_lookup_smoke": False,
+                    },
                 },
             },
             "safe_next_actions": [
@@ -6946,6 +6971,130 @@ class BusinessCardService:
             ],
             "writes_attempted": 0,
             "network_calls_made": 0,
+        }
+
+    def selected_lookup_smoke_execution_packet_from_response(
+        self,
+        *,
+        run_id: str,
+        response: str,
+        execute_selected_lookup_smoke: bool = False,
+    ) -> dict[str, Any]:
+        handoff_packet = self.lookup_smoke_handoff_from_response(
+            run_id=run_id,
+            response=response,
+            write_handoff=False,
+        )
+        job_id = str(handoff_packet.get("job_id") or "")
+        ready = handoff_packet.get("state") == "ready_for_live_lookup_request"
+        execute_command = (
+            f"sinks execute-lookup-smoke {job_id} --run-id {run_id} --json"
+            if job_id
+            else None
+        )
+        if not execute_selected_lookup_smoke:
+            return {
+                "schema": "business-card-watchdog.selected-lookup-smoke-execution-packet-from-response.v1",
+                "generated_at": utc_now(),
+                "state": "ready_to_request_execution" if ready else "blocked",
+                "run_id": run_id,
+                "job_id": job_id or None,
+                "sink": handoff_packet.get("sink"),
+                "operator": handoff_packet.get("operator"),
+                "execute_selected_lookup_smoke": False,
+                "would_execute_selected_lookup_smoke": ready,
+                "lookup_smoke_handoff_from_response": handoff_packet,
+                "smoke": None,
+                "smoke_path": None,
+                "blocked_reasons": [] if ready else list(handoff_packet.get("blocked_reasons") or []),
+                "next_safe_command": (
+                    f"runs lookup-smoke-handoff-from-response {shlex.quote(run_id)} "
+                    f"--response {shlex.quote(response)} --json"
+                ),
+                "next_explicit_operator_command": execute_command if ready else None,
+                "commands": {
+                    "lookup_smoke_handoff": (
+                        f"runs lookup-smoke-handoff-from-response {shlex.quote(run_id)} "
+                        f"--response {shlex.quote(response)} --json"
+                    ),
+                    "execute_selected_lookup_smoke": execute_command,
+                    "live_pilot_status": f"runs live-pilot-status {run_id} --no-write --json",
+                    "live_pilot_handoff": f"runs live-pilot-handoff {run_id} --no-write --json",
+                },
+                "explicit_stop_conditions": [
+                    "Default mode does not execute selected lookup smoke.",
+                    "Pass the explicit execute-selected-lookup-smoke flag only after reviewing the ready handoff.",
+                    "The selected lookup smoke must persist redacted evidence and report writes_attempted=0.",
+                    "Do not process private SyncThing images, run public-web search, or call paid enrichment from this packet.",
+                ],
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            }
+        if not ready or not job_id:
+            return {
+                "schema": "business-card-watchdog.selected-lookup-smoke-execution-packet-from-response.v1",
+                "generated_at": utc_now(),
+                "state": "blocked",
+                "run_id": run_id,
+                "job_id": job_id or None,
+                "sink": handoff_packet.get("sink"),
+                "operator": handoff_packet.get("operator"),
+                "execute_selected_lookup_smoke": True,
+                "would_execute_selected_lookup_smoke": False,
+                "lookup_smoke_handoff_from_response": handoff_packet,
+                "smoke": None,
+                "smoke_path": None,
+                "blocked_reasons": list(handoff_packet.get("blocked_reasons") or ["lookup-smoke handoff is not ready"]),
+                "next_safe_command": (
+                    f"runs lookup-smoke-handoff-from-response {shlex.quote(run_id)} "
+                    f"--response {shlex.quote(response)} --json"
+                ),
+                "next_explicit_operator_command": None,
+                "commands": {
+                    "lookup_smoke_handoff": (
+                        f"runs lookup-smoke-handoff-from-response {shlex.quote(run_id)} "
+                        f"--response {shlex.quote(response)} --json"
+                    ),
+                    "execute_selected_lookup_smoke": execute_command,
+                    "live_pilot_status": f"runs live-pilot-status {run_id} --no-write --json",
+                },
+                "explicit_stop_conditions": [
+                    "selected lookup smoke was not executed because the handoff is blocked.",
+                    "Resolve blocked reasons and review a ready handoff before retrying with the explicit execute flag.",
+                    "This blocked response did not run live lookup, live write, or live readback.",
+                ],
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            }
+        executed = self.execute_selected_lookup_smoke_for_job(job_id=job_id, run_id=run_id)
+        smoke = dict(executed.get("smoke") or {})
+        return {
+            "schema": "business-card-watchdog.selected-lookup-smoke-execution-packet-from-response.v1",
+            "generated_at": utc_now(),
+            "state": "executed",
+            "run_id": run_id,
+            "job_id": job_id,
+            "sink": smoke.get("sink") or handoff_packet.get("sink"),
+            "operator": smoke.get("operator") or handoff_packet.get("operator"),
+            "execute_selected_lookup_smoke": True,
+            "would_execute_selected_lookup_smoke": True,
+            "lookup_smoke_handoff_from_response": handoff_packet,
+            "smoke": smoke,
+            "smoke_path": executed.get("smoke_path"),
+            "blocked_reasons": [],
+            "next_safe_command": f"runs live-pilot-status {run_id} --no-write --json",
+            "next_explicit_operator_command": None,
+            "commands": {
+                "live_pilot_status": f"runs live-pilot-status {run_id} --no-write --json",
+                "live_pilot_handoff": f"runs live-pilot-handoff {run_id} --no-write --json",
+                "review_bundle": f"reviews bundle --run-id {run_id} --state all --json",
+            },
+            "explicit_stop_conditions": [
+                "Inspect redacted downstream duplicate evidence before any duplicate resolution or write pilot.",
+                "Do not run sink write or readback until duplicate evidence is reviewed.",
+            ],
+            "writes_attempted": int(smoke.get("writes_attempted") or 0),
+            "network_calls_made": int(smoke.get("network_calls_made") or 0),
         }
 
     def validate_live_pilot_operator_response(self, *, run_id: str, response: str) -> dict[str, Any]:

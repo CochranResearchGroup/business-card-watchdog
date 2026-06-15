@@ -4311,3 +4311,24 @@ Validation:
 Safety:
 
 - This was lookup-smoke handoff preparation only. It did not create or modify `selected_live_target.json`, execute selected lookup smoke, process configured/private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+## Turn 204 | 2026-06-15
+
+Continued Plan 0009 with Slice 0009-A128.
+
+Implemented:
+
+- Added `business-card-watchdog.selected-lookup-smoke-execution-packet-from-response.v1`.
+- Added run-scoped selected lookup smoke execution packet from a validated operator response across service, CLI, API, and MCP surfaces.
+- Default mode is no-execute and reports whether selected lookup smoke would be allowed, exact explicit execution command, blocked reasons, and follow-up inspection commands.
+- Explicit execute mode remains blocked unless the run-scoped lookup-smoke handoff is ready.
+- Operator dashboard command/API/MCP maps now advertise the execution packet surface.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_operator_dashboard_composes_no_live_readiness tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/api.py src/business_card_watchdog/mcp.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+
+Safety:
+
+- This was selected lookup smoke execution-packet hardening only. Default mode did not execute selected lookup smoke or write `selected_lookup_smoke.json`; blocked explicit execution returned a blocked packet without live lookup, live write, live readback, public-web search, paid enrichment, GWS/Odollo/Odoo calls, or configured/private SyncThing processing.

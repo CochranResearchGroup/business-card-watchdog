@@ -855,6 +855,10 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     assert dashboard["commands"]["lookup_smoke_handoff_from_response"] == (
         f"runs lookup-smoke-handoff-from-response {run_id} --response <operator-response> --json"
     )
+    assert dashboard["commands"]["selected_lookup_smoke_execution_packet_from_response"] == (
+        f"runs selected-lookup-smoke-execution-packet-from-response {run_id} "
+        "--response <operator-response> --json"
+    )
     assert dashboard["commands"]["live_pilot_validate_response"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
@@ -867,6 +871,9 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     )
     assert dashboard["api_routes"]["lookup_smoke_handoff_from_response"] == (
         f"POST /runs/{run_id}/lookup-smoke-handoff-from-response"
+    )
+    assert dashboard["api_routes"]["selected_lookup_smoke_execution_packet_from_response"] == (
+        f"POST /runs/{run_id}/selected-lookup-smoke-execution-packet-from-response"
     )
     assert dashboard["mcp_tools"]["next_actions"] == {
         "tool": "business_card_watchdog_next_actions",
@@ -891,6 +898,10 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     assert dashboard["mcp_tools"]["lookup_smoke_handoff_from_response"] == {
         "tool": "business_card_watchdog_lookup_smoke_handoff_from_response",
         "arguments": {"run_id": run_id, "response": "<operator-response>", "write_handoff": False},
+    }
+    assert dashboard["mcp_tools"]["selected_lookup_smoke_execution_packet_from_response"] == {
+        "tool": "business_card_watchdog_selected_lookup_smoke_execution_packet_from_response",
+        "arguments": {"run_id": run_id, "response": "<operator-response>", "execute_selected_lookup_smoke": False},
     }
     assert dashboard["mcp_tools"]["review_routing_drill"] == {
         "tool": "business_card_watchdog_review_routing_drill",
@@ -2783,6 +2794,39 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert lookup_handoff_written["writes_attempted"] == 0
     assert lookup_handoff_written["network_calls_made"] == 0
     assert Path(lookup_handoff_written["handoff_path"]).exists()
+
+    execution_packet = service.selected_lookup_smoke_execution_packet_from_response(
+        run_id=run_id,
+        response=preselection_response,
+    )
+    assert execution_packet["schema"] == (
+        "business-card-watchdog.selected-lookup-smoke-execution-packet-from-response.v1"
+    )
+    assert execution_packet["state"] == "blocked"
+    assert execution_packet["job_id"] == job_id
+    assert execution_packet["sink"] == "google_contacts"
+    assert execution_packet["operator"] == "tester"
+    assert execution_packet["execute_selected_lookup_smoke"] is False
+    assert execution_packet["would_execute_selected_lookup_smoke"] is False
+    assert execution_packet["smoke"] is None
+    assert execution_packet["smoke_path"] is None
+    assert "reviewed_contact_exists" in execution_packet["blocked_reasons"]
+    assert execution_packet["writes_attempted"] == 0
+    assert execution_packet["network_calls_made"] == 0
+
+    blocked_execution = service.selected_lookup_smoke_execution_packet_from_response(
+        run_id=run_id,
+        response=preselection_response,
+        execute_selected_lookup_smoke=True,
+    )
+    assert blocked_execution["state"] == "blocked"
+    assert blocked_execution["execute_selected_lookup_smoke"] is True
+    assert blocked_execution["would_execute_selected_lookup_smoke"] is False
+    assert blocked_execution["smoke"] is None
+    assert blocked_execution["smoke_path"] is None
+    assert blocked_execution["writes_attempted"] == 0
+    assert blocked_execution["network_calls_made"] == 0
+    assert not (config.runs_dir / run_id / "artifacts" / job_id / "selected_lookup_smoke.json").exists()
 
     audit = service.selected_live_target_audit(job_id=job_id, run_id=run_id, scope="lookup")
     assert audit["schema"] == "business-card-watchdog.selected-live-target-audit.v1"

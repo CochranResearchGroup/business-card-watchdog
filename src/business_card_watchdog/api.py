@@ -131,6 +131,10 @@ def create_app(config_path: Path | None = None):
         response: str
         write_handoff: bool = False
 
+    class SelectedLookupSmokeExecutionPacketFromResponseRequest(BaseModel):
+        response: str
+        execute_selected_lookup_smoke: bool = False
+
     class SelectedLiveTargetAuditRequest(BaseModel):
         run_id: str
         scope: str | None = None
@@ -321,6 +325,17 @@ def create_app(config_path: Path | None = None):
             run_id=run_id,
             response=request.response,
             write_handoff=request.write_handoff,
+        )
+
+    @app.post("/runs/{run_id}/selected-lookup-smoke-execution-packet-from-response")
+    def create_run_selected_lookup_smoke_execution_packet_from_response(
+        run_id: str,
+        request: SelectedLookupSmokeExecutionPacketFromResponseRequest,
+    ) -> dict[str, object]:
+        return service().selected_lookup_smoke_execution_packet_from_response(
+            run_id=run_id,
+            response=request.response,
+            execute_selected_lookup_smoke=request.execute_selected_lookup_smoke,
         )
 
     @app.get("/runs/{run_id}/jobs")
