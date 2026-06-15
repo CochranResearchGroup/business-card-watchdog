@@ -5584,3 +5584,33 @@ Validation:
 Safety:
 
 - This created a no-processing readiness packet only. It did not process configured SyncThing/private watch inputs; run OCR/App Intelligence; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.
+
+## Turn 249 | 2026-06-15
+
+Executed Plan 0043 with Slice 0043-A.
+
+Implemented:
+
+- Added `BusinessCardService.dry_run_closeout`.
+- Added CLI `bcw runs dry-run-closeout`.
+- Added API `GET /runs/{run_id}/dry-run-closeout`.
+- Added MCP tool `business_card_watchdog_dry_run_closeout`.
+- Updated README and ROADMAP for the post-dry-run closeout checkpoint.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_dry_run_closeout_audits_completed_dry_run tests/test_cli_surfaces.py::test_cli_runs_dry_run_closeout_reports_no_live tests/test_api.py::test_api_run_dry_run_closeout_reports_no_live tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_dry_run_closeout_reports_no_live -q` passed with 5 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/api.py src/business_card_watchdog/mcp.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 301 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `rg -n "dry-run-closeout|dry_run_closeout|Dry-run closeout|business_card_watchdog_dry_run_closeout|Plan 0043" README.md ROADMAP.md RUNBOOK.md docs src tests` passed.
+- `uv build --out-dir dist` built source and wheel distributions.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `codegraph sync && codegraph status` passed; index is up to date.
+- `.venv/bin/bcw drills watch-dry-run-execution --json` passed with a synthetic completed dry-run batch run, one fixture file processed, zero writes, and zero network calls.
+- `.venv/bin/bcw --config <temp-fixture-config> runs dry-run-closeout 2026-06-15T13-04-42+00-00 --no-write --json` passed with `state=ready_for_review_and_routing`, zero live event types, zero live artifact kinds, zero writes, and zero network calls.
+
+Safety:
+
+- This added a local-ledger dry-run closeout only. It did not process configured SyncThing/private watch inputs; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.

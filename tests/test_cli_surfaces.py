@@ -314,6 +314,45 @@ def test_cli_watch_dry_run_execution_drill_runs_real_dry_pipeline(
     assert "{" not in text
 
 
+def test_cli_runs_dry_run_closeout_reports_no_live(tmp_path: Path, monkeypatch, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+    source_dir = tmp_path / "cards"
+    write_synthetic_image(source_dir / "card.png")
+    config = AppConfig(
+        config_path=config_path,
+        data_dir=data_dir,
+        prefilter=PrefilterConfig(enabled=False),
+        sink=SinkConfig(google_contacts=True, odoo=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts", "odoo"]}],
+    )
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+
+    assert main(["--config", str(config_path), "runs", "dry-run-closeout", run_dir.name, "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["schema"] == "business-card-watchdog.dry-run-closeout.v1"
+    assert payload["state"] == "ready_for_review_and_routing"
+    assert payload["runtime_artifact_written"] is True
+    assert Path(payload["closeout_path"]).exists()
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert payload["live_sink_calls_made"] is False
+
+    assert main(["--config", str(config_path), "runs", "dry-run-closeout", run_dir.name, "--no-write"]) == 0
+    text = capsys.readouterr().out
+    assert "Dry-run closeout: ready_for_review_and_routing" in text
+    assert "Observed: files=1 ocr_artifacts=1 writes=0 network=0" in text
+    assert "Live event types: 0" in text
+    assert "Runtime artifact written: False" in text
+    assert "Closeout: runs dry-run-closeout" in text
+    assert "Stop conditions: 4" in text
+    assert "{" not in text
+
+
 def test_cli_child_reviews_lists_promoted_child_candidates(
     tmp_path: Path,
     monkeypatch,

@@ -5,12 +5,20 @@ import json
 from io import StringIO
 from pathlib import Path
 
-from business_card_watchdog.config import AppConfig, EnrichmentConfig, EnrichmentProviderConfig, SinkConfig, WatchConfig
+from business_card_watchdog.config import (
+    AppConfig,
+    EnrichmentConfig,
+    EnrichmentProviderConfig,
+    PrefilterConfig,
+    SinkConfig,
+    WatchConfig,
+)
 from business_card_watchdog.contact import build_contact_candidate
 from business_card_watchdog.ledger import RunLedger
 from business_card_watchdog.models import CardJob
+from business_card_watchdog.orchestrator import BatchOrchestrator
 from business_card_watchdog.service import BusinessCardService
-from synthetic_fixtures import write_synthetic_image
+from synthetic_fixtures import SyntheticSkillAdapter, write_synthetic_image
 
 
 def make_recorded_run(config: AppConfig, run_id: str = "run-001") -> tuple[str, str]:
@@ -1545,6 +1553,49 @@ def test_service_watch_dry_run_execution_drill_runs_real_dry_pipeline(tmp_path: 
     sample_output = sample_output_path.read_text(encoding="utf-8")
     assert "# Watch Dry-Run Execution Sample Output" in sample_output
     assert "Synthetic fixture only" in sample_output
+
+
+def test_service_dry_run_closeout_audits_completed_dry_run(tmp_path: Path, monkeypatch) -> None:
+    source_dir = tmp_path / "cards"
+    write_synthetic_image(source_dir / "card.png")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        prefilter=PrefilterConfig(enabled=False),
+        sink=SinkConfig(google_contacts=True, odoo=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts", "odoo"]}],
+    )
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+
+    payload = BusinessCardService(config).dry_run_closeout(run_dir.name, write=True)
+
+    assert payload["schema"] == "business-card-watchdog.dry-run-closeout.v1"
+    assert payload["state"] == "ready_for_review_and_routing"
+    assert payload["run_state"] == "completed"
+    assert payload["dry_run"] is True
+    assert payload["job_count"] == 1
+    assert payload["files_processed"] == 1
+    assert payload["ocr_artifact_count"] == 1
+    assert payload["contact_candidate_count"] == 1
+    assert payload["sink_payload_count"] == 1
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert payload["live_sink_calls_made"] is False
+    assert payload["blocked_reasons"] == []
+    assert payload["runtime_artifact_written"] is True
+    assert Path(payload["closeout_path"]).exists()
+    assert payload["commands"]["dry_run_closeout"] == f"runs dry-run-closeout {run_dir.name} --json"
+    assert payload["safe_next_actions"][0]["action"] == "inspect_run_summary"
+    assert "Do not run public-web search or paid enrichment from this closeout." in (
+        payload["explicit_stop_conditions"]
+    )
+
+    recorded = BusinessCardService(config).get_run(run_dir.name)
+    assert any(artifact["kind"] == "dry_run_closeout" for artifact in recorded["artifacts"])
+    events = (run_dir / "events.jsonl").read_text(encoding="utf-8")
+    assert "dry_run_closeout_created" in events
 
 
 def test_service_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: Path) -> None:

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from business_card_watchdog.config import AppConfig, EnrichmentConfig, EnrichmentProviderConfig, SinkConfig
+from business_card_watchdog.config import AppConfig, EnrichmentConfig, EnrichmentProviderConfig, PrefilterConfig, SinkConfig
 from business_card_watchdog.contact import build_contact_candidate
 from business_card_watchdog.orchestrator import BatchOrchestrator
 from business_card_watchdog.service import BusinessCardService
@@ -998,6 +998,41 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     )
     assert run_next["phase_report_before"]["schema"] == "business-card-watchdog.phase-report.v1"
     assert run_next["phase_report_after"]["schema"] == "business-card-watchdog.phase-report.v1"
+
+
+def test_api_run_dry_run_closeout_reports_no_live(tmp_path: Path, monkeypatch) -> None:
+    from business_card_watchdog.api import create_app
+
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+    source_dir = tmp_path / "cards"
+    write_synthetic_image(source_dir / "card.png")
+    config = AppConfig(
+        config_path=config_path,
+        data_dir=data_dir,
+        prefilter=PrefilterConfig(enabled=False),
+        sink=SinkConfig(google_contacts=True, odoo=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts", "odoo"]}],
+    )
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+    client = TestClient(create_app(config_path))
+
+    payload = client.get(f"/runs/{run_dir.name}/dry-run-closeout", params={"write": "false"}).json()
+
+    assert payload["schema"] == "business-card-watchdog.dry-run-closeout.v1"
+    assert payload["state"] == "ready_for_review_and_routing"
+    assert payload["dry_run"] is True
+    assert payload["run_state"] == "completed"
+    assert payload["job_count"] == 1
+    assert payload["contact_candidate_count"] == 1
+    assert payload["sink_payload_count"] == 1
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert payload["live_sink_calls_made"] is False
+    assert payload["runtime_artifact_written"] is False
 
 
 def test_api_offline_pilot_gap_audit_reports_remaining_boundaries(tmp_path: Path) -> None:

@@ -383,6 +383,10 @@ def create_app(config_path: Path | None = None):
     def get_run_pilot_readiness(run_id: str) -> dict[str, object]:
         return service().pilot_readiness_report(run_id)
 
+    @app.get("/runs/{run_id}/dry-run-closeout")
+    def get_run_dry_run_closeout(run_id: str, write: bool = True) -> dict[str, object]:
+        return service().dry_run_closeout(run_id, write=write)
+
     @app.get("/runs/{run_id}/live-pilot-status")
     def get_run_live_pilot_status(run_id: str, write: bool = True) -> dict[str, object]:
         return service().live_pilot_status(run_id=run_id, write=write)

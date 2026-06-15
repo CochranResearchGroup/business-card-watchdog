@@ -100,6 +100,7 @@ Inspect runs, jobs, review queue, sinks, and watcher state:
 .venv/bin/bcw runs list
 .venv/bin/bcw runs summary <run-id>
 .venv/bin/bcw runs phase-report <run-id>
+.venv/bin/bcw runs dry-run-closeout <run-id> --json
 .venv/bin/bcw operator-dashboard --run-id <run-id>
 .venv/bin/bcw drills review-routing
 .venv/bin/bcw sinks lookup-readiness <job-id> --run-id <run-id> --sink google_contacts --json
@@ -149,6 +150,12 @@ processing files and emits the operator checklist required before any
 private-source `watch --once --dry-run`. It keeps paths and filenames redacted,
 requires fixture execution review plus response validation, and does not return a
 copyable dry-run command.
+
+After an operator-selected dry-run batch completes, run
+`runs dry-run-closeout <run-id> --json` before review or live-pilot selection.
+The closeout reads only the local run ledger and checks that the run completed in
+dry-run mode with no live/pilot event markers, no live/pilot artifacts, no
+writes, and no network calls.
 
 Ordinary dry-run batch processing also writes `card_candidates.json` beside a job's
 `preclassification.json` when deterministic OpenCV boxes exist. Those records are
@@ -253,6 +260,11 @@ inputs and does not call live sinks.
 between fixture execution review and any operator-selected private dry run. It
 reports only redacted aggregate backlog state and keeps `watch --once --dry-run`
 blocked behind the existing response-validation and command-copy packet.
+
+`runs dry-run-closeout` is the post-dry-run checkpoint. It reads the completed
+run ledger, records an optional closeout artifact, and keeps review/routing or
+live-pilot selection blocked if it sees a non-dry run, incomplete run, live/pilot
+ledger markers, write attempts, or network calls.
 
 `offline-pilot-gap-audit` inspects offline drill and documentation coverage and
 reports the remaining live/operator-only boundaries without running private

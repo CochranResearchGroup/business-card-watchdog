@@ -1364,6 +1364,138 @@ class BusinessCardService:
             "reviewed_contact_count": artifact_counts.get("reviewed_contact", 0),
         }
 
+    def dry_run_closeout(self, run_id: str, *, write: bool = True) -> dict[str, Any]:
+        run = self.get_run(run_id)
+        run_dir = self.config.runs_dir / run_id
+        jobs = list(run.get("jobs") or [])
+        artifacts = list(run.get("artifacts") or [])
+        events_path = run_dir / "events.jsonl"
+        events = _read_jsonl(events_path) if events_path.exists() else []
+        event_types = [str(event.get("event_type") or "") for event in events]
+        artifact_kinds = [str(artifact.get("kind") or "") for artifact in artifacts]
+        state_counts: dict[str, int] = {}
+        artifact_counts: dict[str, int] = {}
+        for job in jobs:
+            state = str(job.get("state") or "unknown")
+            state_counts[state] = state_counts.get(state, 0) + 1
+        for kind in artifact_kinds:
+            artifact_counts[kind] = artifact_counts.get(kind, 0) + 1
+        live_event_types = [
+            event_type
+            for event_type in event_types
+            if any(token in event_type for token in ["live", "write_pilot", "readback_pilot", "lookup_pilot"])
+        ]
+        live_artifact_kinds = [
+            kind
+            for kind in artifact_kinds
+            if any(token in kind for token in ["live", "write_pilot", "readback_pilot", "lookup_pilot"])
+        ]
+        writes_attempted = max((_max_nested_int(event, "writes_attempted") for event in events), default=0)
+        network_calls_made = max((_max_nested_int(event, "network_calls_made") for event in events), default=0)
+        blocked_reasons: list[str] = []
+        if run.get("state") != "completed":
+            blocked_reasons.append(f"run state is {run.get('state')}")
+        if run.get("dry_run") is not True:
+            blocked_reasons.append("run was not executed in dry-run mode")
+        if live_event_types:
+            blocked_reasons.append("ledger contains live/pilot event types")
+        if live_artifact_kinds:
+            blocked_reasons.append("ledger contains live/pilot artifact kinds")
+        if writes_attempted:
+            blocked_reasons.append("ledger reports write attempts")
+        if network_calls_made:
+            blocked_reasons.append("ledger reports network calls")
+        state = "ready_for_review_and_routing" if not blocked_reasons else "blocked"
+        payload: dict[str, Any] = {
+            "schema": "business-card-watchdog.dry-run-closeout.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_id,
+            "run_state": run.get("state"),
+            "dry_run": run.get("dry_run"),
+            "job_count": run.get("job_count"),
+            "state_counts": state_counts,
+            "artifact_counts": artifact_counts,
+            "event_count": len(events),
+            "event_types": sorted(set(event_types)),
+            "live_event_types": sorted(set(live_event_types)),
+            "live_artifact_kinds": sorted(set(live_artifact_kinds)),
+            "blocked_reasons": blocked_reasons,
+            "files_processed": int(run.get("job_count") or len(jobs)),
+            "ocr_artifact_count": artifact_counts.get("ocr_text", 0),
+            "contact_candidate_count": artifact_counts.get("contact_candidate", 0),
+            "review_packet_count": artifact_counts.get("review_packet", 0),
+            "review_report_count": artifact_counts.get("review_report", 0),
+            "sink_payload_count": artifact_counts.get("sink_payloads", 0),
+            "writes_attempted": writes_attempted,
+            "network_calls_made": network_calls_made,
+            "private_sources_used": False,
+            "public_web_search_used": False,
+            "paid_enrichment_used": False,
+            "live_sink_calls_made": bool(live_event_types or live_artifact_kinds or writes_attempted or network_calls_made),
+            "runtime_artifact_written": False,
+            "closeout_path": None,
+            "safe_next_actions": [
+                {
+                    "action": "inspect_run_summary",
+                    "command": f"runs summary {run_id} --json",
+                    "safe_to_auto_continue": True,
+                    "requires_explicit_operator_action": False,
+                },
+                {
+                    "action": "inspect_phase_report",
+                    "command": f"runs phase-report {run_id} --json",
+                    "safe_to_auto_continue": True,
+                    "requires_explicit_operator_action": False,
+                },
+                {
+                    "action": "inspect_review_queue",
+                    "command": f"reviews list --run-id {run_id} --state all --json",
+                    "safe_to_auto_continue": True,
+                    "requires_explicit_operator_action": False,
+                },
+                {
+                    "action": "inspect_next_actions",
+                    "command": f"actions next --run-id {run_id} --json",
+                    "safe_to_auto_continue": True,
+                    "requires_explicit_operator_action": False,
+                },
+            ],
+            "explicit_stop_conditions": [
+                "This closeout reads local run ledger artifacts only.",
+                "Do not treat dry-run closeout as approval for live sink lookup, write, or readback.",
+                "Do not run public-web search or paid enrichment from this closeout.",
+                "Use live-pilot selection gates before any Google Contacts, Odoo, or Odollo calls.",
+            ],
+            "commands": {
+                "dry_run_closeout": f"runs dry-run-closeout {run_id} --json",
+                "run_summary": f"runs summary {run_id} --json",
+                "phase_report": f"runs phase-report {run_id} --json",
+                "reviews": f"reviews list --run-id {run_id} --state all --json",
+                "next_actions": f"actions next --run-id {run_id} --json",
+                "operator_dashboard": f"operator-dashboard --run-id {run_id} --json",
+                "live_pilot_preflight": f"operator-selected-live-smoke-preflight --run-id {run_id} --no-write --json",
+            },
+        }
+        if write:
+            closeout_path = run_dir / "dry_run_closeout.json"
+            payload["runtime_artifact_written"] = True
+            payload["closeout_path"] = str(closeout_path)
+            closeout_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            ledger = RunLedger(run_dir)
+            ledger.record_artifact(job_id="__run__", kind="dry_run_closeout", path=closeout_path)
+            ledger.record_event(
+                "dry_run_closeout_created",
+                {
+                    "run_id": run_id,
+                    "state": state,
+                    "closeout_path": str(closeout_path),
+                    "writes_attempted": 0,
+                    "network_calls_made": 0,
+                },
+            )
+        return payload
+
     def phase_report(self, run_id: str) -> dict[str, Any]:
         run = self.get_run(run_id)
         jobs = run["jobs"]
@@ -15285,6 +15417,16 @@ def _watch_backlog_preflight_actions(
             "requires_explicit_operator_action": False,
         }
     ]
+
+
+def _max_nested_int(value: Any, key: str) -> int:
+    if isinstance(value, dict):
+        candidates = [_int(value.get(key))] if key in value else [0]
+        candidates.extend(_max_nested_int(item, key) for item in value.values())
+        return max(candidates, default=0)
+    if isinstance(value, list):
+        return max((_max_nested_int(item, key) for item in value), default=0)
+    return 0
 
 
 def _write_synthetic_business_card_image(path: Path) -> Path:

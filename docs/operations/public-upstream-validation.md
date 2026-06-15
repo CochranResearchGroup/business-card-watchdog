@@ -505,3 +505,23 @@ Validation:
 Safety:
 
 - The Plan 0042 smoke created a no-processing readiness packet only. It did not process configured SyncThing/private watch inputs; run OCR/App Intelligence; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.
+
+## 2026-06-15 Local Gate For Plan 0043
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_dry_run_closeout_audits_completed_dry_run tests/test_cli_surfaces.py::test_cli_runs_dry_run_closeout_reports_no_live tests/test_api.py::test_api_run_dry_run_closeout_reports_no_live tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_dry_run_closeout_reports_no_live -q` passed with 5 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/api.py src/business_card_watchdog/mcp.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 301 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `rg -n "dry-run-closeout|dry_run_closeout|Dry-run closeout|business_card_watchdog_dry_run_closeout|Plan 0043" README.md ROADMAP.md RUNBOOK.md docs src tests` passed.
+- `uv build --out-dir dist` built source and wheel distributions.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `codegraph sync && codegraph status` passed; index is up to date.
+- `.venv/bin/bcw drills watch-dry-run-execution --json` passed with one synthetic fixture file processed through a completed dry-run batch and no writes or network calls.
+- `.venv/bin/bcw --config <temp-fixture-config> runs dry-run-closeout 2026-06-15T13-04-42+00-00 --no-write --json` passed with `state=ready_for_review_and_routing`, zero live markers, zero writes, and zero network calls.
+
+Safety:
+
+- The Plan 0043 closeout reads local run ledgers only. It did not process configured SyncThing/private watch inputs; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.
