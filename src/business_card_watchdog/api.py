@@ -149,6 +149,10 @@ def create_app(config_path: Path | None = None):
         run_id: str | None = None
         limit: int = 10
 
+    class NextActionsRequest(BaseModel):
+        run_id: str | None = None
+        limit: int = 20
+
     class LiveReadinessAuditRequest(BaseModel):
         run_id: str | None = None
         sink: str | None = None
@@ -307,6 +311,14 @@ def create_app(config_path: Path | None = None):
     @app.post("/actions/run-next")
     def run_next_actions(request: RunNextActionsRequest = Body(default=RunNextActionsRequest())) -> dict[str, object]:
         return service().run_next_actions(run_id=request.run_id, limit=request.limit)
+
+    @app.get("/actions/next")
+    def get_next_actions(run_id: str | None = None, limit: int = 20) -> dict[str, object]:
+        return service().next_actions(run_id=run_id, limit=limit)
+
+    @app.post("/actions/next")
+    def post_next_actions(request: NextActionsRequest = Body(default=NextActionsRequest())) -> dict[str, object]:
+        return service().next_actions(run_id=request.run_id, limit=request.limit)
 
     @app.get("/jobs/{job_id}")
     def get_job(job_id: str, run_id: str | None = None) -> dict[str, object]:

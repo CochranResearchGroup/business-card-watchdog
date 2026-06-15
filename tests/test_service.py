@@ -674,6 +674,7 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     assert dashboard["commands"]["review_queue"] == f"reviews list --run-id {run_id} --state all --json"
     assert dashboard["commands"]["next_actions"] == f"actions next --run-id {run_id} --json"
     assert dashboard["commands"]["run_next_safe"] == f"actions run-next --run-id {run_id} --limit 10 --json"
+    assert dashboard["api_routes"]["next_actions"] == f"GET /actions/next?run_id={run_id}&limit=20"
     assert dashboard["commands"]["live_pilot_status"] == f"runs live-pilot-status {run_id} --no-write --json"
     assert dashboard["safe_next_actions"][0]["action"] == "inspect_runtime_readiness"
     assert dashboard["writes_attempted"] == 0

@@ -84,6 +84,8 @@ Serve the API, if `fastapi` and `uvicorn` are installed:
 .venv/bin/bcw api --host 127.0.0.1 --port 8787
 ```
 
+Read-only API inspection surfaces include `GET /operator/dashboard` and `GET /actions/next`.
+
 Print the MCP tool manifest:
 
 ```bash

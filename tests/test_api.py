@@ -45,8 +45,17 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert operator_dashboard["review_counts"]["needs_review"] == 1
     assert operator_dashboard["next_action_summary"]["by_action"] == {"review_contact": 1}
     assert operator_dashboard["commands"]["next_actions"] == f"actions next --run-id {run_id} --json"
+    assert operator_dashboard["api_routes"]["next_actions"] == f"GET /actions/next?run_id={run_id}&limit=20"
     assert operator_dashboard["writes_attempted"] == 0
     assert operator_dashboard["network_calls_made"] == 0
+    next_actions_get = client.get("/actions/next", params={"run_id": run_id, "limit": 5}).json()
+    assert next_actions_get["run_id"] == run_id
+    assert next_actions_get["action_count"] == 1
+    assert next_actions_get["actions"][0]["action"] == "review_contact"
+    assert next_actions_get["actions"][0]["requires_explicit_operator_action"] is True
+    next_actions_post = client.post("/actions/next", json={"run_id": run_id, "limit": 5}).json()
+    assert next_actions_post["actions"][0]["action"] == "review_contact"
+    assert next_actions_post["actions"][0]["safe_to_auto_continue"] is False
     runtime_readiness = client.get("/runtime/readiness").json()
     assert runtime_readiness["schema"] == "business-card-watchdog.runtime-readiness.v1"
     assert runtime_readiness["config"]["config_exists"] is True

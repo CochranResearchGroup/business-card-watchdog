@@ -483,6 +483,29 @@ class BusinessCardService:
                 ),
                 "mcp_manifest": "mcp-manifest",
             },
+            "api_routes": {
+                "operator_dashboard": (
+                    f"GET /operator/dashboard?run_id={selected_run_id}"
+                    if selected_run_id
+                    else "GET /operator/dashboard"
+                ),
+                "next_actions": (
+                    f"GET /actions/next?run_id={selected_run_id}&limit=20"
+                    if selected_run_id
+                    else "GET /actions/next?limit=20"
+                ),
+                "run_next_safe": "POST /actions/run-next",
+                "live_pilot_status": (
+                    f"GET /runs/{selected_run_id}/live-pilot-status?write=false"
+                    if selected_run_id
+                    else "GET /runs/{run_id}/live-pilot-status?write=false"
+                ),
+                "live_pilot_handoff": (
+                    f"GET /runs/{selected_run_id}/live-pilot-handoff?write=false"
+                    if selected_run_id
+                    else "GET /runs/{run_id}/live-pilot-handoff?write=false"
+                ),
+            },
             "safe_next_actions": [
                 {
                     "action": "inspect_runtime_readiness",
