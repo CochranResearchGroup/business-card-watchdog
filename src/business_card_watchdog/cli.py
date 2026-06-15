@@ -295,8 +295,21 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
                     f"action={action.get('action')} "
                     f"safe={action.get('safe_to_auto_continue')} "
                     f"explicit={action.get('requires_explicit_operator_action')} "
-                    f"command={action.get('command') or 'none'}"
+                        f"command={action.get('command') or 'none'}"
                 )
+    execution_packet = dict(live_handoff.get("execution_packet") or {})
+    if execution_packet:
+        lines.append(
+            "Live pilot execution packet: "
+            f"state={execution_packet.get('state')} "
+            f"operator_required={execution_packet.get('operator_required_count', 0)} "
+            f"next_safe={execution_packet.get('next_safe_command') or 'none'} "
+            f"next_explicit={execution_packet.get('next_explicit_operator_command') or 'none'}"
+        )
+        lines.append(
+            "Live pilot execution policy: "
+            f"forbid_live_or_sink={execution_packet.get('forbidden_live_or_sink_write_from_dashboard')}"
+        )
     live_operator_entries = live_handoff.get("operator_entries") or []
     operator_rows = live_operator_entries if isinstance(live_operator_entries, list) else []
     if operator_rows:

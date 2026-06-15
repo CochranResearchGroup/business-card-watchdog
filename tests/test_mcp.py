@@ -442,6 +442,17 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert dashboard_sequence["sink_write_step_count"] == 0
     assert dashboard_sequence["next_safe_inspection_step"] == "validate_operator_response"
     assert dashboard_sequence["next_explicit_operator_step"] == "create_selected_target"
+    dashboard_packet = operator_dashboard["live_pilot_handoff_summary"]["execution_packet"]
+    assert dashboard_packet["schema"] == "business-card-watchdog.operator-dashboard.live-pilot-execution-packet.v1"
+    assert dashboard_packet["state"] == "operator_required"
+    assert dashboard_packet["operator_required_count"] == 1
+    assert dashboard_packet["next_safe_command"].startswith(
+        f"runs live-pilot-validate-response {run_id} --response 'run_id={run_id}"
+    )
+    assert dashboard_packet["next_explicit_operator_command"].startswith("sinks select-live-target ")
+    assert dashboard_packet["forbidden_live_or_sink_write_from_dashboard"] is True
+    assert dashboard_packet["writes_attempted"] == 0
+    assert dashboard_packet["network_calls_made"] == 0
     assert operator_dashboard["writes_attempted"] == 0
     assert operator_dashboard["network_calls_made"] == 0
     assert summary["needs_review_count"] == 1

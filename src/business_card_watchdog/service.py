@@ -488,6 +488,10 @@ class BusinessCardService:
                 if isinstance(entry, dict) and entry.get("operator_required")
             ]
             operator_response_templates = list(handoff.get("operator_response_templates") or [])
+            live_pilot_execution_packet = _operator_dashboard_live_pilot_execution_packet(
+                selected_run_id,
+                handoff,
+            )
             live_pilot_handoff_summary = {
                 "schema": "business-card-watchdog.operator-dashboard.live-pilot-handoff-summary.v1",
                 "state": handoff.get("state"),
@@ -503,6 +507,7 @@ class BusinessCardService:
                 "observed_writes_attempted": handoff.get("observed_writes_attempted", 0),
                 "observed_network_calls_made": handoff.get("observed_network_calls_made", 0),
                 "pilot_checklist_rollup": pilot_checklist_rollup,
+                "execution_packet": live_pilot_execution_packet,
                 "operator_stop_conditions": handoff.get("operator_stop_conditions") or [],
             }
             next_actions = self.next_actions(run_id=selected_run_id, limit=20)
@@ -8451,6 +8456,56 @@ def _pilot_command_sequence_summary(sequence: dict[str, Any]) -> dict[str, Any]:
         "next_safe_inspection_step": next_safe.get("step"),
         "next_explicit_operator_step": next_explicit.get("step"),
         "execution_policy": sequence.get("execution_policy") or {},
+    }
+
+
+def _operator_dashboard_live_pilot_execution_packet(run_id: str, handoff: dict[str, Any]) -> dict[str, Any]:
+    operator_entries = [
+        entry
+        for entry in list(handoff.get("entries") or [])
+        if isinstance(entry, dict) and entry.get("operator_required")
+    ]
+    packet_entries: list[dict[str, Any]] = []
+    for entry in operator_entries[:5]:
+        sequence = dict(entry.get("pilot_command_sequence") or {})
+        next_safe = dict(sequence.get("next_safe_inspection_step") or {})
+        next_explicit = dict(sequence.get("next_explicit_operator_step") or {})
+        commands = dict(entry.get("commands") or {})
+        packet_entries.append(
+            {
+                "job_id": entry.get("job_id"),
+                "next_action": entry.get("next_action"),
+                "next_safe_step": next_safe.get("step"),
+                "next_safe_command": next_safe.get("command") or commands.get("validate_operator_response_prefilled"),
+                "next_explicit_step": next_explicit.get("step"),
+                "next_explicit_command": next_explicit.get("command"),
+                "operator_response_template": entry.get("operator_response_template"),
+                "operator_prompt": entry.get("operator_prompt"),
+                "forbidden_live_command_count": _int(sequence.get("live_call_step_count")),
+                "forbidden_sink_write_command_count": _int(sequence.get("sink_write_step_count")),
+            }
+        )
+
+    state = "operator_required" if operator_entries else "no_operator_required"
+    return {
+        "schema": "business-card-watchdog.operator-dashboard.live-pilot-execution-packet.v1",
+        "run_id": run_id,
+        "state": state,
+        "operator_required_count": len(operator_entries),
+        "entries": packet_entries,
+        "next_safe_command": packet_entries[0]["next_safe_command"] if packet_entries else None,
+        "next_explicit_operator_command": packet_entries[0]["next_explicit_command"] if packet_entries else None,
+        "forbidden_live_or_sink_write_from_dashboard": True,
+        "execution_policy": {
+            "safe_to_auto_execute_next_safe_command": True,
+            "requires_operator_before_explicit_command": True,
+            "requires_operator_before_live_call": True,
+            "requires_operator_before_sink_write": True,
+            "do_not_run_live_or_sink_write_from_dashboard": True,
+        },
+        "stop_conditions": handoff.get("operator_stop_conditions") or [],
+        "writes_attempted": 0,
+        "network_calls_made": 0,
     }
 
 

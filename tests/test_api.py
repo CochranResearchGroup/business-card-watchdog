@@ -274,6 +274,19 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert dashboard_sequence["sink_write_step_count"] == 0
     assert dashboard_sequence["next_safe_inspection_step"] == "validate_operator_response"
     assert dashboard_sequence["next_explicit_operator_step"] == "create_selected_target"
+    dashboard_packet = active_dashboard["live_pilot_handoff_summary"]["execution_packet"]
+    assert dashboard_packet["schema"] == "business-card-watchdog.operator-dashboard.live-pilot-execution-packet.v1"
+    assert dashboard_packet["state"] == "operator_required"
+    assert dashboard_packet["operator_required_count"] == 1
+    assert dashboard_packet["next_safe_command"] == live_handoff["entries"][0]["commands"][
+        "validate_operator_response_prefilled"
+    ]
+    assert dashboard_packet["next_explicit_operator_command"] == live_handoff["entries"][0]["pilot_command_sequence"][
+        "next_explicit_operator_step"
+    ]["command"]
+    assert dashboard_packet["forbidden_live_or_sink_write_from_dashboard"] is True
+    assert dashboard_packet["writes_attempted"] == 0
+    assert dashboard_packet["network_calls_made"] == 0
     response = (
         f"run_id={run_id} job_id={job_id} sink=google_contacts "
         "operator=api-test scope=lookup safety_confirmation=fixture contact is safe for google contacts test profile"

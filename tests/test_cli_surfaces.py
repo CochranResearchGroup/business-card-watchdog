@@ -324,11 +324,32 @@ def test_cli_live_target_candidates_reports_text_and_json(tmp_path: Path, capsys
     assert sequence_summary["sink_write_step_count"] == 0
     assert sequence_summary["next_safe_inspection_step"] == "validate_operator_response"
     assert sequence_summary["next_explicit_operator_step"] == "create_selected_target"
+    execution_packet = dashboard["live_pilot_handoff_summary"]["execution_packet"]
+    assert execution_packet["schema"] == "business-card-watchdog.operator-dashboard.live-pilot-execution-packet.v1"
+    assert execution_packet["state"] == "operator_required"
+    assert execution_packet["operator_required_count"] == 1
+    assert execution_packet["next_safe_command"] == dashboard_entry["validation_command_prefilled"]
+    assert execution_packet["next_explicit_operator_command"] == (
+        f"sinks select-live-target {candidate['job_id']} --run-id {run_id} "
+        "--sink google_contacts --operator <operator> --scope lookup "
+        "--safety-confirmation <tenant-profile-account-confirmation>"
+    )
+    assert execution_packet["forbidden_live_or_sink_write_from_dashboard"] is True
+    assert execution_packet["writes_attempted"] == 0
+    assert execution_packet["network_calls_made"] == 0
     assert dashboard_entry["validation_command_prefilled"] == (
         f"runs live-pilot-validate-response {run_id} "
         f"--response 'run_id={run_id} job_id={candidate['job_id']} sink=google_contacts "
         "operator=<operator> scope=lookup safety_confirmation=<tenant-profile-account-confirmation>' --json"
     )
+
+    assert main(["--config", str(config_path), "operator-dashboard", "--run-id", run_id]) == 0
+    dashboard_text = capsys.readouterr().out
+    assert "Live pilot execution packet: state=operator_required operator_required=1" in dashboard_text
+    assert "Live pilot execution policy: forbid_live_or_sink=True" in dashboard_text
+    assert "next_safe=runs live-pilot-validate-response" in dashboard_text
+    assert "next_explicit=sinks select-live-target" in dashboard_text
+    assert "{" not in dashboard_text
 
     assert main(["--config", str(config_path), "service", "recovery", "--run-id", run_id, "--json"]) == 0
     recovery = json.loads(capsys.readouterr().out)
