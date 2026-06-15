@@ -311,6 +311,17 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
                 )
                 if entry.get("operator_response_template"):
                     lines.append(f"   Operator response: {entry.get('operator_response_template')}")
+                sequence_summary = dict(entry.get("pilot_command_sequence_summary") or {})
+                if sequence_summary:
+                    lines.append(
+                        "   Sequence: "
+                        f"safe={sequence_summary.get('safe_inspection_step_count', 0)} "
+                        f"explicit={sequence_summary.get('explicit_operator_step_count', 0)} "
+                        f"live={sequence_summary.get('live_call_step_count', 0)} "
+                        f"sink_writes={sequence_summary.get('sink_write_step_count', 0)} "
+                        f"next_safe={sequence_summary.get('next_safe_inspection_step') or 'none'} "
+                        f"next_explicit={sequence_summary.get('next_explicit_operator_step') or 'none'}"
+                    )
                 if entry.get("validation_command_prefilled"):
                     lines.append(f"   Validate prefilled response: {entry.get('validation_command_prefilled')}")
     live_stop_conditions = live.get("explicit_stop_conditions") or []

@@ -2210,6 +2210,33 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed; index is up to date.
 
+### Slice 0009-A119 | 2026-06-15 | Dashboard Sequence Summary
+
+Implemented:
+
+- Added `business-card-watchdog.pilot-command-sequence-summary.v1`.
+- Operator dashboard live handoff entries now include compact sequence counts for safe-inspection, explicit-operator, live-call, and sink-write steps.
+- Dashboard entries also expose the next safe-inspection step and next explicit-operator step so subagents can stop at the correct boundary without opening the full handoff.
+- CLI dashboard text renders the per-entry sequence summary.
+- CLI, API, MCP, and service coverage assert the dashboard sequence summary and zero-write/no-live behavior.
+
+Safety:
+
+- This slice is dashboard presentation metadata only.
+- It does not create or modify `selected_live_target.json` and does not execute lookup, write, or readback pilots.
+- It does not process configured/private SyncThing inputs, run public-web search, call paid enrichment, validate a real operator response for a real target, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_live_target_candidates_reports_text_and_json tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service tests/test_service.py::test_service_operator_dashboard_composes_no_live_readiness -q` passed with 4 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py tests/test_service.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 231 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
 ### Slice 0009-A118 | 2026-06-15 | Validation Sequence Groups
 
 Implemented:

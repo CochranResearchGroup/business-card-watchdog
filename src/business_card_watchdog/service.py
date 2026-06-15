@@ -476,6 +476,9 @@ class BusinessCardService:
                     "command": entry.get("command"),
                     "operator_response_template": entry.get("operator_response_template"),
                     "operator_prompt": entry.get("operator_prompt"),
+                    "pilot_command_sequence_summary": _pilot_command_sequence_summary(
+                        dict(entry.get("pilot_command_sequence") or {})
+                    ),
                     "validation_command": (entry.get("commands") or {}).get("validate_operator_response"),
                     "validation_command_prefilled": (entry.get("commands") or {}).get(
                         "validate_operator_response_prefilled"
@@ -8432,6 +8435,22 @@ def _pilot_command_sequence(checklist: list[Any]) -> dict[str, Any]:
             "requires_operator_before_sink_write_steps": True,
             "do_not_run_live_or_sink_write_from_handoff": True,
         },
+    }
+
+
+def _pilot_command_sequence_summary(sequence: dict[str, Any]) -> dict[str, Any]:
+    next_safe = dict(sequence.get("next_safe_inspection_step") or {})
+    next_explicit = dict(sequence.get("next_explicit_operator_step") or {})
+    return {
+        "schema": "business-card-watchdog.pilot-command-sequence-summary.v1",
+        "step_count": _int(sequence.get("step_count")),
+        "safe_inspection_step_count": _int(sequence.get("safe_inspection_step_count")),
+        "explicit_operator_step_count": _int(sequence.get("explicit_operator_step_count")),
+        "live_call_step_count": _int(sequence.get("live_call_step_count")),
+        "sink_write_step_count": _int(sequence.get("sink_write_step_count")),
+        "next_safe_inspection_step": next_safe.get("step"),
+        "next_explicit_operator_step": next_explicit.get("step"),
+        "execution_policy": sequence.get("execution_policy") or {},
     }
 
 

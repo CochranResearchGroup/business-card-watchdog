@@ -433,6 +433,15 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert operator_dashboard["live_pilot_handoff_summary"]["operator_entries"][0][
         "validation_command_prefilled"
     ].startswith(f"runs live-pilot-validate-response {run_id} --response 'run_id={run_id}")
+    dashboard_sequence = operator_dashboard["live_pilot_handoff_summary"]["operator_entries"][0][
+        "pilot_command_sequence_summary"
+    ]
+    assert dashboard_sequence["safe_inspection_step_count"] == 3
+    assert dashboard_sequence["explicit_operator_step_count"] == 2
+    assert dashboard_sequence["live_call_step_count"] == 1
+    assert dashboard_sequence["sink_write_step_count"] == 0
+    assert dashboard_sequence["next_safe_inspection_step"] == "validate_operator_response"
+    assert dashboard_sequence["next_explicit_operator_step"] == "create_selected_target"
     assert operator_dashboard["writes_attempted"] == 0
     assert operator_dashboard["network_calls_made"] == 0
     assert summary["needs_review_count"] == 1

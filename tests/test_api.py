@@ -264,6 +264,16 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
         "operator=api-test scope=lookup safety_confirmation=<tenant-profile-account-confirmation>' --json"
     )
     assert live_handoff["entries"][0]["copyable_approval_fields"]["operator"] == "api-test"
+    active_dashboard = client.get("/operator/dashboard", params={"run_id": run_id}).json()
+    dashboard_sequence = active_dashboard["live_pilot_handoff_summary"]["operator_entries"][0][
+        "pilot_command_sequence_summary"
+    ]
+    assert dashboard_sequence["safe_inspection_step_count"] == 3
+    assert dashboard_sequence["explicit_operator_step_count"] == 2
+    assert dashboard_sequence["live_call_step_count"] == 1
+    assert dashboard_sequence["sink_write_step_count"] == 0
+    assert dashboard_sequence["next_safe_inspection_step"] == "validate_operator_response"
+    assert dashboard_sequence["next_explicit_operator_step"] == "create_selected_target"
     response = (
         f"run_id={run_id} job_id={job_id} sink=google_contacts "
         "operator=api-test scope=lookup safety_confirmation=fixture contact is safe for google contacts test profile"

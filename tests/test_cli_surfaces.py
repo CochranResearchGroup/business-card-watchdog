@@ -316,6 +316,14 @@ def test_cli_live_target_candidates_reports_text_and_json(tmp_path: Path, capsys
     assert checklist_rollup["sink_write_step_count"] == 0
     assert checklist_rollup["explicit_operator_step_count"] == 2
     assert checklist_rollup["sample_jobs"][0]["job_id"] == candidate["job_id"]
+    sequence_summary = dashboard_entry["pilot_command_sequence_summary"]
+    assert sequence_summary["schema"] == "business-card-watchdog.pilot-command-sequence-summary.v1"
+    assert sequence_summary["safe_inspection_step_count"] == 3
+    assert sequence_summary["explicit_operator_step_count"] == 2
+    assert sequence_summary["live_call_step_count"] == 1
+    assert sequence_summary["sink_write_step_count"] == 0
+    assert sequence_summary["next_safe_inspection_step"] == "validate_operator_response"
+    assert sequence_summary["next_explicit_operator_step"] == "create_selected_target"
     assert dashboard_entry["validation_command_prefilled"] == (
         f"runs live-pilot-validate-response {run_id} "
         f"--response 'run_id={run_id} job_id={candidate['job_id']} sink=google_contacts "
@@ -332,6 +340,8 @@ def test_cli_live_target_candidates_reports_text_and_json(tmp_path: Path, capsys
     dashboard_text = capsys.readouterr().out
     assert "Live pilot checklist: jobs=1 steps=5 live_calls=1 sink_writes=0 explicit_steps=2" in dashboard_text
     assert "Live handoff operator entries:" in dashboard_text
+    assert "Sequence: safe=3 explicit=2 live=1 sink_writes=0" in dashboard_text
+    assert "next_safe=validate_operator_response next_explicit=create_selected_target" in dashboard_text
     assert (
         f"Validate prefilled response: runs live-pilot-validate-response {run_id} "
         f"--response 'run_id={run_id} job_id={candidate['job_id']} sink=google_contacts "
