@@ -394,6 +394,7 @@ class BusinessCardService:
                 for entry in handoff.get("entries") or []
                 if isinstance(entry, dict) and entry.get("operator_required")
             ]
+            operator_response_templates = list(handoff.get("operator_response_templates") or [])
             live_pilot_handoff_summary = {
                 "schema": "business-card-watchdog.operator-dashboard.live-pilot-handoff-summary.v1",
                 "state": handoff.get("state"),
@@ -401,6 +402,8 @@ class BusinessCardService:
                 "action_counts": handoff.get("action_counts") or {},
                 "operator_required_count": len(operator_entries),
                 "operator_entries": operator_entries[:5],
+                "operator_response_template_count": len(operator_response_templates),
+                "operator_response_templates": operator_response_templates[:5],
                 "operator_response_contract": handoff.get("operator_response_contract"),
                 "writes_attempted": handoff.get("writes_attempted", 0),
                 "network_calls_made": handoff.get("network_calls_made", 0),
@@ -5705,6 +5708,21 @@ class BusinessCardService:
         for entry in handoff_entries:
             action = str(entry["next_action"])
             action_counts[action] = action_counts.get(action, 0) + 1
+        operator_response_templates = [
+            {
+                "schema": "business-card-watchdog.operator-response-template.v1",
+                "run_id": entry.get("run_id"),
+                "job_id": entry.get("job_id"),
+                "next_action": entry.get("next_action"),
+                "operator_required": entry.get("operator_required", False),
+                "template": entry.get("operator_response_template"),
+                "prompt": entry.get("operator_prompt"),
+                "copyable_approval_fields": entry.get("copyable_approval_fields"),
+                "command": entry.get("command"),
+            }
+            for entry in handoff_entries
+            if entry.get("operator_required") and entry.get("operator_response_template")
+        ]
         state = (
             "complete"
             if handoff_entries and action_counts.get("complete") == len(handoff_entries)
@@ -5727,6 +5745,8 @@ class BusinessCardService:
             "job_count": len(handoff_entries),
             "action_counts": action_counts,
             "entries": handoff_entries,
+            "operator_response_template_count": len(operator_response_templates),
+            "operator_response_templates": operator_response_templates,
             "operator_response_contract": status.get("operator_response_contract"),
             "writes_attempted": 0,
             "network_calls_made": 0,

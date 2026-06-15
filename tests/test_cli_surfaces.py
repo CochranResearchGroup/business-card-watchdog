@@ -121,7 +121,7 @@ def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) 
     assert f"Live pilot status: business_card_watchdog_live_pilot_status args=run_id={run_id}, write=False" in text
     assert "Next actions: total=1 safe=0 explicit=1" in text
     assert "action=review_contact" in text
-    assert "Live handoff: state=blocked operator_required=0" in text
+    assert "Live handoff: state=blocked operator_required=0 response_templates=0" in text
     assert f"Live pilot status: runs live-pilot-status {run_id} --no-write --json" in text
     assert "Observed: writes=0 network=0" in text
     assert "Stop conditions: 3" in text
@@ -556,6 +556,14 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert handoff["entries"][0]["operator_response_template"] == (
         f"run_id={run_id} job_id={job_id} sink=google_contacts "
         "operator=tester scope=lookup safety_confirmation=<confirmation>"
+    )
+    assert handoff["operator_response_template_count"] == 1
+    assert handoff["operator_response_templates"][0]["template"] == (
+        f"run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=tester scope=lookup safety_confirmation=<confirmation>"
+    )
+    assert handoff["operator_response_templates"][0]["command"] == (
+        f"sinks execute-lookup-smoke {job_id} --run-id {run_id} --json"
     )
     assert handoff["entries"][0]["command"] == f"sinks execute-lookup-smoke {job_id} --run-id {run_id} --json"
 

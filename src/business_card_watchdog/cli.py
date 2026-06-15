@@ -92,7 +92,8 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
         f"Live pilot: {live.get('state') or 'none'}",
         "Live handoff: "
         f"state={live_handoff.get('state') or 'none'} "
-        f"operator_required={live_handoff.get('operator_required_count', 0)}",
+        f"operator_required={live_handoff.get('operator_required_count', 0)} "
+        f"response_templates={live_handoff.get('operator_response_template_count', 0)}",
         f"Observed: writes={payload.get('writes_attempted', 0)} network={payload.get('network_calls_made', 0)}",
         "Commands:",
     ]

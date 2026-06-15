@@ -2672,6 +2672,32 @@ Safety:
 
 - This was presentation/readback only. It did not invoke API routes or MCP tools, execute next actions, process private SyncThing inputs, run public-web search, call paid enrichment, create `selected_live_target.json`, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
 
+## Turn 145 | 2026-06-15
+
+Continued Plan 0009 with Slice 0009-A69.
+
+Implemented:
+
+- Live pilot handoffs now expose top-level `operator_response_templates` for operator-required next actions.
+- Each template includes schema, run/job identifiers, next action, prompt, command, and copyable approval fields.
+- Operator dashboard live-handoff summaries now include response-template count and first-template samples.
+- Operator dashboard text now shows the response-template count at the live handoff boundary.
+- Service and CLI tests cover zero-template and selected-target template cases.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_operator_dashboard_composes_no_live_readiness tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_operator_dashboard_reports_no_live_summary tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
+- `.venv/bin/python -m pytest -q` passed with 226 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was no-live readback/presentation only. It did not create or modify `selected_live_target.json`, invoke API routes or MCP tools, execute next actions, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
 ## Turn 142 | 2026-06-14
 
 Continued Plan 0009 with Slice 0009-A66.

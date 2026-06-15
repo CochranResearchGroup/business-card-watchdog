@@ -678,6 +678,8 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     assert dashboard["live_pilot_handoff_summary"]["action_counts"] == {"no_live_candidate": 1}
     assert dashboard["live_pilot_handoff_summary"]["operator_required_count"] == 0
     assert dashboard["live_pilot_handoff_summary"]["operator_entries"] == []
+    assert dashboard["live_pilot_handoff_summary"]["operator_response_template_count"] == 0
+    assert dashboard["live_pilot_handoff_summary"]["operator_response_templates"] == []
     assert dashboard["live_pilot_handoff_summary"]["writes_attempted"] == 0
     assert dashboard["live_pilot_handoff_summary"]["network_calls_made"] == 0
     assert dashboard["commands"]["review_queue"] == f"reviews list --run-id {run_id} --state all --json"
@@ -2355,6 +2357,22 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
         f"run_id={run_id} job_id={job_id} sink=google_contacts "
         "operator=tester scope=lookup safety_confirmation=<confirmation>"
     )
+    assert handoff["operator_response_template_count"] == 1
+    assert handoff["operator_response_templates"][0]["schema"] == (
+        "business-card-watchdog.operator-response-template.v1"
+    )
+    assert handoff["operator_response_templates"][0]["template"] == (
+        f"run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=tester scope=lookup safety_confirmation=<confirmation>"
+    )
+    assert handoff["operator_response_templates"][0]["copyable_approval_fields"] == {
+        "run_id": run_id,
+        "job_id": job_id,
+        "sink": "google_contacts",
+        "operator": "tester",
+        "scope": "lookup",
+        "safety_confirmation": "<confirmation>",
+    }
     assert handoff["writes_attempted"] == 0
     assert handoff["network_calls_made"] == 0
     assert Path(handoff["handoff_path"]).exists()
