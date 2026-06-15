@@ -7,7 +7,11 @@ from pathlib import Path
 from .config import AppConfig, ensure_runtime_dirs, resolve_input_path
 from .contact import build_contact_candidate, contact_candidate_to_spec
 from .dedupe import assess_duplicate, remember_identity
-from .fanout import build_candidate_work_item_manifest, materialize_candidate_crops
+from .fanout import (
+    build_candidate_work_item_manifest,
+    build_child_verification_request_manifest,
+    materialize_candidate_crops,
+)
 from .ledger import RunLedger
 from .models import CardJob, utc_now
 from .preclassifier import assess_business_card_candidate, build_card_candidate_box_manifest
@@ -121,6 +125,31 @@ class BatchOrchestrator:
                 ledger.record_event(
                     "candidate_crops_recorded",
                     {"job": job.to_dict(), "crop_manifest": crop_manifest},
+                )
+                verification_request_manifest, work_item_manifest = (
+                    build_child_verification_request_manifest(
+                        work_item_manifest=work_item_manifest,
+                        crop_manifest=crop_manifest,
+                        dry_run=dry_run,
+                    )
+                )
+                verification_request_manifest_path = artifact_dir / "child_verification_requests.json"
+                verification_request_manifest_path.write_text(
+                    json.dumps(verification_request_manifest, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+                ledger.record_artifact(
+                    job_id=job.job_id,
+                    kind="child_verification_requests",
+                    path=verification_request_manifest_path,
+                    metadata={"request_count": verification_request_manifest["request_count"]},
+                )
+                ledger.record_event(
+                    "child_verification_requests_recorded",
+                    {
+                        "job": job.to_dict(),
+                        "verification_request_manifest": verification_request_manifest,
+                    },
                 )
                 work_item_manifest_path = artifact_dir / "candidate_work_items.json"
                 work_item_manifest_path.write_text(

@@ -127,6 +127,9 @@ item per candidate box so later agent loops can process large multi-card photos
 without losing parent image lineage. When crops can be materialized, the run writes
 `candidate_crops.json` and image files under the job artifact directory, then marks
 those child work items `crop_ready` for later OCR/App Intelligence verification.
+The run also writes `child_verification_requests.json` as a dry-run execution
+contract for the crop-ready items; these requests are not executed and cannot route,
+enrich, or write contacts.
 
 `drills review-routing` creates a synthetic fixture run and proves review approval,
 review bundle/workbook export, duplicate lookup planning, dry-run sink routing, and

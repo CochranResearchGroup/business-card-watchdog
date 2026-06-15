@@ -4733,3 +4733,32 @@ Validation:
 Safety:
 
 - This used synthetic fixture images for validation. It did not run OCR/App Intelligence, normalize child contacts, route, enrich, write sinks, execute command-copy text, run public-web search, call paid APIs, or call GWS/Odollo/Odoo.
+
+## Turn 220 | 2026-06-15
+
+Executed Plan 0014 with Slice 0014-A.
+
+Implemented:
+
+- Added `business-card-watchdog.child-verification-requests.v1`.
+- Added deterministic request manifest construction from crop-ready child work items.
+- Wired batch orchestration to persist `child_verification_requests.json`.
+- Updated `candidate_work_items.json` so crop-ready items record `verification_request_ready` and a request ID.
+- Recorded `child_verification_requests` ledger artifacts and `child_verification_requests_recorded` events.
+- Updated synthetic multi-card dry-run coverage to verify request lineage, dry-run state, explicit execution gate, and route/enrichment/write denial flags.
+- Updated README and roadmap documentation for the dry-run child OCR/App Intelligence request contract.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_preclassifier.py::test_orchestrator_records_multi_card_candidate_manifest -q` passed with 1 test.
+- `.venv/bin/ruff check src/business_card_watchdog/fanout.py src/business_card_watchdog/orchestrator.py tests/test_preclassifier.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 239 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This created execution-request artifacts only. It did not execute OCR/App Intelligence, normalize child contacts, route, enrich, write sinks, execute command-copy text, run public-web search, call paid APIs, or call GWS/Odollo/Odoo.

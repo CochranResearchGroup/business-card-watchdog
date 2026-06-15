@@ -7,6 +7,7 @@ from typing import Any
 
 CANDIDATE_WORK_ITEMS_SCHEMA = "business-card-watchdog.card-candidate-work-items.v1"
 CANDIDATE_CROPS_SCHEMA = "business-card-watchdog.card-candidate-crops.v1"
+CHILD_VERIFICATION_REQUESTS_SCHEMA = "business-card-watchdog.child-verification-requests.v1"
 
 
 def build_candidate_work_item_manifest(candidate_manifest: dict[str, Any]) -> dict[str, Any]:
@@ -131,3 +132,59 @@ def _clamped_box_bounds(
     if x2 <= x1 or y2 <= y1:
         return None
     return x1, y1, x2, y2
+
+
+def build_child_verification_request_manifest(
+    *,
+    work_item_manifest: dict[str, Any],
+    crop_manifest: dict[str, Any],
+    dry_run: bool,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    updated_manifest = deepcopy(work_item_manifest)
+    crops_by_work_item = {
+        str(crop["work_item_id"]): crop
+        for crop in list(crop_manifest.get("crops") or [])
+        if isinstance(crop, dict)
+    }
+    requests: list[dict[str, Any]] = []
+    for item in updated_manifest["work_items"]:
+        crop = crops_by_work_item.get(str(item["work_item_id"]))
+        if crop is None or item.get("state") != "crop_ready":
+            continue
+        request = {
+            "request_id": f"{item['work_item_id']}-request",
+            "work_item_id": item["work_item_id"],
+            "candidate_id": item["candidate_id"],
+            "parent_job_id": item["parent_job_id"],
+            "crop_path": crop["crop_path"],
+            "adapter": "business-card-to-contact",
+            "phase": "ocr_app_intelligence_verification",
+            "state": "ready",
+            "dry_run": dry_run,
+            "executed": False,
+            "requires_explicit_execution": True,
+            "routing_allowed": False,
+            "enrichment_allowed": False,
+            "sink_write_allowed": False,
+        }
+        requests.append(request)
+        item["phase"] = "verification_request_ready"
+        item["verification_request_id"] = request["request_id"]
+
+    updated_manifest["verification_request_ready_count"] = len(requests)
+    return (
+        {
+            "schema": CHILD_VERIFICATION_REQUESTS_SCHEMA,
+            "parent_job_id": work_item_manifest["parent_job_id"],
+            "source_image_path": work_item_manifest["source_image_path"],
+            "dry_run": dry_run,
+            "request_count": len(requests),
+            "requests": requests,
+            "explicit_stop_conditions": [
+                "These are execution requests only; OCR/App Intelligence has not run.",
+                "Do not route, enrich, or write contacts until verification results are reviewed.",
+                "Real OCR/App Intelligence execution requires an explicit operator-selected run or adapter invocation.",
+            ],
+        },
+        updated_manifest,
+    )

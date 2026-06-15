@@ -68,6 +68,7 @@ def test_orchestrator_records_multi_card_candidate_manifest(tmp_path: Path, monk
     artifact_dir = Path(job["artifact_dir"])
     manifest = json.loads((artifact_dir / "card_candidates.json").read_text(encoding="utf-8"))
     crops = json.loads((artifact_dir / "candidate_crops.json").read_text(encoding="utf-8"))
+    requests = json.loads((artifact_dir / "child_verification_requests.json").read_text(encoding="utf-8"))
     work_items = json.loads((artifact_dir / "candidate_work_items.json").read_text(encoding="utf-8"))
     artifact_kinds = [record["kind"] for record in read_jsonl(run_dir / "artifacts.jsonl")]
     events = read_jsonl(run_dir / "events.jsonl")
@@ -83,7 +84,7 @@ def test_orchestrator_records_multi_card_candidate_manifest(tmp_path: Path, monk
     assert work_items["work_item_count"] == manifest["candidate_count"]
     assert len(work_items["work_items"]) == manifest["candidate_count"]
     assert work_items["work_items"][0]["candidate_id"] == manifest["candidates"][0]["candidate_id"]
-    assert work_items["work_items"][0]["phase"] == "ready_for_ocr_app_intelligence_verification"
+    assert work_items["work_items"][0]["phase"] == "verification_request_ready"
     assert work_items["work_items"][0]["state"] == "crop_ready"
     assert all(item["routing_allowed"] is False for item in work_items["work_items"])
     assert crops["schema"] == "business-card-watchdog.card-candidate-crops.v1"
@@ -92,11 +93,22 @@ def test_orchestrator_records_multi_card_candidate_manifest(tmp_path: Path, monk
     assert len(crops["crops"]) == manifest["candidate_count"]
     assert Path(crops["crops"][0]["crop_path"]).exists()
     assert Path(work_items["work_items"][0]["crop_path"]).exists()
+    assert requests["schema"] == "business-card-watchdog.child-verification-requests.v1"
+    assert requests["parent_job_id"] == job["job_id"]
+    assert requests["dry_run"] is True
+    assert requests["request_count"] == manifest["candidate_count"]
+    assert len(requests["requests"]) == manifest["candidate_count"]
+    assert requests["requests"][0]["work_item_id"] == work_items["work_items"][0]["work_item_id"]
+    assert requests["requests"][0]["executed"] is False
+    assert requests["requests"][0]["requires_explicit_execution"] is True
+    assert all(request["routing_allowed"] is False for request in requests["requests"])
     assert "card_candidates" in artifact_kinds
     assert "candidate_crops" in artifact_kinds
+    assert "child_verification_requests" in artifact_kinds
     assert "candidate_work_items" in artifact_kinds
     assert any(event["event_type"] == "card_candidates_recorded" for event in events)
     assert any(event["event_type"] == "candidate_crops_recorded" for event in events)
+    assert any(event["event_type"] == "child_verification_requests_recorded" for event in events)
     assert any(event["event_type"] == "candidate_work_items_recorded" for event in events)
     assert adapter.apply_google_calls == [False]
 
