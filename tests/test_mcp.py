@@ -1673,6 +1673,15 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert operator_dashboard["commands"]["selected_live_target_from_response"] == (
         f"runs selected-live-target-from-response {run_id} --response <operator-response> --json"
     )
+    assert operator_dashboard["commands"]["selected_target_approval_boundary"] == (
+        f"runs selected-target-approval-boundary {run_id} "
+        "--operator <operator> --response <operator-response> --no-write --json"
+    )
+    assert operator_dashboard["commands"]["selected_target_command_copy_packet"] == (
+        f"runs selected-target-command-copy-packet {run_id} "
+        "--operator <operator> --response <operator-response> "
+        "--acknowledgement <operator-acknowledgement> --json"
+    )
     assert operator_dashboard["commands"]["selected_live_target_handoff_from_response"] == (
         f"runs selected-live-target-handoff-from-response {run_id} --response <operator-response> --json"
     )
@@ -1753,6 +1762,24 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert operator_dashboard["mcp_tools"]["selected_live_target_from_response"] == {
         "tool": "business_card_watchdog_selected_live_target_from_response",
         "arguments": {"run_id": run_id, "response": "<operator-response>"},
+    }
+    assert operator_dashboard["mcp_tools"]["selected_target_approval_boundary"] == {
+        "tool": "business_card_watchdog_selected_target_approval_boundary",
+        "arguments": {
+            "run_id": run_id,
+            "operator": "<operator>",
+            "response": "<operator-response>",
+            "write": False,
+        },
+    }
+    assert operator_dashboard["mcp_tools"]["selected_target_command_copy_packet"] == {
+        "tool": "business_card_watchdog_selected_target_command_copy_packet",
+        "arguments": {
+            "run_id": run_id,
+            "operator": "<operator>",
+            "response": "<operator-response>",
+            "acknowledgement": "<operator-acknowledgement>",
+        },
     }
     assert operator_dashboard["mcp_tools"]["selected_live_target_handoff_from_response"] == {
         "tool": "business_card_watchdog_selected_live_target_handoff_from_response",

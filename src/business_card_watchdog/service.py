@@ -885,6 +885,19 @@ class BusinessCardService:
                     if selected_run_id
                     else "runs list --json"
                 ),
+                "selected_target_approval_boundary": (
+                    f"runs selected-target-approval-boundary {selected_run_id} "
+                    "--operator <operator> --response <operator-response> --no-write --json"
+                    if selected_run_id
+                    else "runs list --json"
+                ),
+                "selected_target_command_copy_packet": (
+                    f"runs selected-target-command-copy-packet {selected_run_id} "
+                    "--operator <operator> --response <operator-response> "
+                    "--acknowledgement <operator-acknowledgement> --json"
+                    if selected_run_id
+                    else "runs list --json"
+                ),
                 "selected_live_target_preview": (
                     f"runs selected-live-target-preview {selected_run_id} --response <operator-response> --json"
                     if selected_run_id
@@ -1009,6 +1022,16 @@ class BusinessCardService:
                     f"POST /runs/{selected_run_id}/selected-live-target-preflight"
                     if selected_run_id
                     else "POST /runs/{run_id}/selected-live-target-preflight"
+                ),
+                "selected_target_approval_boundary": (
+                    f"POST /runs/{selected_run_id}/selected-target-approval-boundary"
+                    if selected_run_id
+                    else "POST /runs/{run_id}/selected-target-approval-boundary"
+                ),
+                "selected_target_command_copy_packet": (
+                    f"POST /runs/{selected_run_id}/selected-target-command-copy-packet"
+                    if selected_run_id
+                    else "POST /runs/{run_id}/selected-target-command-copy-packet"
                 ),
                 "selected_live_target_preview": (
                     f"POST /runs/{selected_run_id}/selected-live-target-preview"
@@ -1142,6 +1165,38 @@ class BusinessCardService:
                     "arguments": {"run_id": selected_run_id, "response": "<operator-response>"}
                     if selected_run_id
                     else {"run_id": "<run-id>", "response": "<operator-response>"},
+                },
+                "selected_target_approval_boundary": {
+                    "tool": "business_card_watchdog_selected_target_approval_boundary",
+                    "arguments": {
+                        "run_id": selected_run_id,
+                        "operator": "<operator>",
+                        "response": "<operator-response>",
+                        "write": False,
+                    }
+                    if selected_run_id
+                    else {
+                        "run_id": "<run-id>",
+                        "operator": "<operator>",
+                        "response": "<operator-response>",
+                        "write": False,
+                    },
+                },
+                "selected_target_command_copy_packet": {
+                    "tool": "business_card_watchdog_selected_target_command_copy_packet",
+                    "arguments": {
+                        "run_id": selected_run_id,
+                        "operator": "<operator>",
+                        "response": "<operator-response>",
+                        "acknowledgement": "<operator-acknowledgement>",
+                    }
+                    if selected_run_id
+                    else {
+                        "run_id": "<run-id>",
+                        "operator": "<operator>",
+                        "response": "<operator-response>",
+                        "acknowledgement": "<operator-acknowledgement>",
+                    },
                 },
                 "selected_live_target_preview": {
                     "tool": "business_card_watchdog_selected_live_target_artifact_preview",

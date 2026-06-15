@@ -1527,6 +1527,15 @@ def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) 
     assert payload["commands"]["live_pilot_validate_response"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
+    assert payload["commands"]["selected_target_approval_boundary"] == (
+        f"runs selected-target-approval-boundary {run_id} "
+        "--operator <operator> --response <operator-response> --no-write --json"
+    )
+    assert payload["commands"]["selected_target_command_copy_packet"] == (
+        f"runs selected-target-command-copy-packet {run_id} "
+        "--operator <operator> --response <operator-response> "
+        "--acknowledgement <operator-acknowledgement> --json"
+    )
     assert payload["review_counts"]["needs_review"] == 1
     assert payload["next_action_summary"]["by_action"] == {"review_contact": 1}
     assert payload["live_pilot_handoff_summary"]["action_counts"] == {"no_live_candidate": 1}
@@ -1568,6 +1577,8 @@ def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) 
     assert "Live pilot rehearsal drill: POST /drills/live-pilot-rehearsal" in text
     assert f"Live pilot handoff: GET /runs/{run_id}/live-pilot-handoff?write=false" in text
     assert f"Live pilot validate response: POST /runs/{run_id}/live-pilot-operator-response-validation" in text
+    assert f"Selected target approval boundary: POST /runs/{run_id}/selected-target-approval-boundary" in text
+    assert f"Selected target command copy packet: POST /runs/{run_id}/selected-target-command-copy-packet" in text
     assert "MCP tools:" in text
     assert f"Operator dashboard: business_card_watchdog_operator_dashboard args=run_id={run_id}" in text
     assert f"Next actions: business_card_watchdog_next_actions args=limit=20, run_id={run_id}" in text
@@ -1592,6 +1603,17 @@ def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) 
         f"business_card_watchdog_live_pilot_operator_response_validation "
         f"args=response=<operator-response>, run_id={run_id}"
     ) in text
+    assert (
+        "Selected target approval boundary: "
+        f"business_card_watchdog_selected_target_approval_boundary "
+        f"args=operator=<operator>, response=<operator-response>, run_id={run_id}, write=False"
+    ) in text
+    assert (
+        "Selected target command copy packet: "
+        f"business_card_watchdog_selected_target_command_copy_packet "
+        "args=acknowledgement=<operator-acknowledgement>, operator=<operator>, "
+        f"response=<operator-response>, run_id={run_id}"
+    ) in text
     assert "Next actions: total=1 safe=0 explicit=1" in text
     assert "action=review_contact" in text
     assert "Live handoff: state=blocked operator_required=0 response_templates=0" in text
@@ -1600,6 +1622,15 @@ def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) 
     assert (
         f"Live pilot validate response: runs live-pilot-validate-response {run_id} "
         "--response <operator-response> --json"
+    ) in text
+    assert (
+        f"Selected target approval boundary: runs selected-target-approval-boundary {run_id} "
+        "--operator <operator> --response <operator-response> --no-write --json"
+    ) in text
+    assert (
+        f"Selected target command copy packet: runs selected-target-command-copy-packet {run_id} "
+        "--operator <operator> --response <operator-response> "
+        "--acknowledgement <operator-acknowledgement> --json"
     ) in text
     assert "Observed: writes=0 network=0" in text
     assert "Stop conditions: 3" in text
