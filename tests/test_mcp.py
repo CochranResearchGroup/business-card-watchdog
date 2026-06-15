@@ -48,6 +48,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_live_pilot_command_copy_packet_from_response" in names
     assert "business_card_watchdog_next_actions" in names
     assert "business_card_watchdog_run_next_actions" in names
+    assert "business_card_watchdog_multi_card_preclassification_drill" in names
     assert "business_card_watchdog_review_routing_drill" in names
     assert "business_card_watchdog_live_pilot_rehearsal_drill" in names
     assert "business_card_watchdog_reviews_list" in names
@@ -92,6 +93,28 @@ def test_manifest_has_process_tool() -> None:
     assert "resolve_duplicate" in review_tool["input_schema"]["properties"]["action"]["enum"]
     assert "reject_not_card" in review_tool["input_schema"]["properties"]["action"]["enum"]
     assert "skip" in review_tool["input_schema"]["properties"]["action"]["enum"]
+
+
+def test_mcp_multi_card_preclassification_drill_records_candidate_boxes(tmp_path: Path) -> None:
+    pytest = __import__("pytest")
+    pytest.importorskip("cv2")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        cache_dir=tmp_path / "cache",
+    )
+
+    payload = call_tool("business_card_watchdog_multi_card_preclassification_drill", {}, config=config)
+
+    assert payload["schema"] == "business-card-watchdog.multi-card-preclassification-drill.v1"
+    assert payload["state"] == "passed"
+    assert payload["expected_card_count"] == 3
+    assert payload["detected_card_like_count"] >= 3
+    assert len(payload["candidate_boxes"]) >= 3
+    assert payload["private_sources_used"] is False
+    assert payload["live_sink_calls_made"] is False
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
 
 
 def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
@@ -598,8 +621,14 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert operator_dashboard["selected_run_id"] == run_id
     assert operator_dashboard["commands"]["review_queue"] == f"reviews list --run-id {run_id} --state all --json"
     assert operator_dashboard["commands"]["next_actions"] == f"actions next --run-id {run_id} --json"
+    assert operator_dashboard["commands"]["multi_card_preclassification_drill"] == (
+        "drills multi-card-preclassification --json"
+    )
     assert operator_dashboard["commands"]["review_routing_drill"] == "drills review-routing --json"
     assert operator_dashboard["commands"]["live_pilot_rehearsal_drill"] == "drills live-pilot-rehearsal --json"
+    assert operator_dashboard["api_routes"]["multi_card_preclassification_drill"] == (
+        "POST /drills/multi-card-preclassification"
+    )
     assert operator_dashboard["api_routes"]["review_routing_drill"] == "POST /drills/review-routing"
     assert operator_dashboard["api_routes"]["live_pilot_rehearsal_drill"] == "POST /drills/live-pilot-rehearsal"
     assert operator_dashboard["commands"]["live_pilot_validate_response"] == (
@@ -666,6 +695,10 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     )
     assert operator_dashboard["mcp_tools"]["next_actions"]["tool"] == "business_card_watchdog_next_actions"
     assert operator_dashboard["mcp_tools"]["next_actions"]["arguments"] == {"run_id": run_id, "limit": 20}
+    assert operator_dashboard["mcp_tools"]["multi_card_preclassification_drill"] == {
+        "tool": "business_card_watchdog_multi_card_preclassification_drill",
+        "arguments": {},
+    }
     assert operator_dashboard["mcp_tools"]["review_routing_drill"] == {
         "tool": "business_card_watchdog_review_routing_drill",
         "arguments": {},

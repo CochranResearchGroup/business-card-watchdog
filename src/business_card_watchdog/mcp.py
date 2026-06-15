@@ -385,6 +385,14 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_multi_card_preclassification_drill",
+                "description": "Run a synthetic no-live multi-card image preclassification drill and report deterministic candidate boxes.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {},
+                },
+            },
+            {
                 "name": "business_card_watchdog_live_pilot_rehearsal_drill",
                 "description": "Run a synthetic no-live live-pilot rehearsal through selected target, readiness export, checklist, and command-copy gates.",
                 "input_schema": {
@@ -1122,6 +1130,8 @@ def call_tool(
             run_id=str(args["run_id"]) if args.get("run_id") else None,
             limit=int(args.get("limit", 10)),
         )
+    if tool_name == "business_card_watchdog_multi_card_preclassification_drill":
+        return service.multi_card_preclassification_drill()
     if tool_name == "business_card_watchdog_review_routing_drill":
         return service.review_routing_drill()
     if tool_name == "business_card_watchdog_live_pilot_rehearsal_drill":

@@ -16,7 +16,7 @@ git clone https://github.com/CochranResearchGroup/business-card-watchdog.git "$t
 cd "$tmpdir/business-card-watchdog"
 
 uv venv --python 3.11
-uv pip install --python .venv/bin/python -e '.[dev]'
+uv pip install --python .venv/bin/python -e '.[dev,vision]'
 ```
 
 The status and doctor tests expect the user-scoped `business-card-to-contact` skill to exist. For CI or clean validation hosts that do not have the real skill installed, seed a minimal offline fixture:
@@ -69,8 +69,8 @@ Clean clone path:
 Validation:
 
 - `uv venv --python 3.11` installed CPython 3.11.15.
-- `uv pip install --python .venv/bin/python -e '.[dev]'` installed the package and dev tools.
+- `uv pip install --python .venv/bin/python -e '.[dev,vision]'` installed the package, dev tools, and OpenCV vision analyzer.
 - `.venv/bin/bcw --help` returned successfully.
-- `.venv/bin/python -m pytest -q` passed with 172 tests and 3 skipped optional-extra tests.
+- `.venv/bin/python -m pytest -q` should pass with the CI-equivalent dev and vision extras installed.
 - `.venv/bin/ruff check .` passed.
 - `uv build --out-dir dist` built source and wheel distributions.

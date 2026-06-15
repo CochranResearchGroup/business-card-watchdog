@@ -67,12 +67,22 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     )
     assert operator_dashboard["commands"]["next_actions"] == f"actions next --run-id {run_id} --json"
     assert operator_dashboard["api_routes"]["next_actions"] == f"GET /actions/next?run_id={run_id}&limit=20"
+    assert operator_dashboard["commands"]["multi_card_preclassification_drill"] == (
+        "drills multi-card-preclassification --json"
+    )
     assert operator_dashboard["commands"]["review_routing_drill"] == "drills review-routing --json"
     assert operator_dashboard["commands"]["live_pilot_rehearsal_drill"] == "drills live-pilot-rehearsal --json"
+    assert operator_dashboard["api_routes"]["multi_card_preclassification_drill"] == (
+        "POST /drills/multi-card-preclassification"
+    )
     assert operator_dashboard["api_routes"]["review_routing_drill"] == "POST /drills/review-routing"
     assert operator_dashboard["api_routes"]["live_pilot_rehearsal_drill"] == "POST /drills/live-pilot-rehearsal"
     assert operator_dashboard["mcp_tools"]["review_routing_drill"] == {
         "tool": "business_card_watchdog_review_routing_drill",
+        "arguments": {},
+    }
+    assert operator_dashboard["mcp_tools"]["multi_card_preclassification_drill"] == {
+        "tool": "business_card_watchdog_multi_card_preclassification_drill",
         "arguments": {},
     }
     assert operator_dashboard["mcp_tools"]["live_pilot_rehearsal_drill"] == {
@@ -1003,6 +1013,30 @@ def test_api_review_routing_drill_outputs_fixture_artifact(tmp_path: Path) -> No
     assert drill["safe_actions"]["skipped_actions"] == ["decide_sink_apply"]
     assert drill["network_calls_made"] == 0
     assert drill["writes_attempted"] == 0
+    assert Path(drill["drill_path"]).exists()
+
+
+def test_api_multi_card_preclassification_drill_records_candidate_boxes(tmp_path: Path) -> None:
+    pytest.importorskip("cv2")
+    from business_card_watchdog.api import create_app
+
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+    client = TestClient(create_app(config_path))
+
+    drill = client.post("/drills/multi-card-preclassification").json()
+
+    assert drill["schema"] == "business-card-watchdog.multi-card-preclassification-drill.v1"
+    assert drill["state"] == "passed"
+    assert drill["expected_card_count"] == 3
+    assert drill["detected_card_like_count"] >= 3
+    assert len(drill["candidate_boxes"]) >= 3
+    assert drill["preclassification"]["decision"] == "likely_business_card"
+    assert drill["private_sources_used"] is False
+    assert drill["live_sink_calls_made"] is False
+    assert drill["writes_attempted"] == 0
+    assert drill["network_calls_made"] == 0
     assert Path(drill["drill_path"]).exists()
 
 

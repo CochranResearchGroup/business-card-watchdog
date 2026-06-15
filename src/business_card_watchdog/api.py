@@ -527,6 +527,10 @@ def create_app(config_path: Path | None = None):
     def post_next_actions(request: NextActionsRequest = Body(default=NextActionsRequest())) -> dict[str, object]:
         return service().next_actions(run_id=request.run_id, limit=request.limit)
 
+    @app.post("/drills/multi-card-preclassification")
+    def multi_card_preclassification_drill() -> dict[str, object]:
+        return service().multi_card_preclassification_drill()
+
     @app.post("/drills/review-routing")
     def review_routing_drill() -> dict[str, object]:
         return service().review_routing_drill()

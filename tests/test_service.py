@@ -843,6 +843,9 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     assert dashboard["commands"]["review_queue"] == f"reviews list --run-id {run_id} --state all --json"
     assert dashboard["commands"]["next_actions"] == f"actions next --run-id {run_id} --json"
     assert dashboard["commands"]["run_next_safe"] == f"actions run-next --run-id {run_id} --limit 10 --json"
+    assert dashboard["commands"]["multi_card_preclassification_drill"] == (
+        "drills multi-card-preclassification --json"
+    )
     assert dashboard["commands"]["live_pilot_approval_packet"] == (
         f"runs live-pilot-approval-packet {run_id} --json"
     )
@@ -892,6 +895,9 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
     assert dashboard["api_routes"]["next_actions"] == f"GET /actions/next?run_id={run_id}&limit=20"
+    assert dashboard["api_routes"]["multi_card_preclassification_drill"] == (
+        "POST /drills/multi-card-preclassification"
+    )
     assert dashboard["api_routes"]["live_pilot_validate_response"] == (
         f"POST /runs/{run_id}/live-pilot-operator-response-validation"
     )
@@ -931,6 +937,10 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     assert dashboard["mcp_tools"]["next_actions"] == {
         "tool": "business_card_watchdog_next_actions",
         "arguments": {"run_id": run_id, "limit": 20},
+    }
+    assert dashboard["mcp_tools"]["multi_card_preclassification_drill"] == {
+        "tool": "business_card_watchdog_multi_card_preclassification_drill",
+        "arguments": {},
     }
     assert dashboard["mcp_tools"]["live_pilot_handoff"] == {
         "tool": "business_card_watchdog_live_pilot_handoff",
@@ -1004,8 +1014,14 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
         "tool": "business_card_watchdog_live_pilot_operator_response_validation",
         "arguments": {"run_id": run_id, "response": "<operator-response>"},
     }
+    assert dashboard["commands"]["multi_card_preclassification_drill"] == (
+        "drills multi-card-preclassification --json"
+    )
     assert dashboard["commands"]["review_routing_drill"] == "drills review-routing --json"
     assert dashboard["commands"]["live_pilot_rehearsal_drill"] == "drills live-pilot-rehearsal --json"
+    assert dashboard["api_routes"]["multi_card_preclassification_drill"] == (
+        "POST /drills/multi-card-preclassification"
+    )
     assert dashboard["api_routes"]["review_routing_drill"] == "POST /drills/review-routing"
     assert dashboard["api_routes"]["live_pilot_rehearsal_drill"] == "POST /drills/live-pilot-rehearsal"
     assert dashboard["commands"]["live_pilot_status"] == f"runs live-pilot-status {run_id} --no-write --json"
@@ -1188,6 +1204,42 @@ def test_service_review_routing_drill_exercises_safe_fixture_route(tmp_path: Pat
     assert (artifact_dir / "reviewed_contact.json").exists()
     assert not (artifact_dir / "selected_live_target.json").exists()
     assert "Do not run public-web search, paid enrichment, live lookup" in payload["explicit_stop_conditions"][2]
+
+
+def test_service_multi_card_preclassification_drill_records_candidate_boxes(tmp_path: Path) -> None:
+    pytest = __import__("pytest")
+    pytest.importorskip("cv2")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        cache_dir=tmp_path / "cache",
+    )
+
+    payload = BusinessCardService(config).multi_card_preclassification_drill()
+    run_id = payload["run_id"]
+
+    assert payload["schema"] == "business-card-watchdog.multi-card-preclassification-drill.v1"
+    assert payload["state"] == "passed"
+    assert payload["expected_card_count"] == 3
+    assert payload["detected_card_like_count"] >= 3
+    assert len(payload["candidate_boxes"]) >= 3
+    assert payload["preclassification"]["decision"] == "likely_business_card"
+    assert all(payload["assertions"].values())
+    assert payload["private_sources_used"] is False
+    assert payload["public_web_search_used"] is False
+    assert payload["paid_enrichment_used"] is False
+    assert payload["live_sink_calls_made"] is False
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert Path(payload["fixture_image_path"]).exists()
+    assert Path(payload["drill_path"]).exists()
+    assert Path(payload["preclassification_path"]).exists()
+    assert (config.runs_dir / run_id / "multi_card_preclassification_drill.json").exists()
+    artifacts = [json.loads(line) for line in (config.runs_dir / run_id / "artifacts.jsonl").read_text().splitlines()]
+    assert {artifact["kind"] for artifact in artifacts} >= {
+        "multi_card_preclassification",
+        "multi_card_preclassification_drill",
+    }
 
 
 def test_service_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: Path) -> None:

@@ -219,6 +219,41 @@ def _render_live_pilot_rehearsal_drill_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_multi_card_preclassification_drill_text(payload: dict[str, object]) -> str:
+    assertions = dict(payload.get("assertions") or {})
+    commands = dict(payload.get("commands") or {})
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    failed = [key for key, value in assertions.items() if value is not True]
+    lines = [
+        "Multi-card preclassification drill:",
+        f"Run: {payload.get('run_id')}",
+        f"State: {payload.get('state')}",
+        f"Expected cards: {payload.get('expected_card_count')}",
+        f"Detected card-like boxes: {payload.get('detected_card_like_count')}",
+        "Observed: "
+        f"writes={payload.get('writes_attempted', 0)} "
+        f"network={payload.get('network_calls_made', 0)} "
+        f"private_sources={payload.get('private_sources_used', False)} "
+        f"live_sinks={payload.get('live_sink_calls_made', False)}",
+        f"Assertions: {len(assertions)}",
+    ]
+    if failed:
+        lines.append("Failed assertions: " + ", ".join(sorted(failed)))
+    for label, key in [
+        ("Rerun drill", "multi_card_preclassification_drill"),
+        ("Operator dashboard", "operator_dashboard"),
+        ("Run show", "run_show"),
+    ]:
+        command = commands.get(key)
+        if command:
+            lines.append(f"{label}: {command}")
+    stop_rows = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stop_rows)}")
+    for condition in stop_rows:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
     runtime = dict(payload.get("runtime_readiness") or {})
     recovery = dict(payload.get("service_recovery") or {})
@@ -281,6 +316,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
         ("Phase report", "phase_report"),
         ("Next actions", "next_actions"),
         ("Run next safe", "run_next_safe"),
+        ("Multi-card preclassification drill", "multi_card_preclassification_drill"),
         ("Review routing drill", "review_routing_drill"),
         ("Live pilot rehearsal drill", "live_pilot_rehearsal_drill"),
         ("Live pilot status", "live_pilot_status"),
@@ -311,6 +347,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
             ("Operator dashboard", "operator_dashboard"),
             ("Next actions", "next_actions"),
             ("Run next safe", "run_next_safe"),
+            ("Multi-card preclassification drill", "multi_card_preclassification_drill"),
             ("Review routing drill", "review_routing_drill"),
             ("Live pilot rehearsal drill", "live_pilot_rehearsal_drill"),
             ("Live pilot status", "live_pilot_status"),
@@ -341,6 +378,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
             ("Operator dashboard", "operator_dashboard"),
             ("Next actions", "next_actions"),
             ("Run next safe", "run_next_safe"),
+            ("Multi-card preclassification drill", "multi_card_preclassification_drill"),
             ("Review routing drill", "review_routing_drill"),
             ("Live pilot rehearsal drill", "live_pilot_rehearsal_drill"),
             ("Live pilot status", "live_pilot_status"),
@@ -1984,6 +2022,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     drills = sub.add_parser("drills")
     drills_sub = drills.add_subparsers(dest="drills_command", required=True)
+    drills_multi_card_preclassification = drills_sub.add_parser("multi-card-preclassification")
+    drills_multi_card_preclassification.add_argument("--json", action="store_true")
     drills_review_routing = drills_sub.add_parser("review-routing")
     drills_review_routing.add_argument("--json", action="store_true")
     drills_live_pilot_rehearsal = drills_sub.add_parser("live-pilot-rehearsal")
@@ -2496,7 +2536,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "drills":
-        if args.drills_command == "review-routing":
+        if args.drills_command == "multi-card-preclassification":
+            payload = service.multi_card_preclassification_drill()
+            if not args.json:
+                print(_render_multi_card_preclassification_drill_text(payload), end="")
+                return 0
+        elif args.drills_command == "review-routing":
             payload = service.review_routing_drill()
             if not args.json:
                 print(_render_review_routing_drill_text(payload), end="")

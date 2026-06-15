@@ -32,7 +32,7 @@ jobs:
         run: uv venv --python 3.11
 
       - name: Install package and dev tools
-        run: uv pip install --python .venv/bin/python -e ".[dev]"
+        run: uv pip install --python .venv/bin/python -e ".[dev,vision]"
 
       - name: Seed offline business-card skill fixture
         run: |

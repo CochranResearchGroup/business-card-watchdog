@@ -113,6 +113,11 @@ Inspect runs, jobs, review queue, sinks, and watcher state:
 
 Add `--json` to run, job, and review commands when consuming them from automation.
 
+`drills multi-card-preclassification` creates a synthetic phone-photo-like image
+with multiple card rectangles and proves the deterministic OpenCV prefilter records
+candidate card boxes before OCR/App Intelligence. It uses only cache-local fixture
+data and makes no private, enrichment, or sink calls.
+
 `drills review-routing` creates a synthetic fixture run and proves review approval,
 review bundle/workbook export, duplicate lookup planning, dry-run sink routing, and
 apply preflight without configured watch inputs, private images, enrichment calls, or

@@ -35,6 +35,7 @@ from .enrichment import (
 from .ledger import RunLedger
 from .models import CardJob, utc_now
 from .orchestrator import BatchOrchestrator
+from .preclassifier import assess_business_card_candidate
 from .review import assess_contact_spec, build_review_submission, write_review_packet, write_review_submission
 from .routing import decide_sinks
 from .sink_apply_adapters import execute_sink_readback_adapter, execute_sink_write_adapter
@@ -603,6 +604,7 @@ class BusinessCardService:
                     if selected_run_id
                     else "runs list --json"
                 ),
+                "multi_card_preclassification_drill": "drills multi-card-preclassification --json",
                 "review_routing_drill": "drills review-routing --json",
                 "live_pilot_rehearsal_drill": "drills live-pilot-rehearsal --json",
                 "live_pilot_status": (
@@ -721,6 +723,7 @@ class BusinessCardService:
                     else "GET /actions/next?limit=20"
                 ),
                 "run_next_safe": "POST /actions/run-next",
+                "multi_card_preclassification_drill": "POST /drills/multi-card-preclassification",
                 "review_routing_drill": "POST /drills/review-routing",
                 "live_pilot_rehearsal_drill": "POST /drills/live-pilot-rehearsal",
                 "live_pilot_status": (
@@ -830,6 +833,10 @@ class BusinessCardService:
                     "arguments": {"run_id": selected_run_id, "limit": 10}
                     if selected_run_id
                     else {"limit": 10},
+                },
+                "multi_card_preclassification_drill": {
+                    "tool": "business_card_watchdog_multi_card_preclassification_drill",
+                    "arguments": {},
                 },
                 "review_routing_drill": {
                     "tool": "business_card_watchdog_review_routing_drill",
@@ -1841,6 +1848,93 @@ class BusinessCardService:
             "phase_report_before": phase_report_before,
             "phase_report_after": phase_report_after,
         }
+
+    def multi_card_preclassification_drill(self) -> dict[str, Any]:
+        ensure_runtime_dirs(self.config)
+        run_id = f"fixture-multi-card-preclassification-{utc_now().replace(':', '-')}-{uuid4().hex[:8]}"
+        fixture_dir = self.config.cache_dir / "fixture-drills" / run_id
+        image_path, expected_count, fixture_available = _write_synthetic_multi_card_image(
+            fixture_dir / "synthetic-multi-card-photo.jpg"
+        )
+        assessment = assess_business_card_candidate(
+            image_path,
+            min_score=self.config.prefilter.min_score,
+        )
+        assessment_payload = assessment.to_dict()
+        rectangle = dict(assessment_payload.get("analyzers", {}).get("opencv_rectangle") or {})
+        boxes = [box for box in list(rectangle.get("boxes") or []) if isinstance(box, dict)]
+        detected_count = int(rectangle.get("card_like_count") or 0)
+        assertions = {
+            "fixture_image_available": fixture_available,
+            "opencv_rectangle_available": rectangle.get("available") is True,
+            "decision_likely_business_card": assessment.decision == "likely_business_card",
+            "detected_expected_card_boxes": detected_count >= expected_count,
+            "candidate_boxes_recorded": len(boxes) >= expected_count,
+            "no_private_sources": True,
+            "no_public_web_search": True,
+            "no_paid_enrichment": True,
+            "no_live_sink_calls": True,
+        }
+        state = "passed" if all(assertions.values()) else "needs_attention"
+
+        run_dir = self.config.runs_dir / run_id
+        ledger = RunLedger(run_dir)
+        ledger.initialize(source=str(fixture_dir), dry_run=True)
+        ledger.transition_run("discovering")
+        ledger.transition_run("completed")
+        drill_path = run_dir / "multi_card_preclassification_drill.json"
+        preclassification_path = run_dir / "multi_card_preclassification.json"
+        payload = {
+            "schema": "business-card-watchdog.multi-card-preclassification-drill.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_id,
+            "fixture_dir": str(fixture_dir),
+            "fixture_image_path": str(image_path),
+            "expected_card_count": expected_count,
+            "detected_card_like_count": detected_count,
+            "candidate_boxes": boxes,
+            "preclassification": assessment_payload,
+            "assertions": assertions,
+            "private_sources_used": False,
+            "public_web_search_used": False,
+            "paid_enrichment_used": False,
+            "live_sink_calls_made": False,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "commands": {
+                "multi_card_preclassification_drill": "drills multi-card-preclassification --json",
+                "operator_dashboard": f"operator-dashboard --run-id {run_id} --json",
+                "run_show": f"runs show {run_id} --json",
+            },
+            "explicit_stop_conditions": [
+                "This drill uses only a synthetic fixture image written under the cache directory.",
+                "Candidate boxes are deterministic pre-OCR evidence only; App Intelligence still verifies contacts later.",
+                "Do not process private SyncThing images, run public-web search, call paid enrichment, or call GWS/Odollo/Odoo from this drill.",
+            ],
+        }
+        preclassification_path.write_text(
+            json.dumps(assessment_payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        drill_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger.record_artifact(job_id="__run__", kind="multi_card_preclassification", path=preclassification_path)
+        ledger.record_artifact(job_id="__run__", kind="multi_card_preclassification_drill", path=drill_path)
+        ledger.record_event(
+            "multi_card_preclassification_drill_completed",
+            {
+                "run_id": run_id,
+                "drill_path": str(drill_path),
+                "state": state,
+                "expected_card_count": expected_count,
+                "detected_card_like_count": detected_count,
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        payload["drill_path"] = str(drill_path)
+        payload["preclassification_path"] = str(preclassification_path)
+        return payload
 
     def review_routing_drill(self) -> dict[str, Any]:
         ensure_runtime_dirs(self.config)
@@ -10912,3 +11006,28 @@ def _write_synthetic_business_card_image(path: Path) -> Path:
     )
     path.write_bytes(payload)
     return path
+
+
+def _write_synthetic_multi_card_image(path: Path) -> tuple[Path, int, bool]:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    expected_count = 3
+    try:
+        import cv2  # type: ignore[import-not-found]
+        import numpy as np
+    except Exception:
+        fallback = _write_synthetic_business_card_image(path.with_suffix(".png"))
+        return fallback, expected_count, False
+
+    image = np.zeros((900, 1400, 3), dtype=np.uint8)
+    cards = [
+        ((100, 120), (520, 360)),
+        ((650, 140), (1070, 380)),
+        ((240, 520), (660, 760)),
+    ]
+    for top_left, bottom_right in cards:
+        cv2.rectangle(image, top_left, bottom_right, (255, 255, 255), thickness=-1)
+        cv2.rectangle(image, top_left, bottom_right, (0, 0, 0), thickness=4)
+    if not cv2.imwrite(str(path), image):
+        fallback = _write_synthetic_business_card_image(path.with_suffix(".png"))
+        return fallback, expected_count, False
+    return path, expected_count, True
