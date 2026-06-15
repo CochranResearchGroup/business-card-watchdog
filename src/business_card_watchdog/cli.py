@@ -108,6 +108,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
         ("Run next safe", "run_next_safe"),
         ("Live pilot status", "live_pilot_status"),
         ("Live pilot handoff", "live_pilot_handoff"),
+        ("Live pilot validate response", "live_pilot_validate_response"),
     ]:
         command = commands.get(key)
         if command:
@@ -120,6 +121,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
             ("Run next safe", "run_next_safe"),
             ("Live pilot status", "live_pilot_status"),
             ("Live pilot handoff", "live_pilot_handoff"),
+            ("Live pilot validate response", "live_pilot_validate_response"),
         ]:
             route = api_routes.get(key)
             if route:
@@ -132,6 +134,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
             ("Run next safe", "run_next_safe"),
             ("Live pilot status", "live_pilot_status"),
             ("Live pilot handoff", "live_pilot_handoff"),
+            ("Live pilot validate response", "live_pilot_validate_response"),
         ]:
             tool_entry = mcp_tools.get(key)
             if isinstance(tool_entry, dict):

@@ -48,9 +48,19 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert operator_dashboard["live_pilot_handoff_summary"]["operator_required_count"] == 0
     assert operator_dashboard["commands"]["next_actions"] == f"actions next --run-id {run_id} --json"
     assert operator_dashboard["api_routes"]["next_actions"] == f"GET /actions/next?run_id={run_id}&limit=20"
+    assert operator_dashboard["commands"]["live_pilot_validate_response"] == (
+        f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+    )
+    assert operator_dashboard["api_routes"]["live_pilot_validate_response"] == (
+        f"POST /runs/{run_id}/live-pilot-operator-response-validation"
+    )
     assert operator_dashboard["mcp_tools"]["next_actions"] == {
         "tool": "business_card_watchdog_next_actions",
         "arguments": {"run_id": run_id, "limit": 20},
+    }
+    assert operator_dashboard["mcp_tools"]["live_pilot_validate_response"] == {
+        "tool": "business_card_watchdog_live_pilot_operator_response_validation",
+        "arguments": {"run_id": run_id, "response": "<operator-response>"},
     }
     assert operator_dashboard["writes_attempted"] == 0
     assert operator_dashboard["network_calls_made"] == 0

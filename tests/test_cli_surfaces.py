@@ -93,6 +93,9 @@ def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) 
     assert payload["commands"]["next_actions"] == f"actions next --run-id {run_id} --json"
     assert payload["commands"]["run_next_safe"] == f"actions run-next --run-id {run_id} --limit 10 --json"
     assert payload["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id} --no-write --json"
+    assert payload["commands"]["live_pilot_validate_response"] == (
+        f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+    )
     assert payload["review_counts"]["needs_review"] == 1
     assert payload["next_action_summary"]["by_action"] == {"review_contact": 1}
     assert payload["live_pilot_handoff_summary"]["action_counts"] == {"no_live_candidate": 1}
@@ -115,14 +118,24 @@ def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) 
     assert "API routes:" in text
     assert f"Next actions: GET /actions/next?run_id={run_id}&limit=20" in text
     assert f"Live pilot handoff: GET /runs/{run_id}/live-pilot-handoff?write=false" in text
+    assert f"Live pilot validate response: POST /runs/{run_id}/live-pilot-operator-response-validation" in text
     assert "MCP tools:" in text
     assert f"Operator dashboard: business_card_watchdog_operator_dashboard args=run_id={run_id}" in text
     assert f"Next actions: business_card_watchdog_next_actions args=limit=20, run_id={run_id}" in text
     assert f"Live pilot status: business_card_watchdog_live_pilot_status args=run_id={run_id}, write=False" in text
+    assert (
+        "Live pilot validate response: "
+        f"business_card_watchdog_live_pilot_operator_response_validation "
+        f"args=response=<operator-response>, run_id={run_id}"
+    ) in text
     assert "Next actions: total=1 safe=0 explicit=1" in text
     assert "action=review_contact" in text
     assert "Live handoff: state=blocked operator_required=0 response_templates=0" in text
     assert f"Live pilot status: runs live-pilot-status {run_id} --no-write --json" in text
+    assert (
+        f"Live pilot validate response: runs live-pilot-validate-response {run_id} "
+        "--response <operator-response> --json"
+    ) in text
     assert "Observed: writes=0 network=0" in text
     assert "Stop conditions: 3" in text
     assert "{" not in text

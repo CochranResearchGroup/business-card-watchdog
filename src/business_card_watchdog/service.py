@@ -512,6 +512,11 @@ class BusinessCardService:
                     if selected_run_id
                     else "runs list --json"
                 ),
+                "live_pilot_validate_response": (
+                    f"runs live-pilot-validate-response {selected_run_id} --response <operator-response> --json"
+                    if selected_run_id
+                    else "runs list --json"
+                ),
                 "mcp_manifest": "mcp-manifest",
             },
             "api_routes": {
@@ -535,6 +540,11 @@ class BusinessCardService:
                     f"GET /runs/{selected_run_id}/live-pilot-handoff?write=false"
                     if selected_run_id
                     else "GET /runs/{run_id}/live-pilot-handoff?write=false"
+                ),
+                "live_pilot_validate_response": (
+                    f"POST /runs/{selected_run_id}/live-pilot-operator-response-validation"
+                    if selected_run_id
+                    else "POST /runs/{run_id}/live-pilot-operator-response-validation"
                 ),
             },
             "mcp_tools": {
@@ -565,6 +575,12 @@ class BusinessCardService:
                     "arguments": {"run_id": selected_run_id, "write": False}
                     if selected_run_id
                     else {"run_id": "<run-id>", "write": False},
+                },
+                "live_pilot_validate_response": {
+                    "tool": "business_card_watchdog_live_pilot_operator_response_validation",
+                    "arguments": {"run_id": selected_run_id, "response": "<operator-response>"}
+                    if selected_run_id
+                    else {"run_id": "<run-id>", "response": "<operator-response>"},
                 },
             },
             "safe_next_actions": [
