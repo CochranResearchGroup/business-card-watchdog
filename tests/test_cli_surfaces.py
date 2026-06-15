@@ -726,6 +726,9 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert validation["selected_target_audit_command"] == (
         f"sinks selected-target-audit {job_id} --run-id {run_id} --scope lookup --no-write --json"
     )
+    assert validation["lookup_smoke_handoff_command"] == (
+        f"sinks lookup-smoke-handoff {job_id} --run-id {run_id} --sink google_contacts --approved-by tester --json"
+    )
 
     assert (
         main(
@@ -748,6 +751,10 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert (
         f"Selected target audit: sinks selected-target-audit {job_id} "
         f"--run-id {run_id} --scope lookup --no-write --json"
+    ) in validation_text
+    assert (
+        f"Lookup smoke handoff: sinks lookup-smoke-handoff {job_id} "
+        f"--run-id {run_id} --sink google_contacts --approved-by tester --json"
     ) in validation_text
     assert "{" not in validation_text
 

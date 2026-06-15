@@ -1025,6 +1025,9 @@ def test_mcp_jsonl_server_lists_and_calls_tools(tmp_path: Path) -> None:
     assert operator_response_validation["selected_target_audit_command"] == (
         f"sinks selected-target-audit {job_id} --run-id {run_id} --scope lookup --no-write --json"
     )
+    assert operator_response_validation["lookup_smoke_handoff_command"] == (
+        f"sinks lookup-smoke-handoff {job_id} --run-id {run_id} --sink google_contacts --approved-by mcp-jsonl --json"
+    )
     assert operator_response_validation["creates_selected_live_target"] is False
     assert operator_response_validation["writes_attempted"] == 0
     assert operator_response_validation["network_calls_made"] == 0

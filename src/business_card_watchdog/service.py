@@ -5913,6 +5913,7 @@ class BusinessCardService:
         state = "ready_to_select_live_target" if not missing_fields and not mismatches else "blocked"
         select_target_command = None
         selected_target_audit_command = None
+        lookup_smoke_handoff_command = None
         if state == "ready_to_select_live_target":
             select_target_command = (
                 f"sinks select-live-target {shlex.quote(str(parsed_response['job_id']))} "
@@ -5927,6 +5928,12 @@ class BusinessCardService:
                 f"--run-id {shlex.quote(str(parsed_response['run_id']))} "
                 f"--scope {shlex.quote(str(parsed_response['scope']))} --no-write --json"
             )
+            lookup_smoke_handoff_command = (
+                f"sinks lookup-smoke-handoff {shlex.quote(str(parsed_response['job_id']))} "
+                f"--run-id {shlex.quote(str(parsed_response['run_id']))} "
+                f"--sink {shlex.quote(str(parsed_response['sink']))} "
+                f"--approved-by {shlex.quote(str(parsed_response['operator']))} --json"
+            )
 
         return {
             "schema": "business-card-watchdog.live-pilot-operator-response-validation.v1",
@@ -5940,6 +5947,7 @@ class BusinessCardService:
             "matching_template": matching_template,
             "select_target_command": select_target_command,
             "selected_target_audit_command": selected_target_audit_command,
+            "lookup_smoke_handoff_command": lookup_smoke_handoff_command,
             "operator_response_contract": contract,
             "writes_attempted": 0,
             "network_calls_made": 0,
@@ -5952,6 +5960,7 @@ class BusinessCardService:
                 ),
                 "select_target": select_target_command,
                 "selected_target_audit": selected_target_audit_command,
+                "lookup_smoke_handoff": lookup_smoke_handoff_command,
             },
             "explicit_stop_conditions": [
                 "This validation does not create selected_live_target.json.",

@@ -238,6 +238,9 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert validation["selected_target_audit_command"] == (
         f"sinks selected-target-audit {job_id} --run-id {run_id} --scope lookup --no-write --json"
     )
+    assert validation["lookup_smoke_handoff_command"] == (
+        f"sinks lookup-smoke-handoff {job_id} --run-id {run_id} --sink google_contacts --approved-by api-test --json"
+    )
     assert validation["creates_selected_live_target"] is False
     assert validation["writes_attempted"] == 0
     assert validation["network_calls_made"] == 0
