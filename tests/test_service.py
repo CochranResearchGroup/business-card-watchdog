@@ -871,6 +871,10 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
         f"runs live-pilot-closeout-packet-from-response {run_id} "
         "--response <operator-response> --json"
     )
+    assert dashboard["commands"]["live_pilot_operator_workflow_packet_from_response"] == (
+        f"runs live-pilot-operator-workflow-packet-from-response {run_id} "
+        "--response <operator-response> --json"
+    )
     assert dashboard["commands"]["live_pilot_validate_response"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
@@ -895,6 +899,9 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     )
     assert dashboard["api_routes"]["live_pilot_closeout_packet_from_response"] == (
         f"POST /runs/{run_id}/live-pilot-closeout-packet-from-response"
+    )
+    assert dashboard["api_routes"]["live_pilot_operator_workflow_packet_from_response"] == (
+        f"POST /runs/{run_id}/live-pilot-operator-workflow-packet-from-response"
     )
     assert dashboard["mcp_tools"]["next_actions"] == {
         "tool": "business_card_watchdog_next_actions",
@@ -935,6 +942,10 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     assert dashboard["mcp_tools"]["live_pilot_closeout_packet_from_response"] == {
         "tool": "business_card_watchdog_live_pilot_closeout_packet_from_response",
         "arguments": {"run_id": run_id, "response": "<operator-response>", "write_closeout": False},
+    }
+    assert dashboard["mcp_tools"]["live_pilot_operator_workflow_packet_from_response"] == {
+        "tool": "business_card_watchdog_live_pilot_operator_workflow_packet_from_response",
+        "arguments": {"run_id": run_id, "response": "<operator-response>"},
     }
     assert dashboard["mcp_tools"]["review_routing_drill"] == {
         "tool": "business_card_watchdog_review_routing_drill",
@@ -2951,6 +2962,30 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert "downstream_duplicate_assessment" in closeout_packet["closeout_report"]["missing_artifacts"]
     assert closeout_packet["writes_attempted"] == 0
     assert closeout_packet["network_calls_made"] == 0
+
+    workflow_packet = service.live_pilot_operator_workflow_packet_from_response(
+        run_id=run_id,
+        response=preselection_response,
+    )
+    assert workflow_packet["schema"] == (
+        "business-card-watchdog.live-pilot-operator-workflow-packet-from-response.v1"
+    )
+    assert workflow_packet["state"] == "workflow_blocked"
+    assert workflow_packet["job_id"] == job_id
+    assert workflow_packet["sink"] == "google_contacts"
+    assert workflow_packet["operator"] == "tester"
+    assert workflow_packet["blocked_step_count"] >= 1
+    assert workflow_packet["packets"]["live_pilot_closeout"]["state"] == "closeout_incomplete"
+    assert [step["step"] for step in workflow_packet["step_summary"]] == [
+        "selected_target",
+        "lookup_handoff",
+        "lookup_smoke",
+        "write_pilot",
+        "readback_pilot",
+        "closeout",
+    ]
+    assert workflow_packet["writes_attempted"] == 0
+    assert workflow_packet["network_calls_made"] == 0
 
     blocked_closeout_write = service.live_pilot_closeout_packet_from_response(
         run_id=run_id,

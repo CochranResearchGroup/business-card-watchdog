@@ -675,6 +675,12 @@ class BusinessCardService:
                     if selected_run_id
                     else "runs list --json"
                 ),
+                "live_pilot_operator_workflow_packet_from_response": (
+                    f"runs live-pilot-operator-workflow-packet-from-response {selected_run_id} "
+                    "--response <operator-response> --json"
+                    if selected_run_id
+                    else "runs list --json"
+                ),
                 "mcp_manifest": "mcp-manifest",
             },
             "api_routes": {
@@ -754,6 +760,11 @@ class BusinessCardService:
                     f"POST /runs/{selected_run_id}/live-pilot-closeout-packet-from-response"
                     if selected_run_id
                     else "POST /runs/{run_id}/live-pilot-closeout-packet-from-response"
+                ),
+                "live_pilot_operator_workflow_packet_from_response": (
+                    f"POST /runs/{selected_run_id}/live-pilot-operator-workflow-packet-from-response"
+                    if selected_run_id
+                    else "POST /runs/{run_id}/live-pilot-operator-workflow-packet-from-response"
                 ),
             },
             "mcp_tools": {
@@ -888,6 +899,12 @@ class BusinessCardService:
                         "response": "<operator-response>",
                         "write_closeout": False,
                     },
+                },
+                "live_pilot_operator_workflow_packet_from_response": {
+                    "tool": "business_card_watchdog_live_pilot_operator_workflow_packet_from_response",
+                    "arguments": {"run_id": selected_run_id, "response": "<operator-response>"}
+                    if selected_run_id
+                    else {"run_id": "<run-id>", "response": "<operator-response>"},
                 },
             },
             "safe_next_actions": [
@@ -7614,6 +7631,158 @@ class BusinessCardService:
             ],
             "writes_attempted": int((closeout_report or {}).get("writes_attempted") or 0),
             "network_calls_made": int((closeout_report or {}).get("network_calls_made") or 0),
+        }
+
+    def live_pilot_operator_workflow_packet_from_response(
+        self,
+        *,
+        run_id: str,
+        response: str,
+    ) -> dict[str, Any]:
+        target_handoff = self.selected_live_target_handoff_from_response(
+            run_id=run_id,
+            response=response,
+            write_audit=False,
+        )
+        lookup_handoff = self.lookup_smoke_handoff_from_response(
+            run_id=run_id,
+            response=response,
+            write_handoff=False,
+        )
+        lookup_execution = self.selected_lookup_smoke_execution_packet_from_response(
+            run_id=run_id,
+            response=response,
+            execute_selected_lookup_smoke=False,
+        )
+        write_execution = self.selected_write_pilot_execution_packet_from_response(
+            run_id=run_id,
+            response=response,
+            execute_write_pilot=False,
+        )
+        readback_execution = self.selected_readback_pilot_execution_packet_from_response(
+            run_id=run_id,
+            response=response,
+            execute_readback_pilot=False,
+        )
+        closeout_packet = self.live_pilot_closeout_packet_from_response(
+            run_id=run_id,
+            response=response,
+            write_closeout=False,
+        )
+        packets = {
+            "selected_target_handoff": target_handoff,
+            "lookup_smoke_handoff": lookup_handoff,
+            "selected_lookup_smoke_execution": lookup_execution,
+            "selected_write_pilot_execution": write_execution,
+            "selected_readback_pilot_execution": readback_execution,
+            "live_pilot_closeout": closeout_packet,
+        }
+        step_order = [
+            ("selected_target_handoff", "selected_target"),
+            ("lookup_smoke_handoff", "lookup_handoff"),
+            ("selected_lookup_smoke_execution", "lookup_smoke"),
+            ("selected_write_pilot_execution", "write_pilot"),
+            ("selected_readback_pilot_execution", "readback_pilot"),
+            ("live_pilot_closeout", "closeout"),
+        ]
+        step_summary = [
+            {
+                "step": step,
+                "packet": packet_key,
+                "state": packets[packet_key].get("state"),
+                "blocked_reasons": list(packets[packet_key].get("blocked_reasons") or []),
+                "next_safe_command": packets[packet_key].get("next_safe_command"),
+                "next_explicit_operator_command": packets[packet_key].get("next_explicit_operator_command"),
+            }
+            for packet_key, step in step_order
+        ]
+        blocked_steps = [
+            item
+            for item in step_summary
+            if item["state"]
+            in {
+                "blocked",
+                "audit_blocked",
+                "handoff_blocked",
+                "closeout_incomplete",
+                "workflow_blocked",
+            }
+        ]
+        closeout_report = dict(closeout_packet.get("closeout_report") or {})
+        job_id = (
+            closeout_packet.get("job_id")
+            or target_handoff.get("job_id")
+            or lookup_handoff.get("job_id")
+            or lookup_execution.get("job_id")
+        )
+        state = (
+            "workflow_complete"
+            if closeout_packet.get("state") == "closeout_ready" and not blocked_steps
+            else "workflow_blocked"
+            if blocked_steps
+            else "workflow_ready"
+        )
+        return {
+            "schema": "business-card-watchdog.live-pilot-operator-workflow-packet-from-response.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_id,
+            "job_id": job_id,
+            "sink": closeout_packet.get("sink") or lookup_handoff.get("sink") or write_execution.get("sink"),
+            "operator": closeout_packet.get("operator") or lookup_handoff.get("operator") or write_execution.get("operator"),
+            "validation_state": target_handoff.get("validation_state"),
+            "step_summary": step_summary,
+            "blocked_step_count": len(blocked_steps),
+            "blocked_steps": [item["step"] for item in blocked_steps],
+            "packets": packets,
+            "next_safe_command": (
+                f"runs live-pilot-operator-workflow-packet-from-response {shlex.quote(run_id)} "
+                f"--response {shlex.quote(response)} --json"
+            ),
+            "next_explicit_operator_command": next(
+                (
+                    item.get("next_explicit_operator_command")
+                    for item in step_summary
+                    if item.get("next_explicit_operator_command")
+                ),
+                None,
+            ),
+            "commands": {
+                "selected_target_handoff": (
+                    f"runs selected-live-target-handoff-from-response {shlex.quote(run_id)} "
+                    f"--response {shlex.quote(response)} --json"
+                ),
+                "lookup_smoke_handoff": (
+                    f"runs lookup-smoke-handoff-from-response {shlex.quote(run_id)} "
+                    f"--response {shlex.quote(response)} --json"
+                ),
+                "lookup_smoke_execution_packet": (
+                    f"runs selected-lookup-smoke-execution-packet-from-response {shlex.quote(run_id)} "
+                    f"--response {shlex.quote(response)} --json"
+                ),
+                "write_pilot_execution_packet": (
+                    f"runs selected-write-pilot-execution-packet-from-response {shlex.quote(run_id)} "
+                    f"--response {shlex.quote(response)} --json"
+                ),
+                "readback_pilot_execution_packet": (
+                    f"runs selected-readback-pilot-execution-packet-from-response {shlex.quote(run_id)} "
+                    f"--response {shlex.quote(response)} --json"
+                ),
+                "closeout_packet": (
+                    f"runs live-pilot-closeout-packet-from-response {shlex.quote(run_id)} "
+                    f"--response {shlex.quote(response)} --json"
+                ),
+                "live_pilot_status": f"runs live-pilot-status {run_id} --no-write --json",
+                "live_pilot_handoff": f"runs live-pilot-handoff {run_id} --no-write --json",
+            },
+            "explicit_stop_conditions": [
+                "This workflow packet is read-only and does not execute lookup, write, readback, or closeout writes.",
+                "Run only the next explicit operator command after reviewing the corresponding packet and tenant/profile safety.",
+                "Do not mark a live pilot complete unless the closeout packet reports closeout_ready.",
+                "Do not process private SyncThing images, run public-web search, or call paid enrichment from this packet.",
+            ],
+            "writes_attempted": int(closeout_report.get("writes_attempted") or 0),
+            "network_calls_made": int(closeout_report.get("network_calls_made") or 0),
         }
 
     def validate_live_pilot_operator_response(self, *, run_id: str, response: str) -> dict[str, Any]:

@@ -4413,3 +4413,29 @@ Validation:
 Safety:
 
 - This was live-pilot closeout packet hardening only. Default mode did not write `live_pilot_closeout.json`; explicit write mode writes only the closeout report artifact and does not execute live lookup, live write, live readback, public-web search, paid enrichment, GWS/Odollo/Odoo calls, or configured/private SyncThing processing.
+
+## Turn 208 | 2026-06-15
+
+Continued Plan 0009 with Slice 0009-A132.
+
+Implemented:
+
+- Added `business-card-watchdog.live-pilot-operator-workflow-packet-from-response.v1`.
+- Added run-scoped consolidated live-pilot operator workflow packet from a validated response across service, CLI, API, and MCP surfaces.
+- The packet composes selected target, lookup handoff, lookup smoke, write pilot, readback pilot, and closeout packet state without executing live calls.
+- Operator dashboard command/API/MCP maps now advertise the workflow packet surface.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_operator_dashboard_composes_no_live_readiness tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/api.py src/business_card_watchdog/mcp.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 231 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was live-pilot workflow packet composition only. Default mode did not execute lookup, write, readback, or closeout writes and did not run public-web search, paid enrichment, GWS/Odollo/Odoo calls, or configured/private SyncThing processing.

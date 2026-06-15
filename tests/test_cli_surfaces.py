@@ -1327,6 +1327,31 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
                 "--config",
                 str(config_path),
                 "runs",
+                "live-pilot-operator-workflow-packet-from-response",
+                run_id,
+                "--response",
+                response,
+                "--json",
+            ]
+        )
+        == 0
+    )
+    workflow_packet = json.loads(capsys.readouterr().out)
+    assert workflow_packet["schema"] == (
+        "business-card-watchdog.live-pilot-operator-workflow-packet-from-response.v1"
+    )
+    assert workflow_packet["state"] == "workflow_blocked"
+    assert workflow_packet["blocked_step_count"] >= 1
+    assert workflow_packet["packets"]["live_pilot_closeout"]["state"] == "closeout_incomplete"
+    assert workflow_packet["writes_attempted"] == 0
+    assert workflow_packet["network_calls_made"] == 0
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
                 "live-pilot-closeout-packet-from-response",
                 run_id,
                 "--response",
@@ -1341,6 +1366,26 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert "Write closeout: False" in closeout_packet_text
     assert "Closeout written: False" in closeout_packet_text
     assert "{" not in closeout_packet_text
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "live-pilot-operator-workflow-packet-from-response",
+                run_id,
+                "--response",
+                response,
+            ]
+        )
+        == 0
+    )
+    workflow_packet_text = capsys.readouterr().out
+    assert "State: workflow_blocked" in workflow_packet_text
+    assert "Workflow steps: 6" in workflow_packet_text
+    assert "Observed: writes=0 network=0" in workflow_packet_text
+    assert "{" not in workflow_packet_text
 
     assert (
         main(
