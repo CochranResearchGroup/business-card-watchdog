@@ -1363,6 +1363,18 @@ def test_api_child_selected_target_response_validation_and_checklist(tmp_path: P
             "scope": "write",
         },
     ).json()
+    replacement_template = refresh["refreshed_handoff"]["operator_response_template"]
+    replacement_response = (
+        f"run_id={replacement_template['run_id']} job_id={replacement_template['job_id']} "
+        f"candidate_id={replacement_template['candidate_id']} "
+        f"work_item_id={replacement_template['work_item_id']} "
+        "sink=google_contacts operator=replacement-operator scope=write "
+        "safety_confirmation='approved replacement google contacts target profile'"
+    )
+    replacement_validation = client.post(
+        f"/reviews/children/{candidate_id}/replacement-response-validation",
+        json={"run_id": run_dir.name, "response": replacement_response},
+    ).json()
 
     assert validation["schema"] == "business-card-watchdog.child-selected-target-response-validation.v1"
     assert validation["state"] == "ready_for_no_live_child_checklist"
@@ -1403,6 +1415,13 @@ def test_api_child_selected_target_response_validation_and_checklist(tmp_path: P
     assert refresh["staleness"]["state"] == "stale"
     assert refresh["writes_attempted"] == 0
     assert refresh["network_calls_made"] == 0
+    assert replacement_validation["schema"] == "business-card-watchdog.child-replacement-response-validation.v1"
+    assert replacement_validation["state"] == "ready_for_no_live_replacement_checklist"
+    assert replacement_validation["stale_enforcement"]["staleness_state"] == "stale"
+    assert replacement_validation["parsed_response"]["operator"] == "replacement-operator"
+    assert replacement_validation["selected_target_created"] is False
+    assert replacement_validation["writes_attempted"] == 0
+    assert replacement_validation["network_calls_made"] == 0
 
 
 def test_api_multi_card_preclassification_drill_records_candidate_boxes(tmp_path: Path) -> None:

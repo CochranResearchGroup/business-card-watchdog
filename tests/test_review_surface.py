@@ -432,6 +432,11 @@ def test_child_selected_target_response_validation_and_checklist(tmp_path: Path,
         reset_by="operator",
         reason="replacement preview requested",
     )
+    blocked_replacement_validation = service.validate_child_replacement_response(
+        run_id=run_dir.name,
+        candidate_id=candidate_id,
+        response=response,
+    )
     refresh = service.refresh_child_replacement_handoff(
         run_id=run_dir.name,
         candidate_id=candidate_id,
@@ -439,6 +444,19 @@ def test_child_selected_target_response_validation_and_checklist(tmp_path: Path,
         operator="replacement-operator",
         scope="write",
         reason="replacement handoff refresh",
+    )
+    replacement_template = refresh["refreshed_handoff"]["operator_response_template"]
+    replacement_response = (
+        f"run_id={replacement_template['run_id']} job_id={replacement_template['job_id']} "
+        f"candidate_id={replacement_template['candidate_id']} "
+        f"work_item_id={replacement_template['work_item_id']} "
+        "sink=google_contacts operator=replacement-operator scope=write "
+        "safety_confirmation='approved replacement google contacts target profile'"
+    )
+    replacement_validation = service.validate_child_replacement_response(
+        run_id=run_dir.name,
+        candidate_id=candidate_id,
+        response=replacement_response,
     )
     artifacts = read_jsonl(run_dir / "artifacts.jsonl")
     events = read_jsonl(run_dir / "events.jsonl")
@@ -495,6 +513,14 @@ def test_child_selected_target_response_validation_and_checklist(tmp_path: Path,
     assert reset["requested_target"]["operator"] == "replacement-operator"
     assert reset["writes_attempted"] == 0
     assert reset["network_calls_made"] == 0
+    assert blocked_replacement_validation["schema"] == (
+        "business-card-watchdog.child-replacement-response-validation.v1"
+    )
+    assert blocked_replacement_validation["state"] == "blocked"
+    assert "child replacement handoff refresh artifact is missing" in blocked_replacement_validation[
+        "blocked_reasons"
+    ]
+    assert "child selected-target staleness marker is missing" in blocked_replacement_validation["blocked_reasons"]
     assert refresh["schema"] == "business-card-watchdog.child-replacement-handoff-refresh.v1"
     assert refresh["state"] == "ready_for_replacement_handoff"
     assert refresh["refreshed_handoff"]["state"] == "ready_for_operator_selection"
@@ -503,6 +529,17 @@ def test_child_selected_target_response_validation_and_checklist(tmp_path: Path,
     assert any(item["kind"] == "child_selected_target_command_copy_packet" for item in refresh["staleness"]["stale_artifacts"])
     assert refresh["writes_attempted"] == 0
     assert refresh["network_calls_made"] == 0
+    assert replacement_validation["schema"] == "business-card-watchdog.child-replacement-response-validation.v1"
+    assert replacement_validation["state"] == "ready_for_no_live_replacement_checklist"
+    assert replacement_validation["stale_enforcement"]["staleness_marker_present"] is True
+    assert replacement_validation["stale_enforcement"]["staleness_state"] == "stale"
+    assert "child_selected_target_command_copy_packet" in replacement_validation["stale_enforcement"][
+        "stale_artifact_kinds"
+    ]
+    assert replacement_validation["parsed_response"]["operator"] == "replacement-operator"
+    assert replacement_validation["selected_target_created"] is False
+    assert replacement_validation["writes_attempted"] == 0
+    assert replacement_validation["network_calls_made"] == 0
     assert any(artifact["kind"] == "child_selected_target_response_validation" for artifact in artifacts)
     assert any(artifact["kind"] == "child_selected_target_execution_checklist" for artifact in artifacts)
     assert any(artifact["kind"] == "child_selected_target_command_copy_packet" for artifact in artifacts)
@@ -511,6 +548,7 @@ def test_child_selected_target_response_validation_and_checklist(tmp_path: Path,
     assert any(artifact["kind"] == "child_selected_target_replacement_reset" for artifact in artifacts)
     assert any(artifact["kind"] == "child_selected_target_staleness" for artifact in artifacts)
     assert any(artifact["kind"] == "child_replacement_handoff_refresh" for artifact in artifacts)
+    assert any(artifact["kind"] == "child_replacement_response_validation" for artifact in artifacts)
     assert any(event["event_type"] == "child_selected_target_response_validated" for event in events)
     assert any(event["event_type"] == "child_selected_target_execution_checklist_created" for event in events)
     assert any(event["event_type"] == "child_selected_target_command_copy_packet_created" for event in events)
@@ -518,3 +556,4 @@ def test_child_selected_target_response_validation_and_checklist(tmp_path: Path,
     assert any(event["event_type"] == "child_selected_target_abandoned" for event in events)
     assert any(event["event_type"] == "child_selected_target_replacement_reset_created" for event in events)
     assert any(event["event_type"] == "child_replacement_handoff_refreshed" for event in events)
+    assert any(event["event_type"] == "child_replacement_response_validated" for event in events)

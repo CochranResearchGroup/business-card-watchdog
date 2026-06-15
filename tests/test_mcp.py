@@ -71,6 +71,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_child_selected_target_abandonment" in names
     assert "business_card_watchdog_child_selected_target_replacement_reset" in names
     assert "business_card_watchdog_child_replacement_handoff_refresh" in names
+    assert "business_card_watchdog_child_replacement_response_validation" in names
     assert "business_card_watchdog_review_bundle" in names
     assert "business_card_watchdog_review_html" in names
     assert "business_card_watchdog_review_workbook" in names
@@ -475,6 +476,23 @@ def test_mcp_child_selected_target_response_validation_and_checklist(tmp_path: P
         },
         config=config,
     )
+    replacement_template = refresh["refreshed_handoff"]["operator_response_template"]
+    replacement_response = (
+        f"run_id={replacement_template['run_id']} job_id={replacement_template['job_id']} "
+        f"candidate_id={replacement_template['candidate_id']} "
+        f"work_item_id={replacement_template['work_item_id']} "
+        "sink=google_contacts operator=replacement-operator scope=write "
+        "safety_confirmation='approved replacement google contacts target profile'"
+    )
+    replacement_validation = call_tool(
+        "business_card_watchdog_child_replacement_response_validation",
+        {
+            "run_id": run_dir.name,
+            "candidate_id": candidate_id,
+            "response": replacement_response,
+        },
+        config=config,
+    )
 
     assert validation["schema"] == "business-card-watchdog.child-selected-target-response-validation.v1"
     assert validation["state"] == "ready_for_no_live_child_checklist"
@@ -515,6 +533,13 @@ def test_mcp_child_selected_target_response_validation_and_checklist(tmp_path: P
     assert refresh["staleness"]["state"] == "stale"
     assert refresh["writes_attempted"] == 0
     assert refresh["network_calls_made"] == 0
+    assert replacement_validation["schema"] == "business-card-watchdog.child-replacement-response-validation.v1"
+    assert replacement_validation["state"] == "ready_for_no_live_replacement_checklist"
+    assert replacement_validation["stale_enforcement"]["staleness_state"] == "stale"
+    assert replacement_validation["parsed_response"]["operator"] == "replacement-operator"
+    assert replacement_validation["selected_target_created"] is False
+    assert replacement_validation["writes_attempted"] == 0
+    assert replacement_validation["network_calls_made"] == 0
 
 
 def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:

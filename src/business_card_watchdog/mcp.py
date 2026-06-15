@@ -658,6 +658,19 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_child_replacement_response_validation",
+                "description": "Validate a no-live child replacement response only after the replacement refresh and stale marker are ready.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "candidate_id": {"type": "string"},
+                        "response": {"type": "string"},
+                    },
+                    "required": ["run_id", "candidate_id", "response"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_review_bundle",
                 "description": "Create a run-level batch review bundle with inline review-relevant artifact payloads.",
                 "input_schema": {
@@ -1499,6 +1512,12 @@ def call_tool(
             operator=str(args["operator"]),
             scope=str(args.get("scope") or "write"),
             reason=str(args.get("reason") or ""),
+        )
+    if tool_name == "business_card_watchdog_child_replacement_response_validation":
+        return service.validate_child_replacement_response(
+            run_id=str(args["run_id"]),
+            candidate_id=str(args["candidate_id"]),
+            response=str(args["response"]),
         )
     if tool_name == "business_card_watchdog_review_bundle":
         return service.review_bundle(

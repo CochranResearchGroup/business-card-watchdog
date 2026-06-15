@@ -731,6 +731,17 @@ def create_app(config_path: Path | None = None):
             reason=request.reason,
         )
 
+    @app.post("/reviews/children/{candidate_id}/replacement-response-validation")
+    def create_child_replacement_response_validation(
+        candidate_id: str,
+        request: ChildSelectedTargetResponseRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().validate_child_replacement_response(
+            run_id=request.run_id,
+            candidate_id=candidate_id,
+            response=request.response,
+        )
+
     @app.post("/runs/{run_id}/review-bundle")
     def create_review_bundle(run_id: str, state: str = "all", write: bool = True) -> dict[str, object]:
         return service().review_bundle(run_id=run_id, state=state, write=write)

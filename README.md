@@ -175,7 +175,10 @@ to record a no-live child abandonment artifact, then
 to verify that a replacement handoff preview is unblocked. Use
 `reviews child-replacement-handoff-refresh <candidate-id> --run-id <run-id> --sink google_contacts --operator <operator> --json`
 to refresh the no-live handoff and mark prior child selected-target response,
-checklist, command-copy, and audit artifacts stale.
+checklist, command-copy, and audit artifacts stale. Then use
+`reviews child-validate-replacement-response <candidate-id> --run-id <run-id> --response <operator-response> --json`
+to validate the replacement response only after the refresh packet and staleness
+marker are ready.
 
 `drills review-routing` creates a synthetic fixture run and proves review approval,
 review bundle/workbook export, duplicate lookup planning, dry-run sink routing, and

@@ -4084,6 +4084,160 @@ class BusinessCardService:
         payload["refresh_path"] = str(refresh_path)
         return payload
 
+    def validate_child_replacement_response(
+        self,
+        *,
+        run_id: str,
+        candidate_id: str,
+        response: str,
+    ) -> dict[str, Any]:
+        entry = self._child_route_prep_entry(run_id=run_id, candidate_id=candidate_id)
+        prep_dir = self._child_route_prep_dir(entry)
+        parsed = _parse_operator_response_fields(response)
+        refresh_path = prep_dir / "child_replacement_handoff_refresh.json"
+        staleness_path = prep_dir / "child_selected_target_staleness.json"
+        handoff_path = prep_dir / "child_selected_target_handoff.json"
+        refresh = _read_json_file(refresh_path) or {}
+        staleness = _read_json_file(staleness_path) or {}
+        handoff = _read_json_file(handoff_path) or {}
+        expected = {
+            "run_id": run_id,
+            "job_id": str(entry.get("job_id") or ""),
+            "candidate_id": candidate_id,
+            "work_item_id": str(entry.get("work_item_id") or ""),
+            "sink": str(handoff.get("sink") or refresh.get("sink") or ""),
+            "operator": str(handoff.get("operator") or refresh.get("operator") or ""),
+            "scope": str(handoff.get("scope") or refresh.get("scope") or ""),
+        }
+        required_fields = ["run_id", "job_id", "candidate_id", "sink", "operator", "scope", "safety_confirmation"]
+        missing_fields = [
+            field
+            for field in required_fields
+            if not str(parsed.get(field) or "").strip()
+            or str(parsed.get(field) or "").strip().startswith("<")
+        ]
+        mismatches: list[str] = []
+        blocked_reasons: list[str] = []
+        if not refresh:
+            blocked_reasons.append("child replacement handoff refresh artifact is missing")
+        elif refresh.get("state") != "ready_for_replacement_handoff":
+            blocked_reasons.append(f"child replacement handoff refresh state is {refresh.get('state') or 'missing'}")
+        if not staleness:
+            blocked_reasons.append("child selected-target staleness marker is missing")
+        elif staleness.get("state") != "stale":
+            blocked_reasons.append(f"child selected-target staleness state is {staleness.get('state') or 'missing'}")
+        if not handoff:
+            mismatches.append("refreshed child selected-target handoff artifact is missing")
+        elif handoff.get("state") != "ready_for_operator_selection":
+            mismatches.append(f"refreshed child handoff state is {handoff.get('state') or 'missing'}")
+        if refresh and handoff:
+            if str(refresh.get("refreshed_handoff_path") or "") != str(handoff_path):
+                mismatches.append("refreshed handoff path does not match current child handoff")
+            for field in ["sink", "operator", "scope"]:
+                if str(refresh.get(field) or "") and str(refresh.get(field) or "") != str(handoff.get(field) or ""):
+                    mismatches.append(f"{field} does not match refreshed child handoff")
+        stale_kinds = [
+            str(item.get("kind") or "")
+            for item in list(staleness.get("stale_artifacts") or [])
+            if isinstance(item, dict) and item.get("exists")
+        ]
+        expected_stale_kinds = {
+            "child_selected_target_response_validation",
+            "child_selected_target_execution_checklist",
+            "child_selected_target_command_copy_packet",
+            "child_selected_target_audit",
+        }
+        if staleness and not expected_stale_kinds.intersection(stale_kinds):
+            blocked_reasons.append("child selected-target staleness marker does not name stale predecessor artifacts")
+        for field, expected_value in expected.items():
+            if field == "work_item_id" and not parsed.get(field):
+                continue
+            actual = str(parsed.get(field) or "").strip()
+            if expected_value and actual and actual != expected_value:
+                mismatches.append(f"{field} does not match refreshed child handoff")
+        if "safety_confirmation" not in missing_fields:
+            safety_confirmation_blocker = _safety_confirmation_blocker(
+                str(parsed.get("safety_confirmation") or "")
+            )
+            if safety_confirmation_blocker:
+                mismatches.append(safety_confirmation_blocker)
+        blocked_reasons.extend(missing_fields)
+        blocked_reasons.extend(mismatches)
+        state = "ready_for_no_live_replacement_checklist" if not blocked_reasons else "blocked"
+        validation = {
+            "schema": "business-card-watchdog.child-replacement-response-validation.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_id,
+            "job_id": entry.get("job_id"),
+            "candidate_id": candidate_id,
+            "work_item_id": entry.get("work_item_id"),
+            "response": response,
+            "parsed_response": parsed,
+            "expected_fields": expected,
+            "missing_fields": missing_fields,
+            "mismatches": mismatches,
+            "blocked_reasons": blocked_reasons,
+            "refresh_path": str(refresh_path),
+            "refresh_state": refresh.get("state"),
+            "refresh": refresh,
+            "staleness_path": str(staleness_path),
+            "staleness_state": staleness.get("state"),
+            "staleness": staleness,
+            "handoff_path": str(handoff_path),
+            "handoff_state": handoff.get("state"),
+            "handoff": handoff,
+            "stale_enforcement": {
+                "required": True,
+                "staleness_marker_present": bool(staleness),
+                "staleness_state": staleness.get("state"),
+                "stale_artifact_kinds": stale_kinds,
+                "expected_predecessor_kinds": sorted(expected_stale_kinds),
+            },
+            "selected_target_created": False,
+            "creates_selected_live_target": False,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "commands": {
+                "refresh_replacement_handoff": (
+                    f"reviews child-replacement-handoff-refresh {shlex.quote(candidate_id)} "
+                    f"--run-id {run_id} --sink {shlex.quote(str(expected['sink']))} "
+                    f"--operator {shlex.quote(str(expected['operator']))} "
+                    f"--scope {shlex.quote(str(expected['scope']))} --json"
+                ),
+                "validate_again": (
+                    f"reviews child-validate-replacement-response {shlex.quote(candidate_id)} "
+                    f"--run-id {run_id} --response {shlex.quote(response)} --json"
+                ),
+            },
+            "explicit_stop_conditions": [
+                "This validation does not create selected_live_target.json.",
+                "This validation does not delete stale child artifacts.",
+                "Do not run live lookup, live write, or live readback from this validation report.",
+                "Do not proceed unless stale predecessor artifacts are marked stale and state is ready.",
+                "Do not process private SyncThing images, run public-web search, or call paid enrichment from this report.",
+            ],
+        }
+        validation_path = prep_dir / "child_replacement_response_validation.json"
+        validation_path.write_text(json.dumps(validation, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        parent_job_id = str(entry.get("job_id") or "__run__")
+        ledger.record_artifact(job_id=parent_job_id, kind="child_replacement_response_validation", path=validation_path)
+        ledger.record_event(
+            "child_replacement_response_validated",
+            {
+                "run_id": run_id,
+                "job_id": entry.get("job_id"),
+                "candidate_id": candidate_id,
+                "state": state,
+                "validation_path": str(validation_path),
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        validation["validation_path"] = str(validation_path)
+        return validation
+
     def _child_route_prep_entry(self, *, run_id: str, candidate_id: str) -> dict[str, Any]:
         entry = next(
             (

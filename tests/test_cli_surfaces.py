@@ -712,6 +712,30 @@ def test_cli_child_selected_target_response_validation_and_checklist(
         ]
     ) == 0
     refresh = json.loads(capsys.readouterr().out)
+    replacement_template = refresh["refreshed_handoff"]["operator_response_template"]
+    replacement_response = (
+        f"run_id={replacement_template['run_id']} job_id={replacement_template['job_id']} "
+        f"candidate_id={replacement_template['candidate_id']} "
+        f"work_item_id={replacement_template['work_item_id']} "
+        "sink=google_contacts operator=replacement-operator scope=write "
+        "safety_confirmation='approved replacement google contacts target profile'"
+    )
+
+    assert main(
+        [
+            "--config",
+            str(config_path),
+            "reviews",
+            "child-validate-replacement-response",
+            candidate_id,
+            "--run-id",
+            run_dir.name,
+            "--response",
+            replacement_response,
+            "--json",
+        ]
+    ) == 0
+    replacement_validation = json.loads(capsys.readouterr().out)
 
     assert validation["state"] == "ready_for_no_live_child_checklist"
     assert validation["writes_attempted"] == 0
@@ -750,6 +774,13 @@ def test_cli_child_selected_target_response_validation_and_checklist(
     assert refresh["staleness"]["state"] == "stale"
     assert refresh["writes_attempted"] == 0
     assert refresh["network_calls_made"] == 0
+    assert replacement_validation["schema"] == "business-card-watchdog.child-replacement-response-validation.v1"
+    assert replacement_validation["state"] == "ready_for_no_live_replacement_checklist"
+    assert replacement_validation["stale_enforcement"]["staleness_state"] == "stale"
+    assert replacement_validation["parsed_response"]["operator"] == "replacement-operator"
+    assert replacement_validation["selected_target_created"] is False
+    assert replacement_validation["writes_attempted"] == 0
+    assert replacement_validation["network_calls_made"] == 0
 
 
 def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) -> None:
