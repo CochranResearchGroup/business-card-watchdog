@@ -134,6 +134,11 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert live_packet["existing_selected_target"]["exists"] is False
     assert live_packet["existing_selected_target"]["identity"] is None
     assert live_packet["existing_selected_target"]["abandoned"] is False
+    assert live_packet["operator_response_template"] == (
+        f"run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=api-test scope=lookup safety_confirmation=<confirmation>"
+    )
+    assert live_packet["copyable_approval_fields"]["operator"] == "api-test"
     assert live_packet["commands"]["validate_operator_response"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )

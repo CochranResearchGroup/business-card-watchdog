@@ -389,6 +389,11 @@ def test_cli_live_selection_packet_writes_no_selected_target(tmp_path: Path, cap
     assert payload["existing_selected_target"]["replacement_requires_abandonment"] is False
     assert payload["existing_selected_target"]["can_select_replacement_now"] is True
     assert payload["existing_selected_target"]["abandon_command"] is None
+    assert payload["operator_response_template"] == (
+        f"run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=tester scope=lookup safety_confirmation=<confirmation>"
+    )
+    assert payload["copyable_approval_fields"]["operator"] == "tester"
     assert payload["commands"]["validate_operator_response"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
@@ -418,6 +423,10 @@ def test_cli_live_selection_packet_writes_no_selected_target(tmp_path: Path, cap
     assert f"Job: {job_id}" in text
     assert "Existing target: exists=False identity=none" in text
     assert "Replacement: requires_abandonment=False can_select_now=True" in text
+    assert (
+        f"Operator response: run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=tester scope=lookup safety_confirmation=<confirmation>"
+    ) in text
     assert (
         f"Validate response: runs live-pilot-validate-response {run_id} "
         "--response <operator-response> --json"

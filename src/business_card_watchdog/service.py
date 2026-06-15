@@ -6006,6 +6006,18 @@ class BusinessCardService:
         if replacement_requires_abandonment:
             blocked_reasons.append("selected live target already exists; abandon it before selecting a replacement")
         state = "ready_for_operator_approval" if not blocked_reasons else "blocked"
+        operator_response_template = (
+            f"run_id={run_id} job_id={job_id} sink={sink} operator={operator} "
+            f"scope={scope} safety_confirmation=<confirmation>"
+        )
+        copyable_approval_fields = {
+            "run_id": run_id,
+            "job_id": job_id,
+            "sink": sink,
+            "operator": operator,
+            "scope": scope,
+            "safety_confirmation": "<confirmation>",
+        }
         payload = {
             "schema": "business-card-watchdog.live-selection-packet.v1",
             "generated_at": utc_now(),
@@ -6031,6 +6043,12 @@ class BusinessCardService:
             },
             "missing_requirements": missing_requirements,
             "blocked_reasons": blocked_reasons,
+            "operator_response_template": operator_response_template,
+            "operator_prompt": (
+                "Validate this operator response before creating a selected live target: "
+                f"{operator_response_template}"
+            ),
+            "copyable_approval_fields": copyable_approval_fields,
             "existing_selected_target": {
                 "path": str(selected_target_path),
                 "exists": existing_target_exists,

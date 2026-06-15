@@ -548,6 +548,8 @@ def _render_live_selection_packet_text(payload: dict[str, object]) -> str:
     lines.append(f"Blocked reasons: {len(rows)}")
     for reason in rows:
         lines.append(f" - {reason}")
+    if payload.get("operator_response_template"):
+        lines.append(f"Operator response: {payload.get('operator_response_template')}")
     abandon_command = existing.get("abandon_command")
     if abandon_command:
         lines.append(f"Abandon existing target: {abandon_command}")

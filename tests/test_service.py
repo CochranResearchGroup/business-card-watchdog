@@ -262,6 +262,18 @@ def test_service_live_selection_packet_does_not_select_target(tmp_path: Path) ->
     assert packet["writes_attempted"] == 0
     assert packet["network_calls_made"] == 0
     assert "job state is needs_review" in packet["blocked_reasons"]
+    assert packet["operator_response_template"] == (
+        f"run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=tester scope=lookup safety_confirmation=<confirmation>"
+    )
+    assert packet["copyable_approval_fields"] == {
+        "run_id": run_id,
+        "job_id": job_id,
+        "sink": "google_contacts",
+        "operator": "tester",
+        "scope": "lookup",
+        "safety_confirmation": "<confirmation>",
+    }
     assert Path(packet["packet_path"]).exists()
     assert not Path(packet["existing_selected_target"]["path"]).exists()
     assert packet["existing_selected_target"]["target_safety_confirmed"] is False
