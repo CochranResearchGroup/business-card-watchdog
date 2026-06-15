@@ -749,6 +749,8 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
         f"run_id={run_id} job_id={job_id} sink=google_contacts "
         "operator=tester scope=lookup safety_confirmation=<tenant-profile-account-confirmation>"
     )
+    assert handoff["entries"][0]["pilot_command_checklist_summary"]["step_count"] == 5
+    assert handoff["entries"][0]["pilot_command_checklist_summary"]["live_call_count"] == 1
     assert handoff["operator_response_template_count"] == 1
     assert handoff["operator_response_templates"][0]["template"] == (
         f"run_id={run_id} job_id={job_id} sink=google_contacts "

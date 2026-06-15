@@ -2678,6 +2678,18 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
         "scope": "lookup",
         "safety_confirmation": "<tenant-profile-account-confirmation>",
     }
+    status_checklist = live_status["entries"][0]["pilot_command_checklist_summary"]
+    assert status_checklist["schema"] == "business-card-watchdog.pilot-command-checklist-summary.v1"
+    assert status_checklist["step_count"] == 5
+    assert status_checklist["live_call_count"] == 1
+    assert status_checklist["sink_write_step_count"] == 0
+    assert [row["step"] for row in status_checklist["steps"]] == [
+        "validate_operator_response",
+        "create_selected_target",
+        "selected_target_audit",
+        "lookup_smoke_handoff",
+        "live_lookup_pilot",
+    ]
     assert Path(live_status["status_path"]).exists()
 
     handoff = service.live_pilot_handoff(run_id=run_id)
@@ -2694,6 +2706,9 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
         f"run_id={run_id} job_id={job_id} sink=google_contacts "
         "operator=tester scope=lookup safety_confirmation=<tenant-profile-account-confirmation>"
     )
+    assert handoff["entries"][0]["pilot_command_checklist_summary"]["step_count"] == 5
+    assert handoff["entries"][0]["pilot_command_checklist_summary"]["live_call_count"] == 1
+    assert handoff["entries"][0]["pilot_command_checklist_summary"]["sink_write_step_count"] == 0
     assert handoff["operator_response_template_count"] == 1
     assert handoff["operator_response_templates"][0]["schema"] == (
         "business-card-watchdog.operator-response-template.v1"

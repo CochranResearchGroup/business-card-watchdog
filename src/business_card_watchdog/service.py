@@ -5908,6 +5908,20 @@ class BusinessCardService:
                 f"operator={selection_operator} scope={selection_scope} "
                 "safety_confirmation=<tenant-profile-account-confirmation>"
             )
+            pilot_command_checklist = list(packet.get("pilot_command_checklist") or [])
+            if not pilot_command_checklist:
+                pilot_command_checklist = _live_selection_packet_checklist(
+                    commands=_live_selection_packet_commands(
+                        job_id=job_id,
+                        run_id=run_id,
+                        sink=selection_prompt_sink,
+                        operator=selection_operator,
+                        scope=selection_scope,
+                    ),
+                    scope=selection_scope,
+                    state=str(packet.get("state") or "ready_for_operator_approval"),
+                )
+            pilot_command_checklist_summary = _pilot_command_checklist_summary(pilot_command_checklist)
             copyable_approval_fields = {
                 "run_id": run_id,
                 "job_id": job_id,
@@ -5953,6 +5967,7 @@ class BusinessCardService:
                     "selected_target_sink": selected_target.get("sink"),
                     "selected_target_operator": selected_target.get("operator") or selected_target.get("approved_by"),
                     "selection_packet_state": packet.get("state"),
+                    "pilot_command_checklist_summary": pilot_command_checklist_summary,
                     "selected_target_audit_state": selected_target_audit.get("state"),
                     "selected_target_audit_blockers": selected_target_audit_blockers,
                     "lookup_smoke_state": (artifacts["selected_lookup_smoke"] or {}).get("state"),
@@ -6147,6 +6162,7 @@ class BusinessCardService:
                     "selected_target_identity": entry.get("selected_target_identity"),
                     "selected_target_scope": entry.get("selected_target_scope"),
                     "selection_packet_state": entry.get("selection_packet_state"),
+                    "pilot_command_checklist_summary": entry.get("pilot_command_checklist_summary"),
                     "selected_target_audit_state": entry.get("selected_target_audit_state"),
                     "selected_target_audit_blockers": entry.get("selected_target_audit_blockers", []),
                     "lookup_smoke_state": entry.get("lookup_smoke_state"),
@@ -6516,39 +6532,15 @@ class BusinessCardService:
             f"run_id={run_id} job_id={job_id} sink={sink} operator={operator} "
             f"scope={scope} safety_confirmation=<tenant-profile-account-confirmation>"
         )
-        commands = {
-            "validate_operator_response": (
-                f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
-            ),
-            "validate_operator_response_prefilled": (
-                _operator_response_validation_command(run_id, operator_response_template)
-            ),
-            "create_selected_target": (
-                f"sinks select-live-target {job_id} --run-id {run_id} --sink {sink} "
-                f"--operator {operator} --scope {scope} --safety-confirmation <tenant-profile-account-confirmation>"
-                + (f" --reason {json.dumps(reason)}" if reason else "")
-            ),
-            "selected_target_audit": (
-                f"sinks selected-target-audit {job_id} --run-id {run_id} --scope {scope} --no-write --json"
-            ),
-            "lookup_smoke_handoff": (
-                f"sinks lookup-smoke-handoff {job_id} --run-id {run_id} --sink {sink} "
-                f"--approved-by {operator} --json"
-            ),
-            "lookup_pilot": (
-                f"sinks lookup-pilot {job_id} --run-id {run_id} --sink {sink} "
-                f"--approved-by {operator} --no-simulate"
-            ),
-            "write_pilot": (
-                f"sinks write-pilot {job_id} --run-id {run_id} --sink {sink} "
-                f"--approved-by {operator} --no-simulate"
-            ),
-            "readback_request": f"sinks adapter-request {job_id} --run-id {run_id} --phase readback --json",
-            "readback_pilot": (
-                f"sinks readback-pilot {job_id} --run-id {run_id} --sink {sink} "
-                f"--approved-by {operator} --no-simulate"
-            ),
-        }
+        commands = _live_selection_packet_commands(
+            job_id=job_id,
+            run_id=run_id,
+            sink=sink,
+            operator=operator,
+            scope=scope,
+            reason=reason,
+            operator_response_template=operator_response_template,
+        )
         pilot_command_checklist = _live_selection_packet_checklist(
             commands=commands,
             scope=scope,
@@ -8207,6 +8199,53 @@ def _operator_response_validation_command(run_id: str, response: str) -> str:
     )
 
 
+def _live_selection_packet_commands(
+    *,
+    job_id: str,
+    run_id: str,
+    sink: str,
+    operator: str,
+    scope: str,
+    reason: str = "",
+    operator_response_template: str = "",
+) -> dict[str, str]:
+    response_template = operator_response_template or (
+        f"run_id={run_id} job_id={job_id} sink={sink} operator={operator} "
+        f"scope={scope} safety_confirmation=<tenant-profile-account-confirmation>"
+    )
+    create_selected_target = (
+        f"sinks select-live-target {job_id} --run-id {run_id} --sink {sink} "
+        f"--operator {operator} --scope {scope} --safety-confirmation <tenant-profile-account-confirmation>"
+    )
+    if reason:
+        create_selected_target += f" --reason {json.dumps(reason)}"
+    return {
+        "validate_operator_response": (
+            f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+        ),
+        "validate_operator_response_prefilled": _operator_response_validation_command(run_id, response_template),
+        "create_selected_target": create_selected_target,
+        "selected_target_audit": (
+            f"sinks selected-target-audit {job_id} --run-id {run_id} --scope {scope} --no-write --json"
+        ),
+        "lookup_smoke_handoff": (
+            f"sinks lookup-smoke-handoff {job_id} --run-id {run_id} --sink {sink} "
+            f"--approved-by {operator} --json"
+        ),
+        "lookup_pilot": (
+            f"sinks lookup-pilot {job_id} --run-id {run_id} --sink {sink} --approved-by {operator} --no-simulate"
+        ),
+        "write_pilot": (
+            f"sinks write-pilot {job_id} --run-id {run_id} --sink {sink} --approved-by {operator} --no-simulate"
+        ),
+        "readback_request": f"sinks adapter-request {job_id} --run-id {run_id} --phase readback --json",
+        "readback_pilot": (
+            f"sinks readback-pilot {job_id} --run-id {run_id} --sink {sink} "
+            f"--approved-by {operator} --no-simulate"
+        ),
+    }
+
+
 def _live_selection_packet_checklist(
     *,
     commands: dict[str, str],
@@ -8313,6 +8352,27 @@ def _live_selection_packet_checklist(
             ]
         )
     return checklist
+
+
+def _pilot_command_checklist_summary(checklist: list[Any]) -> dict[str, Any]:
+    rows = [row for row in checklist if isinstance(row, dict)]
+    return {
+        "schema": "business-card-watchdog.pilot-command-checklist-summary.v1",
+        "step_count": len(rows),
+        "live_call_count": sum(1 for row in rows if row.get("live_call")),
+        "sink_write_step_count": sum(1 for row in rows if row.get("writes_sink")),
+        "explicit_operator_step_count": sum(1 for row in rows if row.get("requires_explicit_operator_action")),
+        "runtime_artifact_step_count": sum(1 for row in rows if row.get("writes_runtime_artifact")),
+        "steps": [
+            {
+                "step": row.get("step"),
+                "live_call": bool(row.get("live_call", False)),
+                "writes_sink": bool(row.get("writes_sink", False)),
+                "requires_explicit_operator_action": bool(row.get("requires_explicit_operator_action", False)),
+            }
+            for row in rows[:8]
+        ],
+    }
 
 
 def _safety_confirmation_blocker(value: str) -> str:

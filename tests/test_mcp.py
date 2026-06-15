@@ -667,6 +667,9 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
         "operator=mcp-test scope=all safety_confirmation=<tenant-profile-account-confirmation>"
     )
     assert live_handoff["entries"][0]["copyable_approval_fields"]["scope"] == "all"
+    assert live_handoff["entries"][0]["pilot_command_checklist_summary"]["step_count"] == 8
+    assert live_handoff["entries"][0]["pilot_command_checklist_summary"]["live_call_count"] == 3
+    assert live_handoff["entries"][0]["pilot_command_checklist_summary"]["sink_write_step_count"] == 1
     assert live_handoff["operator_response_template_count"] == 1
     assert live_handoff["operator_response_templates"][0]["schema"] == (
         "business-card-watchdog.operator-response-template.v1"

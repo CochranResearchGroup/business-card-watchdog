@@ -247,6 +247,8 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
         f"run_id={run_id} job_id={job_id} sink=google_contacts "
         "operator=api-test scope=lookup safety_confirmation=<tenant-profile-account-confirmation>"
     )
+    assert live_handoff["entries"][0]["pilot_command_checklist_summary"]["step_count"] == 5
+    assert live_handoff["entries"][0]["pilot_command_checklist_summary"]["live_call_count"] == 1
     assert live_handoff["operator_response_templates"][0]["validation_command"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
