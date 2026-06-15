@@ -752,6 +752,18 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     }
     assert dashboard["commands"]["live_pilot_status"] == f"runs live-pilot-status {run_id} --no-write --json"
     assert dashboard["safe_next_actions"][0]["action"] == "inspect_runtime_readiness"
+    assert dashboard["safe_next_actions"][3] == {
+        "action": "inspect_live_pilot_status",
+        "command": f"runs live-pilot-status {run_id} --no-write --json",
+        "safe_to_auto_continue": True,
+        "requires_explicit_operator_action": False,
+    }
+    assert dashboard["safe_next_actions"][4] == {
+        "action": "inspect_live_pilot_handoff",
+        "command": f"runs live-pilot-handoff {run_id} --no-write --json",
+        "safe_to_auto_continue": True,
+        "requires_explicit_operator_action": False,
+    }
     assert dashboard["writes_attempted"] == 0
     assert dashboard["network_calls_made"] == 0
 

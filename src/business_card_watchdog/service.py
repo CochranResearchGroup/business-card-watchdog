@@ -616,6 +616,26 @@ class BusinessCardService:
                     "safe_to_auto_continue": True,
                     "requires_explicit_operator_action": False,
                 },
+                {
+                    "action": "inspect_live_pilot_status" if selected_run_id else "inspect_runs",
+                    "command": (
+                        f"runs live-pilot-status {selected_run_id} --no-write --json"
+                        if selected_run_id
+                        else "runs list --json"
+                    ),
+                    "safe_to_auto_continue": True,
+                    "requires_explicit_operator_action": False,
+                },
+                {
+                    "action": "inspect_live_pilot_handoff" if selected_run_id else "inspect_runs",
+                    "command": (
+                        f"runs live-pilot-handoff {selected_run_id} --no-write --json"
+                        if selected_run_id
+                        else "runs list --json"
+                    ),
+                    "safe_to_auto_continue": True,
+                    "requires_explicit_operator_action": False,
+                },
             ],
             "explicit_stop_conditions": [
                 "Do not process private SyncThing images from the operator dashboard.",

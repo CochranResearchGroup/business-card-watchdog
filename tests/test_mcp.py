@@ -392,6 +392,14 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert operator_dashboard["commands"]["live_pilot_validate_response"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
+    assert operator_dashboard["safe_next_actions"][3]["action"] == "inspect_live_pilot_status"
+    assert operator_dashboard["safe_next_actions"][3]["command"] == (
+        f"runs live-pilot-status {run_id} --no-write --json"
+    )
+    assert operator_dashboard["safe_next_actions"][4]["action"] == "inspect_live_pilot_handoff"
+    assert operator_dashboard["safe_next_actions"][4]["command"] == (
+        f"runs live-pilot-handoff {run_id} --no-write --json"
+    )
     assert operator_dashboard["mcp_tools"]["next_actions"]["tool"] == "business_card_watchdog_next_actions"
     assert operator_dashboard["mcp_tools"]["next_actions"]["arguments"] == {"run_id": run_id, "limit": 20}
     assert operator_dashboard["mcp_tools"]["live_pilot_validate_response"] == {

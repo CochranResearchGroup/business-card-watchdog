@@ -131,6 +131,9 @@ def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) 
     assert f"Operator dashboard: business_card_watchdog_operator_dashboard args=run_id={run_id}" in text
     assert f"Next actions: business_card_watchdog_next_actions args=limit=20, run_id={run_id}" in text
     assert f"Live pilot status: business_card_watchdog_live_pilot_status args=run_id={run_id}, write=False" in text
+    assert "Safe next actions: 5" in text
+    assert f"inspect_live_pilot_status: runs live-pilot-status {run_id} --no-write --json" in text
+    assert f"inspect_live_pilot_handoff: runs live-pilot-handoff {run_id} --no-write --json" in text
     assert "Live pilot stop conditions: 3" in text
     assert "Do not run live lookup, live write, or live readback from this status report." in text
     assert "Live handoff stop conditions: 4" in text

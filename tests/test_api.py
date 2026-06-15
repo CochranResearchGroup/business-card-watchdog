@@ -42,6 +42,14 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert operator_dashboard["schema"] == "business-card-watchdog.operator-dashboard.v1"
     assert operator_dashboard["selected_run_id"] == run_id
     assert operator_dashboard["commands"]["live_pilot_status"] == f"runs live-pilot-status {run_id} --no-write --json"
+    assert operator_dashboard["safe_next_actions"][3]["action"] == "inspect_live_pilot_status"
+    assert operator_dashboard["safe_next_actions"][3]["command"] == (
+        f"runs live-pilot-status {run_id} --no-write --json"
+    )
+    assert operator_dashboard["safe_next_actions"][4]["action"] == "inspect_live_pilot_handoff"
+    assert operator_dashboard["safe_next_actions"][4]["command"] == (
+        f"runs live-pilot-handoff {run_id} --no-write --json"
+    )
     assert operator_dashboard["review_counts"]["needs_review"] == 1
     assert operator_dashboard["next_action_summary"]["by_action"] == {"review_contact": 1}
     assert operator_dashboard["live_pilot_handoff_summary"]["action_counts"] == {"no_live_candidate": 1}
