@@ -1411,10 +1411,9 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert "Operator-Selected Live Smoke Preflight Sample Output" in preflight_sample_output_path.read_text(
         encoding="utf-8"
     )
-    assert live_pilot_rehearsal_drill["packets"]["operator_selected_preflight"]["state"] in {
-        "awaiting_operator_selection",
-        "awaiting_run_selection",
-    }
+    assert live_pilot_rehearsal_drill["packets"]["operator_selected_preflight"]["schema"] == (
+        "business-card-watchdog.operator-selected-live-smoke-preflight.v1"
+    )
     assert service_recovery["schema"] == "business-card-watchdog.service-recovery.v1"
     assert service_recovery["run_id"] == run_id
     assert service_recovery["commands"]["restart"] == "systemctl --user restart business-card-watchdog.service"

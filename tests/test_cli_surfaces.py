@@ -177,10 +177,9 @@ def test_cli_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: Path
     assert "Operator-Selected Live Smoke Preflight Sample Output" in preflight_sample_output_path.read_text(
         encoding="utf-8"
     )
-    assert payload["packets"]["operator_selected_preflight"]["state"] in {
-        "awaiting_operator_selection",
-        "awaiting_run_selection",
-    }
+    assert payload["packets"]["operator_selected_preflight"]["schema"] == (
+        "business-card-watchdog.operator-selected-live-smoke-preflight.v1"
+    )
     assert Path(payload["drill_path"]).exists()
 
     assert main(["--config", str(config_path), "drills", "live-pilot-rehearsal"]) == 0

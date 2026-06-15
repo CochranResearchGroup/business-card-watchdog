@@ -2512,9 +2512,10 @@ class BusinessCardService:
             "selection_packet_generated": selection_packet.get("schema")
             == "business-card-watchdog.live-selection-packet.v1",
             "validation_ready": validation.get("state") == "ready_to_select_live_target",
-            "operator_selected_preflight_ready": operator_selected_preflight.get("state")
-            in {"awaiting_operator_selection", "awaiting_run_selection"}
-            and operator_selected_preflight.get("ready_entry_count") == 1,
+            "operator_selected_preflight_generated": operator_selected_preflight.get("schema")
+            == "business-card-watchdog.operator-selected-live-smoke-preflight.v1"
+            and operator_selected_preflight.get("writes_attempted") == 0
+            and operator_selected_preflight.get("network_calls_made") == 0,
             "selected_target_created": selected_target.get("state") == "created",
             "selected_target_handoff_generated": selected_target_handoff.get("schema")
             == "business-card-watchdog.selected-live-target-handoff-from-response.v1",

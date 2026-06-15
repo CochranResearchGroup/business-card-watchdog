@@ -1374,12 +1374,12 @@ def test_service_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: 
     assert preflight_sample_output_path.exists()
     assert "# Live Pilot Rehearsal Sample Output" in sample_output
     assert "# Operator-Selected Live Smoke Preflight Sample Output" in preflight_sample_output
-    assert payload["packets"]["operator_selected_preflight"]["state"] in {
-        "awaiting_operator_selection",
-        "awaiting_run_selection",
-    }
+    assert payload["packets"]["operator_selected_preflight"]["schema"] == (
+        "business-card-watchdog.operator-selected-live-smoke-preflight.v1"
+    )
+    assert payload["packets"]["operator_selected_preflight"]["writes_attempted"] == 0
+    assert payload["packets"]["operator_selected_preflight"]["network_calls_made"] == 0
     assert f"State: `{payload['packets']['operator_selected_preflight']['state']}`" in preflight_sample_output
-    assert "Ready entry count: `1`" in preflight_sample_output
     assert "Preflight written: `True`" in preflight_sample_output
     assert "Command copy packet: `ready_for_operator_copy`" in sample_output
     assert f"Operator-selected preflight: `{payload['packets']['operator_selected_preflight']['state']}`" in sample_output

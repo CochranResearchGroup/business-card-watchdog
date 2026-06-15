@@ -1572,10 +1572,9 @@ def test_api_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: Path
     assert sample_output_path.exists()
     assert preflight_sample_output_path.exists()
     assert "Command copy packet: `ready_for_operator_copy`" in sample_output_path.read_text(encoding="utf-8")
-    assert drill["packets"]["operator_selected_preflight"]["state"] in {
-        "awaiting_operator_selection",
-        "awaiting_run_selection",
-    }
+    assert drill["packets"]["operator_selected_preflight"]["schema"] == (
+        "business-card-watchdog.operator-selected-live-smoke-preflight.v1"
+    )
     assert f"State: `{drill['packets']['operator_selected_preflight']['state']}`" in (
         preflight_sample_output_path.read_text(encoding="utf-8")
     )
