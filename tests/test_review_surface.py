@@ -397,6 +397,20 @@ def test_child_selected_target_response_validation_and_checklist(tmp_path: Path,
         candidate_id=candidate_id,
         response=response,
     )
+    blocked_copy_packet = service.child_selected_target_command_copy_packet(
+        run_id=run_dir.name,
+        candidate_id=candidate_id,
+        response=response,
+    )
+    ready_copy_packet = service.child_selected_target_command_copy_packet(
+        run_id=run_dir.name,
+        candidate_id=candidate_id,
+        response=response,
+        acknowledgement=(
+            f"I acknowledge run_id={run_dir.name} candidate_id={candidate_id} "
+            "sink=google_contacts operator=operator ready to copy"
+        ),
+    )
     artifacts = read_jsonl(run_dir / "artifacts.jsonl")
     events = read_jsonl(run_dir / "events.jsonl")
 
@@ -411,7 +425,24 @@ def test_child_selected_target_response_validation_and_checklist(tmp_path: Path,
     assert checklist["network_calls_made"] == 0
     assert all(item["ok"] for item in checklist["checklist_items"])
     assert "safety_confirmation" not in checklist["operator_response_redacted"]["fields"]
+    assert blocked_copy_packet["schema"] == "business-card-watchdog.child-selected-target-command-copy-packet.v1"
+    assert blocked_copy_packet["state"] == "blocked"
+    assert blocked_copy_packet["acknowledgement_ok"] is False
+    assert blocked_copy_packet["command_copy_text"] is None
+    assert "operator acknowledgement is required before child command copy text is shown" in blocked_copy_packet[
+        "blocked_reasons"
+    ]
+    assert ready_copy_packet["state"] == "ready_for_operator_copy"
+    assert ready_copy_packet["acknowledgement_ok"] is True
+    assert ready_copy_packet["command_copy_text"].startswith("reviews child-selected-target-execution-checklist")
+    assert ready_copy_packet["executable_live_command"] is None
+    assert ready_copy_packet["selected_target_created"] is False
+    assert ready_copy_packet["writes_attempted"] == 0
+    assert ready_copy_packet["network_calls_made"] == 0
+    assert ready_copy_packet["acknowledgement_redacted"]["raw_acknowledgement_stored"] is False
     assert any(artifact["kind"] == "child_selected_target_response_validation" for artifact in artifacts)
     assert any(artifact["kind"] == "child_selected_target_execution_checklist" for artifact in artifacts)
+    assert any(artifact["kind"] == "child_selected_target_command_copy_packet" for artifact in artifacts)
     assert any(event["event_type"] == "child_selected_target_response_validated" for event in events)
     assert any(event["event_type"] == "child_selected_target_execution_checklist_created" for event in events)
+    assert any(event["event_type"] == "child_selected_target_command_copy_packet_created" for event in events)

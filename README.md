@@ -160,7 +160,11 @@ Use `reviews child-validate-selected-target-response <candidate-id> --run-id <ru
 to validate a copied child handoff response, then
 `reviews child-selected-target-execution-checklist <candidate-id> --run-id <run-id> --response <operator-response> --json`
 to create a no-live checklist that still blocks selected-target creation and
-live sink execution.
+live sink execution. Use
+`reviews child-selected-target-command-copy-packet <candidate-id> --run-id <run-id> --response <operator-response> --acknowledgement <operator-acknowledgement> --json`
+to show the next offline command only after the acknowledgement names the run,
+child candidate, sink, and operator. It never returns a live GWS/Odollo/Odoo
+command.
 
 `drills review-routing` creates a synthetic fixture run and proves review approval,
 review bundle/workbook export, duplicate lookup planning, dry-run sink routing, and

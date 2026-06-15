@@ -63,6 +63,11 @@ def create_app(config_path: Path | None = None):
         run_id: str
         response: str
 
+    class ChildSelectedTargetCommandCopyRequest(BaseModel):
+        run_id: str
+        response: str
+        acknowledgement: str = ""
+
     class ReviewDecisionsRequest(BaseModel):
         reviewer: str = "operator"
         decisions: list[dict[str, object]] = Field(default_factory=list)
@@ -630,6 +635,18 @@ def create_app(config_path: Path | None = None):
             run_id=request.run_id,
             candidate_id=candidate_id,
             response=request.response,
+        )
+
+    @app.post("/reviews/children/{candidate_id}/selected-target-command-copy-packet")
+    def create_child_selected_target_command_copy_packet(
+        candidate_id: str,
+        request: ChildSelectedTargetCommandCopyRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().child_selected_target_command_copy_packet(
+            run_id=request.run_id,
+            candidate_id=candidate_id,
+            response=request.response,
+            acknowledgement=request.acknowledgement,
         )
 
     @app.post("/runs/{run_id}/review-bundle")

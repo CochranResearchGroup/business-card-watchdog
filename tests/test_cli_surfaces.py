@@ -624,6 +624,27 @@ def test_cli_child_selected_target_response_validation_and_checklist(
     ) == 0
     checklist = json.loads(capsys.readouterr().out)
 
+    assert main(
+        [
+            "--config",
+            str(config_path),
+            "reviews",
+            "child-selected-target-command-copy-packet",
+            candidate_id,
+            "--run-id",
+            run_dir.name,
+            "--response",
+            response,
+            "--acknowledgement",
+            (
+                f"I acknowledge run_id={run_dir.name} candidate_id={candidate_id} "
+                "sink=google_contacts operator=operator ready to copy"
+            ),
+            "--json",
+        ]
+    ) == 0
+    command_copy = json.loads(capsys.readouterr().out)
+
     assert validation["state"] == "ready_for_no_live_child_checklist"
     assert validation["writes_attempted"] == 0
     assert validation["network_calls_made"] == 0
@@ -632,6 +653,13 @@ def test_cli_child_selected_target_response_validation_and_checklist(
     assert checklist["executable_live_command"] is None
     assert checklist["writes_attempted"] == 0
     assert checklist["network_calls_made"] == 0
+    assert command_copy["schema"] == "business-card-watchdog.child-selected-target-command-copy-packet.v1"
+    assert command_copy["state"] == "ready_for_operator_copy"
+    assert command_copy["acknowledgement_ok"] is True
+    assert command_copy["command_copy_text"].startswith("reviews child-selected-target-execution-checklist")
+    assert command_copy["executable_live_command"] is None
+    assert command_copy["writes_attempted"] == 0
+    assert command_copy["network_calls_made"] == 0
 
 
 def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) -> None:

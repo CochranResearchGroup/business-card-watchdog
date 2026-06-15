@@ -5022,3 +5022,31 @@ Validation:
 Safety:
 
 - This created local child response validation and no-live execution checklist artifacts only. It did not create live selected targets, process private SyncThing images, execute live lookup, route to live sinks, enrich, write contacts, execute command-copy text, run public-web search, call paid APIs, or call GWS/Odollo/Odoo.
+
+## Turn 230 | 2026-06-15
+
+Executed Plan 0024 with Slice 0024-A.
+
+Implemented:
+
+- Added `BusinessCardService.child_selected_target_command_copy_packet`.
+- Added CLI command `reviews child-selected-target-command-copy-packet`.
+- Added API route `POST /reviews/children/{candidate_id}/selected-target-command-copy-packet`.
+- Added MCP tool `business_card_watchdog_child_selected_target_command_copy_packet`.
+- Added synthetic multi-card coverage for service, CLI, API, and MCP child command-copy acknowledgement behavior.
+- Updated README and roadmap documentation for child no-live command-copy packets.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_review_surface.py::test_child_selected_target_response_validation_and_checklist tests/test_cli_surfaces.py::test_cli_child_selected_target_response_validation_and_checklist tests/test_api.py::test_api_child_selected_target_response_validation_and_checklist tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_child_selected_target_response_validation_and_checklist -q` passed with 5 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/api.py src/business_card_watchdog/mcp.py tests/test_review_surface.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 267 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `uv build --out-dir dist` built source and wheel distributions.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This created local child command-copy packet artifacts only. It did not create live selected targets, return executable live commands, process private SyncThing images, execute live lookup, route to live sinks, enrich, write contacts, run public-web search, call paid APIs, or call GWS/Odollo/Odoo.

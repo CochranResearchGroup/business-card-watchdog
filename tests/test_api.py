@@ -1326,6 +1326,17 @@ def test_api_child_selected_target_response_validation_and_checklist(tmp_path: P
         f"/reviews/children/{candidate_id}/selected-target-execution-checklist",
         json={"run_id": run_dir.name, "response": response},
     ).json()
+    command_copy = client.post(
+        f"/reviews/children/{candidate_id}/selected-target-command-copy-packet",
+        json={
+            "run_id": run_dir.name,
+            "response": response,
+            "acknowledgement": (
+                f"I acknowledge run_id={run_dir.name} candidate_id={candidate_id} "
+                "sink=google_contacts operator=operator ready to copy"
+            ),
+        },
+    ).json()
 
     assert validation["schema"] == "business-card-watchdog.child-selected-target-response-validation.v1"
     assert validation["state"] == "ready_for_no_live_child_checklist"
@@ -1337,6 +1348,13 @@ def test_api_child_selected_target_response_validation_and_checklist(tmp_path: P
     assert checklist["executable_live_command"] is None
     assert checklist["writes_attempted"] == 0
     assert checklist["network_calls_made"] == 0
+    assert command_copy["schema"] == "business-card-watchdog.child-selected-target-command-copy-packet.v1"
+    assert command_copy["state"] == "ready_for_operator_copy"
+    assert command_copy["acknowledgement_ok"] is True
+    assert command_copy["command_copy_text"].startswith("reviews child-selected-target-execution-checklist")
+    assert command_copy["executable_live_command"] is None
+    assert command_copy["writes_attempted"] == 0
+    assert command_copy["network_calls_made"] == 0
 
 
 def test_api_multi_card_preclassification_drill_records_candidate_boxes(tmp_path: Path) -> None:

@@ -3528,6 +3528,133 @@ class BusinessCardService:
         checklist["checklist_path"] = str(checklist_path)
         return checklist
 
+    def child_selected_target_command_copy_packet(
+        self,
+        *,
+        run_id: str,
+        candidate_id: str,
+        response: str,
+        acknowledgement: str = "",
+    ) -> dict[str, Any]:
+        checklist = self.child_selected_target_execution_checklist(
+            run_id=run_id,
+            candidate_id=candidate_id,
+            response=response,
+        )
+        entry = self._child_route_prep_entry(run_id=run_id, candidate_id=candidate_id)
+        prep_dir = self._child_route_prep_dir(entry)
+        blocked_reasons = list(checklist.get("blocked_reasons") or [])
+        normalized_acknowledgement = " ".join(str(acknowledgement or "").lower().split())
+        acknowledgement_terms = {
+            "run_id": str(checklist.get("run_id") or ""),
+            "candidate_id": str(checklist.get("candidate_id") or ""),
+            "sink": str(checklist.get("sink") or ""),
+            "operator": str(checklist.get("operator") or ""),
+        }
+        missing_acknowledgement_terms = [
+            f"{key}={value}"
+            for key, value in acknowledgement_terms.items()
+            if value and value.lower() not in normalized_acknowledgement
+        ]
+        acknowledgement_verb_ok = any(
+            verb in normalized_acknowledgement
+            for verb in ["acknowledge", "acknowledged", "approve", "approved", "copy", "ready"]
+        )
+        if not normalized_acknowledgement:
+            blocked_reasons.append("operator acknowledgement is required before child command copy text is shown")
+        if missing_acknowledgement_terms:
+            blocked_reasons.append(
+                "operator acknowledgement must name "
+                + ", ".join(missing_acknowledgement_terms)
+                + " before child command copy text is shown"
+            )
+        if not acknowledgement_verb_ok:
+            blocked_reasons.append(
+                "operator acknowledgement must include one of acknowledge, approved, copy, or ready"
+            )
+        checklist_ready = checklist.get("state") == "ready_for_operator_review"
+        acknowledgement_ok = bool(
+            normalized_acknowledgement
+            and not missing_acknowledgement_terms
+            and acknowledgement_verb_ok
+        )
+        offline_command = (
+            f"reviews child-selected-target-execution-checklist {shlex.quote(candidate_id)} "
+            f"--run-id {run_id} --response <operator-response> --json"
+        )
+        command_copy_text = offline_command if checklist_ready and acknowledgement_ok and not blocked_reasons else None
+        state = "ready_for_operator_copy" if command_copy_text else "blocked"
+        packet = {
+            "schema": "business-card-watchdog.child-selected-target-command-copy-packet.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_id,
+            "job_id": entry.get("job_id"),
+            "candidate_id": candidate_id,
+            "work_item_id": entry.get("work_item_id"),
+            "sink": checklist.get("sink"),
+            "operator": checklist.get("operator"),
+            "scope": checklist.get("scope"),
+            "acknowledgement_required": True,
+            "acknowledgement_ok": acknowledgement_ok,
+            "acknowledgement_instruction": (
+                "Acknowledge the exact run_id, candidate_id, sink, and operator plus an approval/copy verb."
+            ),
+            "acknowledgement_redacted": {
+                "raw_acknowledgement_stored": False,
+                "sha256": hashlib.sha256(acknowledgement.encode("utf-8")).hexdigest() if acknowledgement else None,
+                "required_terms": acknowledgement_terms,
+                "missing_terms": missing_acknowledgement_terms,
+            },
+            "checklist_state": checklist.get("state"),
+            "checklist": checklist,
+            "command_copy_text": command_copy_text,
+            "offline_command_copy_text": command_copy_text,
+            "executable_live_command": None,
+            "selected_target_created": False,
+            "creates_selected_live_target": False,
+            "blocked_reasons": blocked_reasons,
+            "commands": {
+                "validate_response": (
+                    f"reviews child-validate-selected-target-response {shlex.quote(candidate_id)} "
+                    f"--run-id {run_id} --response <operator-response> --json"
+                ),
+                "execution_checklist": offline_command,
+                "refresh_handoff": (
+                    f"reviews child-selected-target-handoff {shlex.quote(candidate_id)} "
+                    f"--run-id {run_id} --sink {shlex.quote(str(checklist.get('sink') or ''))} --json"
+                ),
+            },
+            "explicit_stop_conditions": [
+                "This packet only returns offline command text for operator copy; it never executes the command.",
+                "This packet never returns an executable live command.",
+                "Do not create selected_live_target.json from this child command-copy packet.",
+                "Do not run live GWS/Odollo/Odoo lookup, write, or readback from this packet.",
+                "Do not process private SyncThing images, run public-web search, or call paid enrichment from this packet.",
+            ],
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+        packet_path = prep_dir / "child_selected_target_command_copy_packet.json"
+        packet_path.write_text(json.dumps(packet, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        parent_job_id = str(entry.get("job_id") or "__run__")
+        ledger.record_artifact(job_id=parent_job_id, kind="child_selected_target_command_copy_packet", path=packet_path)
+        ledger.record_event(
+            "child_selected_target_command_copy_packet_created",
+            {
+                "run_id": run_id,
+                "job_id": entry.get("job_id"),
+                "candidate_id": candidate_id,
+                "state": state,
+                "packet_path": str(packet_path),
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        packet["packet_path"] = str(packet_path)
+        return packet
+
     def _child_route_prep_entry(self, *, run_id: str, candidate_id: str) -> dict[str, Any]:
         entry = next(
             (

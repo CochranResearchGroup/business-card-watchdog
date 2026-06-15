@@ -581,6 +581,20 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_child_selected_target_command_copy_packet",
+                "description": "Return child offline command-copy text only after the no-live checklist is ready and acknowledgement matches the child context.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "candidate_id": {"type": "string"},
+                        "response": {"type": "string"},
+                        "acknowledgement": {"type": "string", "default": ""},
+                    },
+                    "required": ["run_id", "candidate_id", "response"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_review_bundle",
                 "description": "Create a run-level batch review bundle with inline review-relevant artifact payloads.",
                 "input_schema": {
@@ -1380,6 +1394,13 @@ def call_tool(
             run_id=str(args["run_id"]),
             candidate_id=str(args["candidate_id"]),
             response=str(args["response"]),
+        )
+    if tool_name == "business_card_watchdog_child_selected_target_command_copy_packet":
+        return service.child_selected_target_command_copy_packet(
+            run_id=str(args["run_id"]),
+            candidate_id=str(args["candidate_id"]),
+            response=str(args["response"]),
+            acknowledgement=str(args.get("acknowledgement") or ""),
         )
     if tool_name == "business_card_watchdog_review_bundle":
         return service.review_bundle(
