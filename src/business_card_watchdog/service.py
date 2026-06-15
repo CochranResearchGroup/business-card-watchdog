@@ -360,6 +360,7 @@ class BusinessCardService:
                 "service_recovery": "service recovery --json",
                 "watch_status": "watch-status --json",
                 "watch_backlog_preflight": "watch-backlog-preflight --json",
+                "watch_dry_run_selection_handoff": "watch-dry-run-selection-handoff --json",
                 "watch_dry_run": "watch-dry-run --json",
                 "runs_list": "runs list --json",
                 "mcp_manifest": "mcp-manifest",
@@ -12244,7 +12245,7 @@ class BusinessCardService:
             recommended_next_action = "wait_for_settle_then_recheck"
         elif backlog_count:
             state = "ready_for_operator_selected_dry_run"
-            recommended_next_action = "operator_explicit_watch_dry_run"
+            recommended_next_action = "prepare_watch_dry_run_selection_handoff"
         elif not input_summaries:
             state = "not_configured"
             recommended_next_action = "configure_watch_inputs"
@@ -12279,6 +12280,7 @@ class BusinessCardService:
             "commands": {
                 "watch_status": "watch-status --json",
                 "watch_backlog_preflight": "watch-backlog-preflight --json",
+                "watch_dry_run_selection_handoff": "watch-dry-run-selection-handoff --json",
                 "watch_dry_run": "watch-dry-run --json",
                 "watch_once_dry_run": "watch --once --dry-run",
                 "runtime_readiness": "runtime-readiness --json",
@@ -12301,6 +12303,212 @@ class BusinessCardService:
             payload["preflight_path"] = str(preflight_path)
             preflight_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         return payload
+
+    def watch_dry_run_selection_handoff(self, *, write: bool = True) -> dict[str, Any]:
+        ensure_runtime_dirs(self.config)
+        preflight = self.watch_backlog_preflight(write=False)
+        input_rows = [row for row in list(preflight.get("inputs") or []) if isinstance(row, dict)]
+        ready = preflight.get("state") == "ready_for_operator_selected_dry_run" and bool(input_rows)
+        handoff_path = self.config.data_dir / "watch_dry_run_selection_handoff.json"
+        entries: list[dict[str, Any]] = []
+        for row in input_rows:
+            input_ref = str(row.get("input_ref") or "")
+            template = (
+                f"input_ref={input_ref} operator=<operator> mode=dry_run "
+                "safety_confirmation=<operator-confirms-private-source-dry-run>"
+            )
+            entries.append(
+                {
+                    "schema": "business-card-watchdog.watch-dry-run-selection-entry.v1",
+                    "state": "awaiting_operator_response" if ready else "blocked",
+                    "input_ref": input_ref,
+                    "configured_ref_kind": row.get("configured_ref_kind"),
+                    "configured_ref_display": row.get("configured_ref_display"),
+                    "operator_response_template": template,
+                    "copyable_approval_fields": {
+                        "input_ref": input_ref,
+                        "operator": "<operator>",
+                        "mode": "dry_run",
+                        "safety_confirmation": "<operator-confirms-private-source-dry-run>",
+                    },
+                    "commands": {
+                        "validate_operator_response": (
+                            "watch-dry-run-validate-response --response <operator-response> --json"
+                        ),
+                        "validate_operator_response_prefilled": _watch_dry_run_response_validation_command(template),
+                        "command_copy_packet": (
+                            "watch-dry-run-command-copy-packet --response <operator-response> "
+                            "--acknowledgement <operator-acknowledgement> --json"
+                        ),
+                    },
+                }
+            )
+        state = "awaiting_operator_response" if ready else str(preflight.get("state") or "blocked")
+        payload: dict[str, Any] = {
+            "schema": "business-card-watchdog.watch-dry-run-selection-handoff.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "recommended_next_step": "validate_operator_response" if ready else preflight.get("recommended_next_action"),
+            "preflight": preflight,
+            "entry_count": len(entries),
+            "entries": entries,
+            "operator_response_contract": {
+                "schema": "business-card-watchdog.watch-dry-run-operator-response-contract.v1",
+                "required_fields": ["input_ref", "operator", "mode", "safety_confirmation"],
+                "allowed_modes": ["dry_run"],
+                "format": (
+                    "input_ref=<input_ref> operator=<operator> mode=dry_run "
+                    "safety_confirmation=<operator-confirms-private-source-dry-run>"
+                ),
+                "requires_human_safety_confirmation": True,
+                "creates_runtime_artifact": False,
+                "processes_watched_files": False,
+            },
+            "commands": {
+                "watch_backlog_preflight": "watch-backlog-preflight --no-write --json",
+                "watch_dry_run_selection_handoff": "watch-dry-run-selection-handoff --json",
+                "validate_operator_response": "watch-dry-run-validate-response --response <operator-response> --json",
+                "command_copy_packet": (
+                    "watch-dry-run-command-copy-packet --response <operator-response> "
+                    "--acknowledgement <operator-acknowledgement> --json"
+                ),
+            },
+            "handoff_path": str(handoff_path) if write else None,
+            "handoff_written": False,
+            "private_paths_redacted": True,
+            "private_filenames_redacted": True,
+            "private_sources_used": False,
+            "files_processed": 0,
+            "ocr_attempted": 0,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "explicit_stop_conditions": [
+                "This handoff does not process watched files.",
+                "Do not run watch --once --dry-run until a human validates the operator response and copies the command.",
+                "Do not OCR/process private SyncThing images from this handoff.",
+                "Do not run public-web search, paid enrichment, or live sink operations from watch dry-run selection handoff.",
+            ],
+        }
+        if write:
+            payload["handoff_written"] = True
+            handoff_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        return payload
+
+    def validate_watch_dry_run_operator_response(self, *, response: str) -> dict[str, Any]:
+        handoff = self.watch_dry_run_selection_handoff(write=False)
+        fields = _parse_operator_response_fields(response)
+        entries = [row for row in list(handoff.get("entries") or []) if isinstance(row, dict)]
+        entries_by_ref = {str(row.get("input_ref") or ""): row for row in entries}
+        input_ref = str(fields.get("input_ref") or "")
+        mode = str(fields.get("mode") or "")
+        operator = str(fields.get("operator") or "")
+        safety_confirmation = str(fields.get("safety_confirmation") or "")
+        missing_fields = [
+            field
+            for field, value in [
+                ("input_ref", input_ref),
+                ("operator", operator),
+                ("mode", mode),
+                ("safety_confirmation", safety_confirmation),
+            ]
+            if not value.strip()
+        ]
+        mismatches: list[str] = []
+        if input_ref and input_ref not in entries_by_ref:
+            mismatches.append(f"input_ref is not available in current handoff: {input_ref}")
+        if mode and mode != "dry_run":
+            mismatches.append("mode must be dry_run")
+        confirmation_error = _watch_dry_run_safety_confirmation_error(safety_confirmation)
+        if confirmation_error:
+            mismatches.append(confirmation_error)
+        if handoff.get("state") != "awaiting_operator_response":
+            mismatches.append(f"watch dry-run handoff is not ready: {handoff.get('state')}")
+        matching_entry = entries_by_ref.get(input_ref) if input_ref else None
+        state = "ready_for_command_copy" if not missing_fields and not mismatches else "blocked"
+        return {
+            "schema": "business-card-watchdog.watch-dry-run-operator-response-validation.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "next_validation_step": "command_copy_packet" if state == "ready_for_command_copy" else "fix_operator_response",
+            "missing_fields": missing_fields,
+            "mismatches": mismatches,
+            "matching_entry": matching_entry,
+            "operator_response_redacted": {
+                "raw_response_stored": False,
+                "fields": {
+                    "input_ref": input_ref or None,
+                    "operator": operator or None,
+                    "mode": mode or None,
+                },
+                "safety_confirmation_present": bool(safety_confirmation.strip()),
+            },
+            "commands": {
+                "handoff": "watch-dry-run-selection-handoff --no-write --json",
+                "command_copy_packet": (
+                    "watch-dry-run-command-copy-packet --response <operator-response> "
+                    "--acknowledgement <operator-acknowledgement> --json"
+                ),
+            },
+            "creates_runtime_artifact": False,
+            "processes_watched_files": False,
+            "private_paths_redacted": True,
+            "private_filenames_redacted": True,
+            "private_sources_used": False,
+            "files_processed": 0,
+            "ocr_attempted": 0,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "explicit_stop_conditions": [
+                "Validation does not process watched files.",
+                "Validation does not store the raw operator response or safety confirmation.",
+                "Do not run watch --once --dry-run until command-copy packet is ready.",
+            ],
+        }
+
+    def watch_dry_run_command_copy_packet(
+        self,
+        *,
+        response: str,
+        acknowledgement: str = "",
+    ) -> dict[str, Any]:
+        validation = self.validate_watch_dry_run_operator_response(response=response)
+        required_acknowledgement = "I understand this will dry-run the configured private watch backlog"
+        acknowledgement_ok = acknowledgement.strip() == required_acknowledgement
+        ready = validation.get("state") == "ready_for_command_copy" and acknowledgement_ok
+        command_copy_text = "watch --once --dry-run" if ready else None
+        blocked_reasons: list[str] = []
+        if validation.get("state") != "ready_for_command_copy":
+            blocked_reasons.extend(str(item) for item in list(validation.get("missing_fields") or []))
+            blocked_reasons.extend(str(item) for item in list(validation.get("mismatches") or []))
+        if not acknowledgement_ok:
+            blocked_reasons.append("acknowledgement does not match required text")
+        return {
+            "schema": "business-card-watchdog.watch-dry-run-command-copy-packet.v1",
+            "generated_at": utc_now(),
+            "state": "ready_for_operator_copy" if ready else "blocked",
+            "validation_state": validation.get("state"),
+            "acknowledgement_required": True,
+            "required_acknowledgement": required_acknowledgement,
+            "acknowledgement_ok": acknowledgement_ok,
+            "command_copy_text": command_copy_text,
+            "executable_command": command_copy_text,
+            "blocked_reasons": blocked_reasons,
+            "validation": validation,
+            "processes_watched_files": False,
+            "copying_command_would_process_watched_files": bool(command_copy_text),
+            "private_paths_redacted": True,
+            "private_filenames_redacted": True,
+            "private_sources_used": False,
+            "files_processed": 0,
+            "ocr_attempted": 0,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "explicit_stop_conditions": [
+                "This packet does not execute the command.",
+                "Only copy command_copy_text after confirming dry-run scope and private-source intent.",
+                "Do not add --no-dry-run or live sink flags to the copied command.",
+            ],
+        }
 
     def watch_dry_run_harness(self) -> dict[str, Any]:
         ensure_runtime_dirs(self.config)
@@ -13934,6 +14142,18 @@ def _operator_response_validation_command(run_id: str, response: str) -> str:
     )
 
 
+def _watch_dry_run_response_validation_command(response: str) -> str:
+    return f"watch-dry-run-validate-response --response {shlex.quote(response)} --json"
+
+
+def _watch_dry_run_safety_confirmation_error(safety_confirmation: str) -> str:
+    normalized = safety_confirmation.strip().lower()
+    required_terms = {"private", "dry", "run"}
+    if len(normalized) < 16 or not all(term in normalized for term in required_terms):
+        return "safety_confirmation must explicitly mention private dry run intent"
+    return ""
+
+
 def _live_selection_packet_commands(
     *,
     job_id: str,
@@ -14435,19 +14655,19 @@ def _watch_backlog_preflight_actions(
     state: str,
     recommended_next_action: str,
 ) -> list[dict[str, Any]]:
-    if recommended_next_action == "operator_explicit_watch_dry_run":
+    if recommended_next_action == "prepare_watch_dry_run_selection_handoff":
         return [
             {
-                "action": "operator_explicit_watch_dry_run",
-                "command": "watch-dry-run --json",
-                "reason": "backlog is present and settled; run only after the operator explicitly selects this private-source dry run",
-                "safe_to_auto_continue": False,
-                "requires_explicit_operator_action": True,
+                "action": "inspect_watch_dry_run_selection_handoff",
+                "command": "watch-dry-run-selection-handoff --json",
+                "reason": "prepare the operator-response and command-copy packet before any private-source dry run",
+                "safe_to_auto_continue": True,
+                "requires_explicit_operator_action": False,
             },
             {
-                "action": "operator_explicit_watch_once_dry_run",
+                "action": "operator_explicit_watch_dry_run",
                 "command": "watch --once --dry-run",
-                "reason": "process configured watch backlog in dry-run mode only after explicit operator selection",
+                "reason": "backlog is present and settled; run only after operator response validation and command-copy acknowledgement",
                 "safe_to_auto_continue": False,
                 "requires_explicit_operator_action": True,
             },

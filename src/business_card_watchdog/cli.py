@@ -39,6 +39,7 @@ def _render_status_text(payload: dict[str, object]) -> str:
         ("Service recovery", "service_recovery"),
         ("Watch status", "watch_status"),
         ("Watch backlog preflight", "watch_backlog_preflight"),
+        ("Watch dry-run selection handoff", "watch_dry_run_selection_handoff"),
         ("Watch dry run", "watch_dry_run"),
         ("Runs list", "runs_list"),
         ("MCP manifest", "mcp_manifest"),
@@ -157,6 +158,80 @@ def _render_watch_backlog_preflight_text(payload: dict[str, object]) -> str:
     lines.append(f"Stop conditions: {len(stop_rows)}")
     for condition in stop_rows:
         lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
+def _render_watch_dry_run_selection_handoff_text(payload: dict[str, object]) -> str:
+    commands = dict(payload.get("commands") or {})
+    entries = payload.get("entries") or []
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    lines = [
+        f"Watch dry-run selection handoff: {payload.get('state')}",
+        f"Entries: {payload.get('entry_count', 0)}",
+        f"Recommended next step: {payload.get('recommended_next_step')}",
+        f"Handoff written: {payload.get('handoff_written', False)}",
+    ]
+    if payload.get("handoff_path"):
+        lines.append(f"Handoff path: {payload.get('handoff_path')}")
+    entry_rows = entries if isinstance(entries, list) else []
+    for entry in entry_rows:
+        if isinstance(entry, dict):
+            lines.append(
+                " - "
+                f"{entry.get('input_ref')}: {entry.get('state')} "
+                f"{entry.get('configured_ref_display')}"
+            )
+            if entry.get("operator_response_template"):
+                lines.append(f"   Operator response: {entry.get('operator_response_template')}")
+    lines.append("Commands:")
+    for label, key in [
+        ("Watch backlog preflight", "watch_backlog_preflight"),
+        ("Validate operator response", "validate_operator_response"),
+        ("Command copy packet", "command_copy_packet"),
+    ]:
+        command = commands.get(key)
+        if command:
+            lines.append(f" - {label}: {command}")
+    stop_rows = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stop_rows)}")
+    for condition in stop_rows:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
+def _render_watch_dry_run_operator_response_validation_text(payload: dict[str, object]) -> str:
+    response = dict(payload.get("operator_response_redacted") or {})
+    fields = dict(response.get("fields") or {})
+    lines = [
+        f"Watch dry-run response validation: {payload.get('state')}",
+        f"Next validation step: {payload.get('next_validation_step')}",
+        f"Input ref: {fields.get('input_ref') or 'none'}",
+        f"Operator: {fields.get('operator') or 'none'}",
+        f"Mode: {fields.get('mode') or 'none'}",
+        f"Safety confirmation present: {response.get('safety_confirmation_present', False)}",
+        f"Missing fields: {len(payload.get('missing_fields') or [])}",
+        f"Mismatches: {len(payload.get('mismatches') or [])}",
+        f"Observed: files={payload.get('files_processed', 0)} ocr={payload.get('ocr_attempted', 0)} "
+        f"writes={payload.get('writes_attempted', 0)} network={payload.get('network_calls_made', 0)}",
+    ]
+    for item in payload.get("missing_fields") or []:
+        lines.append(f" - missing: {item}")
+    for item in payload.get("mismatches") or []:
+        lines.append(f" - mismatch: {item}")
+    return "\n".join(lines) + "\n"
+
+
+def _render_watch_dry_run_command_copy_packet_text(payload: dict[str, object]) -> str:
+    lines = [
+        f"Watch dry-run command copy packet: {payload.get('state')}",
+        f"Validation state: {payload.get('validation_state')}",
+        f"Acknowledgement ok: {payload.get('acknowledgement_ok', False)}",
+        f"Command copy text: {payload.get('command_copy_text') or 'none'}",
+        f"Observed: files={payload.get('files_processed', 0)} ocr={payload.get('ocr_attempted', 0)} "
+        f"writes={payload.get('writes_attempted', 0)} network={payload.get('network_calls_made', 0)}",
+    ]
+    for reason in payload.get("blocked_reasons") or []:
+        lines.append(f" - blocked: {reason}")
     return "\n".join(lines) + "\n"
 
 
@@ -2611,6 +2686,19 @@ def build_parser() -> argparse.ArgumentParser:
     watch_backlog_preflight.add_argument("--no-write", action="store_true")
     watch_backlog_preflight.add_argument("--json", action="store_true")
 
+    watch_dry_run_selection_handoff = sub.add_parser("watch-dry-run-selection-handoff")
+    watch_dry_run_selection_handoff.add_argument("--no-write", action="store_true")
+    watch_dry_run_selection_handoff.add_argument("--json", action="store_true")
+
+    watch_dry_run_validate_response = sub.add_parser("watch-dry-run-validate-response")
+    watch_dry_run_validate_response.add_argument("--response", required=True)
+    watch_dry_run_validate_response.add_argument("--json", action="store_true")
+
+    watch_dry_run_command_copy_packet = sub.add_parser("watch-dry-run-command-copy-packet")
+    watch_dry_run_command_copy_packet.add_argument("--response", required=True)
+    watch_dry_run_command_copy_packet.add_argument("--acknowledgement", default="")
+    watch_dry_run_command_copy_packet.add_argument("--json", action="store_true")
+
     watch_dry_run = sub.add_parser("watch-dry-run")
     watch_dry_run.add_argument("--json", action="store_true")
 
@@ -3389,6 +3477,31 @@ def main(argv: list[str] | None = None) -> int:
         payload = service.watch_backlog_preflight(write=not args.no_write)
         print(json.dumps(payload, indent=2) if args.json else _render_watch_backlog_preflight_text(payload), end="")
         return 0 if payload["state"] != "blocked" else 2
+
+    if args.command == "watch-dry-run-selection-handoff":
+        payload = service.watch_dry_run_selection_handoff(write=not args.no_write)
+        output = json.dumps(payload, indent=2) if args.json else _render_watch_dry_run_selection_handoff_text(payload)
+        print(output, end="")
+        return 0 if payload["state"] == "awaiting_operator_response" else 2
+
+    if args.command == "watch-dry-run-validate-response":
+        payload = service.validate_watch_dry_run_operator_response(response=args.response)
+        output = (
+            json.dumps(payload, indent=2)
+            if args.json
+            else _render_watch_dry_run_operator_response_validation_text(payload)
+        )
+        print(output, end="")
+        return 0 if payload["state"] == "ready_for_command_copy" else 2
+
+    if args.command == "watch-dry-run-command-copy-packet":
+        payload = service.watch_dry_run_command_copy_packet(
+            response=args.response,
+            acknowledgement=args.acknowledgement,
+        )
+        output = json.dumps(payload, indent=2) if args.json else _render_watch_dry_run_command_copy_packet_text(payload)
+        print(output, end="")
+        return 0 if payload["state"] == "ready_for_operator_copy" else 2
 
     if args.command == "watch-dry-run":
         payload = service.watch_dry_run_harness()

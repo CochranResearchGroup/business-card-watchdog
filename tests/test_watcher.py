@@ -255,6 +255,59 @@ def test_watch_backlog_preflight_cli_outputs_redacted_counts(
     assert "{" not in text
 
 
+def test_watch_dry_run_selection_cli_validates_and_builds_command_copy(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source = tmp_path / "Private Phone Camera"
+    write_synthetic_image(source / "private-card-photo.png")
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    config_path.write_text(
+        f'data_dir = "{data_dir}"\n[watch]\ninputs = ["{source}"]\nsettle_seconds = 0.0\n',
+        encoding="utf-8",
+    )
+    response = (
+        "input_ref=input_0 operator=tester mode=dry_run "
+        "safety_confirmation='private dry run approved for this configured source'"
+    )
+
+    assert main(["--config", str(config_path), "watch-dry-run-selection-handoff", "--json"]) == 0
+    handoff = json.loads(capsys.readouterr().out)
+    assert handoff["state"] == "awaiting_operator_response"
+    assert handoff["entries"][0]["commands"]["validate_operator_response"].startswith(
+        "watch-dry-run-validate-response"
+    )
+    assert str(source) not in json.dumps(handoff, sort_keys=True)
+
+    assert main(["--config", str(config_path), "watch-dry-run-validate-response", "--response", response]) == 0
+    validation_text = capsys.readouterr().out
+    assert "Watch dry-run response validation: ready_for_command_copy" in validation_text
+    assert "Safety confirmation present: True" in validation_text
+    assert "private dry run approved" not in validation_text
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "watch-dry-run-command-copy-packet",
+                "--response",
+                response,
+                "--acknowledgement",
+                "I understand this will dry-run the configured private watch backlog",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    packet = json.loads(capsys.readouterr().out)
+    assert packet["state"] == "ready_for_operator_copy"
+    assert packet["command_copy_text"] == "watch --once --dry-run"
+    assert packet["files_processed"] == 0
+    assert "private-card-photo.png" not in json.dumps(packet, sort_keys=True)
+
+
 def test_main_status_includes_watch_status(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     config_path = tmp_path / "config.toml"
     config_path.write_text("[watch]\ninputs = []\n", encoding="utf-8")

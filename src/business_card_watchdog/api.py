@@ -292,6 +292,13 @@ def create_app(config_path: Path | None = None):
     class WatchBacklogPreflightRequest(BaseModel):
         write: bool = True
 
+    class WatchDryRunSelectionHandoffRequest(BaseModel):
+        write: bool = True
+
+    class WatchDryRunOperatorResponseRequest(BaseModel):
+        response: str
+        acknowledgement: str = ""
+
     app = FastAPI(title="Business Card Watchdog")
 
     def service() -> BusinessCardService:
@@ -1170,6 +1177,27 @@ def create_app(config_path: Path | None = None):
         request: WatchBacklogPreflightRequest = Body(default=WatchBacklogPreflightRequest()),
     ) -> dict[str, object]:
         return service().watch_backlog_preflight(write=request.write)
+
+    @app.post("/watch/dry-run-selection-handoff")
+    def watch_dry_run_selection_handoff(
+        request: WatchDryRunSelectionHandoffRequest = Body(default=WatchDryRunSelectionHandoffRequest()),
+    ) -> dict[str, object]:
+        return service().watch_dry_run_selection_handoff(write=request.write)
+
+    @app.post("/watch/dry-run-validate-response")
+    def watch_dry_run_validate_response(
+        request: WatchDryRunOperatorResponseRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().validate_watch_dry_run_operator_response(response=request.response)
+
+    @app.post("/watch/dry-run-command-copy-packet")
+    def watch_dry_run_command_copy_packet(
+        request: WatchDryRunOperatorResponseRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().watch_dry_run_command_copy_packet(
+            response=request.response,
+            acknowledgement=request.acknowledgement,
+        )
 
     @app.post("/watch/dry-run")
     def watch_dry_run() -> dict[str, object]:

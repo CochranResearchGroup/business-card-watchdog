@@ -1806,6 +1806,25 @@ def test_api_enrichment_request_accepts_paid_provider_results(tmp_path: Path) ->
     assert watch_preflight["runtime_artifact_written"] is False
     assert str(source) not in serialized_preflight
     assert "private-card-photo.png" not in serialized_preflight
+    response = (
+        "input_ref=input_0 operator=api-test mode=dry_run "
+        "safety_confirmation='private dry run approved for this configured source'"
+    )
+    watch_handoff = client.post("/watch/dry-run-selection-handoff", json={"write": False}).json()
+    assert watch_handoff["schema"] == "business-card-watchdog.watch-dry-run-selection-handoff.v1"
+    assert watch_handoff["state"] == "awaiting_operator_response"
+    watch_validation = client.post("/watch/dry-run-validate-response", json={"response": response}).json()
+    assert watch_validation["state"] == "ready_for_command_copy"
+    watch_command_copy = client.post(
+        "/watch/dry-run-command-copy-packet",
+        json={
+            "response": response,
+            "acknowledgement": "I understand this will dry-run the configured private watch backlog",
+        },
+    ).json()
+    assert watch_command_copy["state"] == "ready_for_operator_copy"
+    assert watch_command_copy["command_copy_text"] == "watch --once --dry-run"
+    assert watch_command_copy["files_processed"] == 0
     watch_dry_run = client.post("/watch/dry-run").json()
     assert watch_dry_run["schema"] == "business-card-watchdog.watch-dry-run-harness.v1"
     assert watch_dry_run["state"] == "passed"

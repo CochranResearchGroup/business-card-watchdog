@@ -110,6 +110,7 @@ Inspect runs, jobs, review queue, sinks, and watcher state:
 .venv/bin/bcw sinks check --json
 .venv/bin/bcw watch-status --json
 .venv/bin/bcw watch-backlog-preflight --json
+.venv/bin/bcw watch-dry-run-selection-handoff --json
 ```
 
 Add `--json` to run, job, and review commands when consuming them from automation.
@@ -121,10 +122,12 @@ data and makes no private, enrichment, or sink calls.
 
 `watch-backlog-preflight` inspects configured watch inputs without processing
 files. It reports only aggregate backlog counts, redacted input references, a
-recommended next action, and stop conditions. If backlog is present, the next
-private-source step remains an explicit operator choice: `watch-dry-run --json`
-for the fixture proof, or `watch --once --dry-run` for the configured watched
-folder after approval.
+recommended next action, and stop conditions. If backlog is present, use
+`watch-dry-run-selection-handoff --json`, validate the returned operator
+response template with `watch-dry-run-validate-response`, and request
+`watch-dry-run-command-copy-packet` with the required acknowledgement. The packet
+returns `watch --once --dry-run` as copyable text only after validation; it does
+not execute the private-source dry run.
 
 Ordinary dry-run batch processing also writes `card_candidates.json` beside a job's
 `preclassification.json` when deterministic OpenCV boxes exist. Those records are

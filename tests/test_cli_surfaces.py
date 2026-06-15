@@ -87,6 +87,7 @@ def test_cli_status_reports_command_map_text_and_json(tmp_path: Path, capsys) ->
     assert "Operator-selected live smoke preflight: operator-selected-live-smoke-preflight --json" in text
     assert "Service recovery: service recovery --json" in text
     assert "Watch backlog preflight: watch-backlog-preflight --json" in text
+    assert "Watch dry-run selection handoff: watch-dry-run-selection-handoff --json" in text
     assert "Runs list: runs list --json" in text
     assert "Safe next actions: 6" in text
     assert "Stop conditions: 3" in text

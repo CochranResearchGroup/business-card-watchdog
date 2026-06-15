@@ -177,7 +177,7 @@ def test_service_watch_backlog_preflight_redacts_private_source_paths(tmp_path: 
 
     assert payload["schema"] == "business-card-watchdog.watch-backlog-preflight.v1"
     assert payload["state"] == "ready_for_operator_selected_dry_run"
-    assert payload["recommended_next_action"] == "operator_explicit_watch_dry_run"
+    assert payload["recommended_next_action"] == "prepare_watch_dry_run_selection_handoff"
     assert payload["counts"]["backlog"] == 1
     assert payload["counts"]["unsettled"] == 0
     assert payload["inputs"] == [
@@ -197,7 +197,10 @@ def test_service_watch_backlog_preflight_redacts_private_source_paths(tmp_path: 
     assert Path(payload["preflight_path"]).exists()
     assert str(source) not in serialized
     assert "private-card-photo.png" not in serialized
-    assert payload["safe_next_actions"][0]["requires_explicit_operator_action"] is True
+    assert payload["safe_next_actions"][0]["action"] == "inspect_watch_dry_run_selection_handoff"
+    assert payload["safe_next_actions"][0]["requires_explicit_operator_action"] is False
+    assert payload["safe_next_actions"][1]["action"] == "operator_explicit_watch_dry_run"
+    assert payload["safe_next_actions"][1]["requires_explicit_operator_action"] is True
     assert "This preflight does not process watched files." in payload["explicit_stop_conditions"][0]
 
 
@@ -218,6 +221,75 @@ def test_service_watch_backlog_preflight_can_preview_without_writing(tmp_path: P
     assert payload["runtime_artifact_written"] is False
     assert payload["preflight_path"] is None
     assert not (config.data_dir / "watch_backlog_preflight.json").exists()
+
+
+def test_service_watch_dry_run_selection_handoff_validates_response_and_command_copy(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "Private Phone Camera"
+    write_synthetic_image(source / "private-card-photo.png")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        watch=WatchConfig(inputs=[str(source)], settle_seconds=0.0),
+    )
+    service = BusinessCardService(config)
+
+    handoff = service.watch_dry_run_selection_handoff(write=True)
+    serialized_handoff = json.dumps(handoff, sort_keys=True)
+    response = (
+        "input_ref=input_0 operator=tester mode=dry_run "
+        "safety_confirmation='private dry run approved for this configured source'"
+    )
+    validation = service.validate_watch_dry_run_operator_response(response=response)
+    serialized_validation = json.dumps(validation, sort_keys=True)
+    packet = service.watch_dry_run_command_copy_packet(
+        response=response,
+        acknowledgement="I understand this will dry-run the configured private watch backlog",
+    )
+
+    assert handoff["schema"] == "business-card-watchdog.watch-dry-run-selection-handoff.v1"
+    assert handoff["state"] == "awaiting_operator_response"
+    assert handoff["entry_count"] == 1
+    assert handoff["entries"][0]["input_ref"] == "input_0"
+    assert handoff["handoff_written"] is True
+    assert Path(handoff["handoff_path"]).exists()
+    assert str(source) not in serialized_handoff
+    assert "private-card-photo.png" not in serialized_handoff
+    assert validation["schema"] == "business-card-watchdog.watch-dry-run-operator-response-validation.v1"
+    assert validation["state"] == "ready_for_command_copy"
+    assert validation["operator_response_redacted"]["raw_response_stored"] is False
+    assert validation["operator_response_redacted"]["safety_confirmation_present"] is True
+    assert "private dry run approved" not in serialized_validation
+    assert str(source) not in serialized_validation
+    assert "private-card-photo.png" not in serialized_validation
+    assert packet["schema"] == "business-card-watchdog.watch-dry-run-command-copy-packet.v1"
+    assert packet["state"] == "ready_for_operator_copy"
+    assert packet["command_copy_text"] == "watch --once --dry-run"
+    assert packet["processes_watched_files"] is False
+    assert packet["copying_command_would_process_watched_files"] is True
+    assert packet["writes_attempted"] == 0
+    assert packet["network_calls_made"] == 0
+
+
+def test_service_watch_dry_run_command_copy_blocks_without_acknowledgement(tmp_path: Path) -> None:
+    source = tmp_path / "Private Phone Camera"
+    write_synthetic_image(source / "private-card-photo.png")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        watch=WatchConfig(inputs=[str(source)], settle_seconds=0.0),
+    )
+    response = (
+        "input_ref=input_0 operator=tester mode=dry_run "
+        "safety_confirmation='private dry run approved for this configured source'"
+    )
+
+    packet = BusinessCardService(config).watch_dry_run_command_copy_packet(response=response)
+
+    assert packet["state"] == "blocked"
+    assert packet["command_copy_text"] is None
+    assert "acknowledgement does not match required text" in packet["blocked_reasons"]
 
 
 def test_service_live_target_candidates_report_blocks_unready_jobs(tmp_path: Path) -> None:

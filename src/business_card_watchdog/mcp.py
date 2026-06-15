@@ -1275,6 +1275,35 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_watch_dry_run_selection_handoff",
+                "description": "Create or preview a redacted operator-response handoff before any configured private-source watch dry run.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"write": {"type": "boolean", "default": True}},
+                },
+            },
+            {
+                "name": "business_card_watchdog_watch_dry_run_operator_response_validation",
+                "description": "Validate a watch dry-run operator response without processing watched files or storing the raw confirmation.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"response": {"type": "string"}},
+                    "required": ["response"],
+                },
+            },
+            {
+                "name": "business_card_watchdog_watch_dry_run_command_copy_packet",
+                "description": "Return the configured watch dry-run command only after response validation and acknowledgement.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "response": {"type": "string"},
+                        "acknowledgement": {"type": "string", "default": ""},
+                    },
+                    "required": ["response"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_watch_dry_run",
                 "description": "Run a fixture-backed watched-folder dry-run harness without touching configured private watch inputs.",
                 "input_schema": {"type": "object", "properties": {}},
@@ -1883,6 +1912,15 @@ def call_tool(
         return service.watch_status()
     if tool_name == "business_card_watchdog_watch_backlog_preflight":
         return service.watch_backlog_preflight(write=bool(args.get("write", True)))
+    if tool_name == "business_card_watchdog_watch_dry_run_selection_handoff":
+        return service.watch_dry_run_selection_handoff(write=bool(args.get("write", True)))
+    if tool_name == "business_card_watchdog_watch_dry_run_operator_response_validation":
+        return service.validate_watch_dry_run_operator_response(response=str(args["response"]))
+    if tool_name == "business_card_watchdog_watch_dry_run_command_copy_packet":
+        return service.watch_dry_run_command_copy_packet(
+            response=str(args["response"]),
+            acknowledgement=str(args.get("acknowledgement") or ""),
+        )
     if tool_name == "business_card_watchdog_watch_dry_run":
         return service.watch_dry_run_harness()
     if tool_name == "business_card_watchdog_doctor":
