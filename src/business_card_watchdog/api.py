@@ -41,6 +41,13 @@ def create_app(config_path: Path | None = None):
         run_id: str
         matches_by_sink: dict[str, list[dict[str, object]]] = Field(default_factory=dict)
 
+    class ChildDuplicateResolutionRequest(BaseModel):
+        run_id: str
+        reviewer: str = "operator"
+        decision: str
+        target_identity: str = ""
+        reason: str = ""
+
     class ReviewDecisionsRequest(BaseModel):
         reviewer: str = "operator"
         decisions: list[dict[str, object]] = Field(default_factory=list)
@@ -535,6 +542,30 @@ def create_app(config_path: Path | None = None):
         request: ChildRoutePrepRequest = Body(...),
     ) -> dict[str, object]:
         return service().assess_child_downstream_duplicates(
+            run_id=request.run_id,
+            candidate_id=candidate_id,
+        )
+
+    @app.post("/reviews/children/{candidate_id}/duplicate-resolution")
+    def create_child_duplicate_resolution(
+        candidate_id: str,
+        request: ChildDuplicateResolutionRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().resolve_child_duplicate(
+            run_id=request.run_id,
+            candidate_id=candidate_id,
+            reviewer=request.reviewer,
+            decision=request.decision,
+            target_identity=request.target_identity,
+            reason=request.reason,
+        )
+
+    @app.post("/reviews/children/{candidate_id}/sink-plan-gate")
+    def create_child_sink_plan_gate(
+        candidate_id: str,
+        request: ChildRoutePrepRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().child_sink_plan_gate(
             run_id=request.run_id,
             candidate_id=candidate_id,
         )

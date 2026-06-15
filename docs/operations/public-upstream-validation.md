@@ -194,3 +194,15 @@ Validation:
 - `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed; index is up to date.
+
+## 2026-06-15 Local Gate For Plan 0021
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_review_surface.py::test_child_duplicate_resolution_clears_sink_plan_gate tests/test_cli_surfaces.py::test_cli_child_duplicate_resolution_clears_gate tests/test_api.py::test_api_child_duplicate_resolution_clears_gate tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_child_duplicate_resolution_clears_gate -q` passed with 5 tests.
+- `.venv/bin/python -m pytest -q` passed with 259 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` built source and wheel distributions.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.

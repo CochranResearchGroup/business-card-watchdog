@@ -498,6 +498,34 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_child_duplicate_resolution",
+                "description": "Record an explicit operator child duplicate decision before sink-plan gating.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "candidate_id": {"type": "string"},
+                        "reviewer": {"type": "string", "default": "operator"},
+                        "decision": {"type": "string"},
+                        "target_identity": {"type": "string"},
+                        "reason": {"type": "string"},
+                    },
+                    "required": ["run_id", "candidate_id", "decision"],
+                },
+            },
+            {
+                "name": "business_card_watchdog_child_sink_plan_gate",
+                "description": "Check whether child duplicate evidence clears the local child sink plan for future preflight.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "candidate_id": {"type": "string"},
+                    },
+                    "required": ["run_id", "candidate_id"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_review_bundle",
                 "description": "Create a run-level batch review bundle with inline review-relevant artifact payloads.",
                 "input_schema": {
@@ -1254,6 +1282,20 @@ def call_tool(
         )
     if tool_name == "business_card_watchdog_child_downstream_duplicate_assessment":
         return service.assess_child_downstream_duplicates(
+            run_id=str(args["run_id"]),
+            candidate_id=str(args["candidate_id"]),
+        )
+    if tool_name == "business_card_watchdog_child_duplicate_resolution":
+        return service.resolve_child_duplicate(
+            run_id=str(args["run_id"]),
+            candidate_id=str(args["candidate_id"]),
+            reviewer=str(args.get("reviewer") or "operator"),
+            decision=str(args["decision"]),
+            target_identity=str(args.get("target_identity") or ""),
+            reason=str(args.get("reason") or ""),
+        )
+    if tool_name == "business_card_watchdog_child_sink_plan_gate":
+        return service.child_sink_plan_gate(
             run_id=str(args["run_id"]),
             candidate_id=str(args["candidate_id"]),
         )

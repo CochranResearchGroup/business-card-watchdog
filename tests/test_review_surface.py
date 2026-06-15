@@ -234,3 +234,59 @@ def test_child_lookup_result_and_duplicate_assessment_use_fixture_matches(
     assert any(artifact["kind"] == "child_downstream_duplicate_assessment" for artifact in artifacts)
     assert any(event["event_type"] == "child_sink_lookup_result_recorded" for event in events)
     assert any(event["event_type"] == "child_downstream_duplicate_assessed" for event in events)
+
+
+def test_child_duplicate_resolution_clears_sink_plan_gate(tmp_path: Path, monkeypatch) -> None:
+    pytest = __import__("pytest")
+    pytest.importorskip("cv2")
+    source_dir = tmp_path / "images"
+    write_multi_card_image(source_dir / "multi.jpg")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+    service = BusinessCardService(config)
+    candidate_id = str(service.child_review_queue(run_id=run_dir.name)[0]["candidate_id"])
+    service.submit_child_review(
+        run_id=run_dir.name,
+        candidate_id=candidate_id,
+        reviewer="operator",
+        action="approve_child_for_routing",
+    )
+    service.prepare_child_route(run_id=run_dir.name, candidate_id=candidate_id)
+    service.record_child_sink_lookup_result(
+        run_id=run_dir.name,
+        candidate_id=candidate_id,
+        matches_by_sink={"google_contacts": [{"resource_id": "people/existing", "basis": ["email"]}]},
+    )
+    service.assess_child_downstream_duplicates(run_id=run_dir.name, candidate_id=candidate_id)
+
+    blocked = service.child_sink_plan_gate(run_id=run_dir.name, candidate_id=candidate_id)
+    resolution = service.resolve_child_duplicate(
+        run_id=run_dir.name,
+        candidate_id=candidate_id,
+        reviewer="operator",
+        decision="create_new",
+        reason="confirmed separate person",
+    )
+    cleared = service.child_sink_plan_gate(run_id=run_dir.name, candidate_id=candidate_id)
+    artifacts = read_jsonl(run_dir / "artifacts.jsonl")
+    events = read_jsonl(run_dir / "events.jsonl")
+
+    assert blocked["gate"]["state"] == "blocked"
+    assert blocked["gate"]["blocked_reasons"] == ["child_duplicate_state_unresolved:strong_duplicate"]
+    assert resolution["resolution"]["decision"] == "create_new"
+    assert resolution["resolution"]["sink_write_allowed"] is False
+    assert cleared["gate"]["state"] == "ready_for_sink_plan"
+    assert cleared["gate"]["routing_allowed"] is True
+    assert cleared["gate"]["sink_write_allowed"] is False
+    assert cleared["writes_attempted"] == 0
+    assert cleared["network_calls_made"] == 0
+    assert any(artifact["kind"] == "child_duplicate_resolution" for artifact in artifacts)
+    assert any(artifact["kind"] == "child_sink_plan_gate" for artifact in artifacts)
+    assert any(event["event_type"] == "child_duplicate_resolved" for event in events)
+    assert any(event["event_type"] == "child_sink_plan_gate_created" for event in events)

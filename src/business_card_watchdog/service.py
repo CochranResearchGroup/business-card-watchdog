@@ -2996,6 +2996,156 @@ class BusinessCardService:
             "network_calls_made": 0,
         }
 
+    def resolve_child_duplicate(
+        self,
+        *,
+        run_id: str,
+        candidate_id: str,
+        reviewer: str,
+        decision: str,
+        target_identity: str = "",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        if decision not in {"create_new", "merge_existing", "noop"}:
+            raise ValueError("child duplicate decision must be create_new, merge_existing, or noop")
+        entry = self._child_route_prep_entry(run_id=run_id, candidate_id=candidate_id)
+        prep_dir = self._child_route_prep_dir(entry)
+        assessment_path = prep_dir / "child_downstream_duplicate_assessment.json"
+        assessment = _read_json_file(assessment_path) or {}
+        if not assessment:
+            raise FileNotFoundError(f"child downstream duplicate assessment not found: {assessment_path}")
+        payload = {
+            "schema": "business-card-watchdog.child-duplicate-resolution.v1",
+            "run_id": run_id,
+            "job_id": entry.get("job_id"),
+            "candidate_id": candidate_id,
+            "work_item_id": entry.get("work_item_id"),
+            "reviewer": reviewer,
+            "decision": decision,
+            "target_identity": target_identity,
+            "reason": reason,
+            "resolved_at": utc_now(),
+            "duplicate_assessment": assessment,
+            "routing_allowed": decision != "noop",
+            "sink_write_allowed": False,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+        resolution_path = prep_dir / "child_duplicate_resolution.json"
+        resolution_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        parent_job_id = str(entry.get("job_id") or "__run__")
+        ledger.record_artifact(job_id=parent_job_id, kind="child_duplicate_resolution", path=resolution_path)
+        ledger.record_event(
+            "child_duplicate_resolved",
+            {
+                "run_id": run_id,
+                "job_id": entry.get("job_id"),
+                "candidate_id": candidate_id,
+                "decision": decision,
+                "resolution_path": str(resolution_path),
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        return {
+            "schema": "business-card-watchdog.child-duplicate-resolution-result.v1",
+            "run_id": run_id,
+            "job_id": entry.get("job_id"),
+            "candidate_id": candidate_id,
+            "resolution_path": str(resolution_path),
+            "resolution": payload,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+
+    def child_sink_plan_gate(
+        self,
+        *,
+        run_id: str,
+        candidate_id: str,
+    ) -> dict[str, Any]:
+        entry = self._child_route_prep_entry(run_id=run_id, candidate_id=candidate_id)
+        prep_dir = self._child_route_prep_dir(entry)
+        assessment = _read_json_file(prep_dir / "child_downstream_duplicate_assessment.json") or {}
+        resolution = _read_json_file(prep_dir / "child_duplicate_resolution.json") or {}
+        sink_plan = _read_json_file(prep_dir / "child_sink_plan.json") or {}
+        duplicate_state = str(assessment.get("state") or "missing")
+        decision = str(resolution.get("decision") or "")
+        blockers: list[str] = []
+        if not sink_plan:
+            blockers.append("child_sink_plan_missing")
+        if not assessment:
+            blockers.append("child_downstream_duplicate_assessment_missing")
+        elif duplicate_state != "no_match" and not decision:
+            blockers.append(f"child_duplicate_state_unresolved:{duplicate_state}")
+        elif decision == "noop":
+            blockers.append("child_duplicate_resolution_noop")
+        state = "ready_for_sink_plan" if not blockers else "blocked"
+        payload = {
+            "schema": "business-card-watchdog.child-sink-plan-gate.v1",
+            "run_id": run_id,
+            "job_id": entry.get("job_id"),
+            "candidate_id": candidate_id,
+            "work_item_id": entry.get("work_item_id"),
+            "state": state,
+            "duplicate_state": duplicate_state,
+            "duplicate_decision": decision,
+            "blocked_reasons": blockers,
+            "planned_sinks": [
+                str(action.get("sink") or "")
+                for action in list(sink_plan.get("actions") or [])
+                if action.get("sink")
+            ],
+            "routing_allowed": state == "ready_for_sink_plan",
+            "sink_write_allowed": False,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "artifact_paths": {
+                "child_sink_plan": str(prep_dir / "child_sink_plan.json"),
+                "child_downstream_duplicate_assessment": str(prep_dir / "child_downstream_duplicate_assessment.json"),
+                "child_duplicate_resolution": str(prep_dir / "child_duplicate_resolution.json"),
+            },
+            "next_action": {
+                "action": "child_sink_apply_preflight" if state == "ready_for_sink_plan" else "resolve_child_duplicate",
+                "safe_to_auto_continue": state == "ready_for_sink_plan",
+                "requires_explicit_operator_action": state != "ready_for_sink_plan",
+                "reason": (
+                    "child duplicate gate is clear for future sink preflight"
+                    if state == "ready_for_sink_plan"
+                    else "child duplicate assessment must be resolved before sink preflight"
+                ),
+            },
+        }
+        gate_path = prep_dir / "child_sink_plan_gate.json"
+        gate_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        parent_job_id = str(entry.get("job_id") or "__run__")
+        ledger.record_artifact(job_id=parent_job_id, kind="child_sink_plan_gate", path=gate_path)
+        ledger.record_event(
+            "child_sink_plan_gate_created",
+            {
+                "run_id": run_id,
+                "job_id": entry.get("job_id"),
+                "candidate_id": candidate_id,
+                "state": state,
+                "blocked_reasons": blockers,
+                "gate_path": str(gate_path),
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        return {
+            "schema": "business-card-watchdog.child-sink-plan-gate-result.v1",
+            "run_id": run_id,
+            "job_id": entry.get("job_id"),
+            "candidate_id": candidate_id,
+            "gate_path": str(gate_path),
+            "gate": payload,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+
     def _child_route_prep_entry(self, *, run_id: str, candidate_id: str) -> dict[str, Any]:
         entry = next(
             (
@@ -3011,6 +3161,13 @@ class BusinessCardService:
         if not prep_result:
             raise FileNotFoundError(f"child route prep result not found: {candidate_id}")
         return entry
+
+    def _child_route_prep_dir(self, entry: dict[str, Any]) -> Path:
+        prep_result = dict(entry.get("child_route_prep_result") or {})
+        lookup_plan_path = Path(str(prep_result.get("child_sink_lookup_plan_path") or ""))
+        if not lookup_plan_path:
+            raise FileNotFoundError("child sink lookup plan path is missing")
+        return lookup_plan_path.parent
 
     def review_bundle(self, *, run_id: str, state: str = "all", write: bool = True) -> dict[str, Any]:
         run = self.get_run(run_id)

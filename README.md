@@ -147,7 +147,11 @@ does not run live lookup, resolve duplicates, enrich, or write sinks. Use
 `reviews child-lookup-result <candidate-id> --run-id <run-id> --matches-by-sink-json '{}' --json`
 to import supplied child lookup evidence, then
 `reviews child-assess-duplicates <candidate-id> --run-id <run-id> --json` to
-classify downstream duplicate state without live sink calls.
+classify downstream duplicate state without live sink calls. Use
+`reviews child-resolve-duplicate <candidate-id> --run-id <run-id> --decision create_new --json`
+to record an explicit child duplicate decision, then
+`reviews child-sink-plan-gate <candidate-id> --run-id <run-id> --json` to verify
+whether the child sink plan is still blocked or cleared for future preflight.
 
 `drills review-routing` creates a synthetic fixture run and proves review approval,
 review bundle/workbook export, duplicate lookup planning, dry-run sink routing, and

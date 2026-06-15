@@ -2045,6 +2045,22 @@ def build_parser() -> argparse.ArgumentParser:
     reviews_child_assess_duplicates.add_argument("candidate_id")
     reviews_child_assess_duplicates.add_argument("--run-id", required=True)
     reviews_child_assess_duplicates.add_argument("--json", action="store_true")
+    reviews_child_resolve_duplicate = reviews_sub.add_parser("child-resolve-duplicate")
+    reviews_child_resolve_duplicate.add_argument("candidate_id")
+    reviews_child_resolve_duplicate.add_argument("--run-id", required=True)
+    reviews_child_resolve_duplicate.add_argument("--reviewer", default="operator")
+    reviews_child_resolve_duplicate.add_argument(
+        "--decision",
+        choices=["create_new", "merge_existing", "noop"],
+        required=True,
+    )
+    reviews_child_resolve_duplicate.add_argument("--target-identity", default="")
+    reviews_child_resolve_duplicate.add_argument("--reason", default="")
+    reviews_child_resolve_duplicate.add_argument("--json", action="store_true")
+    reviews_child_sink_plan_gate = reviews_sub.add_parser("child-sink-plan-gate")
+    reviews_child_sink_plan_gate.add_argument("candidate_id")
+    reviews_child_sink_plan_gate.add_argument("--run-id", required=True)
+    reviews_child_sink_plan_gate.add_argument("--json", action="store_true")
     reviews_bundle = reviews_sub.add_parser("bundle")
     reviews_bundle.add_argument("--run-id", required=True)
     reviews_bundle.add_argument("--state", default="all")
@@ -2614,6 +2630,20 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif args.reviews_command == "child-assess-duplicates":
             payload = service.assess_child_downstream_duplicates(
+                run_id=args.run_id,
+                candidate_id=args.candidate_id,
+            )
+        elif args.reviews_command == "child-resolve-duplicate":
+            payload = service.resolve_child_duplicate(
+                run_id=args.run_id,
+                candidate_id=args.candidate_id,
+                reviewer=args.reviewer,
+                decision=args.decision,
+                target_identity=args.target_identity,
+                reason=args.reason,
+            )
+        elif args.reviews_command == "child-sink-plan-gate":
+            payload = service.child_sink_plan_gate(
                 run_id=args.run_id,
                 candidate_id=args.candidate_id,
             )
