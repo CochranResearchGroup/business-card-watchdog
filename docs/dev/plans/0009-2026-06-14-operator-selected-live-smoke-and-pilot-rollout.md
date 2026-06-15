@@ -1710,6 +1710,29 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed; index is up to date.
 
+### Slice 0009-A90 | 2026-06-15 | Runbook Chronology Repair
+
+Implemented:
+
+- Reordered the Runbook Plan 0009 tail so Turns 157-165 appear in numeric execution order.
+- Preserved the existing Turn 164 and Turn 165 evidence text while moving it after Turn 163.
+- Added Turn 166 to record the evidence-integrity repair.
+
+Safety:
+
+- This was documentation/evidence ordering only.
+- It did not validate an operator response, execute any returned select-target command, create or modify `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `rg -n '## Turn 15[0-9]|## Turn 16[0-9]' RUNBOOK.md` passed and shows Turn 150 through Turn 166 in order.
+- `.venv/bin/python -m pytest -q` passed with 226 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

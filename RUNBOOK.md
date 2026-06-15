@@ -3126,57 +3126,6 @@ Safety:
 
 - This was no-live selection-requirements command-surface hardening only. It did not validate an operator response, execute any returned select-target command, create or modify `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
 
-## Turn 165 | 2026-06-15
-
-Continued Plan 0009 with Slice 0009-A89.
-
-Implemented:
-
-- Operator-facing live-target approval templates now use `safety_confirmation=<tenant-profile-account-confirmation>` instead of the generic `<confirmation>` placeholder.
-- Selected target creation now rejects placeholder-shaped safety confirmations even when the placeholder contains tenant/profile/account words.
-- README and live-pilot checklist examples now tell operators to replace the tenant/profile/account placeholder before validation or selection.
-- Service, CLI, API, and MCP tests protect the updated placeholder across selection requirements, selection packets, status, handoff, and response validation.
-
-Validation:
-
-- `.venv/bin/python -m pytest tests/test_service.py::test_service_live_selection_requirements_report_writes_run_level_artifact tests/test_service.py::test_service_live_selection_packet_does_not_select_target tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup -q` passed with 3 tests.
-- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_live_target_candidates_reports_text_and_json tests/test_cli_surfaces.py::test_cli_live_selection_requirements_reports_text_and_json tests/test_cli_surfaces.py::test_cli_live_selection_packet_writes_no_selected_target tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
-- `rg -n 'safety_confirmation=<confirmation>|--safety-confirmation <confirmation>|"safety_confirmation": "<confirmation>"' .` found no matches.
-- `.venv/bin/python -m pytest -q` passed with 226 tests.
-- `.venv/bin/ruff check .` passed.
-- `uv build --out-dir dist` passed.
-- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
-- `git diff --check` passed.
-- `codegraph sync && codegraph status` passed; index is up to date.
-
-Safety:
-
-- This was no-live approval-template hardening only. It did not validate a real operator response, execute any returned select-target command, create or modify `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
-
-## Turn 164 | 2026-06-15
-
-Continued Plan 0009 with Slice 0009-A88.
-
-Implemented:
-
-- Selected target creation now rejects terse safety confirmations that do not describe the intended tenant/profile/account context.
-- Read-only operator-response validation now blocks weak safety confirmations before returning a select-target command.
-- Service tests protect both direct selection and validation blockers.
-
-Validation:
-
-- `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup -q` passed with 1 test.
-- `.venv/bin/python -m pytest -q` passed with 226 tests.
-- `.venv/bin/ruff check .` passed.
-- `uv build --out-dir dist` passed.
-- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
-- `git diff --check` passed.
-- `codegraph sync && codegraph status` passed; index is up to date.
-
-Safety:
-
-- This was no-live approval hardening only. It did not validate a real operator response, execute any returned select-target command, create or modify `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
-
 ## Turn 157 | 2026-06-15
 
 Continued Plan 0009 with Slice 0009-A81.
@@ -3345,3 +3294,78 @@ Validation:
 Safety:
 
 - This was no-live selection-requirements command-surface hardening only. It did not validate an operator response, execute any returned select-target command, create or modify `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+## Turn 164 | 2026-06-15
+
+Continued Plan 0009 with Slice 0009-A88.
+
+Implemented:
+
+- Selected target creation now rejects terse safety confirmations that do not describe the intended tenant/profile/account context.
+- Read-only operator-response validation now blocks weak safety confirmations before returning a select-target command.
+- Service tests protect both direct selection and validation blockers.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup -q` passed with 1 test.
+- `.venv/bin/python -m pytest -q` passed with 226 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was no-live approval hardening only. It did not validate a real operator response, execute any returned select-target command, create or modify `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+## Turn 165 | 2026-06-15
+
+Continued Plan 0009 with Slice 0009-A89.
+
+Implemented:
+
+- Operator-facing live-target approval templates now use `safety_confirmation=<tenant-profile-account-confirmation>` instead of the generic `<confirmation>` placeholder.
+- Selected target creation now rejects placeholder-shaped safety confirmations even when the placeholder contains tenant/profile/account words.
+- README and live-pilot checklist examples now tell operators to replace the tenant/profile/account placeholder before validation or selection.
+- Service, CLI, API, and MCP tests protect the updated placeholder across selection requirements, selection packets, status, handoff, and response validation.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_live_selection_requirements_report_writes_run_level_artifact tests/test_service.py::test_service_live_selection_packet_does_not_select_target tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup -q` passed with 3 tests.
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_live_target_candidates_reports_text_and_json tests/test_cli_surfaces.py::test_cli_live_selection_requirements_reports_text_and_json tests/test_cli_surfaces.py::test_cli_live_selection_packet_writes_no_selected_target tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
+- `rg -n 'safety_confirmation=<confirmation>|--safety-confirmation <confirmation>|"safety_confirmation": "<confirmation>"' .` found no matches.
+- `.venv/bin/python -m pytest -q` passed with 226 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was no-live approval-template hardening only. It did not validate a real operator response, execute any returned select-target command, create or modify `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+## Turn 166 | 2026-06-15
+
+Continued Plan 0009 with Slice 0009-A90.
+
+Implemented:
+
+- Reordered the Runbook Plan 0009 tail so Turns 157-165 appear in numeric execution order.
+- Preserved the existing Turn 164 and Turn 165 evidence text while moving it after Turn 163.
+- Added this repair note as a no-live documentation/evidence-integrity slice.
+
+Validation:
+
+- `rg -n '## Turn 15[0-9]|## Turn 16[0-9]' RUNBOOK.md` passed and shows Turn 150 through Turn 166 in order.
+- `.venv/bin/python -m pytest -q` passed with 226 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was documentation/evidence ordering only. It did not validate an operator response, execute any returned select-target command, create or modify `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
