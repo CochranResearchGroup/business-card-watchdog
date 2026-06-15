@@ -1000,6 +1000,25 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert run_next["phase_report_after"]["schema"] == "business-card-watchdog.phase-report.v1"
 
 
+def test_api_offline_pilot_gap_audit_reports_remaining_boundaries(tmp_path: Path) -> None:
+    from business_card_watchdog.api import create_app
+
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+    client = TestClient(create_app(config_path))
+
+    audit = client.get("/offline-pilot-gap-audit").json()
+
+    assert audit["schema"] == "business-card-watchdog.offline-pilot-gap-audit.v1"
+    assert audit["state"] == "ready_for_live_operator_boundary"
+    assert audit["recommended_next_slice"] == "operator_selected_live_smoke"
+    assert audit["coverage"]["missing_doc_count"] == 0
+    assert audit["writes_attempted"] == 0
+    assert audit["network_calls_made"] == 0
+    assert Path(audit["audit_path"]).exists()
+
+
 def test_api_review_routing_drill_outputs_fixture_artifact(tmp_path: Path) -> None:
     from business_card_watchdog.api import create_app
 

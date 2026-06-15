@@ -34,6 +34,7 @@ def _render_status_text(payload: dict[str, object]) -> str:
     ]
     for label, key in [
         ("Runtime readiness", "runtime_readiness"),
+        ("Offline pilot gap audit", "offline_pilot_gap_audit"),
         ("Service recovery", "service_recovery"),
         ("Watch status", "watch_status"),
         ("Watch dry run", "watch_dry_run"),
@@ -1426,6 +1427,55 @@ def _render_live_selection_requirements_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_offline_pilot_gap_audit_text(payload: dict[str, object]) -> str:
+    coverage = dict(payload.get("coverage") or {})
+    commands = dict(payload.get("commands") or {})
+    doc_checks = payload.get("doc_checks") or []
+    drill_surfaces = payload.get("drill_surfaces") or []
+    boundaries = payload.get("remaining_boundaries") or []
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    lines = [
+        f"Offline pilot gap audit: {payload.get('state')}",
+        "Coverage: "
+        f"{coverage.get('covered_count', 0)}/{coverage.get('total_count', 0)} "
+        f"missing_docs={coverage.get('missing_doc_count', 0)}",
+        f"Recommended next slice: {payload.get('recommended_next_slice')}",
+        f"Audit path: {payload.get('audit_path') or 'not written'}",
+        "Observed: "
+        f"writes={payload.get('writes_attempted', 0)} "
+        f"network={payload.get('network_calls_made', 0)}",
+    ]
+    doc_rows = doc_checks if isinstance(doc_checks, list) else []
+    lines.append(f"Docs: {len(doc_rows)}")
+    for row in doc_rows:
+        if isinstance(row, dict):
+            lines.append(f" - {row.get('name')}: exists={row.get('exists')} path={row.get('path')}")
+    drill_rows = drill_surfaces if isinstance(drill_surfaces, list) else []
+    lines.append(f"Drills: {len(drill_rows)}")
+    for row in drill_rows:
+        if isinstance(row, dict):
+            lines.append(f" - {row.get('name')}: {row.get('cli')}")
+    boundary_rows = boundaries if isinstance(boundaries, list) else []
+    lines.append(f"Remaining boundaries: {len(boundary_rows)}")
+    for row in boundary_rows:
+        if isinstance(row, dict):
+            lines.append(f" - {row.get('boundary')}: {row.get('state')} - {row.get('reason')}")
+    for label, key in [
+        ("Operator dashboard", "operator_dashboard"),
+        ("Runtime readiness", "runtime_readiness"),
+        ("Live pilot rehearsal drill", "live_pilot_rehearsal_drill"),
+        ("Child replacement readiness drill", "child_replacement_readiness_drill"),
+    ]:
+        command = commands.get(key)
+        if command:
+            lines.append(f"{label}: {command}")
+    stop_rows = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stop_rows)}")
+    for condition in stop_rows:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_live_selection_packet_text(payload: dict[str, object]) -> str:
     existing = dict(payload.get("existing_selected_target") or {})
     scope_allows = dict(payload.get("scope_allows") or {})
@@ -1883,6 +1933,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     runtime_readiness = sub.add_parser("runtime-readiness")
     runtime_readiness.add_argument("--json", action="store_true")
+
+    offline_pilot_gap_audit = sub.add_parser("offline-pilot-gap-audit")
+    offline_pilot_gap_audit.add_argument("--no-write", action="store_true")
+    offline_pilot_gap_audit.add_argument("--json", action="store_true")
 
     live_target_candidates = sub.add_parser("live-target-candidates")
     live_target_candidates.add_argument("--run-id", default=None)
@@ -2511,6 +2565,11 @@ def main(argv: list[str] | None = None) -> int:
         payload = service.runtime_readiness()
         print(json.dumps(payload, indent=2) if args.json else _render_runtime_readiness_text(payload), end="")
         return 0 if payload["state"] != "blocked" else 2
+
+    if args.command == "offline-pilot-gap-audit":
+        payload = service.offline_pilot_gap_audit(write=not args.no_write)
+        print(json.dumps(payload, indent=2) if args.json else _render_offline_pilot_gap_audit_text(payload), end="")
+        return 0 if payload["state"] != "needs_offline_attention" else 2
 
     if args.command == "live-target-candidates":
         payload = service.live_target_candidates(run_id=args.run_id, sink=args.sink)

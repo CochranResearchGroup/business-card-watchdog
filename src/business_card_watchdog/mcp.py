@@ -377,6 +377,16 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_offline_pilot_gap_audit",
+                "description": "Inspect offline pilot drill/documentation coverage and remaining live/operator boundaries without running live calls.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "write": {"type": "boolean", "default": True},
+                    },
+                },
+            },
+            {
                 "name": "business_card_watchdog_review_routing_drill",
                 "description": "Run a synthetic no-live review/export/routing drill through safe agent-loop actions.",
                 "input_schema": {
@@ -1426,6 +1436,8 @@ def call_tool(
             run_id=str(args["run_id"]) if args.get("run_id") else None,
             limit=int(args.get("limit", 10)),
         )
+    if tool_name == "business_card_watchdog_offline_pilot_gap_audit":
+        return service.offline_pilot_gap_audit(write=bool(args.get("write", True)))
     if tool_name == "business_card_watchdog_multi_card_preclassification_drill":
         return service.multi_card_preclassification_drill()
     if tool_name == "business_card_watchdog_review_routing_drill":

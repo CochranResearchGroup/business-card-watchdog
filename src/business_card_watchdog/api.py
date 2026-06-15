@@ -832,6 +832,10 @@ def create_app(config_path: Path | None = None):
     def post_next_actions(request: NextActionsRequest = Body(default=NextActionsRequest())) -> dict[str, object]:
         return service().next_actions(run_id=request.run_id, limit=request.limit)
 
+    @app.get("/offline-pilot-gap-audit")
+    def offline_pilot_gap_audit(write: bool = True) -> dict[str, object]:
+        return service().offline_pilot_gap_audit(write=write)
+
     @app.post("/drills/multi-card-preclassification")
     def multi_card_preclassification_drill() -> dict[str, object]:
         return service().multi_card_preclassification_drill()

@@ -50,6 +50,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_live_pilot_command_copy_packet_from_response" in names
     assert "business_card_watchdog_next_actions" in names
     assert "business_card_watchdog_run_next_actions" in names
+    assert "business_card_watchdog_offline_pilot_gap_audit" in names
     assert "business_card_watchdog_multi_card_preclassification_drill" in names
     assert "business_card_watchdog_review_routing_drill" in names
     assert "business_card_watchdog_live_pilot_rehearsal_drill" in names
@@ -139,6 +140,20 @@ def test_mcp_multi_card_preclassification_drill_records_candidate_boxes(tmp_path
     assert payload["live_sink_calls_made"] is False
     assert payload["writes_attempted"] == 0
     assert payload["network_calls_made"] == 0
+
+
+def test_mcp_offline_pilot_gap_audit_reports_remaining_boundaries(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+
+    payload = call_tool("business_card_watchdog_offline_pilot_gap_audit", {"write": True}, config=config)
+
+    assert payload["schema"] == "business-card-watchdog.offline-pilot-gap-audit.v1"
+    assert payload["state"] == "ready_for_live_operator_boundary"
+    assert payload["recommended_next_slice"] == "operator_selected_live_smoke"
+    assert payload["coverage"]["missing_doc_count"] == 0
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert Path(payload["audit_path"]).exists()
 
 
 def test_mcp_child_replacement_readiness_drill_exports_operator_samples(tmp_path: Path) -> None:

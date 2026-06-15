@@ -89,6 +89,37 @@ def test_service_runtime_readiness_reports_user_scope_runtime_state(tmp_path: Pa
     assert any("Do not process private SyncThing images" in item for item in report["explicit_stop_conditions"])
 
 
+def test_service_offline_pilot_gap_audit_reports_remaining_live_boundaries(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+
+    audit = BusinessCardService(config).offline_pilot_gap_audit()
+
+    assert audit["schema"] == "business-card-watchdog.offline-pilot-gap-audit.v1"
+    assert audit["state"] == "ready_for_live_operator_boundary"
+    assert audit["recommended_next_slice"] == "operator_selected_live_smoke"
+    assert audit["coverage"]["missing_doc_count"] == 0
+    assert {item["name"] for item in audit["drill_surfaces"]} >= {
+        "multi_card_preclassification",
+        "review_routing",
+        "live_pilot_rehearsal",
+        "child_replacement_readiness",
+    }
+    assert {item["boundary"] for item in audit["remaining_boundaries"]} >= {
+        "operator_selected_live_smoke",
+        "private_syncthing_source_processing",
+        "paid_api_enrichment",
+        "non_loopback_api_exposure",
+    }
+    assert audit["writes_attempted"] == 0
+    assert audit["network_calls_made"] == 0
+    assert audit["audit_written"] is True
+    assert Path(audit["audit_path"]).exists()
+
+    status = BusinessCardService(config).status()
+    assert status["commands"]["offline_pilot_gap_audit"] == "offline-pilot-gap-audit --json"
+    assert any(action["action"] == "inspect_offline_pilot_gap_audit" for action in status["safe_next_actions"])
+
+
 def test_service_recovery_report_composes_status_and_recovery_commands(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, _job_id = make_recorded_run(config)

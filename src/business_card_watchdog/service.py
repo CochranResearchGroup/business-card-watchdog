@@ -355,6 +355,7 @@ class BusinessCardService:
             "watch": watch_status.to_dict(),
             "commands": {
                 "runtime_readiness": "runtime-readiness --json",
+                "offline_pilot_gap_audit": "offline-pilot-gap-audit --json",
                 "service_recovery": "service recovery --json",
                 "watch_status": "watch-status --json",
                 "watch_dry_run": "watch-dry-run --json",
@@ -373,6 +374,13 @@ class BusinessCardService:
                     "action": "inspect_service_recovery",
                     "command": "service recovery --json",
                     "reason": "review recovery commands and stop conditions without changing runtime state",
+                    "safe_to_auto_continue": True,
+                    "requires_explicit_operator_action": False,
+                },
+                {
+                    "action": "inspect_offline_pilot_gap_audit",
+                    "command": "offline-pilot-gap-audit --json",
+                    "reason": "review offline pilot drill and documentation coverage before choosing the next slice",
                     "safe_to_auto_continue": True,
                     "requires_explicit_operator_action": False,
                 },
@@ -487,6 +495,129 @@ class BusinessCardService:
             "writes_attempted": _int(payload.get("writes_attempted")),
             "network_calls_made": _int(payload.get("network_calls_made")),
         }
+
+    def offline_pilot_gap_audit(self, *, write: bool = True) -> dict[str, Any]:
+        ensure_runtime_dirs(self.config)
+        repo_root = Path(__file__).resolve().parents[2]
+        required_docs = {
+            "review_workflow_sample_output": repo_root / "docs/operations/review-workflow-sample-output.md",
+            "live_pilot_sample_output": repo_root / "docs/operations/live-pilot-sample-output.md",
+            "child_replacement_sample_output": repo_root / "docs/operations/child-replacement-sample-output.md",
+            "live_pilot_checklists": repo_root / "docs/operations/live-pilot-checklists.md",
+            "public_upstream_validation": repo_root / "docs/operations/public-upstream-validation.md",
+        }
+        doc_checks = [
+            {
+                "name": name,
+                "path": str(path),
+                "exists": path.exists(),
+            }
+            for name, path in required_docs.items()
+        ]
+        drill_surfaces = [
+            {
+                "name": "multi_card_preclassification",
+                "cli": "drills multi-card-preclassification --json",
+                "api": "POST /drills/multi-card-preclassification",
+                "mcp": "business_card_watchdog_multi_card_preclassification_drill",
+                "covered": True,
+            },
+            {
+                "name": "review_routing",
+                "cli": "drills review-routing --json",
+                "api": "POST /drills/review-routing",
+                "mcp": "business_card_watchdog_review_routing_drill",
+                "covered": True,
+            },
+            {
+                "name": "live_pilot_rehearsal",
+                "cli": "drills live-pilot-rehearsal --json",
+                "api": "POST /drills/live-pilot-rehearsal",
+                "mcp": "business_card_watchdog_live_pilot_rehearsal_drill",
+                "covered": True,
+            },
+            {
+                "name": "child_replacement_readiness",
+                "cli": "drills child-replacement-readiness --json",
+                "api": "POST /drills/child-replacement-readiness",
+                "mcp": "business_card_watchdog_child_replacement_readiness_drill",
+                "covered": True,
+            },
+        ]
+        remaining_boundaries = [
+            {
+                "boundary": "operator_selected_live_smoke",
+                "state": "live_operator_required",
+                "reason": "requires one explicit real run, job, sink, operator, target, and tenant/profile confirmation",
+                "next_plan": "docs/dev/plans/0009-2026-06-14-operator-selected-live-smoke-and-pilot-rollout.md",
+            },
+            {
+                "boundary": "private_syncthing_source_processing",
+                "state": "operator_required",
+                "reason": "private phone directory images must not be processed by generic offline audits",
+                "next_safe_command": "watch-dry-run --json",
+            },
+            {
+                "boundary": "paid_api_enrichment",
+                "state": "explicit_request_required",
+                "reason": "paid enrichment may cost money and must be explicitly requested by the operator",
+                "next_safe_command": "enrichment check --json",
+            },
+            {
+                "boundary": "non_loopback_api_exposure",
+                "state": "separate_design_required",
+                "reason": "hosted or non-loopback API exposure needs an auth/network design before enablement",
+                "next_doc": "docs/operations/release-readiness.md",
+            },
+        ]
+        covered_count = sum(1 for item in drill_surfaces if item["covered"]) + sum(1 for item in doc_checks if item["exists"])
+        total_count = len(drill_surfaces) + len(doc_checks)
+        missing_docs = [item for item in doc_checks if not item["exists"]]
+        state = "ready_for_live_operator_boundary" if not missing_docs else "needs_offline_attention"
+        audit_path = self.config.data_dir / "offline_pilot_gap_audit.json"
+        payload = {
+            "schema": "business-card-watchdog.offline-pilot-gap-audit.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "coverage": {
+                "covered_count": covered_count,
+                "total_count": total_count,
+                "missing_doc_count": len(missing_docs),
+                "drill_surface_count": len(drill_surfaces),
+            },
+            "doc_checks": doc_checks,
+            "drill_surfaces": drill_surfaces,
+            "remaining_boundaries": remaining_boundaries,
+            "recommended_next_slice": (
+                "operator_selected_live_smoke"
+                if state == "ready_for_live_operator_boundary"
+                else "complete_missing_offline_docs"
+            ),
+            "commands": {
+                "offline_pilot_gap_audit": "offline-pilot-gap-audit --json",
+                "multi_card_preclassification_drill": "drills multi-card-preclassification --json",
+                "review_routing_drill": "drills review-routing --json",
+                "live_pilot_rehearsal_drill": "drills live-pilot-rehearsal --json",
+                "child_replacement_readiness_drill": "drills child-replacement-readiness --json",
+                "operator_dashboard": "operator-dashboard --json",
+                "runtime_readiness": "runtime-readiness --json",
+            },
+            "explicit_stop_conditions": [
+                "This audit inspects offline surfaces only.",
+                "Do not process private SyncThing images from this audit.",
+                "Do not run public-web search, paid enrichment, live lookup, live write, or live readback from this audit.",
+                "Do not claim Google/Odoo writes work until authenticated readiness and live or sandbox write/readback checks exist.",
+            ],
+            "audit_path": str(audit_path) if write else None,
+            "audit_written": False,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+        if write:
+            payload["audit_written"] = True
+            audit_path.parent.mkdir(parents=True, exist_ok=True)
+            audit_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        return payload
 
     def operator_dashboard(self, *, run_id: str | None = None) -> dict[str, Any]:
         status = self.status()

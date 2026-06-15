@@ -68,6 +68,7 @@ def test_cli_status_reports_command_map_text_and_json(tmp_path: Path, capsys) ->
     payload = json.loads(capsys.readouterr().out)
     assert payload["schema"] == "business-card-watchdog.status.v1"
     assert payload["commands"]["runtime_readiness"] == "runtime-readiness --json"
+    assert payload["commands"]["offline_pilot_gap_audit"] == "offline-pilot-gap-audit --json"
     assert payload["commands"]["service_recovery"] == "service recovery --json"
     assert payload["commands"]["runs_list"] == "runs list --json"
     assert payload["safe_next_actions"][0]["action"] == "inspect_runtime_readiness"
@@ -79,11 +80,36 @@ def test_cli_status_reports_command_map_text_and_json(tmp_path: Path, capsys) ->
     assert "Status:" in text
     assert "Commands:" in text
     assert "Runtime readiness: runtime-readiness --json" in text
+    assert "Offline pilot gap audit: offline-pilot-gap-audit --json" in text
     assert "Service recovery: service recovery --json" in text
     assert "Runs list: runs list --json" in text
-    assert "Safe next actions: 3" in text
+    assert "Safe next actions: 4" in text
     assert "Stop conditions: 3" in text
     assert "Observed: writes=0 network=0" in text
+    assert "{" not in text
+
+
+def test_cli_offline_pilot_gap_audit_reports_remaining_boundaries(tmp_path: Path, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+
+    assert main(["--config", str(config_path), "offline-pilot-gap-audit", "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["schema"] == "business-card-watchdog.offline-pilot-gap-audit.v1"
+    assert payload["state"] == "ready_for_live_operator_boundary"
+    assert payload["recommended_next_slice"] == "operator_selected_live_smoke"
+    assert payload["coverage"]["missing_doc_count"] == 0
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert Path(payload["audit_path"]).exists()
+
+    assert main(["--config", str(config_path), "offline-pilot-gap-audit", "--no-write"]) == 0
+    text = capsys.readouterr().out
+    assert "Offline pilot gap audit: ready_for_live_operator_boundary" in text
+    assert "Remaining boundaries:" in text
+    assert "operator_selected_live_smoke" in text
     assert "{" not in text
 
 
