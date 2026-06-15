@@ -1185,6 +1185,7 @@ class BusinessCardService:
                         "show_job": f"jobs show {job['job_id']} --run-id {run_id}",
                         "review": f"jobs review {job['job_id']} --run-id {run_id}",
                         "next": (next_action or {}).get("command"),
+                        "live_pilot_handoff": f"runs live-pilot-handoff {run_id}",
                     },
                 }
             )
@@ -1206,6 +1207,7 @@ class BusinessCardService:
                 "apply_decisions": f"reviews apply-decisions --run-id {run_id} --decisions-file <path>",
                 "phase_report": f"runs phase-report {run_id}",
                 "run_next_safe": f"actions run-next --run-id {run_id}",
+                "live_pilot_handoff": f"runs live-pilot-handoff {run_id}",
                 "next_actions": f"mcp-call business_card_watchdog_next_actions --arguments-json '{{\"run_id\":\"{run_id}\"}}'",
                 "mcp_phase_report": f"mcp-call business_card_watchdog_phase_report --arguments-json '{{\"run_id\":\"{run_id}\"}}'",
             },
@@ -6214,6 +6216,7 @@ class BusinessCardService:
             "route_refresh_state",
             "artifact_kinds",
             "review_command",
+            "live_pilot_handoff_command",
             "decision_action",
             "review_action",
             "corrected_full_name",
@@ -6477,6 +6480,7 @@ class BusinessCardService:
             "route_refresh_state": route_refresh.get("state"),
             "artifact_kinds": ";".join(str(kind) for kind in entry.get("artifact_kinds") or []),
             "review_command": (entry.get("commands") or {}).get("review"),
+            "live_pilot_handoff_command": (entry.get("commands") or {}).get("live_pilot_handoff"),
             "decision_action": decision_template.get("action"),
             "review_action": decision_template.get("action"),
             "corrected_full_name": self._review_contact_value(contact, "full_name"),

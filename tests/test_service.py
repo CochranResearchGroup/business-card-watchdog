@@ -413,6 +413,7 @@ def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
     assert bundle["entries"][0]["next_action"]["action"] == "review_contact"
     assert bundle["entries"][0]["decision_template"]["action"] == "approve_for_routing"
     assert bundle["entries"][0]["commands"]["review"] == f"jobs review {job_id} --run-id {run_id}"
+    assert bundle["entries"][0]["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id}"
     assert bundle["entries"][0]["review_matrix"]["schema"] == "business-card-watchdog.review-matrix-entry.v1"
     assert bundle["entries"][0]["review_matrix"]["contact_source"] == "missing"
     assert bundle["entries"][0]["review_matrix"]["duplicate_state"] == "not_assessed"
@@ -429,6 +430,7 @@ def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
     assert bundle["commands"]["apply_decisions"] == f"reviews apply-decisions --run-id {run_id} --decisions-file <path>"
     assert bundle["commands"]["phase_report"] == f"runs phase-report {run_id}"
     assert bundle["commands"]["run_next_safe"] == f"actions run-next --run-id {run_id}"
+    assert bundle["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id}"
     assert bundle["commands"]["mcp_phase_report"] == (
         f"mcp-call business_card_watchdog_phase_report --arguments-json '{{\"run_id\":\"{run_id}\"}}'"
     )
@@ -448,6 +450,7 @@ def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
     assert "Review Matrix" in html["html"]
     assert f"runs phase-report {run_id}" in html["html"]
     assert f"actions run-next --run-id {run_id}" in html["html"]
+    assert f"runs live-pilot-handoff {run_id}" in html["html"]
     assert job_id in html["html"]
     assert html_path.exists()
     assert any(artifact["kind"] == "review_html" for artifact in service.list_artifacts(run_id))
@@ -470,6 +473,7 @@ def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
     assert rows[0]["matrix_enrichment_state"] == "not_requested"
     assert rows[0]["matrix_route_state"] == "not_planned"
     assert rows[0]["matrix_sink_lookup_state"] == "not_started"
+    assert rows[0]["live_pilot_handoff_command"] == f"runs live-pilot-handoff {run_id}"
     assert "corrected_full_name" in rows[0]
     assert "corrected_email" in rows[0]
     assert "contact_spec" in rows[0]["artifact_kinds"]

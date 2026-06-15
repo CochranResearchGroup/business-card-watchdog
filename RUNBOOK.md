@@ -2607,3 +2607,23 @@ Validation:
 Safety:
 
 - This was approval-evidence hardening only. It did not create selected targets from generic continuation, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+## Turn 134 | 2026-06-14
+
+Continued Plan 0009 with Slice 0009-A58.
+
+Implemented:
+
+- Review bundles now expose a run-level `live_pilot_handoff` command.
+- Review bundle job entries now include the same handoff command beside job review commands.
+- Review workbook CSV exports now include `live_pilot_handoff_command`.
+- Offline review HTML now renders the handoff command through the shared command list.
+- Service, API, and MCP tests protect handoff-command visibility from batch review artifacts.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_run_summary_and_review_queue tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 3 tests.
+
+Safety:
+
+- This was command-link/readback hardening only. It did not create `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
