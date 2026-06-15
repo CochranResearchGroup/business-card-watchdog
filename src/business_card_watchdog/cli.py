@@ -219,6 +219,65 @@ def _render_live_pilot_rehearsal_drill_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_child_replacement_readiness_drill_text(payload: dict[str, object]) -> str:
+    assertions = dict(payload.get("assertions") or {})
+    sample_outputs = dict(payload.get("sample_outputs") or {})
+    readiness_states = dict(payload.get("readiness_states") or {})
+    commands = dict(payload.get("commands") or {})
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    failed = [key for key, value in assertions.items() if value is not True]
+    lines = [
+        "Child replacement readiness drill:",
+        f"Run: {payload.get('run_id')}",
+        f"Job: {payload.get('job_id')}",
+        f"Candidate: {payload.get('candidate_id')}",
+        f"State: {payload.get('state')}",
+        f"Fixture child candidates: {payload.get('fixture_child_candidate_count')}",
+        "Observed: "
+        f"writes={payload.get('writes_attempted', 0)} "
+        f"network={payload.get('network_calls_made', 0)} "
+        f"private_sources={payload.get('private_sources_used', False)} "
+        f"live_sinks={payload.get('live_sink_calls_made', False)}",
+        f"Assertions: {len(assertions)}",
+    ]
+    if failed:
+        lines.append("Failed assertions: " + ", ".join(sorted(failed)))
+    for key in [
+        "blocked_replacement_audit",
+        "blocked_replacement_validation",
+        "replacement_handoff",
+        "replacement_response",
+        "replacement_checklist",
+        "ready_replacement_copy_packet",
+        "closeout",
+    ]:
+        if key in readiness_states:
+            lines.append(f"{key}: {readiness_states.get(key)}")
+    for label, key in [
+        ("Review bundle", "review_bundle_path"),
+        ("Review HTML", "review_html_path"),
+        ("Review workbook", "review_workbook_path"),
+    ]:
+        value = sample_outputs.get(key)
+        if value:
+            lines.append(f"{label}: {value}")
+    for label, key in [
+        ("Operator dashboard", "operator_dashboard"),
+        ("Closeout status", "closeout_status"),
+        ("Review bundle", "review_bundle"),
+        ("Review HTML", "review_html"),
+        ("Review workbook", "review_workbook"),
+    ]:
+        command = commands.get(key)
+        if command:
+            lines.append(f"{label}: {command}")
+    stop_rows = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stop_rows)}")
+    for condition in stop_rows:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_multi_card_preclassification_drill_text(payload: dict[str, object]) -> str:
     assertions = dict(payload.get("assertions") or {})
     commands = dict(payload.get("commands") or {})
@@ -2205,6 +2264,8 @@ def build_parser() -> argparse.ArgumentParser:
     drills_review_routing.add_argument("--json", action="store_true")
     drills_live_pilot_rehearsal = drills_sub.add_parser("live-pilot-rehearsal")
     drills_live_pilot_rehearsal.add_argument("--json", action="store_true")
+    drills_child_replacement_readiness = drills_sub.add_parser("child-replacement-readiness")
+    drills_child_replacement_readiness.add_argument("--json", action="store_true")
 
     sinks = sub.add_parser("sinks")
     sinks_sub = sinks.add_subparsers(dest="sinks_command", required=True)
@@ -2870,6 +2931,11 @@ def main(argv: list[str] | None = None) -> int:
             payload = service.live_pilot_rehearsal_drill()
             if not args.json:
                 print(_render_live_pilot_rehearsal_drill_text(payload), end="")
+                return 0
+        elif args.drills_command == "child-replacement-readiness":
+            payload = service.child_replacement_readiness_drill()
+            if not args.json:
+                print(_render_child_replacement_readiness_drill_text(payload), end="")
                 return 0
         print(json.dumps(payload, indent=2) if args.json else payload)
         return 0

@@ -33,7 +33,7 @@ from .enrichment import (
     score_public_web_results,
 )
 from .ledger import RunLedger
-from .models import CardJob, utc_now
+from .models import CardJob, SkillRunResult, utc_now
 from .orchestrator import BatchOrchestrator
 from .preclassifier import assess_business_card_candidate
 from .review import assess_contact_spec, build_review_submission, write_review_packet, write_review_submission
@@ -76,6 +76,55 @@ _SAFE_NEXT_ACTIONS = {
 
 def _selected_target_identity(payload: dict[str, Any]) -> str:
     return str(payload.get("selection_id") or payload.get("created_at") or "")
+
+
+class _FixtureSkillAdapter:
+    def run_pipeline(self, image_path: Path, artifact_dir: Path, *, apply_google: bool) -> SkillRunResult:
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        spec = {
+            "full_name": "Synthetic Fixture",
+            "organization": "Fixture Labs",
+            "title": "Validation Contact",
+            "email": "fixture@example.test",
+            "phone": "+1-555-0100",
+            "notes": "Synthetic privacy-safe business-card fixture for dry-run validation.",
+            "source_fixture": image_path.name,
+        }
+        spec_path = artifact_dir / "spec.json"
+        review_path = artifact_dir / "review.md"
+        crop_manifest_path = artifact_dir / "crop_manifest.json"
+        ocr_path = artifact_dir / "ocr.txt"
+        spec_path.write_text(json.dumps(spec, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        review_path.write_text(
+            "# Synthetic Review\n\n"
+            "- privacy: synthetic fixture only\n"
+            "- confidence: high\n"
+            "- action: dry-run validation\n",
+            encoding="utf-8",
+        )
+        crop_manifest_path.write_text(
+            json.dumps(
+                {
+                    "schema": "business-card-watchdog.synthetic-crops.v1",
+                    "crops": [{"id": "contact-photo-1", "source": image_path.name, "synthetic": True}],
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        ocr_path.write_text(
+            "Synthetic Fixture\nFixture Labs\nfixture@example.test\n+1-555-0100\n",
+            encoding="utf-8",
+        )
+        return SkillRunResult(
+            status="ok",
+            artifact_dir=artifact_dir,
+            spec_path=spec_path,
+            review_path=review_path,
+            stdout="synthetic adapter completed\n",
+        )
 
 _EXPLICIT_OPERATOR_ACTIONS = {
     "decide_sink_apply",
@@ -655,6 +704,7 @@ class BusinessCardService:
                 "multi_card_preclassification_drill": "drills multi-card-preclassification --json",
                 "review_routing_drill": "drills review-routing --json",
                 "live_pilot_rehearsal_drill": "drills live-pilot-rehearsal --json",
+                "child_replacement_readiness_drill": "drills child-replacement-readiness --json",
                 "live_pilot_status": (
                     f"runs live-pilot-status {selected_run_id} --no-write --json"
                     if selected_run_id
@@ -779,6 +829,7 @@ class BusinessCardService:
                 "multi_card_preclassification_drill": "POST /drills/multi-card-preclassification",
                 "review_routing_drill": "POST /drills/review-routing",
                 "live_pilot_rehearsal_drill": "POST /drills/live-pilot-rehearsal",
+                "child_replacement_readiness_drill": "POST /drills/child-replacement-readiness",
                 "live_pilot_status": (
                     f"GET /runs/{selected_run_id}/live-pilot-status?write=false"
                     if selected_run_id
@@ -903,6 +954,10 @@ class BusinessCardService:
                 },
                 "live_pilot_rehearsal_drill": {
                     "tool": "business_card_watchdog_live_pilot_rehearsal_drill",
+                    "arguments": {},
+                },
+                "child_replacement_readiness_drill": {
+                    "tool": "business_card_watchdog_child_replacement_readiness_drill",
                     "arguments": {},
                 },
                 "live_pilot_status": {
@@ -2416,6 +2471,264 @@ class BusinessCardService:
             {
                 "run_id": run_id,
                 "job_id": job_id,
+                "drill_path": str(drill_path),
+                "state": state,
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        payload["drill_path"] = str(drill_path)
+        return payload
+
+    def child_replacement_readiness_drill(self) -> dict[str, Any]:
+        ensure_runtime_dirs(self.config)
+        run_id = f"fixture-child-replacement-readiness-{utc_now().replace(':', '-')}-{uuid4().hex[:8]}"
+        fixture_dir = self.config.cache_dir / "fixture-drills" / run_id
+        image_path, expected_count, fixture_available = _write_synthetic_multi_card_image(
+            fixture_dir / "synthetic-child-replacement-photo.jpg"
+        )
+        drill_config = replace(
+            self.config,
+            sink=SinkConfig(
+                google_contacts=True,
+                google_contacts_profile="fixture-gws-profile",
+                odoo=True,
+                odollo_tenant="fixture-odollo-tenant",
+                dry_run=True,
+                google_contacts_apply_enabled=False,
+                odoo_apply_enabled=False,
+            ),
+            routing_rules=[
+                {
+                    "match": "email_domain",
+                    "value": "*",
+                    "sinks": ["google_contacts", "odoo"],
+                }
+            ],
+        )
+        orchestrator = BatchOrchestrator(drill_config)
+        orchestrator.adapter = _FixtureSkillAdapter()
+        run_dir = orchestrator.process_source(str(fixture_dir), dry_run=True, workers=1)
+        drill_service = BusinessCardService(
+            drill_config,
+            sink_lookup_executor=self.sink_lookup_executor,
+            sink_write_executor=self.sink_write_executor,
+            sink_readback_executor=self.sink_readback_executor,
+        )
+        child_queue = drill_service.child_review_queue(run_id=run_dir.name)
+        if not child_queue:
+            raise RuntimeError("synthetic child replacement drill did not produce child review candidates")
+        candidate_id = str(child_queue[0]["candidate_id"])
+        drill_service.submit_child_review(
+            run_id=run_dir.name,
+            candidate_id=candidate_id,
+            reviewer="fixture-operator",
+            action="approve_child_for_routing",
+            notes="approved by synthetic child replacement readiness drill",
+        )
+        drill_service.prepare_child_route(run_id=run_dir.name, candidate_id=candidate_id)
+        drill_service.record_child_sink_lookup_result(run_id=run_dir.name, candidate_id=candidate_id)
+        drill_service.assess_child_downstream_duplicates(run_id=run_dir.name, candidate_id=candidate_id)
+        drill_service.child_sink_plan_gate(run_id=run_dir.name, candidate_id=candidate_id)
+        handoff = drill_service.child_selected_target_handoff(
+            run_id=run_dir.name,
+            candidate_id=candidate_id,
+            sink="google_contacts",
+            operator="fixture-operator",
+            scope="write",
+        )["handoff"]
+        template = handoff["operator_response_template"]
+        operator_response = (
+            f"run_id={template['run_id']} job_id={template['job_id']} "
+            f"candidate_id={template['candidate_id']} work_item_id={template['work_item_id']} "
+            "sink=google_contacts operator=fixture-operator scope=write "
+            "safety_confirmation='approved fixture google contacts target profile'"
+        )
+        drill_service.validate_child_selected_target_response(
+            run_id=run_dir.name,
+            candidate_id=candidate_id,
+            response=operator_response,
+        )
+        drill_service.child_selected_target_execution_checklist(
+            run_id=run_dir.name,
+            candidate_id=candidate_id,
+            response=operator_response,
+        )
+        drill_service.child_selected_target_command_copy_packet(
+            run_id=run_dir.name,
+            candidate_id=candidate_id,
+            response=operator_response,
+            acknowledgement=(
+                f"I acknowledge run_id={run_dir.name} candidate_id={candidate_id} "
+                "sink=google_contacts operator=fixture-operator ready to copy"
+            ),
+        )
+        blocked_replacement_audit = drill_service.child_selected_target_audit(
+            run_id=run_dir.name,
+            candidate_id=candidate_id,
+            operator="replacement-operator",
+        )
+        abandonment = drill_service.abandon_child_selected_target(
+            run_id=run_dir.name,
+            candidate_id=candidate_id,
+            operator="fixture-operator",
+            reason="synthetic replacement readiness drill",
+        )
+        reset = drill_service.child_selected_target_replacement_reset(
+            run_id=run_dir.name,
+            candidate_id=candidate_id,
+            sink="google_contacts",
+            operator="replacement-operator",
+            scope="write",
+            reset_by="fixture-operator",
+            reason="synthetic replacement preview requested",
+        )
+        blocked_replacement_validation = drill_service.validate_child_replacement_response(
+            run_id=run_dir.name,
+            candidate_id=candidate_id,
+            response=operator_response,
+        )
+        refresh = drill_service.refresh_child_replacement_handoff(
+            run_id=run_dir.name,
+            candidate_id=candidate_id,
+            sink="google_contacts",
+            operator="replacement-operator",
+            scope="write",
+            reason="synthetic replacement handoff refresh",
+        )
+        replacement_template = refresh["refreshed_handoff"]["operator_response_template"]
+        replacement_response = (
+            f"run_id={replacement_template['run_id']} job_id={replacement_template['job_id']} "
+            f"candidate_id={replacement_template['candidate_id']} "
+            f"work_item_id={replacement_template['work_item_id']} "
+            "sink=google_contacts operator=replacement-operator scope=write "
+            "safety_confirmation='approved fixture replacement google contacts target profile'"
+        )
+        replacement_validation = drill_service.validate_child_replacement_response(
+            run_id=run_dir.name,
+            candidate_id=candidate_id,
+            response=replacement_response,
+        )
+        replacement_checklist = drill_service.child_replacement_execution_checklist(
+            run_id=run_dir.name,
+            candidate_id=candidate_id,
+            response=replacement_response,
+        )
+        blocked_replacement_copy_packet = drill_service.child_replacement_command_copy_packet(
+            run_id=run_dir.name,
+            candidate_id=candidate_id,
+            response=replacement_response,
+        )
+        ready_replacement_copy_packet = drill_service.child_replacement_command_copy_packet(
+            run_id=run_dir.name,
+            candidate_id=candidate_id,
+            response=replacement_response,
+            acknowledgement=(
+                f"I acknowledge run_id={run_dir.name} candidate_id={candidate_id} "
+                "sink=google_contacts operator=replacement-operator ready to copy"
+            ),
+        )
+        closeout = drill_service.child_replacement_closeout_status(
+            run_id=run_dir.name,
+            candidate_id=candidate_id,
+        )
+        review_bundle = drill_service.review_bundle(run_id=run_dir.name, state="all", write=True)
+        review_html = drill_service.review_html(run_id=run_dir.name, state="all", write=True)
+        review_workbook = drill_service.review_workbook(run_id=run_dir.name, state="all", write=True)
+        operator_dashboard = drill_service.operator_dashboard(run_id=run_dir.name)
+        closeout_status = dict(closeout.get("rollup") or {})
+        bundle_groups = dict(review_bundle.get("groups") or {})
+        child_state_groups = dict(bundle_groups.get("by_child_replacement_state") or {})
+        child_summary = dict(operator_dashboard.get("child_replacement_summary") or {})
+        assertions = {
+            "fixture_image_available": fixture_available,
+            "expected_child_candidates_available": len(child_queue) >= min(expected_count, 1),
+            "replacement_requires_abandonment_seen": blocked_replacement_audit.get("replacement_requires_abandonment")
+            is True,
+            "abandonment_recorded": abandonment.get("state") == "abandoned",
+            "replacement_reset_ready": reset.get("state") == "ready_for_replacement_preview",
+            "blocked_validation_before_refresh": blocked_replacement_validation.get("state") == "blocked",
+            "replacement_handoff_ready": refresh.get("state") == "ready_for_replacement_handoff",
+            "replacement_response_ready": replacement_validation.get("state") == "ready_for_no_live_replacement_checklist",
+            "replacement_checklist_ready": replacement_checklist.get("state") == "ready_for_replacement_operator_review",
+            "blocked_copy_requires_acknowledgement": blocked_replacement_copy_packet.get("state") == "blocked",
+            "replacement_copy_ready": ready_replacement_copy_packet.get("state") == "ready_for_replacement_operator_copy",
+            "closeout_ready": closeout.get("state") == "ready_for_operator_closeout",
+            "predecessors_marked_stale": closeout_status.get("predecessor_artifacts_stale") is True,
+            "review_bundle_groups_closeout": child_state_groups.get("ready_for_operator_closeout", {}).get("count") == 1,
+            "review_html_written": bool(review_html.get("html_path")),
+            "review_workbook_written": bool(review_workbook.get("workbook_path")),
+            "operator_dashboard_ready_count": child_summary.get("ready_count") == 1,
+            "no_private_sources": True,
+            "no_public_web_search": True,
+            "no_paid_enrichment": True,
+            "no_live_sink_calls": True,
+        }
+        state = "passed" if all(assertions.values()) else "needs_attention"
+        payload = {
+            "schema": "business-card-watchdog.child-replacement-readiness-drill.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_dir.name,
+            "job_id": closeout.get("job_id"),
+            "candidate_id": candidate_id,
+            "fixture_dir": str(fixture_dir),
+            "fixture_image_path": str(image_path),
+            "fixture_child_candidate_count": len(child_queue),
+            "private_sources_used": False,
+            "public_web_search_used": False,
+            "paid_enrichment_used": False,
+            "live_sink_calls_made": False,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "sample_outputs": {
+                "review_bundle_path": review_bundle.get("review_bundle_path"),
+                "review_html_path": review_html.get("html_path"),
+                "review_workbook_path": review_workbook.get("workbook_path"),
+                "operator_dashboard_command": f"operator-dashboard --run-id {run_dir.name} --json",
+            },
+            "readiness_states": {
+                "blocked_replacement_audit": blocked_replacement_audit.get("state"),
+                "blocked_replacement_validation": blocked_replacement_validation.get("state"),
+                "replacement_handoff": refresh.get("state"),
+                "replacement_response": replacement_validation.get("state"),
+                "replacement_checklist": replacement_checklist.get("state"),
+                "blocked_replacement_copy_packet": blocked_replacement_copy_packet.get("state"),
+                "ready_replacement_copy_packet": ready_replacement_copy_packet.get("state"),
+                "closeout": closeout.get("state"),
+            },
+            "closeout_rollup": closeout_status,
+            "review_bundle_child_replacement_groups": child_state_groups,
+            "operator_dashboard_child_replacement_summary": child_summary,
+            "assertions": assertions,
+            "commands": {
+                "child_replacement_readiness_drill": "drills child-replacement-readiness --json",
+                "review_bundle": f"reviews bundle --run-id {run_dir.name} --state all --json",
+                "review_html": f"reviews html --run-id {run_dir.name} --state all --json",
+                "review_workbook": f"reviews workbook --run-id {run_dir.name} --state all --json",
+                "operator_dashboard": f"operator-dashboard --run-id {run_dir.name} --json",
+                "closeout_status": (
+                    f"reviews child-replacement-closeout-status {shlex.quote(candidate_id)} "
+                    f"--run-id {run_dir.name} --json"
+                ),
+            },
+            "explicit_stop_conditions": [
+                "This drill uses only synthetic fixture data written under the cache directory.",
+                "The command-copy text is offline operator copy text; it is not a live sink command.",
+                "Do not process private SyncThing images, run public-web search, call paid enrichment, or call GWS/Odollo/Odoo from this drill.",
+                "Use authenticated readiness and live or sandbox write/readback checks before claiming real sink routing.",
+            ],
+        }
+        drill_path = self.config.runs_dir / run_dir.name / "child_replacement_readiness_drill.json"
+        drill_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_dir.name)
+        ledger.record_artifact(job_id="__run__", kind="child_replacement_readiness_drill", path=drill_path)
+        ledger.record_event(
+            "child_replacement_readiness_drill_completed",
+            {
+                "run_id": run_dir.name,
+                "job_id": closeout.get("job_id"),
+                "candidate_id": candidate_id,
                 "drill_path": str(drill_path),
                 "state": state,
                 "writes_attempted": 0,

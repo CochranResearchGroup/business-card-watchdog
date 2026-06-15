@@ -150,6 +150,30 @@ def test_cli_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: Path
     assert "{" not in text
 
 
+def test_cli_child_replacement_readiness_drill_exports_operator_samples(tmp_path: Path, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+
+    assert main(["--config", str(config_path), "drills", "child-replacement-readiness", "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["schema"] == "business-card-watchdog.child-replacement-readiness-drill.v1"
+    assert payload["state"] == "passed"
+    assert payload["readiness_states"]["closeout"] == "ready_for_operator_closeout"
+    assert payload["operator_dashboard_child_replacement_summary"]["ready_count"] == 1
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert Path(payload["sample_outputs"]["review_html_path"]).exists()
+
+    assert main(["--config", str(config_path), "drills", "child-replacement-readiness"]) == 0
+    text = capsys.readouterr().out
+    assert "Child replacement readiness drill:" in text
+    assert "closeout: ready_for_operator_closeout" in text
+    assert "Review HTML:" in text
+    assert "{" not in text
+
+
 def test_cli_multi_card_preclassification_drill_records_candidate_boxes(
     tmp_path: Path,
     capsys,

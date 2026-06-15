@@ -83,6 +83,35 @@ def test_child_review_queue_lists_promoted_child_contact_candidates(tmp_path: Pa
     assert BusinessCardService(config).child_review_queue(run_id=run_dir.name, state="all")
 
 
+def test_service_child_replacement_readiness_drill_exports_operator_samples(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data", cache_dir=tmp_path / "cache")
+
+    drill = BusinessCardService(config).child_replacement_readiness_drill()
+
+    assert drill["schema"] == "business-card-watchdog.child-replacement-readiness-drill.v1"
+    assert drill["state"] == "passed"
+    assert drill["private_sources_used"] is False
+    assert drill["public_web_search_used"] is False
+    assert drill["paid_enrichment_used"] is False
+    assert drill["live_sink_calls_made"] is False
+    assert drill["writes_attempted"] == 0
+    assert drill["network_calls_made"] == 0
+    assert drill["readiness_states"]["blocked_replacement_audit"] == "blocked"
+    assert drill["readiness_states"]["blocked_replacement_validation"] == "blocked"
+    assert drill["readiness_states"]["replacement_handoff"] == "ready_for_replacement_handoff"
+    assert drill["readiness_states"]["replacement_response"] == "ready_for_no_live_replacement_checklist"
+    assert drill["readiness_states"]["replacement_checklist"] == "ready_for_replacement_operator_review"
+    assert drill["readiness_states"]["ready_replacement_copy_packet"] == "ready_for_replacement_operator_copy"
+    assert drill["readiness_states"]["closeout"] == "ready_for_operator_closeout"
+    assert drill["closeout_rollup"]["predecessor_artifacts_stale"] is True
+    assert drill["review_bundle_child_replacement_groups"]["ready_for_operator_closeout"]["count"] == 1
+    assert drill["operator_dashboard_child_replacement_summary"]["ready_count"] == 1
+    assert Path(drill["sample_outputs"]["review_bundle_path"]).exists()
+    assert Path(drill["sample_outputs"]["review_html_path"]).exists()
+    assert Path(drill["sample_outputs"]["review_workbook_path"]).exists()
+    assert Path(drill["drill_path"]).exists()
+
+
 def test_child_review_approval_writes_reviewed_child_contact_artifact(tmp_path: Path, monkeypatch) -> None:
     pytest = __import__("pytest")
     pytest.importorskip("cv2")

@@ -1515,6 +1515,31 @@ def test_api_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: Path
     assert Path(drill["drill_path"]).exists()
 
 
+def test_api_child_replacement_readiness_drill_exports_operator_samples(tmp_path: Path) -> None:
+    from business_card_watchdog.api import create_app
+
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+    client = TestClient(create_app(config_path))
+
+    drill = client.post("/drills/child-replacement-readiness").json()
+
+    assert drill["schema"] == "business-card-watchdog.child-replacement-readiness-drill.v1"
+    assert drill["state"] == "passed"
+    assert drill["private_sources_used"] is False
+    assert drill["public_web_search_used"] is False
+    assert drill["paid_enrichment_used"] is False
+    assert drill["live_sink_calls_made"] is False
+    assert drill["readiness_states"]["closeout"] == "ready_for_operator_closeout"
+    assert drill["review_bundle_child_replacement_groups"]["ready_for_operator_closeout"]["count"] == 1
+    assert drill["operator_dashboard_child_replacement_summary"]["ready_count"] == 1
+    assert drill["writes_attempted"] == 0
+    assert drill["network_calls_made"] == 0
+    assert Path(drill["sample_outputs"]["review_workbook_path"]).exists()
+    assert Path(drill["drill_path"]).exists()
+
+
 def test_api_sink_readback_pilot_writes_zero_write_artifact(tmp_path: Path) -> None:
     from business_card_watchdog.api import create_app
 

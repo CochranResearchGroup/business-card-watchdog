@@ -844,6 +844,10 @@ def create_app(config_path: Path | None = None):
     def live_pilot_rehearsal_drill() -> dict[str, object]:
         return service().live_pilot_rehearsal_drill()
 
+    @app.post("/drills/child-replacement-readiness")
+    def child_replacement_readiness_drill() -> dict[str, object]:
+        return service().child_replacement_readiness_drill()
+
     @app.get("/jobs/{job_id}")
     def get_job(job_id: str, run_id: str | None = None) -> dict[str, object]:
         return service().get_job(job_id, run_id=run_id)

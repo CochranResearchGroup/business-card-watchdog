@@ -53,6 +53,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_multi_card_preclassification_drill" in names
     assert "business_card_watchdog_review_routing_drill" in names
     assert "business_card_watchdog_live_pilot_rehearsal_drill" in names
+    assert "business_card_watchdog_child_replacement_readiness_drill" in names
     assert "business_card_watchdog_reviews_list" in names
     assert "business_card_watchdog_child_reviews_list" in names
     assert "business_card_watchdog_child_review_submit" in names
@@ -138,6 +139,30 @@ def test_mcp_multi_card_preclassification_drill_records_candidate_boxes(tmp_path
     assert payload["live_sink_calls_made"] is False
     assert payload["writes_attempted"] == 0
     assert payload["network_calls_made"] == 0
+
+
+def test_mcp_child_replacement_readiness_drill_exports_operator_samples(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        cache_dir=tmp_path / "cache",
+    )
+
+    payload = call_tool("business_card_watchdog_child_replacement_readiness_drill", {}, config=config)
+
+    assert payload["schema"] == "business-card-watchdog.child-replacement-readiness-drill.v1"
+    assert payload["state"] == "passed"
+    assert payload["private_sources_used"] is False
+    assert payload["public_web_search_used"] is False
+    assert payload["paid_enrichment_used"] is False
+    assert payload["live_sink_calls_made"] is False
+    assert payload["readiness_states"]["closeout"] == "ready_for_operator_closeout"
+    assert payload["review_bundle_child_replacement_groups"]["ready_for_operator_closeout"]["count"] == 1
+    assert payload["operator_dashboard_child_replacement_summary"]["ready_count"] == 1
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert Path(payload["sample_outputs"]["review_bundle_path"]).exists()
+    assert Path(payload["drill_path"]).exists()
 
 
 def test_mcp_child_reviews_lists_promoted_child_candidates(tmp_path: Path, monkeypatch) -> None:

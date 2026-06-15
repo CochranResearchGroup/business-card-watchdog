@@ -5253,3 +5253,32 @@ Validation:
 Safety:
 
 - This exposed existing no-live child replacement closeout state through review surfaces only. It did not create selected targets; process private SyncThing images; execute live lookup; route to live sinks; enrich; write contacts; run public-web search; call paid APIs; or call GWS/Odollo/Odoo.
+
+## Turn 238 | 2026-06-15
+
+Executed Plan 0032 with Slice 0032-A.
+
+Implemented:
+
+- Added `BusinessCardService.child_replacement_readiness_drill`.
+- Added CLI command `drills child-replacement-readiness`.
+- Added API route `POST /drills/child-replacement-readiness`.
+- Added MCP tool `business_card_watchdog_child_replacement_readiness_drill`.
+- Added operator dashboard CLI/API/MCP command references for the drill.
+- Added synthetic service, CLI, API, and MCP coverage for child replacement stale/readiness sample outputs.
+- Updated README and roadmap documentation for the child replacement readiness drill.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_review_surface.py::test_service_child_replacement_readiness_drill_exports_operator_samples tests/test_cli_surfaces.py::test_cli_child_replacement_readiness_drill_exports_operator_samples tests/test_api.py::test_api_child_replacement_readiness_drill_exports_operator_samples tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_child_replacement_readiness_drill_exports_operator_samples -q` passed with 5 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/api.py src/business_card_watchdog/mcp.py tests/test_review_surface.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 271 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `uv build --out-dir dist` built source and wheel distributions.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This created synthetic child replacement readiness sample outputs only. It did not create selected targets; process private SyncThing images; execute live lookup; route to live sinks; enrich; write contacts; run public-web search; call paid APIs; or call GWS/Odollo/Odoo.

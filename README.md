@@ -200,6 +200,12 @@ operator-selected live-pilot gate through selected target creation, selected-tar
 audit, lookup handoff, redacted readiness export, execution checklist, and command
 copy packet. It does not execute the copied command or call live sinks.
 
+`drills child-replacement-readiness` creates a synthetic child replacement run and
+exports review bundle, review HTML, review workbook, and operator dashboard sample
+outputs. It proves the blocked audit/validation states before refresh and the
+ready handoff, response, checklist, command-copy, and closeout states after
+replacement refresh. It uses fixture data only and does not call live sinks.
+
 ## Operator-Selected Live Pilots
 
 Live lookup, write, and readback are not part of generic continuation or broad batch automation. Use one explicit `run_id`, `job_id`, `sink`, `operator`, and scope at a time, starting with non-sensitive test card data.

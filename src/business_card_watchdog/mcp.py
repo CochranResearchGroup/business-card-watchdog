@@ -401,6 +401,14 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_child_replacement_readiness_drill",
+                "description": "Run a synthetic no-live child replacement stale/readiness drill and emit operator review sample outputs.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {},
+                },
+            },
+            {
                 "name": "business_card_watchdog_jobs_list",
                 "description": "List latest job states, optionally for one run.",
                 "input_schema": {
@@ -1424,6 +1432,8 @@ def call_tool(
         return service.review_routing_drill()
     if tool_name == "business_card_watchdog_live_pilot_rehearsal_drill":
         return service.live_pilot_rehearsal_drill()
+    if tool_name == "business_card_watchdog_child_replacement_readiness_drill":
+        return service.child_replacement_readiness_drill()
     if tool_name == "business_card_watchdog_jobs_list":
         return service.list_jobs(str(args["run_id"]) if args.get("run_id") else None)
     if tool_name == "business_card_watchdog_reviews_list":
