@@ -5297,6 +5297,7 @@ class BusinessCardService:
                 "live_selection_requirements": f"live-selection-requirements --run-id {run_id}",
                 "live_target_candidates": f"live-target-candidates --run-id {run_id}",
                 "live_pilot_status": f"runs live-pilot-status {run_id}",
+                "live_pilot_handoff": f"runs live-pilot-handoff {run_id}",
             },
             "explicit_stop_conditions": [
                 "This status report does not create selected_live_target.json.",

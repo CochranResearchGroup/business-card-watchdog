@@ -447,6 +447,7 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert Path(status["status_path"]).exists()
     assert status["commands"]["live_pilot_status"] == f"runs live-pilot-status {run_id}"
     assert status["commands"]["live_target_candidates"] == f"live-target-candidates --run-id {run_id}"
+    assert status["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id}"
     assert status["operator_response_contract"]["creates_selected_live_target"] is False
     assert status["entries"][0]["operator_response_template"] == (
         f"run_id={run_id} job_id={job_id} sink=google_contacts "
@@ -462,6 +463,7 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     text_status = capsys.readouterr().out
     assert f"target={target_identity}" in text_status
     assert "abandonment=none" in text_status
+    assert f"Live pilot handoff: runs live-pilot-handoff {run_id}" in text_status
     assert "{" not in text_status
 
     assert main(["--config", str(config_path), "runs", "live-pilot-handoff", run_id, "--json"]) == 0

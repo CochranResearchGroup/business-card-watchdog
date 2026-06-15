@@ -65,6 +65,7 @@ def _render_pilot_readiness_report_text(payload: dict[str, object]) -> str:
 
 def _render_live_pilot_status_text(payload: dict[str, object]) -> str:
     counts = dict(payload.get("counts") or {})
+    commands = dict(payload.get("commands") or {})
     entries = payload.get("entries") or []
     lines = [
         f"Run: {payload.get('run_id')}",
@@ -77,6 +78,7 @@ def _render_live_pilot_status_text(payload: dict[str, object]) -> str:
         "Observed: "
         f"writes={payload.get('observed_writes_attempted', 0)} "
         f"network={payload.get('observed_network_calls_made', 0)}",
+        f"Live pilot handoff: {commands.get('live_pilot_handoff')}",
     ]
     for entry in entries if isinstance(entries, list) else []:
         if isinstance(entry, dict):
