@@ -736,6 +736,42 @@ def test_cli_child_selected_target_response_validation_and_checklist(
         ]
     ) == 0
     replacement_validation = json.loads(capsys.readouterr().out)
+    assert main(
+        [
+            "--config",
+            str(config_path),
+            "reviews",
+            "child-replacement-execution-checklist",
+            candidate_id,
+            "--run-id",
+            run_dir.name,
+            "--response",
+            replacement_response,
+            "--json",
+        ]
+    ) == 0
+    replacement_checklist = json.loads(capsys.readouterr().out)
+
+    assert main(
+        [
+            "--config",
+            str(config_path),
+            "reviews",
+            "child-replacement-command-copy-packet",
+            candidate_id,
+            "--run-id",
+            run_dir.name,
+            "--response",
+            replacement_response,
+            "--acknowledgement",
+            (
+                f"I acknowledge run_id={run_dir.name} candidate_id={candidate_id} "
+                "sink=google_contacts operator=replacement-operator ready to copy"
+            ),
+            "--json",
+        ]
+    ) == 0
+    replacement_command_copy = json.loads(capsys.readouterr().out)
 
     assert validation["state"] == "ready_for_no_live_child_checklist"
     assert validation["writes_attempted"] == 0
@@ -781,6 +817,17 @@ def test_cli_child_selected_target_response_validation_and_checklist(
     assert replacement_validation["selected_target_created"] is False
     assert replacement_validation["writes_attempted"] == 0
     assert replacement_validation["network_calls_made"] == 0
+    assert replacement_checklist["schema"] == "business-card-watchdog.child-replacement-execution-checklist.v1"
+    assert replacement_checklist["state"] == "ready_for_replacement_operator_review"
+    assert replacement_checklist["executable_live_command"] is None
+    assert replacement_checklist["writes_attempted"] == 0
+    assert replacement_checklist["network_calls_made"] == 0
+    assert replacement_command_copy["schema"] == "business-card-watchdog.child-replacement-command-copy-packet.v1"
+    assert replacement_command_copy["state"] == "ready_for_replacement_operator_copy"
+    assert replacement_command_copy["command_copy_text"].startswith("reviews child-replacement-execution-checklist")
+    assert replacement_command_copy["executable_live_command"] is None
+    assert replacement_command_copy["writes_attempted"] == 0
+    assert replacement_command_copy["network_calls_made"] == 0
 
 
 def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) -> None:

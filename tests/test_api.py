@@ -1375,6 +1375,21 @@ def test_api_child_selected_target_response_validation_and_checklist(tmp_path: P
         f"/reviews/children/{candidate_id}/replacement-response-validation",
         json={"run_id": run_dir.name, "response": replacement_response},
     ).json()
+    replacement_checklist = client.post(
+        f"/reviews/children/{candidate_id}/replacement-execution-checklist",
+        json={"run_id": run_dir.name, "response": replacement_response},
+    ).json()
+    replacement_command_copy = client.post(
+        f"/reviews/children/{candidate_id}/replacement-command-copy-packet",
+        json={
+            "run_id": run_dir.name,
+            "response": replacement_response,
+            "acknowledgement": (
+                f"I acknowledge run_id={run_dir.name} candidate_id={candidate_id} "
+                "sink=google_contacts operator=replacement-operator ready to copy"
+            ),
+        },
+    ).json()
 
     assert validation["schema"] == "business-card-watchdog.child-selected-target-response-validation.v1"
     assert validation["state"] == "ready_for_no_live_child_checklist"
@@ -1422,6 +1437,17 @@ def test_api_child_selected_target_response_validation_and_checklist(tmp_path: P
     assert replacement_validation["selected_target_created"] is False
     assert replacement_validation["writes_attempted"] == 0
     assert replacement_validation["network_calls_made"] == 0
+    assert replacement_checklist["schema"] == "business-card-watchdog.child-replacement-execution-checklist.v1"
+    assert replacement_checklist["state"] == "ready_for_replacement_operator_review"
+    assert replacement_checklist["executable_live_command"] is None
+    assert replacement_checklist["writes_attempted"] == 0
+    assert replacement_checklist["network_calls_made"] == 0
+    assert replacement_command_copy["schema"] == "business-card-watchdog.child-replacement-command-copy-packet.v1"
+    assert replacement_command_copy["state"] == "ready_for_replacement_operator_copy"
+    assert replacement_command_copy["command_copy_text"].startswith("reviews child-replacement-execution-checklist")
+    assert replacement_command_copy["executable_live_command"] is None
+    assert replacement_command_copy["writes_attempted"] == 0
+    assert replacement_command_copy["network_calls_made"] == 0
 
 
 def test_api_multi_card_preclassification_drill_records_candidate_boxes(tmp_path: Path) -> None:

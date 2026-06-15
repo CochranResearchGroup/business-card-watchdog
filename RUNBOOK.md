@@ -5165,3 +5165,33 @@ Validation:
 Safety:
 
 - This created local child replacement response validation artifacts only. It did not create selected targets; process private SyncThing images; execute live lookup; route to live sinks; enrich; write contacts; run public-web search; call paid APIs; or call GWS/Odollo/Odoo.
+
+## Turn 235 | 2026-06-15
+
+Executed Plan 0029 with Slice 0029-A.
+
+Implemented:
+
+- Added `BusinessCardService.child_replacement_execution_checklist`.
+- Added `BusinessCardService.child_replacement_command_copy_packet`.
+- Added CLI commands `reviews child-replacement-execution-checklist` and `reviews child-replacement-command-copy-packet`.
+- Added API routes `POST /reviews/children/{candidate_id}/replacement-execution-checklist` and `POST /reviews/children/{candidate_id}/replacement-command-copy-packet`.
+- Added MCP tools `business_card_watchdog_child_replacement_execution_checklist` and `business_card_watchdog_child_replacement_command_copy_packet`.
+- Added acknowledgement gating for replacement command-copy packets.
+- Added synthetic multi-card coverage for service, CLI, API, and MCP child replacement checklist/copy behavior.
+- Updated README and roadmap documentation for child replacement checklist/copy packets.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_review_surface.py::test_child_selected_target_response_validation_and_checklist tests/test_cli_surfaces.py::test_cli_child_selected_target_response_validation_and_checklist tests/test_api.py::test_api_child_selected_target_response_validation_and_checklist tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_child_selected_target_response_validation_and_checklist -q` passed with 5 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/api.py src/business_card_watchdog/mcp.py tests/test_review_surface.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 267 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `uv build --out-dir dist` built source and wheel distributions.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This created local child replacement checklist and command-copy artifacts only. It did not create selected targets; process private SyncThing images; execute live lookup; route to live sinks; enrich; write contacts; run public-web search; call paid APIs; or call GWS/Odollo/Odoo.

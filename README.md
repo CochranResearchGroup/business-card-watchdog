@@ -178,7 +178,12 @@ to refresh the no-live handoff and mark prior child selected-target response,
 checklist, command-copy, and audit artifacts stale. Then use
 `reviews child-validate-replacement-response <candidate-id> --run-id <run-id> --response <operator-response> --json`
 to validate the replacement response only after the refresh packet and staleness
-marker are ready.
+marker are ready. Then use
+`reviews child-replacement-execution-checklist <candidate-id> --run-id <run-id> --response <operator-response> --json`
+and
+`reviews child-replacement-command-copy-packet <candidate-id> --run-id <run-id> --response <operator-response> --acknowledgement <operator-acknowledgement> --json`
+to create replacement-specific no-live checklist and offline command-copy
+packets.
 
 `drills review-routing` creates a synthetic fixture run and proves review approval,
 review bundle/workbook export, duplicate lookup planning, dry-run sink routing, and

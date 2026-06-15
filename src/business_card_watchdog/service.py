@@ -4238,6 +4238,261 @@ class BusinessCardService:
         validation["validation_path"] = str(validation_path)
         return validation
 
+    def child_replacement_execution_checklist(
+        self,
+        *,
+        run_id: str,
+        candidate_id: str,
+        response: str,
+    ) -> dict[str, Any]:
+        validation = self.validate_child_replacement_response(
+            run_id=run_id,
+            candidate_id=candidate_id,
+            response=response,
+        )
+        entry = self._child_route_prep_entry(run_id=run_id, candidate_id=candidate_id)
+        prep_dir = self._child_route_prep_dir(entry)
+        response_digest = hashlib.sha256(response.encode("utf-8")).hexdigest()
+        stale_enforcement = dict(validation.get("stale_enforcement") or {})
+        checklist_items = [
+            {
+                "name": "replacement_response_ready",
+                "ok": validation.get("state") == "ready_for_no_live_replacement_checklist",
+                "evidence": validation.get("validation_path"),
+            },
+            {
+                "name": "replacement_handoff_ready",
+                "ok": validation.get("handoff_state") == "ready_for_operator_selection",
+                "evidence": validation.get("handoff_path"),
+            },
+            {
+                "name": "stale_predecessor_artifacts_marked",
+                "ok": stale_enforcement.get("staleness_marker_present") is True
+                and stale_enforcement.get("staleness_state") == "stale",
+                "evidence": validation.get("staleness_path"),
+            },
+            {
+                "name": "response_digest_recorded_without_live_action",
+                "ok": bool(response_digest),
+                "evidence": "sha256 digest only; raw response remains in local runtime artifact",
+            },
+            {
+                "name": "live_execution_blocked",
+                "ok": True,
+                "evidence": "executable_live_command is null and selected_target_created is false",
+            },
+        ]
+        blocked_reasons = list(validation.get("blocked_reasons") or [])
+        state = (
+            "ready_for_replacement_operator_review"
+            if validation.get("state") == "ready_for_no_live_replacement_checklist"
+            else "blocked"
+        )
+        checklist = {
+            "schema": "business-card-watchdog.child-replacement-execution-checklist.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_id,
+            "job_id": entry.get("job_id"),
+            "candidate_id": candidate_id,
+            "work_item_id": entry.get("work_item_id"),
+            "sink": (validation.get("parsed_response") or {}).get("sink"),
+            "operator": (validation.get("parsed_response") or {}).get("operator"),
+            "scope": (validation.get("parsed_response") or {}).get("scope"),
+            "validation": validation,
+            "stale_enforcement": stale_enforcement,
+            "operator_response_redacted": {
+                "raw_response_stored": True,
+                "sha256": response_digest,
+                "fields": {
+                    key: value
+                    for key, value in dict(validation.get("parsed_response") or {}).items()
+                    if key != "safety_confirmation"
+                },
+                "safety_confirmation_stored": False,
+            },
+            "checklist_items": checklist_items,
+            "blocked_reasons": blocked_reasons,
+            "selected_target_created": False,
+            "creates_selected_live_target": False,
+            "executable_live_command": None,
+            "next_safe_command": (
+                f"reviews child-replacement-handoff-refresh {shlex.quote(candidate_id)} "
+                f"--run-id {run_id} --sink {shlex.quote(str((validation.get('parsed_response') or {}).get('sink') or ''))} "
+                f"--operator {shlex.quote(str((validation.get('parsed_response') or {}).get('operator') or ''))} "
+                f"--scope {shlex.quote(str((validation.get('parsed_response') or {}).get('scope') or 'write'))} --json"
+            ),
+            "commands": {
+                "validate_replacement_response": (
+                    f"reviews child-validate-replacement-response {shlex.quote(candidate_id)} "
+                    f"--run-id {run_id} --response <operator-response> --json"
+                ),
+                "replacement_command_copy_packet": (
+                    f"reviews child-replacement-command-copy-packet {shlex.quote(candidate_id)} "
+                    f"--run-id {run_id} --response <operator-response> "
+                    "--acknowledgement <operator-acknowledgement> --json"
+                ),
+            },
+            "explicit_stop_conditions": [
+                "This replacement checklist is not selected-target approval.",
+                "Do not create selected_live_target.json from this replacement checklist.",
+                "Do not run live GWS/Odollo/Odoo lookup, write, or readback from this replacement checklist.",
+                "Do not use stale predecessor child checklist or command-copy packets for the replacement target.",
+                "Do not process private SyncThing images, run public-web search, or call paid enrichment from this checklist.",
+            ],
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+        checklist_path = prep_dir / "child_replacement_execution_checklist.json"
+        checklist_path.write_text(json.dumps(checklist, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        parent_job_id = str(entry.get("job_id") or "__run__")
+        ledger.record_artifact(job_id=parent_job_id, kind="child_replacement_execution_checklist", path=checklist_path)
+        ledger.record_event(
+            "child_replacement_execution_checklist_created",
+            {
+                "run_id": run_id,
+                "job_id": entry.get("job_id"),
+                "candidate_id": candidate_id,
+                "state": state,
+                "checklist_path": str(checklist_path),
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        checklist["checklist_path"] = str(checklist_path)
+        return checklist
+
+    def child_replacement_command_copy_packet(
+        self,
+        *,
+        run_id: str,
+        candidate_id: str,
+        response: str,
+        acknowledgement: str = "",
+    ) -> dict[str, Any]:
+        checklist = self.child_replacement_execution_checklist(
+            run_id=run_id,
+            candidate_id=candidate_id,
+            response=response,
+        )
+        entry = self._child_route_prep_entry(run_id=run_id, candidate_id=candidate_id)
+        prep_dir = self._child_route_prep_dir(entry)
+        blocked_reasons = list(checklist.get("blocked_reasons") or [])
+        normalized_acknowledgement = " ".join(str(acknowledgement or "").lower().split())
+        acknowledgement_terms = {
+            "run_id": str(checklist.get("run_id") or ""),
+            "candidate_id": str(checklist.get("candidate_id") or ""),
+            "sink": str(checklist.get("sink") or ""),
+            "operator": str(checklist.get("operator") or ""),
+        }
+        missing_acknowledgement_terms = [
+            f"{key}={value}"
+            for key, value in acknowledgement_terms.items()
+            if value and value.lower() not in normalized_acknowledgement
+        ]
+        acknowledgement_verb_ok = any(
+            verb in normalized_acknowledgement
+            for verb in ["acknowledge", "acknowledged", "approve", "approved", "copy", "ready"]
+        )
+        if not normalized_acknowledgement:
+            blocked_reasons.append("operator acknowledgement is required before replacement command copy text is shown")
+        if missing_acknowledgement_terms:
+            blocked_reasons.append(
+                "operator acknowledgement must name "
+                + ", ".join(missing_acknowledgement_terms)
+                + " before replacement command copy text is shown"
+            )
+        if not acknowledgement_verb_ok:
+            blocked_reasons.append(
+                "operator acknowledgement must include one of acknowledge, approved, copy, or ready"
+            )
+        checklist_ready = checklist.get("state") == "ready_for_replacement_operator_review"
+        acknowledgement_ok = bool(
+            normalized_acknowledgement
+            and not missing_acknowledgement_terms
+            and acknowledgement_verb_ok
+        )
+        offline_command = (
+            f"reviews child-replacement-execution-checklist {shlex.quote(candidate_id)} "
+            f"--run-id {run_id} --response <operator-response> --json"
+        )
+        command_copy_text = offline_command if checklist_ready and acknowledgement_ok and not blocked_reasons else None
+        state = "ready_for_replacement_operator_copy" if command_copy_text else "blocked"
+        packet = {
+            "schema": "business-card-watchdog.child-replacement-command-copy-packet.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_id,
+            "job_id": entry.get("job_id"),
+            "candidate_id": candidate_id,
+            "work_item_id": entry.get("work_item_id"),
+            "sink": checklist.get("sink"),
+            "operator": checklist.get("operator"),
+            "scope": checklist.get("scope"),
+            "acknowledgement_required": True,
+            "acknowledgement_ok": acknowledgement_ok,
+            "acknowledgement_instruction": (
+                "Acknowledge the exact run_id, candidate_id, sink, and operator plus an approval/copy verb."
+            ),
+            "acknowledgement_redacted": {
+                "raw_acknowledgement_stored": False,
+                "sha256": hashlib.sha256(acknowledgement.encode("utf-8")).hexdigest() if acknowledgement else None,
+                "required_terms": acknowledgement_terms,
+                "missing_terms": missing_acknowledgement_terms,
+            },
+            "checklist_state": checklist.get("state"),
+            "checklist": checklist,
+            "command_copy_text": command_copy_text,
+            "offline_command_copy_text": command_copy_text,
+            "executable_live_command": None,
+            "selected_target_created": False,
+            "creates_selected_live_target": False,
+            "blocked_reasons": blocked_reasons,
+            "commands": {
+                "validate_replacement_response": (
+                    f"reviews child-validate-replacement-response {shlex.quote(candidate_id)} "
+                    f"--run-id {run_id} --response <operator-response> --json"
+                ),
+                "replacement_execution_checklist": offline_command,
+                "refresh_replacement_handoff": (
+                    f"reviews child-replacement-handoff-refresh {shlex.quote(candidate_id)} "
+                    f"--run-id {run_id} --sink {shlex.quote(str(checklist.get('sink') or ''))} "
+                    f"--operator {shlex.quote(str(checklist.get('operator') or ''))} "
+                    f"--scope {shlex.quote(str(checklist.get('scope') or 'write'))} --json"
+                ),
+            },
+            "explicit_stop_conditions": [
+                "This packet only returns offline replacement command text for operator copy; it never executes the command.",
+                "This packet never returns an executable live command.",
+                "Do not create selected_live_target.json from this replacement command-copy packet.",
+                "Do not run live GWS/Odollo/Odoo lookup, write, or readback from this packet.",
+                "Do not use stale predecessor child command-copy packets for the replacement target.",
+                "Do not process private SyncThing images, run public-web search, or call paid enrichment from this packet.",
+            ],
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+        packet_path = prep_dir / "child_replacement_command_copy_packet.json"
+        packet_path.write_text(json.dumps(packet, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        parent_job_id = str(entry.get("job_id") or "__run__")
+        ledger.record_artifact(job_id=parent_job_id, kind="child_replacement_command_copy_packet", path=packet_path)
+        ledger.record_event(
+            "child_replacement_command_copy_packet_created",
+            {
+                "run_id": run_id,
+                "job_id": entry.get("job_id"),
+                "candidate_id": candidate_id,
+                "state": state,
+                "packet_path": str(packet_path),
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        packet["packet_path"] = str(packet_path)
+        return packet
+
     def _child_route_prep_entry(self, *, run_id: str, candidate_id: str) -> dict[str, Any]:
         entry = next(
             (

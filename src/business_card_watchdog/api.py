@@ -742,6 +742,29 @@ def create_app(config_path: Path | None = None):
             response=request.response,
         )
 
+    @app.post("/reviews/children/{candidate_id}/replacement-execution-checklist")
+    def create_child_replacement_execution_checklist(
+        candidate_id: str,
+        request: ChildSelectedTargetResponseRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().child_replacement_execution_checklist(
+            run_id=request.run_id,
+            candidate_id=candidate_id,
+            response=request.response,
+        )
+
+    @app.post("/reviews/children/{candidate_id}/replacement-command-copy-packet")
+    def create_child_replacement_command_copy_packet(
+        candidate_id: str,
+        request: ChildSelectedTargetCommandCopyRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().child_replacement_command_copy_packet(
+            run_id=request.run_id,
+            candidate_id=candidate_id,
+            response=request.response,
+            acknowledgement=request.acknowledgement,
+        )
+
     @app.post("/runs/{run_id}/review-bundle")
     def create_review_bundle(run_id: str, state: str = "all", write: bool = True) -> dict[str, object]:
         return service().review_bundle(run_id=run_id, state=state, write=write)

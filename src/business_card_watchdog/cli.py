@@ -2134,6 +2134,21 @@ def build_parser() -> argparse.ArgumentParser:
     reviews_child_validate_replacement_response.add_argument("--run-id", required=True)
     reviews_child_validate_replacement_response.add_argument("--response", required=True)
     reviews_child_validate_replacement_response.add_argument("--json", action="store_true")
+    reviews_child_replacement_execution_checklist = reviews_sub.add_parser(
+        "child-replacement-execution-checklist"
+    )
+    reviews_child_replacement_execution_checklist.add_argument("candidate_id")
+    reviews_child_replacement_execution_checklist.add_argument("--run-id", required=True)
+    reviews_child_replacement_execution_checklist.add_argument("--response", required=True)
+    reviews_child_replacement_execution_checklist.add_argument("--json", action="store_true")
+    reviews_child_replacement_command_copy_packet = reviews_sub.add_parser(
+        "child-replacement-command-copy-packet"
+    )
+    reviews_child_replacement_command_copy_packet.add_argument("candidate_id")
+    reviews_child_replacement_command_copy_packet.add_argument("--run-id", required=True)
+    reviews_child_replacement_command_copy_packet.add_argument("--response", required=True)
+    reviews_child_replacement_command_copy_packet.add_argument("--acknowledgement", default="")
+    reviews_child_replacement_command_copy_packet.add_argument("--json", action="store_true")
     reviews_bundle = reviews_sub.add_parser("bundle")
     reviews_bundle.add_argument("--run-id", required=True)
     reviews_bundle.add_argument("--state", default="all")
@@ -2794,6 +2809,19 @@ def main(argv: list[str] | None = None) -> int:
                 run_id=args.run_id,
                 candidate_id=args.candidate_id,
                 response=args.response,
+            )
+        elif args.reviews_command == "child-replacement-execution-checklist":
+            payload = service.child_replacement_execution_checklist(
+                run_id=args.run_id,
+                candidate_id=args.candidate_id,
+                response=args.response,
+            )
+        elif args.reviews_command == "child-replacement-command-copy-packet":
+            payload = service.child_replacement_command_copy_packet(
+                run_id=args.run_id,
+                candidate_id=args.candidate_id,
+                response=args.response,
+                acknowledgement=args.acknowledgement,
             )
         else:
             payload = service.review_queue(

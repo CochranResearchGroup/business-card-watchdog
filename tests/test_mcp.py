@@ -72,6 +72,8 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_child_selected_target_replacement_reset" in names
     assert "business_card_watchdog_child_replacement_handoff_refresh" in names
     assert "business_card_watchdog_child_replacement_response_validation" in names
+    assert "business_card_watchdog_child_replacement_execution_checklist" in names
+    assert "business_card_watchdog_child_replacement_command_copy_packet" in names
     assert "business_card_watchdog_review_bundle" in names
     assert "business_card_watchdog_review_html" in names
     assert "business_card_watchdog_review_workbook" in names
@@ -493,6 +495,28 @@ def test_mcp_child_selected_target_response_validation_and_checklist(tmp_path: P
         },
         config=config,
     )
+    replacement_checklist = call_tool(
+        "business_card_watchdog_child_replacement_execution_checklist",
+        {
+            "run_id": run_dir.name,
+            "candidate_id": candidate_id,
+            "response": replacement_response,
+        },
+        config=config,
+    )
+    replacement_command_copy = call_tool(
+        "business_card_watchdog_child_replacement_command_copy_packet",
+        {
+            "run_id": run_dir.name,
+            "candidate_id": candidate_id,
+            "response": replacement_response,
+            "acknowledgement": (
+                f"I acknowledge run_id={run_dir.name} candidate_id={candidate_id} "
+                "sink=google_contacts operator=replacement-operator ready to copy"
+            ),
+        },
+        config=config,
+    )
 
     assert validation["schema"] == "business-card-watchdog.child-selected-target-response-validation.v1"
     assert validation["state"] == "ready_for_no_live_child_checklist"
@@ -540,6 +564,17 @@ def test_mcp_child_selected_target_response_validation_and_checklist(tmp_path: P
     assert replacement_validation["selected_target_created"] is False
     assert replacement_validation["writes_attempted"] == 0
     assert replacement_validation["network_calls_made"] == 0
+    assert replacement_checklist["schema"] == "business-card-watchdog.child-replacement-execution-checklist.v1"
+    assert replacement_checklist["state"] == "ready_for_replacement_operator_review"
+    assert replacement_checklist["executable_live_command"] is None
+    assert replacement_checklist["writes_attempted"] == 0
+    assert replacement_checklist["network_calls_made"] == 0
+    assert replacement_command_copy["schema"] == "business-card-watchdog.child-replacement-command-copy-packet.v1"
+    assert replacement_command_copy["state"] == "ready_for_replacement_operator_copy"
+    assert replacement_command_copy["command_copy_text"].startswith("reviews child-replacement-execution-checklist")
+    assert replacement_command_copy["executable_live_command"] is None
+    assert replacement_command_copy["writes_attempted"] == 0
+    assert replacement_command_copy["network_calls_made"] == 0
 
 
 def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
