@@ -347,6 +347,131 @@ class BusinessCardService:
             latest[str(row["run_id"])] = row
         return sorted(latest.values(), key=lambda row: str(row.get("updated_at", "")), reverse=True)
 
+    def operator_dashboard(self, *, run_id: str | None = None) -> dict[str, Any]:
+        status = self.status()
+        runtime = self.runtime_readiness()
+        runs = self.list_runs()
+        selected_run_id = run_id or (str(runs[0]["run_id"]) if runs else None)
+        recovery = self.service_recovery_report(run_id=selected_run_id)
+        run_summary: dict[str, Any] | None = None
+        phase_dashboard: dict[str, Any] | None = None
+        review_counts: dict[str, int] = {}
+        live_pilot_summary: dict[str, Any] | None = None
+
+        if selected_run_id:
+            run_summary = self.run_summary(selected_run_id)
+            phase_dashboard = self.phase_report(selected_run_id)["dashboard_summary"]
+            review_entries = self.review_queue(run_id=selected_run_id, state="all")
+            for entry in review_entries:
+                state = str(entry.get("state") or "unknown")
+                review_counts[state] = review_counts.get(state, 0) + 1
+            live_status = self.live_pilot_status(run_id=selected_run_id, write=False)
+            live_pilot_summary = {
+                "state": live_status.get("state"),
+                "job_count": live_status.get("job_count", 0),
+                "counts": live_status.get("counts") or {},
+                "observed_writes_attempted": live_status.get("observed_writes_attempted", 0),
+                "observed_network_calls_made": live_status.get("observed_network_calls_made", 0),
+                "commands": live_status.get("commands") or {},
+            }
+
+        blocked_reasons: list[str] = []
+        if runtime.get("state") == "blocked":
+            blocked_reasons.append("runtime readiness is blocked")
+        if recovery.get("state") == "blocked":
+            blocked_reasons.extend(str(item) for item in recovery.get("blocked_reasons") or [])
+        if not selected_run_id:
+            blocked_reasons.append("no run selected or available for review/routing/live-pilot inspection")
+
+        return {
+            "schema": "business-card-watchdog.operator-dashboard.v1",
+            "created_at": utc_now(),
+            "state": "blocked" if blocked_reasons else "ready",
+            "config_path": status.get("config_path"),
+            "data_dir": status.get("data_dir"),
+            "cache_dir": status.get("cache_dir"),
+            "selected_run_id": selected_run_id,
+            "run_count": len(runs),
+            "recent_runs": runs[:5],
+            "status": status,
+            "runtime_readiness": runtime,
+            "service_recovery": recovery,
+            "run_summary": run_summary,
+            "phase_dashboard_summary": phase_dashboard,
+            "review_counts": review_counts,
+            "live_pilot_summary": live_pilot_summary,
+            "blocked_reasons": blocked_reasons,
+            "commands": {
+                "operator_dashboard": (
+                    f"operator-dashboard --run-id {selected_run_id} --json"
+                    if selected_run_id
+                    else "operator-dashboard --json"
+                ),
+                "status": "status --json",
+                "runtime_readiness": "runtime-readiness --json",
+                "service_recovery": (
+                    f"service recovery --run-id {selected_run_id} --json"
+                    if selected_run_id
+                    else "service recovery --json"
+                ),
+                "runs_list": "runs list --json",
+                "review_queue": (
+                    f"reviews list --run-id {selected_run_id} --state all --json"
+                    if selected_run_id
+                    else "runs list --json"
+                ),
+                "phase_report": (
+                    f"runs phase-report {selected_run_id} --json" if selected_run_id else "runs list --json"
+                ),
+                "live_pilot_status": (
+                    f"runs live-pilot-status {selected_run_id} --no-write --json"
+                    if selected_run_id
+                    else "runs list --json"
+                ),
+                "live_pilot_handoff": (
+                    f"runs live-pilot-handoff {selected_run_id} --no-write --json"
+                    if selected_run_id
+                    else "runs list --json"
+                ),
+                "mcp_manifest": "mcp-manifest",
+            },
+            "safe_next_actions": [
+                {
+                    "action": "inspect_runtime_readiness",
+                    "command": "runtime-readiness --json",
+                    "safe_to_auto_continue": True,
+                    "requires_explicit_operator_action": False,
+                },
+                {
+                    "action": "inspect_service_recovery",
+                    "command": (
+                        f"service recovery --run-id {selected_run_id} --json"
+                        if selected_run_id
+                        else "service recovery --json"
+                    ),
+                    "safe_to_auto_continue": True,
+                    "requires_explicit_operator_action": False,
+                },
+                {
+                    "action": "inspect_review_queue" if selected_run_id else "inspect_runs",
+                    "command": (
+                        f"reviews list --run-id {selected_run_id} --state all --json"
+                        if selected_run_id
+                        else "runs list --json"
+                    ),
+                    "safe_to_auto_continue": True,
+                    "requires_explicit_operator_action": False,
+                },
+            ],
+            "explicit_stop_conditions": [
+                "Do not process private SyncThing images from the operator dashboard.",
+                "Do not run public-web search or paid API enrichment from the operator dashboard.",
+                "Do not run live GWS/Odollo/Odoo lookup, write, or readback without selected target approval.",
+            ],
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+
     def get_run(self, run_id: str) -> dict[str, Any]:
         run_dir = self.config.runs_dir / run_id
         run_path = run_dir / "run.json"

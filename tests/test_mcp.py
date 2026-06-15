@@ -105,6 +105,11 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     )
 
     status = call_tool("business_card_watchdog_status", {}, config=config)
+    operator_dashboard = call_tool(
+        "business_card_watchdog_operator_dashboard",
+        {"run_id": run_id},
+        config=config,
+    )
     summary = call_tool("business_card_watchdog_run_summary", {"run_id": run_id}, config=config)
     phase_report = call_tool("business_card_watchdog_phase_report", {"run_id": run_id}, config=config)
     readiness_report = call_tool("business_card_watchdog_pilot_readiness_report", {"run_id": run_id}, config=config)
@@ -366,6 +371,11 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert status["schema"] == "business-card-watchdog.status.v1"
     assert status["commands"]["runtime_readiness"] == "runtime-readiness --json"
     assert status["safe_next_actions"][0]["action"] == "inspect_runtime_readiness"
+    assert operator_dashboard["schema"] == "business-card-watchdog.operator-dashboard.v1"
+    assert operator_dashboard["selected_run_id"] == run_id
+    assert operator_dashboard["commands"]["review_queue"] == f"reviews list --run-id {run_id} --state all --json"
+    assert operator_dashboard["writes_attempted"] == 0
+    assert operator_dashboard["network_calls_made"] == 0
     assert summary["needs_review_count"] == 1
     assert phase_report["schema"] == "business-card-watchdog.phase-report.v1"
     assert phase_report["review_workbook_preview"]["schema"] == (
@@ -840,6 +850,10 @@ def test_mcp_jsonl_server_lists_and_calls_tools(tmp_path: Path) -> None:
     assert responses[0]["result"]["serverInfo"]["name"] == "business-card-watchdog"
     assert responses[1]["result"]["tools"][0]["inputSchema"]["type"] == "object"
     assert any(tool["name"] == "business_card_watchdog_status" for tool in responses[1]["result"]["tools"])
+    assert any(
+        tool["name"] == "business_card_watchdog_operator_dashboard"
+        for tool in responses[1]["result"]["tools"]
+    )
     assert any(
         tool["name"] == "business_card_watchdog_pilot_readiness_report"
         for tool in responses[1]["result"]["tools"]

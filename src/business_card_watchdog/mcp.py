@@ -32,6 +32,14 @@ def tool_manifest() -> dict[str, object]:
                 "input_schema": {"type": "object", "properties": {}},
             },
             {
+                "name": "business_card_watchdog_operator_dashboard",
+                "description": "Compose no-live operator status, readiness, recovery, runs, review counts, and handoff commands.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"run_id": {"type": "string"}},
+                },
+            },
+            {
                 "name": "business_card_watchdog_runtime_readiness",
                 "description": "Report user-scope install, config, runtime directory, watcher, and service readiness without network calls.",
                 "input_schema": {"type": "object", "properties": {}},
@@ -749,6 +757,10 @@ def call_tool(
         )
     if tool_name == "business_card_watchdog_status":
         return service.status()
+    if tool_name == "business_card_watchdog_operator_dashboard":
+        return service.operator_dashboard(
+            run_id=str(args["run_id"]) if args.get("run_id") else None,
+        )
     if tool_name == "business_card_watchdog_runtime_readiness":
         return service.runtime_readiness()
     if tool_name == "business_card_watchdog_service_recovery":

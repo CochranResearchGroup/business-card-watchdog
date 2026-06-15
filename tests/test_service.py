@@ -649,6 +649,30 @@ def test_service_status_and_sink_readiness_are_structured(tmp_path: Path) -> Non
     assert {sink["sink"] for sink in readiness["sinks"]} == {"google_contacts", "odoo"}
 
 
+def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    run_id, _job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+
+    dashboard = service.operator_dashboard(run_id=run_id)
+
+    assert dashboard["schema"] == "business-card-watchdog.operator-dashboard.v1"
+    assert dashboard["selected_run_id"] == run_id
+    assert dashboard["run_count"] == 1
+    assert dashboard["status"]["schema"] == "business-card-watchdog.status.v1"
+    assert dashboard["runtime_readiness"]["schema"] == "business-card-watchdog.runtime-readiness.v1"
+    assert dashboard["service_recovery"]["schema"] == "business-card-watchdog.service-recovery.v1"
+    assert dashboard["run_summary"]["run_id"] == run_id
+    assert dashboard["phase_dashboard_summary"]["schema"] == "business-card-watchdog.phase-dashboard-summary.v1"
+    assert dashboard["review_counts"]["needs_review"] == 1
+    assert dashboard["live_pilot_summary"]["state"] == "blocked"
+    assert dashboard["commands"]["review_queue"] == f"reviews list --run-id {run_id} --state all --json"
+    assert dashboard["commands"]["live_pilot_status"] == f"runs live-pilot-status {run_id} --no-write --json"
+    assert dashboard["safe_next_actions"][0]["action"] == "inspect_runtime_readiness"
+    assert dashboard["writes_attempted"] == 0
+    assert dashboard["network_calls_made"] == 0
+
+
 def test_service_sink_readiness_reports_apply_policy(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",

@@ -38,6 +38,13 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert status["safe_next_actions"][0]["action"] == "inspect_runtime_readiness"
     assert status["writes_attempted"] == 0
     assert status["network_calls_made"] == 0
+    operator_dashboard = client.get("/operator/dashboard", params={"run_id": run_id}).json()
+    assert operator_dashboard["schema"] == "business-card-watchdog.operator-dashboard.v1"
+    assert operator_dashboard["selected_run_id"] == run_id
+    assert operator_dashboard["commands"]["live_pilot_status"] == f"runs live-pilot-status {run_id} --no-write --json"
+    assert operator_dashboard["review_counts"]["needs_review"] == 1
+    assert operator_dashboard["writes_attempted"] == 0
+    assert operator_dashboard["network_calls_made"] == 0
     runtime_readiness = client.get("/runtime/readiness").json()
     assert runtime_readiness["schema"] == "business-card-watchdog.runtime-readiness.v1"
     assert runtime_readiness["config"]["config_exists"] is True

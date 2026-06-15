@@ -57,6 +57,63 @@ def _render_status_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
+    runtime = dict(payload.get("runtime_readiness") or {})
+    recovery = dict(payload.get("service_recovery") or {})
+    run_summary = dict(payload.get("run_summary") or {})
+    phase = dict(payload.get("phase_dashboard_summary") or {})
+    live = dict(payload.get("live_pilot_summary") or {})
+    review_counts = dict(payload.get("review_counts") or {})
+    commands = dict(payload.get("commands") or {})
+    blocked = payload.get("blocked_reasons") or []
+    safe_actions = payload.get("safe_next_actions") or []
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    lines = [
+        f"Operator dashboard: {payload.get('state')}",
+        f"Selected run: {payload.get('selected_run_id') or 'none'}",
+        f"Runs: {payload.get('run_count', 0)}",
+        f"Runtime readiness: {runtime.get('state')}",
+        f"Service recovery: {recovery.get('state')}",
+        f"Run state: {run_summary.get('state') or 'none'}",
+        f"Jobs: {run_summary.get('job_count', 0)}",
+        "Review counts: "
+        + " ".join(f"{key}={value}" for key, value in sorted(review_counts.items()))
+        if review_counts
+        else "Review counts: none",
+        f"Phase status: {phase.get('status_line') or 'none'}",
+        f"Live pilot: {live.get('state') or 'none'}",
+        f"Observed: writes={payload.get('writes_attempted', 0)} network={payload.get('network_calls_made', 0)}",
+        "Commands:",
+    ]
+    for label, key in [
+        ("Status", "status"),
+        ("Runtime readiness", "runtime_readiness"),
+        ("Service recovery", "service_recovery"),
+        ("Runs list", "runs_list"),
+        ("Review queue", "review_queue"),
+        ("Phase report", "phase_report"),
+        ("Live pilot status", "live_pilot_status"),
+        ("Live pilot handoff", "live_pilot_handoff"),
+    ]:
+        command = commands.get(key)
+        if command:
+            lines.append(f" - {label}: {command}")
+    blocked_rows = blocked if isinstance(blocked, list) else []
+    lines.append(f"Blocked reasons: {len(blocked_rows)}")
+    for reason in blocked_rows:
+        lines.append(f" - {reason}")
+    action_rows = safe_actions if isinstance(safe_actions, list) else []
+    lines.append(f"Safe next actions: {len(action_rows)}")
+    for action in action_rows:
+        if isinstance(action, dict):
+            lines.append(f" - {action.get('action')}: {action.get('command')}")
+    stop_rows = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stop_rows)}")
+    for condition in stop_rows:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_phase_report_text(payload: dict[str, object]) -> str:
     dashboard = dict(payload.get("dashboard_summary") or {})
     preview = dict(payload.get("review_workbook_preview") or {})
@@ -770,6 +827,10 @@ def build_parser() -> argparse.ArgumentParser:
     status = sub.add_parser("status")
     status.add_argument("--json", action="store_true")
 
+    operator_dashboard = sub.add_parser("operator-dashboard")
+    operator_dashboard.add_argument("--run-id", default=None)
+    operator_dashboard.add_argument("--json", action="store_true")
+
     doctor = sub.add_parser("doctor")
     doctor.add_argument("--json", action="store_true")
 
@@ -1126,6 +1187,11 @@ def main(argv: list[str] | None = None) -> int:
         payload = service.status()
         print(json.dumps(payload, indent=2) if args.json else _render_status_text(payload), end="")
         return 0 if payload["skill_ready"] else 2
+
+    if args.command == "operator-dashboard":
+        payload = service.operator_dashboard(run_id=args.run_id)
+        print(json.dumps(payload, indent=2) if args.json else _render_operator_dashboard_text(payload), end="")
+        return 0 if payload["state"] != "blocked" else 2
 
     if args.command == "doctor":
         payload = service.doctor()

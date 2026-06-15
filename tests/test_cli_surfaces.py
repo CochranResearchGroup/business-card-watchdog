@@ -79,6 +79,33 @@ def test_cli_status_reports_command_map_text_and_json(tmp_path: Path, capsys) ->
     assert "{" not in text
 
 
+def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+    run_id, _job_id = make_recorded_run(AppConfig(config_path=config_path, data_dir=data_dir))
+
+    assert main(["--config", str(config_path), "operator-dashboard", "--run-id", run_id, "--json"]) in {0, 2}
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["schema"] == "business-card-watchdog.operator-dashboard.v1"
+    assert payload["selected_run_id"] == run_id
+    assert payload["commands"]["review_queue"] == f"reviews list --run-id {run_id} --state all --json"
+    assert payload["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id} --no-write --json"
+    assert payload["review_counts"]["needs_review"] == 1
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+
+    assert main(["--config", str(config_path), "operator-dashboard", "--run-id", run_id]) in {0, 2}
+    text = capsys.readouterr().out
+    assert "Operator dashboard:" in text
+    assert f"Selected run: {run_id}" in text
+    assert f"Review queue: reviews list --run-id {run_id} --state all --json" in text
+    assert f"Live pilot status: runs live-pilot-status {run_id} --no-write --json" in text
+    assert "Observed: writes=0 network=0" in text
+    assert "Stop conditions: 3" in text
+    assert "{" not in text
+
+
 def test_cli_service_recovery_reports_status_shape(tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.toml"
     data_dir = tmp_path / "data"

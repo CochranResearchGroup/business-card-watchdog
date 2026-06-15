@@ -63,6 +63,7 @@ Inspect local readiness and safe next commands:
 
 ```bash
 .venv/bin/bcw status
+.venv/bin/bcw operator-dashboard
 ```
 
 Dry-run a batch:
@@ -95,6 +96,7 @@ Inspect runs, jobs, review queue, sinks, and watcher state:
 .venv/bin/bcw runs list
 .venv/bin/bcw runs summary <run-id>
 .venv/bin/bcw runs phase-report <run-id>
+.venv/bin/bcw operator-dashboard --run-id <run-id>
 .venv/bin/bcw sinks lookup-readiness <job-id> --run-id <run-id> --sink google_contacts --json
 .venv/bin/bcw jobs list --run-id <run-id>
 .venv/bin/bcw jobs show <job-id> --run-id <run-id>

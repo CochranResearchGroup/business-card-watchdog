@@ -173,6 +173,10 @@ def create_app(config_path: Path | None = None):
     def status() -> dict[str, object]:
         return service().status()
 
+    @app.get("/operator/dashboard")
+    def operator_dashboard(run_id: str | None = None) -> dict[str, object]:
+        return service().operator_dashboard(run_id=run_id)
+
     @app.get("/runtime/readiness")
     def runtime_readiness() -> dict[str, object]:
         return service().runtime_readiness()
