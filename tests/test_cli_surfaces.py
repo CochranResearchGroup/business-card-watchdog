@@ -137,6 +137,9 @@ def test_cli_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: Path
     assert payload["packets"]["command_copy_packet"]["state"] == "ready_for_operator_copy"
     assert payload["writes_attempted"] == 0
     assert payload["network_calls_made"] == 0
+    sample_output_path = Path(payload["sample_outputs"]["live_pilot_rehearsal_markdown_path"])
+    assert sample_output_path.exists()
+    assert "Live Pilot Rehearsal Sample Output" in sample_output_path.read_text(encoding="utf-8")
     assert Path(payload["drill_path"]).exists()
 
     assert main(["--config", str(config_path), "drills", "live-pilot-rehearsal"]) == 0
@@ -146,6 +149,7 @@ def test_cli_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: Path
     assert "Command copy ready: True" in text
     assert "Observed: writes=0 network=0 private_sources=False live_sinks=False" in text
     assert "Command copy packet: runs live-pilot-command-copy-packet-from-response" in text
+    assert "Sample output:" in text
     assert "Stop conditions: 4" in text
     assert "{" not in text
 

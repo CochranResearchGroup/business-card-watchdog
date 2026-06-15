@@ -1286,12 +1286,24 @@ def test_service_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: 
     assert f"--run-id {run_id}" in payload["command_copy_text"]
     assert payload["operator_response_redacted"]["raw_response_stored"] is False
     assert payload["acknowledgement_redacted"]["raw_acknowledgement_stored"] is False
+    sample_output_path = Path(payload["sample_outputs"]["live_pilot_rehearsal_markdown_path"])
+    sample_output = sample_output_path.read_text(encoding="utf-8")
+    assert sample_output_path.exists()
+    assert "# Live Pilot Rehearsal Sample Output" in sample_output
+    assert "Command copy packet: `ready_for_operator_copy`" in sample_output
+    assert "fixture contact is safe for google contacts test profile" not in sample_output
     assert Path(payload["drill_path"]).exists()
     assert (artifact_dir / "selected_live_target.json").exists()
     assert (artifact_dir / "selected_live_target_audit.json").exists()
     assert (artifact_dir / "sink_lookup_smoke_handoff.json").exists()
     assert (config.runs_dir / run_id / "live_pilot_readiness_export.json").exists()
+    assert (config.runs_dir / run_id / "live_pilot_rehearsal_sample_output.md").exists()
     assert (config.runs_dir / run_id / "live_pilot_rehearsal_drill.json").exists()
+    artifacts = [
+        json.loads(line)
+        for line in (config.runs_dir / run_id / "artifacts.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert any(artifact["kind"] == "live_pilot_rehearsal_sample_output" for artifact in artifacts)
 
 
 def test_service_doctor_checks_user_scope_paths(tmp_path: Path) -> None:

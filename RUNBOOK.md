@@ -5282,3 +5282,33 @@ Validation:
 Safety:
 
 - This created synthetic child replacement readiness sample outputs only. It did not create selected targets; process private SyncThing images; execute live lookup; route to live sinks; enrich; write contacts; run public-web search; call paid APIs; or call GWS/Odollo/Odoo.
+
+## Turn 239 | 2026-06-15
+
+Executed Plan 0033 with Slice 0033-A.
+
+Implemented:
+
+- Added `live_pilot_rehearsal_sample_output.md` generation to `drills live-pilot-rehearsal`.
+- Added `sample_outputs.live_pilot_rehearsal_markdown_path` to the drill payload.
+- Added `live_pilot_rehearsal_sample_output` as a run artifact kind.
+- Added CLI text output for the sample path.
+- Added `docs/operations/live-pilot-sample-output.md`.
+- Updated README and roadmap documentation for live-pilot sample output.
+- Added service, CLI, API, and MCP coverage for sample output visibility and redaction.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_live_pilot_rehearsal_drill_reaches_command_copy_gate tests/test_cli_surfaces.py::test_cli_live_pilot_rehearsal_drill_reaches_command_copy_gate tests/test_api.py::test_api_live_pilot_rehearsal_drill_reaches_command_copy_gate tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 271 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `rg -n "live-pilot-sample-output|live_pilot_rehearsal_sample_output|Live Pilot Rehearsal Sample Output|sample_outputs" README.md docs src tests` passed.
+- `uv build --out-dir dist` built source and wheel distributions.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This created synthetic live-pilot rehearsal sample output only. It did not process private SyncThing images; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.

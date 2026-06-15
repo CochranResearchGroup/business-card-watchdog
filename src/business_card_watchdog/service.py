@@ -2462,9 +2462,31 @@ class BusinessCardService:
                 "Use the documented operator-selected live pilot procedure with a real operator-selected target before any non-simulated sink call.",
             ],
         }
+        sample_output_path = self.config.runs_dir / run_id / "live_pilot_rehearsal_sample_output.md"
+        payload["sample_outputs"] = {
+            "live_pilot_rehearsal_markdown_path": str(sample_output_path),
+            "documents_packets": [
+                "selection_packet",
+                "validation",
+                "selected_target_handoff",
+                "lookup_handoff",
+                "workflow_packet",
+                "rehearsal",
+                "readiness_export",
+                "execution_checklist",
+                "command_copy_packet",
+            ],
+            "raw_operator_response_stored": False,
+            "raw_acknowledgement_stored": False,
+        }
+        sample_output_path.write_text(
+            self._render_live_pilot_rehearsal_sample_output(payload),
+            encoding="utf-8",
+        )
         drill_path = self.config.runs_dir / run_id / "live_pilot_rehearsal_drill.json"
         drill_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         ledger = RunLedger(self.config.runs_dir / run_id)
+        ledger.record_artifact(job_id="__run__", kind="live_pilot_rehearsal_sample_output", path=sample_output_path)
         ledger.record_artifact(job_id="__run__", kind="live_pilot_rehearsal_drill", path=drill_path)
         ledger.record_event(
             "live_pilot_rehearsal_drill_completed",
@@ -2479,6 +2501,79 @@ class BusinessCardService:
         )
         payload["drill_path"] = str(drill_path)
         return payload
+
+    def _render_live_pilot_rehearsal_sample_output(self, payload: dict[str, Any]) -> str:
+        packets = dict(payload.get("packets") or {})
+        commands = dict(payload.get("commands") or {})
+        stop_conditions = list(payload.get("explicit_stop_conditions") or [])
+        readiness_export = dict(packets.get("readiness_export") or {})
+        command_copy_packet = dict(packets.get("command_copy_packet") or {})
+        workflow_packet = dict(packets.get("workflow_packet") or {})
+        rehearsal = dict(packets.get("rehearsal") or {})
+        redacted_fields = dict(payload.get("operator_response_redacted", {}).get("fields") or {})
+        lines = [
+            "# Live Pilot Rehearsal Sample Output",
+            "",
+            "Synthetic fixture only. Do not use this sample as live sink approval.",
+            "",
+            "## Run",
+            "",
+            f"- Run: `{payload.get('run_id')}`",
+            f"- Job: `{payload.get('job_id')}`",
+            f"- Sink: `{payload.get('sink')}`",
+            f"- Operator: `{payload.get('operator')}`",
+            f"- Scope: `{payload.get('scope')}`",
+            f"- State: `{payload.get('state')}`",
+            f"- Writes attempted: `{payload.get('writes_attempted', 0)}`",
+            f"- Network calls made: `{payload.get('network_calls_made', 0)}`",
+            "",
+            "## Redaction",
+            "",
+            "- Raw operator response stored: `False`",
+            "- Raw acknowledgement stored: `False`",
+            "- Operator response fields retained:",
+        ]
+        for key in ["run_id", "job_id", "sink", "operator", "scope"]:
+            lines.append(f"  - {key}: `{redacted_fields.get(key)}`")
+        lines.extend(
+            [
+                "",
+                "## Packet States",
+                "",
+                f"- Selection packet: `{dict(packets.get('selection_packet') or {}).get('state')}`",
+                f"- Operator response validation: `{dict(packets.get('validation') or {}).get('state')}`",
+                f"- Selected target: `{dict(packets.get('selected_target') or {}).get('state')}`",
+                f"- Selected target handoff: `{dict(packets.get('selected_target_handoff') or {}).get('state')}`",
+                f"- Lookup handoff: `{dict(packets.get('lookup_handoff') or {}).get('state')}`",
+                f"- Workflow packet: `{workflow_packet.get('state')}`",
+                f"- Operator rehearsal: `{rehearsal.get('state')}`",
+                f"- Readiness export written: `{readiness_export.get('export_written')}`",
+                f"- Execution checklist: `{dict(packets.get('execution_checklist') or {}).get('state')}`",
+                f"- Command copy packet: `{command_copy_packet.get('state')}`",
+                "",
+                "## Operator Commands",
+                "",
+                f"- Dashboard: `{commands.get('operator_dashboard')}`",
+                f"- Live pilot status: `{commands.get('live_pilot_status')}`",
+                f"- Live pilot handoff: `{commands.get('live_pilot_handoff')}`",
+                f"- Readiness export: `{commands.get('readiness_export')}`",
+                f"- Execution checklist: `{commands.get('execution_checklist')}`",
+                f"- Command copy packet: `{commands.get('command_copy_packet')}`",
+                "",
+                "## Command Copy",
+                "",
+                "- The drill proves command-copy gating but does not execute the copied command.",
+                f"- Command copy ready: `{payload.get('command_copy_ready')}`",
+                f"- Command copy text: `{payload.get('command_copy_text')}`",
+                "",
+                "## Stop Conditions",
+                "",
+            ]
+        )
+        for condition in stop_conditions:
+            lines.append(f"- {condition}")
+        lines.append("")
+        return "\n".join(lines)
 
     def child_replacement_readiness_drill(self) -> dict[str, Any]:
         ensure_runtime_dirs(self.config)

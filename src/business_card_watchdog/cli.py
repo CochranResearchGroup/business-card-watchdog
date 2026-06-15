@@ -183,6 +183,7 @@ def _render_review_routing_drill_text(payload: dict[str, object]) -> str:
 def _render_live_pilot_rehearsal_drill_text(payload: dict[str, object]) -> str:
     assertions = dict(payload.get("assertions") or {})
     commands = dict(payload.get("commands") or {})
+    sample_outputs = dict(payload.get("sample_outputs") or {})
     stop_conditions = payload.get("explicit_stop_conditions") or []
     failed = [key for key, value in assertions.items() if value is not True]
     lines = [
@@ -212,6 +213,8 @@ def _render_live_pilot_rehearsal_drill_text(payload: dict[str, object]) -> str:
         command = commands.get(key)
         if command:
             lines.append(f"{label}: {command}")
+    if sample_outputs.get("live_pilot_rehearsal_markdown_path"):
+        lines.append(f"Sample output: {sample_outputs.get('live_pilot_rehearsal_markdown_path')}")
     stop_rows = stop_conditions if isinstance(stop_conditions, list) else []
     lines.append(f"Stop conditions: {len(stop_rows)}")
     for condition in stop_rows:
