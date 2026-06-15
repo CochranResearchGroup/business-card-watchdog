@@ -2104,6 +2104,23 @@ def build_parser() -> argparse.ArgumentParser:
     reviews_child_selected_target_audit.add_argument("--scope", default=None)
     reviews_child_selected_target_audit.add_argument("--no-write", action="store_true")
     reviews_child_selected_target_audit.add_argument("--json", action="store_true")
+    reviews_child_abandon_selected_target = reviews_sub.add_parser("child-abandon-selected-target")
+    reviews_child_abandon_selected_target.add_argument("candidate_id")
+    reviews_child_abandon_selected_target.add_argument("--run-id", required=True)
+    reviews_child_abandon_selected_target.add_argument("--operator", required=True)
+    reviews_child_abandon_selected_target.add_argument("--reason", required=True)
+    reviews_child_abandon_selected_target.add_argument("--json", action="store_true")
+    reviews_child_selected_target_replacement_reset = reviews_sub.add_parser(
+        "child-selected-target-replacement-reset"
+    )
+    reviews_child_selected_target_replacement_reset.add_argument("candidate_id")
+    reviews_child_selected_target_replacement_reset.add_argument("--run-id", required=True)
+    reviews_child_selected_target_replacement_reset.add_argument("--sink", required=True)
+    reviews_child_selected_target_replacement_reset.add_argument("--operator", required=True)
+    reviews_child_selected_target_replacement_reset.add_argument("--scope", default="write")
+    reviews_child_selected_target_replacement_reset.add_argument("--reset-by", default="operator")
+    reviews_child_selected_target_replacement_reset.add_argument("--reason", default="")
+    reviews_child_selected_target_replacement_reset.add_argument("--json", action="store_true")
     reviews_bundle = reviews_sub.add_parser("bundle")
     reviews_bundle.add_argument("--run-id", required=True)
     reviews_bundle.add_argument("--state", default="all")
@@ -2732,6 +2749,23 @@ def main(argv: list[str] | None = None) -> int:
                 operator=args.operator,
                 scope=args.scope,
                 write=not args.no_write,
+            )
+        elif args.reviews_command == "child-abandon-selected-target":
+            payload = service.abandon_child_selected_target(
+                run_id=args.run_id,
+                candidate_id=args.candidate_id,
+                operator=args.operator,
+                reason=args.reason,
+            )
+        elif args.reviews_command == "child-selected-target-replacement-reset":
+            payload = service.child_selected_target_replacement_reset(
+                run_id=args.run_id,
+                candidate_id=args.candidate_id,
+                sink=args.sink,
+                operator=args.operator,
+                scope=args.scope,
+                reset_by=args.reset_by,
+                reason=args.reason,
             )
         else:
             payload = service.review_queue(

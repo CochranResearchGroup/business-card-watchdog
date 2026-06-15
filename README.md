@@ -168,7 +168,11 @@ command. Use
 `reviews child-selected-target-audit <candidate-id> --run-id <run-id> --json`
 to preview the current child selected-target packet and whether a replacement
 would require abandonment. The audit never creates, replaces, or abandons a
-selected target.
+selected target. Use
+`reviews child-abandon-selected-target <candidate-id> --run-id <run-id> --operator <operator> --reason <reason> --json`
+to record a no-live child abandonment artifact, then
+`reviews child-selected-target-replacement-reset <candidate-id> --run-id <run-id> --sink google_contacts --operator <operator> --json`
+to verify that a replacement handoff preview is unblocked.
 
 `drills review-routing` creates a synthetic fixture run and proves review approval,
 review bundle/workbook export, duplicate lookup planning, dry-run sink routing, and

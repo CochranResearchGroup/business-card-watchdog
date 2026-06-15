@@ -5078,3 +5078,32 @@ Validation:
 Safety:
 
 - This created local child selected-target audit preview artifacts only. It did not create, replace, or abandon selected targets; process private SyncThing images; execute live lookup; route to live sinks; enrich; write contacts; run public-web search; call paid APIs; or call GWS/Odollo/Odoo.
+
+## Turn 232 | 2026-06-15
+
+Executed Plan 0026 with Slice 0026-A.
+
+Implemented:
+
+- Added `BusinessCardService.abandon_child_selected_target`.
+- Added `BusinessCardService.child_selected_target_replacement_reset`.
+- Added CLI commands `reviews child-abandon-selected-target` and `reviews child-selected-target-replacement-reset`.
+- Added API routes `POST /reviews/children/{candidate_id}/selected-target-abandonment` and `POST /reviews/children/{candidate_id}/selected-target-replacement-reset`.
+- Added MCP tools `business_card_watchdog_child_selected_target_abandonment` and `business_card_watchdog_child_selected_target_replacement_reset`.
+- Added synthetic multi-card coverage for service, CLI, API, and MCP child abandonment plus replacement reset behavior.
+- Updated README and roadmap documentation for child selected-target abandonment/reset packets.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_review_surface.py::test_child_selected_target_response_validation_and_checklist tests/test_cli_surfaces.py::test_cli_child_selected_target_response_validation_and_checklist tests/test_api.py::test_api_child_selected_target_response_validation_and_checklist tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_child_selected_target_response_validation_and_checklist -q` passed with 5 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/api.py src/business_card_watchdog/mcp.py tests/test_review_surface.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 267 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `uv build --out-dir dist` built source and wheel distributions.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This created local child selected-target abandonment and replacement reset artifacts only. It did not create, delete, replace, or mutate selected-target packets; process private SyncThing images; execute live lookup; route to live sinks; enrich; write contacts; run public-web search; call paid APIs; or call GWS/Odollo/Odoo.

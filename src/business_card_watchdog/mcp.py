@@ -611,6 +611,37 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_child_selected_target_abandonment",
+                "description": "Record a no-live child selected-target abandonment artifact without deleting prior artifacts.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "candidate_id": {"type": "string"},
+                        "operator": {"type": "string"},
+                        "reason": {"type": "string"},
+                    },
+                    "required": ["run_id", "candidate_id", "operator", "reason"],
+                },
+            },
+            {
+                "name": "business_card_watchdog_child_selected_target_replacement_reset",
+                "description": "Create a no-live child selected-target replacement reset packet after abandonment.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "candidate_id": {"type": "string"},
+                        "sink": {"type": "string"},
+                        "operator": {"type": "string"},
+                        "scope": {"type": "string", "default": "write"},
+                        "reset_by": {"type": "string", "default": "operator"},
+                        "reason": {"type": "string", "default": ""},
+                    },
+                    "required": ["run_id", "candidate_id", "sink", "operator"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_review_bundle",
                 "description": "Create a run-level batch review bundle with inline review-relevant artifact payloads.",
                 "input_schema": {
@@ -1426,6 +1457,23 @@ def call_tool(
             operator=str(args["operator"]) if args.get("operator") is not None else None,
             scope=str(args["scope"]) if args.get("scope") is not None else None,
             write=bool(args.get("write", True)),
+        )
+    if tool_name == "business_card_watchdog_child_selected_target_abandonment":
+        return service.abandon_child_selected_target(
+            run_id=str(args["run_id"]),
+            candidate_id=str(args["candidate_id"]),
+            operator=str(args["operator"]),
+            reason=str(args["reason"]),
+        )
+    if tool_name == "business_card_watchdog_child_selected_target_replacement_reset":
+        return service.child_selected_target_replacement_reset(
+            run_id=str(args["run_id"]),
+            candidate_id=str(args["candidate_id"]),
+            sink=str(args["sink"]),
+            operator=str(args["operator"]),
+            scope=str(args.get("scope") or "write"),
+            reset_by=str(args.get("reset_by") or "operator"),
+            reason=str(args.get("reason") or ""),
         )
     if tool_name == "business_card_watchdog_review_bundle":
         return service.review_bundle(

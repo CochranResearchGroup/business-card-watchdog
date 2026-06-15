@@ -3784,6 +3784,173 @@ class BusinessCardService:
             audit["audit_path"] = str(audit_path)
         return audit
 
+    def abandon_child_selected_target(
+        self,
+        *,
+        run_id: str,
+        candidate_id: str,
+        operator: str,
+        reason: str,
+    ) -> dict[str, Any]:
+        if not operator.strip():
+            raise ValueError("child selected-target abandonment requires an operator")
+        if not reason.strip():
+            raise ValueError("child selected-target abandonment requires a reason")
+        entry = self._child_route_prep_entry(run_id=run_id, candidate_id=candidate_id)
+        prep_dir = self._child_route_prep_dir(entry)
+        audit = self.child_selected_target_audit(run_id=run_id, candidate_id=candidate_id, write=False)
+        if not audit.get("selected_target_exists"):
+            raise ValueError("child selected-target abandonment requires an existing child selected-target packet")
+        selected_target = dict(audit.get("selected_target") or {})
+        selected_target_identity = str(audit.get("selected_target_identity") or "")
+        payload = {
+            "schema": "business-card-watchdog.child-selected-target-abandonment.v1",
+            "state": "abandoned",
+            "created_at": utc_now(),
+            "run_id": run_id,
+            "job_id": entry.get("job_id"),
+            "candidate_id": candidate_id,
+            "work_item_id": entry.get("work_item_id"),
+            "sink": selected_target.get("sink"),
+            "scope": selected_target.get("scope"),
+            "operator": operator,
+            "reason": reason,
+            "selected_target_path": audit.get("selected_target_path"),
+            "selected_target_identity": selected_target_identity,
+            "selected_target_operator": selected_target.get("operator"),
+            "selected_target": selected_target,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "commands": {
+                "audit": f"reviews child-selected-target-audit {shlex.quote(candidate_id)} --run-id {run_id} --json",
+                "replacement_reset": (
+                    f"reviews child-selected-target-replacement-reset {shlex.quote(candidate_id)} "
+                    f"--run-id {run_id} --sink <sink> --operator <operator> --scope <scope> --json"
+                ),
+            },
+            "explicit_stop_conditions": [
+                "This abandonment artifact does not delete or mutate prior child target artifacts.",
+                "Do not run live lookup, live write, or live readback for the abandoned child target.",
+                "A replacement reset packet is required before preparing a new child selected-target preview.",
+                "Do not process private SyncThing images, run public-web search, or call paid enrichment from this artifact.",
+            ],
+        }
+        abandonment_path = prep_dir / "child_selected_target_abandonment.json"
+        abandonment_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        parent_job_id = str(entry.get("job_id") or "__run__")
+        ledger.record_artifact(job_id=parent_job_id, kind="child_selected_target_abandonment", path=abandonment_path)
+        ledger.record_event(
+            "child_selected_target_abandoned",
+            {
+                "run_id": run_id,
+                "job_id": entry.get("job_id"),
+                "candidate_id": candidate_id,
+                "selected_target_identity": selected_target_identity,
+                "abandonment_path": str(abandonment_path),
+                "operator": operator,
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        payload["abandonment_path"] = str(abandonment_path)
+        return payload
+
+    def child_selected_target_replacement_reset(
+        self,
+        *,
+        run_id: str,
+        candidate_id: str,
+        sink: str,
+        operator: str,
+        scope: str = "write",
+        reset_by: str = "operator",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        entry = self._child_route_prep_entry(run_id=run_id, candidate_id=candidate_id)
+        prep_dir = self._child_route_prep_dir(entry)
+        abandonment_path = prep_dir / "child_selected_target_abandonment.json"
+        abandonment = _read_json_file(abandonment_path)
+        audit = self.child_selected_target_audit(
+            run_id=run_id,
+            candidate_id=candidate_id,
+            sink=sink,
+            operator=operator,
+            scope=scope,
+            write=False,
+        )
+        blocked_reasons: list[str] = []
+        if not abandonment:
+            blocked_reasons.append("child selected-target abandonment artifact is missing")
+        elif abandonment.get("state") != "abandoned":
+            blocked_reasons.append(f"child abandonment state is {abandonment.get('state') or 'missing'}")
+        expected_identity = str(audit.get("selected_target_identity") or "")
+        actual_identity = str((abandonment or {}).get("selected_target_identity") or "")
+        if expected_identity and actual_identity and expected_identity != actual_identity:
+            blocked_reasons.append("child abandonment identity does not match current selected target")
+        if audit.get("replacement_requires_abandonment"):
+            blocked_reasons.append("replacement still requires child selected-target abandonment")
+        requested_target = {"sink": sink, "operator": operator, "scope": scope}
+        state = "ready_for_replacement_preview" if not blocked_reasons else "blocked"
+        payload = {
+            "schema": "business-card-watchdog.child-selected-target-replacement-reset.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_id,
+            "job_id": entry.get("job_id"),
+            "candidate_id": candidate_id,
+            "work_item_id": entry.get("work_item_id"),
+            "reset_by": reset_by,
+            "reason": reason,
+            "requested_target": requested_target,
+            "replacement_unblocked": state == "ready_for_replacement_preview",
+            "replacement_requires_abandonment": bool(audit.get("replacement_requires_abandonment")),
+            "previous_selected_target_identity": expected_identity or None,
+            "abandonment_path": str(abandonment_path),
+            "abandonment": abandonment,
+            "selected_target_audit": audit,
+            "blocked_reasons": blocked_reasons,
+            "commands": {
+                "refresh_audit": (
+                    f"reviews child-selected-target-audit {shlex.quote(candidate_id)} --run-id {run_id} "
+                    f"--sink {shlex.quote(sink)} --operator {shlex.quote(operator)} --scope {shlex.quote(scope)} --json"
+                ),
+                "new_handoff": (
+                    f"reviews child-selected-target-handoff {shlex.quote(candidate_id)} --run-id {run_id} "
+                    f"--sink {shlex.quote(sink)} --operator {shlex.quote(operator)} --scope {shlex.quote(scope)} --json"
+                ),
+            },
+            "explicit_stop_conditions": [
+                "This reset packet does not create a new selected target.",
+                "This reset packet does not delete or mutate prior child target artifacts.",
+                "Do not run live GWS/Odollo/Odoo lookup, write, or readback from this reset packet.",
+                "Use the new_handoff command only to prepare another no-live child handoff preview.",
+                "Do not process private SyncThing images, run public-web search, or call paid enrichment from this packet.",
+            ],
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+        reset_path = prep_dir / "child_selected_target_replacement_reset.json"
+        reset_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        parent_job_id = str(entry.get("job_id") or "__run__")
+        ledger.record_artifact(job_id=parent_job_id, kind="child_selected_target_replacement_reset", path=reset_path)
+        ledger.record_event(
+            "child_selected_target_replacement_reset_created",
+            {
+                "run_id": run_id,
+                "job_id": entry.get("job_id"),
+                "candidate_id": candidate_id,
+                "state": state,
+                "reset_path": str(reset_path),
+                "replacement_unblocked": payload["replacement_unblocked"],
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        payload["reset_path"] = str(reset_path)
+        return payload
+
     def _child_route_prep_entry(self, *, run_id: str, candidate_id: str) -> dict[str, Any]:
         entry = next(
             (

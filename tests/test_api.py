@@ -1341,6 +1341,19 @@ def test_api_child_selected_target_response_validation_and_checklist(tmp_path: P
         f"/reviews/children/{candidate_id}/selected-target-audit",
         json={"run_id": run_dir.name},
     ).json()
+    abandonment = client.post(
+        f"/reviews/children/{candidate_id}/selected-target-abandonment",
+        json={"run_id": run_dir.name, "operator": "operator", "reason": "replace child target"},
+    ).json()
+    reset = client.post(
+        f"/reviews/children/{candidate_id}/selected-target-replacement-reset",
+        json={
+            "run_id": run_dir.name,
+            "sink": "google_contacts",
+            "operator": "replacement-operator",
+            "scope": "write",
+        },
+    ).json()
 
     assert validation["schema"] == "business-card-watchdog.child-selected-target-response-validation.v1"
     assert validation["state"] == "ready_for_no_live_child_checklist"
@@ -1365,6 +1378,16 @@ def test_api_child_selected_target_response_validation_and_checklist(tmp_path: P
     assert audit["replacement_requires_abandonment"] is False
     assert audit["writes_attempted"] == 0
     assert audit["network_calls_made"] == 0
+    assert abandonment["schema"] == "business-card-watchdog.child-selected-target-abandonment.v1"
+    assert abandonment["state"] == "abandoned"
+    assert abandonment["writes_attempted"] == 0
+    assert abandonment["network_calls_made"] == 0
+    assert reset["schema"] == "business-card-watchdog.child-selected-target-replacement-reset.v1"
+    assert reset["state"] == "ready_for_replacement_preview"
+    assert reset["replacement_unblocked"] is True
+    assert reset["replacement_requires_abandonment"] is False
+    assert reset["writes_attempted"] == 0
+    assert reset["network_calls_made"] == 0
 
 
 def test_api_multi_card_preclassification_drill_records_candidate_boxes(tmp_path: Path) -> None:

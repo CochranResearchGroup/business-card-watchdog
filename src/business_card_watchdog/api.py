@@ -75,6 +75,19 @@ def create_app(config_path: Path | None = None):
         scope: str | None = None
         write: bool = True
 
+    class ChildSelectedTargetAbandonmentRequest(BaseModel):
+        run_id: str
+        operator: str
+        reason: str
+
+    class ChildSelectedTargetReplacementResetRequest(BaseModel):
+        run_id: str
+        sink: str
+        operator: str
+        scope: str = "write"
+        reset_by: str = "operator"
+        reason: str = ""
+
     class ReviewDecisionsRequest(BaseModel):
         reviewer: str = "operator"
         decisions: list[dict[str, object]] = Field(default_factory=list)
@@ -668,6 +681,33 @@ def create_app(config_path: Path | None = None):
             operator=request.operator,
             scope=request.scope,
             write=request.write,
+        )
+
+    @app.post("/reviews/children/{candidate_id}/selected-target-abandonment")
+    def create_child_selected_target_abandonment(
+        candidate_id: str,
+        request: ChildSelectedTargetAbandonmentRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().abandon_child_selected_target(
+            run_id=request.run_id,
+            candidate_id=candidate_id,
+            operator=request.operator,
+            reason=request.reason,
+        )
+
+    @app.post("/reviews/children/{candidate_id}/selected-target-replacement-reset")
+    def create_child_selected_target_replacement_reset(
+        candidate_id: str,
+        request: ChildSelectedTargetReplacementResetRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().child_selected_target_replacement_reset(
+            run_id=request.run_id,
+            candidate_id=candidate_id,
+            sink=request.sink,
+            operator=request.operator,
+            scope=request.scope,
+            reset_by=request.reset_by,
+            reason=request.reason,
         )
 
     @app.post("/runs/{run_id}/review-bundle")

@@ -659,6 +659,42 @@ def test_cli_child_selected_target_response_validation_and_checklist(
     ) == 0
     audit = json.loads(capsys.readouterr().out)
 
+    assert main(
+        [
+            "--config",
+            str(config_path),
+            "reviews",
+            "child-abandon-selected-target",
+            candidate_id,
+            "--run-id",
+            run_dir.name,
+            "--operator",
+            "operator",
+            "--reason",
+            "replace child target",
+            "--json",
+        ]
+    ) == 0
+    abandonment = json.loads(capsys.readouterr().out)
+
+    assert main(
+        [
+            "--config",
+            str(config_path),
+            "reviews",
+            "child-selected-target-replacement-reset",
+            candidate_id,
+            "--run-id",
+            run_dir.name,
+            "--sink",
+            "google_contacts",
+            "--operator",
+            "replacement-operator",
+            "--json",
+        ]
+    ) == 0
+    reset = json.loads(capsys.readouterr().out)
+
     assert validation["state"] == "ready_for_no_live_child_checklist"
     assert validation["writes_attempted"] == 0
     assert validation["network_calls_made"] == 0
@@ -680,6 +716,16 @@ def test_cli_child_selected_target_response_validation_and_checklist(
     assert audit["replacement_requires_abandonment"] is False
     assert audit["writes_attempted"] == 0
     assert audit["network_calls_made"] == 0
+    assert abandonment["schema"] == "business-card-watchdog.child-selected-target-abandonment.v1"
+    assert abandonment["state"] == "abandoned"
+    assert abandonment["writes_attempted"] == 0
+    assert abandonment["network_calls_made"] == 0
+    assert reset["schema"] == "business-card-watchdog.child-selected-target-replacement-reset.v1"
+    assert reset["state"] == "ready_for_replacement_preview"
+    assert reset["replacement_unblocked"] is True
+    assert reset["replacement_requires_abandonment"] is False
+    assert reset["writes_attempted"] == 0
+    assert reset["network_calls_made"] == 0
 
 
 def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) -> None:
