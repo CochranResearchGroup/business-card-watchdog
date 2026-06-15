@@ -40,6 +40,8 @@ Prepare selected-target approval evidence:
   --operator <operator> \
   --scope lookup
 .venv/bin/bcw runs live-pilot-handoff <run-id> --no-write
+# Run the packet's printed "Validate prefilled response:" command first, then replace
+# safety_confirmation=<confirmation> with the operator's tenant/profile confirmation.
 .venv/bin/bcw runs live-pilot-validate-response \
   <run-id> \
   --response "run_id=<run-id> job_id=<job-id> sink=google_contacts operator=<operator> scope=lookup safety_confirmation=<operator confirms this run/job/sink uses the intended tenant/profile>"
@@ -59,7 +61,7 @@ Prepare selected-target approval evidence:
 .venv/bin/bcw runs live-pilot-status <run-id> --no-write
 ```
 
-Use `--sink odoo` when the read-only smoke target is Odollo/Odoo. Start with `live-selection-requirements` when you need candidate-specific packet and approval commands. Use `runs live-pilot-handoff --no-write` when an agent loop needs the current concrete operator response template; it does not create `selected_live_target.json`. Validate the filled response with `runs live-pilot-validate-response`; validation is read-only and only returns blockers or the exact select-target command. The packet must show `existing_selected_target.can_select_replacement_now = true` before selecting a replacement; if it shows `replacement_requires_abandonment = true`, run `abandon-live-pilot` for the old target first and then prepare a new packet.
+Use `--sink odoo` when the read-only smoke target is Odollo/Odoo. Start with `live-selection-requirements` when you need candidate-specific packet and approval commands. Use the selection packet's `Validate prefilled response:` command for the first read-only check, then validate the filled response after replacing the confirmation placeholder. Use `runs live-pilot-handoff --no-write` when an agent loop needs the current concrete operator response template; it does not create `selected_live_target.json`. Validation is read-only and only returns blockers or the exact select-target command. The packet must show `existing_selected_target.can_select_replacement_now = true` before selecting a replacement; if it shows `replacement_requires_abandonment = true`, run `abandon-live-pilot` for the old target first and then prepare a new packet.
 Add `--json` to review commands when you need to archive the full structured artifact.
 
 Prepare lookup artifacts:
@@ -157,6 +159,8 @@ Prepare or refresh selected-target approval evidence:
   --operator <operator> \
   --scope all
 .venv/bin/bcw runs live-pilot-handoff <run-id> --no-write
+# Run the packet's printed "Validate prefilled response:" command first, then replace
+# safety_confirmation=<confirmation> with the operator's tenant/profile confirmation.
 .venv/bin/bcw runs live-pilot-validate-response \
   <run-id> \
   --response "run_id=<run-id> job_id=<job-id> sink=google_contacts operator=<operator> scope=all safety_confirmation=<operator confirms this run/job/sink uses the intended tenant/profile>"
@@ -176,7 +180,7 @@ Prepare or refresh selected-target approval evidence:
 .venv/bin/bcw runs live-pilot-status <run-id> --no-write
 ```
 
-Start with `live-selection-requirements` when you need candidate-specific packet and approval commands. Use `runs live-pilot-handoff --no-write` when an agent loop needs the current concrete operator response template; it does not create `selected_live_target.json`. Validate the filled response with `runs live-pilot-validate-response`; validation is read-only and only returns blockers or the exact select-target command. If a lookup-only selected target already exists, record `abandon-live-pilot` with the reason for replacement before selecting the broader `all` scope target. Do not hand-edit selected-target artifacts.
+Start with `live-selection-requirements` when you need candidate-specific packet and approval commands. Use the selection packet's `Validate prefilled response:` command for the first read-only check, then validate the filled response after replacing the confirmation placeholder. Use `runs live-pilot-handoff --no-write` when an agent loop needs the current concrete operator response template; it does not create `selected_live_target.json`. Validation is read-only and only returns blockers or the exact select-target command. If a lookup-only selected target already exists, record `abandon-live-pilot` with the reason for replacement before selecting the broader `all` scope target. Do not hand-edit selected-target artifacts.
 Add `--json` to review commands when you need to archive the full structured artifact.
 
 Prepare apply artifacts:

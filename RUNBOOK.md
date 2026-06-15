@@ -3222,3 +3222,27 @@ Validation:
 Safety:
 
 - This was no-live selection-packet command-surface hardening only. It did not validate an operator response, execute any returned select-target command, create or modify `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+## Turn 161 | 2026-06-15
+
+Continued Plan 0009 with Slice 0009-A85.
+
+Implemented:
+
+- README live-pilot quick-start now tells operators to run the selection packet's printed `Validate prefilled response:` command before filling the tenant/profile confirmation.
+- The live-pilot checklist now gives the same prefilled-validation guidance for lookup-only and all-scope selected-target approval flows.
+- The docs preserve the manual `runs live-pilot-validate-response` command for the filled confirmation and keep validation explicitly read-only.
+
+Validation:
+
+- `rg -n 'Validate prefilled response|validation is read-only|selected_live_target\.json|live-pilot-validate-response' README.md docs/operations/live-pilot-checklists.md` passed.
+- `.venv/bin/python -m pytest -q` passed with 226 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was documentation only. It did not run validation, execute any returned select-target command, create or modify `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
