@@ -268,6 +268,9 @@ def test_service_live_selection_packet_does_not_select_target(tmp_path: Path) ->
     assert packet["existing_selected_target"]["replacement_requires_abandonment"] is False
     assert packet["existing_selected_target"]["can_select_replacement_now"] is True
     assert packet["existing_selected_target"]["abandon_command"] is None
+    assert packet["commands"]["validate_operator_response"] == (
+        f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+    )
     assert "select-live-target" in packet["commands"]["create_selected_target"]
     artifacts = BusinessCardService(config).list_artifacts(run_id)
     assert any(artifact["kind"] == "live_selection_packet" for artifact in artifacts)

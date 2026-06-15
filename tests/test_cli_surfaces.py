@@ -389,6 +389,9 @@ def test_cli_live_selection_packet_writes_no_selected_target(tmp_path: Path, cap
     assert payload["existing_selected_target"]["replacement_requires_abandonment"] is False
     assert payload["existing_selected_target"]["can_select_replacement_now"] is True
     assert payload["existing_selected_target"]["abandon_command"] is None
+    assert payload["commands"]["validate_operator_response"] == (
+        f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+    )
 
     assert (
         main(
@@ -415,6 +418,10 @@ def test_cli_live_selection_packet_writes_no_selected_target(tmp_path: Path, cap
     assert f"Job: {job_id}" in text
     assert "Existing target: exists=False identity=none" in text
     assert "Replacement: requires_abandonment=False can_select_now=True" in text
+    assert (
+        f"Validate response: runs live-pilot-validate-response {run_id} "
+        "--response <operator-response> --json"
+    ) in text
     assert "Create selected target: sinks select-live-target" in text
     assert "{" not in text
 

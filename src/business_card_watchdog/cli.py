@@ -551,6 +551,9 @@ def _render_live_selection_packet_text(payload: dict[str, object]) -> str:
     abandon_command = existing.get("abandon_command")
     if abandon_command:
         lines.append(f"Abandon existing target: {abandon_command}")
+    validate_command = commands.get("validate_operator_response")
+    if validate_command:
+        lines.append(f"Validate response: {validate_command}")
     create_command = commands.get("create_selected_target")
     if create_command:
         lines.append(f"Create selected target: {create_command}")

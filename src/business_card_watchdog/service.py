@@ -6057,6 +6057,9 @@ class BusinessCardService:
             "writes_attempted": 0,
             "network_calls_made": 0,
             "commands": {
+                "validate_operator_response": (
+                    f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+                ),
                 "create_selected_target": (
                     f"sinks select-live-target {job_id} --run-id {run_id} --sink {sink} "
                     f"--operator {operator} --scope {scope} --safety-confirmation <confirmation>"

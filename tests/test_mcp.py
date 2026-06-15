@@ -466,6 +466,9 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert live_packet["existing_selected_target"]["exists"] is False
     assert live_packet["existing_selected_target"]["identity"] is None
     assert live_packet["existing_selected_target"]["abandoned"] is False
+    assert live_packet["commands"]["validate_operator_response"] == (
+        f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+    )
     assert active_live_packet["state"] == "blocked"
     assert active_live_packet["existing_selected_target"]["exists"] is True
     assert active_live_packet["existing_selected_target"]["identity"] == selected_target["target"]["selection_id"]
