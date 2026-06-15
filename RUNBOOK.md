@@ -2775,6 +2775,31 @@ Safety:
 
 - This was no-live metadata/readback only. It did not run validation, execute the returned select-target command, create or modify `selected_live_target.json`, execute next actions, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
 
+## Turn 149 | 2026-06-15
+
+Continued Plan 0009 with Slice 0009-A73.
+
+Implemented:
+
+- README live-pilot quick-start now inserts `runs live-pilot-validate-response` between handoff review and selected-target creation.
+- The live-pilot checklist now includes response validation for lookup-only and all-scope pilot flows.
+- Docs now state that response validation is read-only and only returns blockers or the exact select-target command.
+
+Validation:
+
+- `rg -n 'live-pilot-validate-response|validation is read-only|selected_live_target\.json' README.md docs/operations/live-pilot-checklists.md` passed.
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 3 tests.
+- `.venv/bin/python -m pytest -q` passed with 226 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was documentation only. It did not run validation, execute the returned select-target command, create or modify `selected_live_target.json`, execute next actions, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
 ## Turn 142 | 2026-06-14
 
 Continued Plan 0009 with Slice 0009-A66.
