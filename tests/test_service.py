@@ -846,6 +846,9 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     assert dashboard["commands"]["live_pilot_approval_packet"] == (
         f"runs live-pilot-approval-packet {run_id} --json"
     )
+    assert dashboard["commands"]["selected_live_target_from_response"] == (
+        f"runs selected-live-target-from-response {run_id} --response <operator-response> --json"
+    )
     assert dashboard["commands"]["live_pilot_validate_response"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
@@ -864,6 +867,10 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     assert dashboard["mcp_tools"]["live_pilot_approval_packet"] == {
         "tool": "business_card_watchdog_live_pilot_approval_packet",
         "arguments": {"run_id": run_id},
+    }
+    assert dashboard["mcp_tools"]["selected_live_target_from_response"] == {
+        "tool": "business_card_watchdog_selected_live_target_from_response",
+        "arguments": {"run_id": run_id, "response": "<operator-response>"},
     }
     assert dashboard["mcp_tools"]["review_routing_drill"] == {
         "tool": "business_card_watchdog_review_routing_drill",
@@ -2648,15 +2655,33 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert preselection_preview["network_calls_made"] == 0
     assert not (Path(preselection_preview["would_write_path"])).exists()
 
-    target = service.select_live_target_for_job(
-        job_id=job_id,
+    default_from_response = service.selected_live_target_from_response(
         run_id=run_id,
-        sink="google_contacts",
-        operator="tester",
-        scope="lookup",
-        reason="fixture live lookup approval",
-        safety_confirmation="fixture contact is safe for google contacts test profile",
+        response=preselection_response,
     )
+    assert default_from_response["schema"] == "business-card-watchdog.selected-live-target-from-response.v1"
+    assert default_from_response["state"] == "preview"
+    assert default_from_response["write_selected_target"] is False
+    assert default_from_response["creates_selected_live_target"] is False
+    assert default_from_response["target"] is None
+    assert default_from_response["target_path"] is None
+    assert default_from_response["preview"]["state"] == "ready"
+    assert default_from_response["writes_attempted"] == 0
+    assert default_from_response["network_calls_made"] == 0
+    assert not (Path(preselection_preview["would_write_path"])).exists()
+
+    created_from_response = service.selected_live_target_from_response(
+        run_id=run_id,
+        response=preselection_response,
+        write_selected_target=True,
+        reason="fixture live lookup approval",
+    )
+    assert created_from_response["state"] == "created"
+    assert created_from_response["write_selected_target"] is True
+    assert created_from_response["creates_selected_live_target"] is True
+    assert created_from_response["writes_attempted"] == 1
+    assert created_from_response["network_calls_made"] == 0
+    target = {"target": created_from_response["target"], "target_path": created_from_response["target_path"]}
     payload = target["target"]
     job = service.get_job(job_id, run_id=run_id)
     review_bundle = service.review_bundle(run_id=run_id)

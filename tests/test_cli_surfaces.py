@@ -1012,6 +1012,54 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
                 "--config",
                 str(config_path),
                 "runs",
+                "selected-live-target-from-response",
+                run_id,
+                "--response",
+                response,
+                "--json",
+            ]
+        )
+        == 0
+    )
+    from_response = json.loads(capsys.readouterr().out)
+    assert from_response["schema"] == "business-card-watchdog.selected-live-target-from-response.v1"
+    assert from_response["state"] == "preview"
+    assert from_response["write_selected_target"] is False
+    assert from_response["preview"]["state"] == "blocked"
+    assert from_response["target"] is None
+    assert from_response["target_path"] is None
+    assert from_response["creates_selected_live_target"] is False
+    assert from_response["writes_attempted"] == 0
+    assert from_response["network_calls_made"] == 0
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "selected-live-target-from-response",
+                run_id,
+                "--response",
+                response,
+            ]
+        )
+        == 0
+    )
+    from_response_text = capsys.readouterr().out
+    assert "State: preview" in from_response_text
+    assert "Write selected target: False" in from_response_text
+    assert "Creates selected target: False" in from_response_text
+    assert "Preview state: blocked" in from_response_text
+    assert "Stop conditions: 3" in from_response_text
+    assert "{" not in from_response_text
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
                 "live-pilot-validate-response",
                 run_id,
                 "--response",

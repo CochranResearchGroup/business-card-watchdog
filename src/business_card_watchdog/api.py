@@ -118,6 +118,11 @@ def create_app(config_path: Path | None = None):
     class SelectedLiveTargetPreflightRequest(BaseModel):
         response: str
 
+    class SelectedLiveTargetFromResponseRequest(BaseModel):
+        response: str
+        write_selected_target: bool = False
+        reason: str = ""
+
     class SelectedLiveTargetAuditRequest(BaseModel):
         run_id: str
         scope: str | None = None
@@ -275,6 +280,18 @@ def create_app(config_path: Path | None = None):
         request: SelectedLiveTargetPreflightRequest,
     ) -> dict[str, object]:
         return service().selected_live_target_artifact_preview(run_id=run_id, response=request.response)
+
+    @app.post("/runs/{run_id}/selected-live-target-from-response")
+    def create_run_selected_live_target_from_response(
+        run_id: str,
+        request: SelectedLiveTargetFromResponseRequest,
+    ) -> dict[str, object]:
+        return service().selected_live_target_from_response(
+            run_id=run_id,
+            response=request.response,
+            write_selected_target=request.write_selected_target,
+            reason=request.reason,
+        )
 
     @app.get("/runs/{run_id}/jobs")
     def list_run_jobs(run_id: str) -> list[dict[str, object]]:

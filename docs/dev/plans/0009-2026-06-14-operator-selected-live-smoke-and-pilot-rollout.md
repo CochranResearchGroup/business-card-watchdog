@@ -2210,6 +2210,34 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed; index is up to date.
 
+### Slice 0009-A125 | 2026-06-15 | Guarded Selected Target Create From Response
+
+Implemented:
+
+- Added `business-card-watchdog.selected-live-target-from-response.v1`.
+- Added guarded selected-target create-from-response flow across service, CLI, API, and MCP surfaces.
+- Default mode returns preview/no-write output and does not create `selected_live_target.json`.
+- Explicit write mode requires `--write-selected-target` or equivalent API/MCP flag and reuses the existing selected-target writer only after preflight/preview is ready.
+- Operator dashboard command/API/MCP maps now advertise the guarded create-from-response surface.
+- Service, CLI, API, and MCP coverage assert default preview behavior, explicit creation behavior, blocked behavior, and zero live sink calls.
+
+Safety:
+
+- This slice creates `selected_live_target.json` only in focused synthetic tests when the explicit write flag is set.
+- Default CLI/API/MCP behavior remains no-write preview.
+- It does not process configured/private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_operator_dashboard_composes_no_live_readiness tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/api.py src/business_card_watchdog/mcp.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 231 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
 ### Slice 0009-A124 | 2026-06-15 | Selected Target Artifact Preview
 
 Implemented:

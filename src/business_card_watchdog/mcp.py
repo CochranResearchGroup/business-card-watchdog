@@ -201,6 +201,20 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_selected_live_target_from_response",
+                "description": "Preview or explicitly create selected_live_target.json from a validated operator response.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "response": {"type": "string"},
+                        "write_selected_target": {"type": "boolean", "default": False},
+                        "reason": {"type": "string"},
+                    },
+                    "required": ["run_id", "response"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_next_actions",
                 "description": "Return deterministic next actions for agent-loop batch orchestration.",
                 "input_schema": {
@@ -879,6 +893,13 @@ def call_tool(
         return service.selected_live_target_artifact_preview(
             run_id=str(args["run_id"]),
             response=str(args["response"]),
+        )
+    if tool_name == "business_card_watchdog_selected_live_target_from_response":
+        return service.selected_live_target_from_response(
+            run_id=str(args["run_id"]),
+            response=str(args["response"]),
+            write_selected_target=bool(args.get("write_selected_target", False)),
+            reason=str(args.get("reason") or ""),
         )
     if tool_name == "business_card_watchdog_next_actions":
         return service.next_actions(

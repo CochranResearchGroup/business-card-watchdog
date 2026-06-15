@@ -633,6 +633,12 @@ class BusinessCardService:
                     if selected_run_id
                     else "runs list --json"
                 ),
+                "selected_live_target_from_response": (
+                    f"runs selected-live-target-from-response {selected_run_id} "
+                    "--response <operator-response> --json"
+                    if selected_run_id
+                    else "runs list --json"
+                ),
                 "mcp_manifest": "mcp-manifest",
             },
             "api_routes": {
@@ -677,6 +683,11 @@ class BusinessCardService:
                     f"POST /runs/{selected_run_id}/selected-live-target-preview"
                     if selected_run_id
                     else "POST /runs/{run_id}/selected-live-target-preview"
+                ),
+                "selected_live_target_from_response": (
+                    f"POST /runs/{selected_run_id}/selected-live-target-from-response"
+                    if selected_run_id
+                    else "POST /runs/{run_id}/selected-live-target-from-response"
                 ),
             },
             "mcp_tools": {
@@ -730,6 +741,12 @@ class BusinessCardService:
                 },
                 "selected_live_target_preview": {
                     "tool": "business_card_watchdog_selected_live_target_artifact_preview",
+                    "arguments": {"run_id": selected_run_id, "response": "<operator-response>"}
+                    if selected_run_id
+                    else {"run_id": "<run-id>", "response": "<operator-response>"},
+                },
+                "selected_live_target_from_response": {
+                    "tool": "business_card_watchdog_selected_live_target_from_response",
                     "arguments": {"run_id": selected_run_id, "response": "<operator-response>"}
                     if selected_run_id
                     else {"run_id": "<run-id>", "response": "<operator-response>"},
@@ -6556,6 +6573,84 @@ class BusinessCardService:
             ],
             "writes_attempted": 0,
             "network_calls_made": 0,
+        }
+
+    def selected_live_target_from_response(
+        self,
+        *,
+        run_id: str,
+        response: str,
+        write_selected_target: bool = False,
+        reason: str = "",
+    ) -> dict[str, Any]:
+        preview = self.selected_live_target_artifact_preview(run_id=run_id, response=response)
+        if not write_selected_target:
+            return {
+                "schema": "business-card-watchdog.selected-live-target-from-response.v1",
+                "generated_at": utc_now(),
+                "state": "preview",
+                "run_id": run_id,
+                "write_selected_target": False,
+                "preview": preview,
+                "target": None,
+                "target_path": None,
+                "creates_selected_live_target": False,
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+                "explicit_stop_conditions": [
+                    "Default mode is preview only and does not create selected_live_target.json.",
+                    "Pass the explicit write-selected-target flag only after operator approval is final.",
+                    "This command never runs live lookup, live write, or live readback.",
+                ],
+            }
+        if preview.get("state") != "ready" or not preview.get("artifact_preview"):
+            return {
+                "schema": "business-card-watchdog.selected-live-target-from-response.v1",
+                "generated_at": utc_now(),
+                "state": "blocked",
+                "run_id": run_id,
+                "write_selected_target": True,
+                "preview": preview,
+                "target": None,
+                "target_path": None,
+                "blocked_reasons": preview.get("blocked_reasons") or ["selected target preview is not ready"],
+                "creates_selected_live_target": False,
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+                "explicit_stop_conditions": [
+                    "selected_live_target.json was not created because preflight/preview is blocked.",
+                    "Fix the blocked reasons before retrying with the explicit write-selected-target flag.",
+                    "This command never runs live lookup, live write, or live readback.",
+                ],
+            }
+        validation = self.validate_live_pilot_operator_response(run_id=run_id, response=response)
+        parsed = dict(validation.get("parsed_response") or {})
+        created = self.select_live_target_for_job(
+            job_id=str(parsed["job_id"]),
+            run_id=run_id,
+            sink=str(parsed["sink"]),
+            operator=str(parsed["operator"]),
+            scope=str(parsed["scope"]),
+            reason=reason,
+            safety_confirmation=str(parsed["safety_confirmation"]),
+        )
+        return {
+            "schema": "business-card-watchdog.selected-live-target-from-response.v1",
+            "generated_at": utc_now(),
+            "state": "created",
+            "run_id": run_id,
+            "write_selected_target": True,
+            "preview": preview,
+            "target": created["target"],
+            "target_path": created["target_path"],
+            "creates_selected_live_target": True,
+            "writes_attempted": 1,
+            "network_calls_made": 0,
+            "explicit_stop_conditions": [
+                "selected_live_target.json was created; do not create another selected target without abandonment.",
+                "This command did not run live lookup, live write, or live readback.",
+                "Run selected-target audit before any explicit live pilot command.",
+            ],
         }
 
     def validate_live_pilot_operator_response(self, *, run_id: str, response: str) -> dict[str, Any]:
