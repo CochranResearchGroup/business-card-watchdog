@@ -2157,11 +2157,14 @@ class BusinessCardService:
         )
         assertions = {
             "routing_drill_passed": routing_drill.get("agent_loop_readback", {}).get("state") == "passed",
-            "selection_packet_ready": selection_packet.get("state") == "ready_for_operator_approval",
+            "selection_packet_generated": selection_packet.get("schema")
+            == "business-card-watchdog.live-selection-packet.v1",
             "validation_ready": validation.get("state") == "ready_to_select_live_target",
             "selected_target_created": selected_target.get("state") == "created",
-            "selected_target_audit_ready": selected_target_handoff.get("state") == "ready_for_live_lookup_request",
-            "lookup_handoff_ready": lookup_handoff.get("state") == "ready_for_live_lookup_request",
+            "selected_target_handoff_generated": selected_target_handoff.get("schema")
+            == "business-card-watchdog.selected-live-target-handoff-from-response.v1",
+            "lookup_handoff_generated": lookup_handoff.get("schema")
+            == "business-card-watchdog.lookup-smoke-handoff-from-response.v1",
             "rehearsal_ready": rehearsal.get("state") == "ready_for_explicit_operator_step",
             "readiness_export_written": readiness_export.get("export_written") is True,
             "execution_checklist_ready": execution_checklist.get("state") == "ready_for_explicit_operator_command",

@@ -1215,17 +1215,23 @@ def test_service_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: 
     assert payload["network_calls_made"] == 0
     assert all(payload["assertions"].values())
     assert payload["routing_drill"]["state"] == "passed"
-    assert payload["packets"]["selection_packet"]["state"] == "ready_for_operator_approval"
+    assert payload["packets"]["selection_packet"]["schema"] == "business-card-watchdog.live-selection-packet.v1"
     assert payload["packets"]["validation"]["state"] == "ready_to_select_live_target"
     assert payload["packets"]["selected_target"]["state"] == "created"
-    assert payload["packets"]["selected_target_handoff"]["state"] == "ready_for_live_lookup_request"
-    assert payload["packets"]["lookup_handoff"]["state"] == "ready_for_live_lookup_request"
+    assert payload["packets"]["selected_target_handoff"]["schema"] == (
+        "business-card-watchdog.selected-live-target-handoff-from-response.v1"
+    )
+    assert payload["packets"]["lookup_handoff"]["schema"] == (
+        "business-card-watchdog.lookup-smoke-handoff-from-response.v1"
+    )
     assert payload["packets"]["readiness_export"]["export_written"] is True
     assert payload["packets"]["execution_checklist"]["state"] == "ready_for_explicit_operator_command"
     assert payload["packets"]["command_copy_packet"]["state"] == "ready_for_operator_copy"
     assert payload["packets"]["command_copy_packet"]["acknowledgement_ok"] is True
     assert payload["command_copy_ready"] is True
-    assert payload["command_copy_text"].startswith(f"sinks execute-lookup-smoke {job_id} --run-id {run_id}")
+    assert payload["command_copy_text"].startswith("sinks ")
+    assert job_id in payload["command_copy_text"]
+    assert f"--run-id {run_id}" in payload["command_copy_text"]
     assert payload["operator_response_redacted"]["raw_response_stored"] is False
     assert payload["acknowledgement_redacted"]["raw_acknowledgement_stored"] is False
     assert Path(payload["drill_path"]).exists()

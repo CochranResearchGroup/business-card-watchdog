@@ -221,12 +221,13 @@ Validation:
 Safety:
 
 - This was synthetic no-live rehearsal only. It created synthetic fixture runtime artifacts under the configured data/cache dirs and did not process private SyncThing inputs, run public-web search, call paid enrichment, execute command-copy text, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
-- `.venv/bin/python -m pytest -q` passed with 231 tests.
-- `.venv/bin/ruff check .` passed.
-- `uv build --out-dir dist` passed.
-- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
-- `git diff --check` passed.
-- `codegraph sync && codegraph status` passed; index is up to date.
+
+CI portability addendum:
+
+- GitHub Actions run `27532151168` failed because the synthetic drill top-level pass/fail asserted host-specific live lookup readiness that is unavailable in CI's offline fixture environment.
+- The top-level drill state now asserts the deterministic no-live rehearsal contract: packet generation, operator-response validation, selected-target creation, readiness export, execution checklist, command-copy readiness, and zero private/web/paid/live calls.
+- Live lookup readiness blockers remain visible inside nested selection/handoff packets; they are not treated as CI-portable evidence of drill failure.
+- The service test now asserts that command-copy text is sink-scoped and bound to the same job/run instead of requiring one host-specific next command.
 
 ### Slice 0009-A134 | 2026-06-15 | Redacted Live Pilot Readiness Export From Response
 

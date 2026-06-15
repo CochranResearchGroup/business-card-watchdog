@@ -4595,3 +4595,28 @@ Validation:
 Safety:
 
 - This was synthetic no-live rehearsal only. It created synthetic fixture runtime artifacts under the configured data/cache dirs and did not process private SyncThing inputs, run public-web search, call paid enrichment, execute command-copy text, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+## Turn 215 | 2026-06-15
+
+Continued Plan 0009 with a CI portability fix for Slice 0009-A138.
+
+Implemented:
+
+- Adjusted `business-card-watchdog.live-pilot-rehearsal-drill.v1` top-level assertions so CI-portable pass/fail is based on the deterministic no-live rehearsal path rather than host-specific live lookup readiness.
+- Kept live lookup readiness blockers visible in nested selection and handoff packets.
+- Relaxed the service test to require command-copy text to be sink-scoped and bound to the same job/run, instead of requiring one host-specific next command.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_live_pilot_rehearsal_drill_reaches_command_copy_gate tests/test_cli_surfaces.py::test_cli_live_pilot_rehearsal_drill_reaches_command_copy_gate tests/test_api.py::test_api_live_pilot_rehearsal_drill_reaches_command_copy_gate tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 4 tests.
+- CI-like temporary `HOME` with the offline business-card skill fixture: `.venv/bin/python -m pytest tests/test_service.py::test_service_live_pilot_rehearsal_drill_reaches_command_copy_gate tests/test_cli_surfaces.py::test_cli_live_pilot_rehearsal_drill_reaches_command_copy_gate tests/test_api.py::test_api_live_pilot_rehearsal_drill_reaches_command_copy_gate tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 4 tests.
+- `.venv/bin/python -m pytest -q` passed with 234 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was CI/test hardening only. It did not process private SyncThing inputs, run public-web search, call paid enrichment, execute command-copy text, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
