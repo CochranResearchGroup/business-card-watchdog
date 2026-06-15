@@ -433,6 +433,22 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_child_review_submit",
+                "description": "Approve, keep, or reject a promoted child contact candidate without live sink writes.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "candidate_id": {"type": "string"},
+                        "reviewer": {"type": "string", "default": "operator"},
+                        "action": {"type": "string", "default": "keep_needs_review"},
+                        "field_corrections": {"type": "object"},
+                        "notes": {"type": "string"},
+                    },
+                    "required": ["run_id", "candidate_id"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_review_bundle",
                 "description": "Create a run-level batch review bundle with inline review-relevant artifact payloads.",
                 "input_schema": {
@@ -1160,6 +1176,15 @@ def call_tool(
         return service.child_review_queue(
             run_id=str(args["run_id"]) if args.get("run_id") else None,
             state=str(args.get("state") or "needs_review"),
+        )
+    if tool_name == "business_card_watchdog_child_review_submit":
+        return service.submit_child_review(
+            run_id=str(args["run_id"]),
+            candidate_id=str(args["candidate_id"]),
+            reviewer=str(args.get("reviewer") or "operator"),
+            action=str(args.get("action") or "keep_needs_review"),
+            field_corrections=dict(args.get("field_corrections") or {}),
+            notes=str(args.get("notes") or ""),
         )
     if tool_name == "business_card_watchdog_review_bundle":
         return service.review_bundle(

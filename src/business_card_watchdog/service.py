@@ -100,6 +100,12 @@ _SUPPORTED_REVIEW_ACTIONS = {
     "skip",
 }
 
+_SUPPORTED_CHILD_REVIEW_ACTIONS = {
+    "approve_child_for_routing",
+    "keep_needs_review",
+    "reject_child_contact",
+}
+
 _ROUTE_ARTIFACT_FILES = {
     "sink_lookup_plan": "sink_lookup_plan.json",
     "sink_adapter_request_lookup": "sink_adapter_request_lookup.json",
@@ -2467,6 +2473,14 @@ class BusinessCardService:
                 for artifact in artifacts
                 if artifact.get("kind") == "child_contact_promotions"
             ]
+            review_results: dict[str, dict[str, Any]] = {}
+            for result_artifact in artifacts:
+                if result_artifact.get("kind") != "child_contact_review_result":
+                    continue
+                result_payload = _read_json_file(Path(str(result_artifact.get("path") or ""))) or {}
+                result_candidate_id = str(result_payload.get("candidate_id") or "")
+                if result_candidate_id:
+                    review_results[result_candidate_id] = result_payload
             for artifact in promotion_artifacts:
                 manifest = _read_json_file(Path(str(artifact.get("path") or ""))) or {}
                 promotions = [
@@ -2475,8 +2489,10 @@ class BusinessCardService:
                     if isinstance(promotion, dict)
                 ]
                 for promotion in promotions:
-                    promotion_state = str(promotion.get("state") or "")
-                    if state != "all" and promotion_state != state:
+                    candidate_id = str(promotion.get("candidate_id") or "")
+                    review_result = review_results.get(candidate_id)
+                    current_state = str((review_result or {}).get("state") or promotion.get("state") or "")
+                    if state != "all" and current_state != state:
                         continue
                     candidate_path = Path(str(promotion.get("contact_candidate_path") or ""))
                     candidate = _read_json_file(candidate_path) or {}
@@ -2486,9 +2502,9 @@ class BusinessCardService:
                             "schema": "business-card-watchdog.child-review-queue-entry.v1",
                             "run_id": str(current_run_id),
                             "job_id": promotion.get("parent_job_id"),
-                            "candidate_id": promotion.get("candidate_id"),
+                            "candidate_id": candidate_id,
                             "work_item_id": promotion.get("work_item_id"),
-                            "state": promotion_state,
+                            "state": current_state,
                             "image_path": (job or {}).get("image_path"),
                             "artifact_dir": (job or {}).get("artifact_dir"),
                             "contact_candidate_path": str(candidate_path),
@@ -2496,7 +2512,8 @@ class BusinessCardService:
                             "contact_candidate": candidate,
                             "lineage": candidate.get("lineage") if isinstance(candidate, dict) else {},
                             "review": candidate.get("review") if isinstance(candidate, dict) else {},
-                            "routing_allowed": bool(promotion.get("routing_allowed")),
+                            "child_review_result": review_result,
+                            "routing_allowed": bool((review_result or {}).get("routing_allowed")),
                             "enrichment_allowed": bool(promotion.get("enrichment_allowed")),
                             "sink_write_allowed": bool(promotion.get("sink_write_allowed")),
                             "next_action": {
@@ -2505,8 +2522,9 @@ class BusinessCardService:
                                 "requires_explicit_operator_action": True,
                                 "reason": "promoted child contact candidate requires review before routing",
                                 "command": (
-                                    "reviews children "
-                                    f"--run-id {current_run_id} --state {promotion_state} --json"
+                                    "reviews child-review "
+                                    f"{shlex.quote(candidate_id)} --run-id {current_run_id} "
+                                    "--action approve_child_for_routing --json"
                                 ),
                             },
                         }
@@ -2519,6 +2537,152 @@ class BusinessCardService:
                 str(row.get("candidate_id") or ""),
             ),
         )
+
+    def submit_child_review(
+        self,
+        *,
+        run_id: str,
+        candidate_id: str,
+        reviewer: str,
+        action: str,
+        field_corrections: dict[str, Any] | None = None,
+        notes: str = "",
+    ) -> dict[str, Any]:
+        if action not in _SUPPORTED_CHILD_REVIEW_ACTIONS:
+            raise ValueError(f"unsupported child review action: {action}")
+
+        queue = self.child_review_queue(run_id=run_id, state="all")
+        entry = next((row for row in queue if str(row.get("candidate_id") or "") == candidate_id), None)
+        if entry is None:
+            raise FileNotFoundError(f"child contact candidate not found: {candidate_id}")
+
+        contact_candidate_path = Path(str(entry.get("contact_candidate_path") or ""))
+        candidate = _read_json_file(contact_candidate_path) or {}
+        if not isinstance(candidate, dict):
+            candidate = {}
+        artifact_dir = Path(str(entry.get("artifact_dir") or "")) if entry.get("artifact_dir") else contact_candidate_path.parent
+        child_review_dir = artifact_dir / "child_reviews" / candidate_id
+        child_review_dir.mkdir(parents=True, exist_ok=True)
+        created_at = utc_now()
+        field_corrections = dict(field_corrections or {})
+        submission = {
+            "schema": "business-card-watchdog.child-review-submission.v1",
+            "run_id": run_id,
+            "job_id": entry.get("job_id"),
+            "candidate_id": candidate_id,
+            "work_item_id": entry.get("work_item_id"),
+            "reviewer": reviewer,
+            "action": action,
+            "field_corrections": field_corrections,
+            "notes": notes,
+            "contact_candidate_path": str(contact_candidate_path),
+            "submitted_at": created_at,
+        }
+        submission_path = child_review_dir / "child_review_submission.json"
+        submission_path.write_text(json.dumps(submission, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+        reviewed_contact = None
+        reviewed_contact_path = None
+        state = "needs_review"
+        routing_allowed = False
+        if action == "approve_child_for_routing":
+            reviewed_contact = apply_review_corrections(
+                candidate,
+                reviewer=reviewer,
+                field_corrections=field_corrections,
+                default_country=self.config.normalization.default_country,
+            )
+            reviewed_contact["lineage"] = {
+                **dict(candidate.get("lineage") or {}),
+                "child_review_submission_path": str(submission_path),
+                "contact_candidate_path": str(contact_candidate_path),
+            }
+            reviewed_contact["review"] = {
+                "state": "approved_for_dedupe",
+                "reviewer": reviewer,
+                "reviewed_at": created_at,
+                "notes": notes,
+            }
+            reviewed_contact["routing_allowed"] = True
+            reviewed_contact["enrichment_allowed"] = False
+            reviewed_contact["sink_write_allowed"] = False
+            reviewed_contact_path = child_review_dir / "reviewed_child_contact.json"
+            reviewed_contact_path.write_text(
+                json.dumps(reviewed_contact, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            state = "approved_for_dedupe"
+            routing_allowed = True
+        elif action == "reject_child_contact":
+            state = "rejected"
+
+        result = {
+            "schema": "business-card-watchdog.child-contact-review-result.v1",
+            "run_id": run_id,
+            "job_id": entry.get("job_id"),
+            "candidate_id": candidate_id,
+            "work_item_id": entry.get("work_item_id"),
+            "state": state,
+            "action": action,
+            "reviewer": reviewer,
+            "reviewed_at": created_at,
+            "notes": notes,
+            "contact_candidate_path": str(contact_candidate_path),
+            "child_review_submission_path": str(submission_path),
+            "reviewed_child_contact_path": str(reviewed_contact_path) if reviewed_contact_path is not None else None,
+            "routing_allowed": routing_allowed,
+            "enrichment_allowed": False,
+            "sink_write_allowed": False,
+            "next_action": {
+                "action": "dedupe_child_contact" if routing_allowed else "review_child_contact",
+                "safe_to_auto_continue": bool(routing_allowed),
+                "requires_explicit_operator_action": not bool(routing_allowed),
+                "reason": (
+                    "approved child contact is ready for future dedupe/routing"
+                    if routing_allowed
+                    else "child contact remains out of routing"
+                ),
+            },
+        }
+        result_path = child_review_dir / "child_contact_review_result.json"
+        result_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        parent_job_id = str(entry.get("job_id") or "__run__")
+        ledger.record_artifact(job_id=parent_job_id, kind="child_review_submission", path=submission_path)
+        if reviewed_contact_path is not None:
+            ledger.record_artifact(job_id=parent_job_id, kind="reviewed_child_contact", path=reviewed_contact_path)
+        ledger.record_artifact(job_id=parent_job_id, kind="child_contact_review_result", path=result_path)
+        ledger.record_event(
+            "child_contact_review_submitted",
+            {
+                "run_id": run_id,
+                "job_id": entry.get("job_id"),
+                "candidate_id": candidate_id,
+                "action": action,
+                "state": state,
+                "reviewer": reviewer,
+                "submission_path": str(submission_path),
+                "result_path": str(result_path),
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        return {
+            "schema": "business-card-watchdog.child-review-submission-result.v1",
+            "run_id": run_id,
+            "job_id": entry.get("job_id"),
+            "candidate_id": candidate_id,
+            "state": state,
+            "submission": submission,
+            "submission_path": str(submission_path),
+            "result": result,
+            "result_path": str(result_path),
+            "reviewed_contact": reviewed_contact,
+            "reviewed_child_contact_path": str(reviewed_contact_path) if reviewed_contact_path is not None else None,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
 
     def review_bundle(self, *, run_id: str, state: str = "all", write: bool = True) -> dict[str, Any]:
         run = self.get_run(run_id)

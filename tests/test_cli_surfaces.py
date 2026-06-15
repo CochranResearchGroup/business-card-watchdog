@@ -212,6 +212,52 @@ def test_cli_child_reviews_lists_promoted_child_candidates(
     assert "{" not in text
 
 
+def test_cli_child_review_approves_promoted_child_candidate(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    pytest = __import__("pytest")
+    pytest.importorskip("cv2")
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+    source_dir = tmp_path / "images"
+    write_multi_card_image(source_dir / "multi.jpg")
+    config = AppConfig(config_path=config_path, data_dir=data_dir)
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+    candidate_id = str(BusinessCardService(config).child_review_queue(run_id=run_dir.name)[0]["candidate_id"])
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "reviews",
+                "child-review",
+                candidate_id,
+                "--run-id",
+                run_dir.name,
+                "--action",
+                "approve_child_for_routing",
+                "--field-corrections-json",
+                '{"email":"cli-child@example.test"}',
+                "--json",
+            ]
+        )
+        == 0
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["candidate_id"] == candidate_id
+    assert payload["state"] == "approved_for_dedupe"
+    assert payload["reviewed_contact"]["flat"]["email"] == "cli-child@example.test"
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+
+
 def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.toml"
     data_dir = tmp_path / "data"

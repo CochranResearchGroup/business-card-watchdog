@@ -10,6 +10,7 @@ import pytest
 from business_card_watchdog.config import AppConfig, EnrichmentConfig, EnrichmentProviderConfig, SinkConfig
 from business_card_watchdog.contact import build_contact_candidate
 from business_card_watchdog.orchestrator import BatchOrchestrator
+from business_card_watchdog.service import BusinessCardService
 
 from synthetic_fixtures import SyntheticSkillAdapter, write_multi_card_image
 from test_service import make_recorded_run
@@ -1040,6 +1041,40 @@ def test_api_child_reviews_lists_promoted_child_candidates(tmp_path: Path, monke
     assert payload[0]["state"] == "needs_review"
     assert payload[0]["next_action"]["action"] == "review_child_contact"
     assert payload[0]["contact_candidate"]["source"] == "child_verification_result"
+
+
+def test_api_child_review_approves_promoted_child_candidate(tmp_path: Path, monkeypatch) -> None:
+    pytest.importorskip("cv2")
+    from business_card_watchdog.api import create_app
+
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+    source_dir = tmp_path / "images"
+    write_multi_card_image(source_dir / "multi.jpg")
+    config = AppConfig(config_path=config_path, data_dir=data_dir)
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+    service = BusinessCardService(config)
+    candidate_id = str(service.child_review_queue(run_id=run_dir.name)[0]["candidate_id"])
+    client = TestClient(create_app(config_path))
+
+    payload = client.post(
+        f"/reviews/children/{candidate_id}",
+        json={
+            "run_id": run_dir.name,
+            "reviewer": "operator",
+            "action": "approve_child_for_routing",
+            "field_corrections": {"email": "api-child@example.test"},
+        },
+    ).json()
+
+    assert payload["candidate_id"] == candidate_id
+    assert payload["state"] == "approved_for_dedupe"
+    assert payload["reviewed_contact"]["flat"]["email"] == "api-child@example.test"
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
 
 
 def test_api_multi_card_preclassification_drill_records_candidate_boxes(tmp_path: Path) -> None:

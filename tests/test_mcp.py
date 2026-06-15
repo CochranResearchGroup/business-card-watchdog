@@ -55,6 +55,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_live_pilot_rehearsal_drill" in names
     assert "business_card_watchdog_reviews_list" in names
     assert "business_card_watchdog_child_reviews_list" in names
+    assert "business_card_watchdog_child_review_submit" in names
     assert "business_card_watchdog_review_bundle" in names
     assert "business_card_watchdog_review_html" in names
     assert "business_card_watchdog_review_workbook" in names
@@ -139,6 +140,36 @@ def test_mcp_child_reviews_lists_promoted_child_candidates(tmp_path: Path, monke
     assert len(payload) >= 3
     assert payload[0]["next_action"]["action"] == "review_child_contact"
     assert payload[0]["contact_candidate"]["source"] == "child_verification_result"
+
+
+def test_mcp_child_review_approves_promoted_child_candidate(tmp_path: Path, monkeypatch) -> None:
+    pytest = __import__("pytest")
+    pytest.importorskip("cv2")
+    source_dir = tmp_path / "images"
+    write_multi_card_image(source_dir / "multi.jpg")
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+    candidate_id = str(BusinessCardService(config).child_review_queue(run_id=run_dir.name)[0]["candidate_id"])
+
+    payload = call_tool(
+        "business_card_watchdog_child_review_submit",
+        {
+            "run_id": run_dir.name,
+            "candidate_id": candidate_id,
+            "reviewer": "operator",
+            "action": "approve_child_for_routing",
+            "field_corrections": {"email": "mcp-child@example.test"},
+        },
+        config=config,
+    )
+
+    assert payload["candidate_id"] == candidate_id
+    assert payload["state"] == "approved_for_dedupe"
+    assert payload["reviewed_contact"]["flat"]["email"] == "mcp-child@example.test"
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
 
 
 def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:

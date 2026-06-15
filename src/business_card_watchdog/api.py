@@ -26,6 +26,13 @@ def create_app(config_path: Path | None = None):
         duplicate_resolution: dict[str, object] = Field(default_factory=dict)
         notes: str = ""
 
+    class ChildReviewRequest(BaseModel):
+        run_id: str
+        reviewer: str = "operator"
+        action: str = "keep_needs_review"
+        field_corrections: dict[str, object] = Field(default_factory=dict)
+        notes: str = ""
+
     class ReviewDecisionsRequest(BaseModel):
         reviewer: str = "operator"
         decisions: list[dict[str, object]] = Field(default_factory=list)
@@ -476,6 +483,17 @@ def create_app(config_path: Path | None = None):
         state: str = "needs_review",
     ) -> list[dict[str, object]]:
         return service().child_review_queue(run_id=run_id, state=state)
+
+    @app.post("/reviews/children/{candidate_id}")
+    def submit_child_review(candidate_id: str, request: ChildReviewRequest = Body(...)) -> dict[str, object]:
+        return service().submit_child_review(
+            run_id=request.run_id,
+            candidate_id=candidate_id,
+            reviewer=request.reviewer,
+            action=request.action,
+            field_corrections=dict(request.field_corrections),
+            notes=request.notes,
+        )
 
     @app.post("/runs/{run_id}/review-bundle")
     def create_review_bundle(run_id: str, state: str = "all", write: bool = True) -> dict[str, object]:

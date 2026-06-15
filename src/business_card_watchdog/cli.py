@@ -1999,6 +1999,18 @@ def build_parser() -> argparse.ArgumentParser:
     reviews_children.add_argument("--run-id", default=None)
     reviews_children.add_argument("--state", default="needs_review")
     reviews_children.add_argument("--json", action="store_true")
+    reviews_child_review = reviews_sub.add_parser("child-review")
+    reviews_child_review.add_argument("candidate_id")
+    reviews_child_review.add_argument("--run-id", required=True)
+    reviews_child_review.add_argument("--reviewer", default="operator")
+    reviews_child_review.add_argument(
+        "--action",
+        choices=["approve_child_for_routing", "keep_needs_review", "reject_child_contact"],
+        default="keep_needs_review",
+    )
+    reviews_child_review.add_argument("--field-corrections-json", default="{}")
+    reviews_child_review.add_argument("--notes", default="")
+    reviews_child_review.add_argument("--json", action="store_true")
     reviews_bundle = reviews_sub.add_parser("bundle")
     reviews_bundle.add_argument("--run-id", required=True)
     reviews_bundle.add_argument("--state", default="all")
@@ -2540,6 +2552,15 @@ def main(argv: list[str] | None = None) -> int:
             if not args.json:
                 print(_render_child_review_queue_text(payload), end="")
                 return 0
+        elif args.reviews_command == "child-review":
+            payload = service.submit_child_review(
+                run_id=args.run_id,
+                candidate_id=args.candidate_id,
+                reviewer=args.reviewer,
+                action=args.action,
+                field_corrections=json.loads(args.field_corrections_json),
+                notes=args.notes,
+            )
         else:
             payload = service.review_queue(
                 run_id=args.run_id,

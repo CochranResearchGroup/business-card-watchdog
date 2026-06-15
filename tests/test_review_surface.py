@@ -79,3 +79,46 @@ def test_child_review_queue_lists_promoted_child_contact_candidates(tmp_path: Pa
     assert queue[0]["contact_candidate"]["schema"] == "business-card-watchdog.contact-candidate.v1"
     assert queue[0]["contact_candidate"]["lineage"]["parent_job_id"] == queue[0]["job_id"]
     assert BusinessCardService(config).child_review_queue(run_id=run_dir.name, state="all")
+
+
+def test_child_review_approval_writes_reviewed_child_contact_artifact(tmp_path: Path, monkeypatch) -> None:
+    pytest = __import__("pytest")
+    pytest.importorskip("cv2")
+    source_dir = tmp_path / "images"
+    write_multi_card_image(source_dir / "multi.jpg")
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+    service = BusinessCardService(config)
+    candidate_id = str(service.child_review_queue(run_id=run_dir.name)[0]["candidate_id"])
+
+    result = service.submit_child_review(
+        run_id=run_dir.name,
+        candidate_id=candidate_id,
+        reviewer="operator",
+        action="approve_child_for_routing",
+        field_corrections={"email": " reviewed-child@example.test "},
+        notes="approved synthetic child contact",
+    )
+
+    reviewed_path = Path(str(result["reviewed_child_contact_path"]))
+    reviewed = json.loads(reviewed_path.read_text(encoding="utf-8"))
+    artifacts = read_jsonl(run_dir / "artifacts.jsonl")
+    events = read_jsonl(run_dir / "events.jsonl")
+    approved_queue = service.child_review_queue(run_id=run_dir.name, state="approved_for_dedupe")
+
+    assert result["schema"] == "business-card-watchdog.child-review-submission-result.v1"
+    assert result["state"] == "approved_for_dedupe"
+    assert result["writes_attempted"] == 0
+    assert result["network_calls_made"] == 0
+    assert reviewed["schema"] == "business-card-watchdog.reviewed-contact.v1"
+    assert reviewed["flat"]["email"] == "reviewed-child@example.test"
+    assert reviewed["review"]["state"] == "approved_for_dedupe"
+    assert reviewed["routing_allowed"] is True
+    assert reviewed["sink_write_allowed"] is False
+    assert any(artifact["kind"] == "child_review_submission" for artifact in artifacts)
+    assert any(artifact["kind"] == "reviewed_child_contact" for artifact in artifacts)
+    assert any(artifact["kind"] == "child_contact_review_result" for artifact in artifacts)
+    assert any(event["event_type"] == "child_contact_review_submitted" for event in events)
+    assert any(entry["candidate_id"] == candidate_id for entry in approved_queue)

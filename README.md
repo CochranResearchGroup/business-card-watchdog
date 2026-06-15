@@ -135,7 +135,10 @@ review workflow can be built without production OCR/App Intelligence or sink cal
 Those child results are promoted into review-pending `child_contact_promotions.json`
 records and normal contact-candidate files with parent/child lineage preserved.
 Use `reviews children --run-id <run-id> --json` to inspect those promoted child
-candidates before review, routing, enrichment, or sink work.
+candidates before review, routing, enrichment, or sink work. Use
+`reviews child-review <candidate-id> --run-id <run-id> --action approve_child_for_routing --json`
+to approve a promoted child candidate into local reviewed-child-contact artifacts;
+that approval still does not call enrichment, dedupe, routing, or live sinks.
 
 `drills review-routing` creates a synthetic fixture run and proves review approval,
 review bundle/workbook export, duplicate lookup planning, dry-run sink routing, and
