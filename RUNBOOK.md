@@ -4544,3 +4544,27 @@ Validation:
 Safety:
 
 - This was command-copy/readback only. It did not execute lookup, write, readback, closeout, public-web search, paid enrichment, GWS/Odollo/Odoo calls, or configured/private SyncThing processing. It refuses to show command-copy text unless the persisted redacted readiness export matches current state and the operator acknowledgement matches the intended live-pilot context.
+
+## Turn 213 | 2026-06-15
+
+Continued Plan 0009 with Slice 0009-A137.
+
+Implemented:
+
+- Updated `docs/operations/live-pilot-checklists.md` so read-only lookup smoke and one-job write/readback procedures require the final pre-live command-copy gate.
+- Documented the operator response and acknowledgement variables, redacted readiness export, execution checklist, and command-copy packet sequence.
+- Updated `README.md` to point operators to the readiness export, execution checklist, and command-copy packet before any non-simulated lookup/write/readback command.
+
+Validation:
+
+- `rg -n "live-pilot-readiness-export-from-response|live-pilot-execution-checklist-from-response|live-pilot-command-copy-packet-from-response|ready_for_operator_copy|command_copy_text" README.md docs/operations/live-pilot-checklists.md docs/dev/plans/0009-2026-06-14-operator-selected-live-smoke-and-pilot-rollout.md RUNBOOK.md` passed.
+- `git diff --check` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `.venv/bin/python -m pytest -q` passed with 231 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was documentation only. It did not validate an operator response, execute any returned command, create or modify `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.

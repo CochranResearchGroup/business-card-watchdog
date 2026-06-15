@@ -65,6 +65,33 @@ Use `--sink odoo` when the read-only smoke target is Odollo/Odoo. Start with `li
 If validation is run after the selected target already exists, it reports the active-target state and omits the select-target command. In that case, follow the returned `post_selection_sequence`, which begins with selected-target audit and lookup-smoke handoff.
 Add `--json` to review commands when you need to archive the full structured artifact.
 
+Final pre-live command-copy gate:
+
+```bash
+OPERATOR_RESPONSE="run_id=<run-id> job_id=<job-id> sink=google_contacts operator=<operator> scope=lookup safety_confirmation=<operator confirms this run/job/sink uses the intended tenant/profile>"
+OPERATOR_ACK="acknowledge run_id=<run-id> job_id=<job-id> sink=google_contacts operator=<operator> copy command"
+
+.venv/bin/bcw runs live-pilot-operator-rehearsal-from-response \
+  <run-id> \
+  --response "$OPERATOR_RESPONSE" \
+  --json
+.venv/bin/bcw runs live-pilot-readiness-export-from-response \
+  <run-id> \
+  --response "$OPERATOR_RESPONSE" \
+  --json
+.venv/bin/bcw runs live-pilot-execution-checklist-from-response \
+  <run-id> \
+  --response "$OPERATOR_RESPONSE" \
+  --json
+.venv/bin/bcw runs live-pilot-command-copy-packet-from-response \
+  <run-id> \
+  --response "$OPERATOR_RESPONSE" \
+  --acknowledgement "$OPERATOR_ACK" \
+  --json
+```
+
+Only copy the command from `command_copy_text` when the command-copy packet reports `state = ready_for_operator_copy`, `acknowledgement_ok = true`, and an empty `blocked_reasons` list. This packet is still no-send: it validates the persisted redacted readiness export and acknowledgement, but it never executes the lookup pilot.
+
 Prepare lookup artifacts:
 
 ```bash
@@ -84,6 +111,7 @@ Prepare lookup artifacts:
 ```
 
 Review `selected_live_target.json`, `selected_live_target_audit.json`, and `sink_lookup_smoke_handoff.json` before running `lookup-pilot --no-simulate`; none of those artifacts is live approval by itself. The selected target is valid only when it names the intended run, job, sink, operator, scope, and tenant/profile safety confirmation.
+The command-copy packet is the final pre-live guard. Do not run a copied lookup command if the readiness export is missing, the execution checklist is blocked, the acknowledgement does not match the selected target, or any artifact changed after the readiness export was written.
 
 Run one explicit read-only lookup pilot:
 
@@ -185,6 +213,33 @@ Start with `live-selection-requirements` when you need candidate-specific packet
 If validation is run after the selected target already exists, it reports the active-target state and omits the select-target command. In that case, follow the returned `post_selection_sequence`, which begins with selected-target audit and lookup-smoke handoff.
 Add `--json` to review commands when you need to archive the full structured artifact.
 
+Final pre-live command-copy gate:
+
+```bash
+OPERATOR_RESPONSE="run_id=<run-id> job_id=<job-id> sink=google_contacts operator=<operator> scope=all safety_confirmation=<operator confirms this run/job/sink uses the intended tenant/profile>"
+OPERATOR_ACK="acknowledge run_id=<run-id> job_id=<job-id> sink=google_contacts operator=<operator> copy command"
+
+.venv/bin/bcw runs live-pilot-operator-rehearsal-from-response \
+  <run-id> \
+  --response "$OPERATOR_RESPONSE" \
+  --json
+.venv/bin/bcw runs live-pilot-readiness-export-from-response \
+  <run-id> \
+  --response "$OPERATOR_RESPONSE" \
+  --json
+.venv/bin/bcw runs live-pilot-execution-checklist-from-response \
+  <run-id> \
+  --response "$OPERATOR_RESPONSE" \
+  --json
+.venv/bin/bcw runs live-pilot-command-copy-packet-from-response \
+  <run-id> \
+  --response "$OPERATOR_RESPONSE" \
+  --acknowledgement "$OPERATOR_ACK" \
+  --json
+```
+
+Only copy the command from `command_copy_text` when the command-copy packet reports `state = ready_for_operator_copy`, `acknowledgement_ok = true`, and an empty `blocked_reasons` list. This packet is still no-send: it validates the persisted redacted readiness export and acknowledgement, but it never executes lookup, write, or readback pilots.
+
 Prepare apply artifacts:
 
 ```bash
@@ -213,6 +268,7 @@ Prepare apply artifacts:
 
 Use `--sink odoo` when the one-job pilot target is Odollo/Odoo. Treat readiness as valid only for the selected sink named in the artifact.
 Review the selected-target audit and operator bundle before any live write. They list selected-sink commands, artifact paths, missing requirements, stop conditions, and remediation notes.
+The command-copy packet is the final pre-live guard. Re-run the readiness export, execution checklist, and command-copy packet after any selected-target, duplicate, apply-decision, write-pilot, or readback evidence changes.
 
 Run one explicit live write pilot:
 
