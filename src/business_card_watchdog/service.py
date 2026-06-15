@@ -1514,6 +1514,9 @@ class BusinessCardService:
                         "review": f"jobs review {job['job_id']} --run-id {run_id}",
                         "next": (next_action or {}).get("command"),
                         "live_pilot_handoff": f"runs live-pilot-handoff {run_id}",
+                        "validate_operator_response": (
+                            f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+                        ),
                     },
                 }
             )
@@ -1536,6 +1539,9 @@ class BusinessCardService:
                 "phase_report": f"runs phase-report {run_id}",
                 "run_next_safe": f"actions run-next --run-id {run_id}",
                 "live_pilot_handoff": f"runs live-pilot-handoff {run_id}",
+                "validate_operator_response": (
+                    f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+                ),
                 "next_actions": f"mcp-call business_card_watchdog_next_actions --arguments-json '{{\"run_id\":\"{run_id}\"}}'",
                 "mcp_phase_report": f"mcp-call business_card_watchdog_phase_report --arguments-json '{{\"run_id\":\"{run_id}\"}}'",
             },
@@ -6660,6 +6666,7 @@ class BusinessCardService:
             "artifact_kinds",
             "review_command",
             "live_pilot_handoff_command",
+            "validate_operator_response_command",
             "decision_action",
             "review_action",
             "corrected_full_name",
@@ -6924,6 +6931,7 @@ class BusinessCardService:
             "artifact_kinds": ";".join(str(kind) for kind in entry.get("artifact_kinds") or []),
             "review_command": (entry.get("commands") or {}).get("review"),
             "live_pilot_handoff_command": (entry.get("commands") or {}).get("live_pilot_handoff"),
+            "validate_operator_response_command": (entry.get("commands") or {}).get("validate_operator_response"),
             "decision_action": decision_template.get("action"),
             "review_action": decision_template.get("action"),
             "corrected_full_name": self._review_contact_value(contact, "full_name"),

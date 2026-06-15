@@ -2623,6 +2623,12 @@ Implemented:
 Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_run_summary_and_review_queue tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 3 tests.
+- `.venv/bin/python -m pytest -q` passed with 226 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
 
 Safety:
 
@@ -3078,3 +3084,21 @@ Validation:
 Safety:
 
 - This was no-live per-job handoff/readback hardening only. It did not validate an operator response, execute any returned select-target command, create or modify `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+## Turn 155 | 2026-06-15
+
+Continued Plan 0009 with Slice 0009-A79.
+
+Implemented:
+
+- Review bundles now expose run-level and per-entry `validate_operator_response` commands.
+- Review workbook CSV exports now include `validate_operator_response_command`.
+- Service, API, and MCP tests protect validation-command visibility in review bundles and exported workbooks.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_run_summary_and_review_queue tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 3 tests.
+
+Safety:
+
+- This was no-live review/export command-surface hardening only. It did not validate an operator response, execute any returned select-target command, create or modify `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
