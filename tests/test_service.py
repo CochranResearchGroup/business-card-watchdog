@@ -665,8 +665,15 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     assert dashboard["run_summary"]["run_id"] == run_id
     assert dashboard["phase_dashboard_summary"]["schema"] == "business-card-watchdog.phase-dashboard-summary.v1"
     assert dashboard["review_counts"]["needs_review"] == 1
+    assert dashboard["next_action_summary"]["action_count"] == 1
+    assert dashboard["next_action_summary"]["explicit_operator_count"] == 1
+    assert dashboard["next_action_summary"]["by_action"] == {"review_contact": 1}
+    assert dashboard["next_action_summary"]["sample_actions"][0]["command"] == "jobs review"
+    assert dashboard["next_action_summary"]["sample_actions"][0]["requires_explicit_operator_action"] is True
     assert dashboard["live_pilot_summary"]["state"] == "blocked"
     assert dashboard["commands"]["review_queue"] == f"reviews list --run-id {run_id} --state all --json"
+    assert dashboard["commands"]["next_actions"] == f"actions next --run-id {run_id} --json"
+    assert dashboard["commands"]["run_next_safe"] == f"actions run-next --run-id {run_id} --limit 10 --json"
     assert dashboard["commands"]["live_pilot_status"] == f"runs live-pilot-status {run_id} --no-write --json"
     assert dashboard["safe_next_actions"][0]["action"] == "inspect_runtime_readiness"
     assert dashboard["writes_attempted"] == 0

@@ -90,16 +90,28 @@ def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) 
     assert payload["schema"] == "business-card-watchdog.operator-dashboard.v1"
     assert payload["selected_run_id"] == run_id
     assert payload["commands"]["review_queue"] == f"reviews list --run-id {run_id} --state all --json"
+    assert payload["commands"]["next_actions"] == f"actions next --run-id {run_id} --json"
+    assert payload["commands"]["run_next_safe"] == f"actions run-next --run-id {run_id} --limit 10 --json"
     assert payload["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id} --no-write --json"
     assert payload["review_counts"]["needs_review"] == 1
+    assert payload["next_action_summary"]["by_action"] == {"review_contact": 1}
     assert payload["writes_attempted"] == 0
     assert payload["network_calls_made"] == 0
+
+    assert main(["--config", str(config_path), "actions", "next", "--run-id", run_id, "--json"]) == 0
+    next_actions = json.loads(capsys.readouterr().out)
+    assert next_actions["action_count"] == 1
+    assert next_actions["actions"][0]["action"] == "review_contact"
+    assert next_actions["actions"][0]["requires_explicit_operator_action"] is True
 
     assert main(["--config", str(config_path), "operator-dashboard", "--run-id", run_id]) in {0, 2}
     text = capsys.readouterr().out
     assert "Operator dashboard:" in text
     assert f"Selected run: {run_id}" in text
     assert f"Review queue: reviews list --run-id {run_id} --state all --json" in text
+    assert f"Next actions: actions next --run-id {run_id} --json" in text
+    assert "Next actions: total=1 safe=0 explicit=1" in text
+    assert "action=review_contact" in text
     assert f"Live pilot status: runs live-pilot-status {run_id} --no-write --json" in text
     assert "Observed: writes=0 network=0" in text
     assert "Stop conditions: 3" in text

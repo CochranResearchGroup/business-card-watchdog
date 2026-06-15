@@ -2628,6 +2628,25 @@ Safety:
 
 - This was command-link/readback hardening only. It did not create `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
 
+## Turn 140 | 2026-06-14
+
+Continued Plan 0009 with Slice 0009-A64.
+
+Implemented:
+
+- Operator dashboard now includes `next_action_summary` with total, safe-auto, explicit-operator, action-group, and sample-action readback.
+- Dashboard command map now links to read-only next-action inspection and the bounded safe executor.
+- Added CLI `bcw actions next` for read-only next-action inspection.
+- CLI/API/MCP/service tests protect dashboard next-action summary and command hints.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_operator_dashboard_composes_no_live_readiness tests/test_cli_surfaces.py::test_cli_operator_dashboard_reports_no_live_summary tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 4 tests.
+
+Safety:
+
+- This was next-action readback only. It did not execute next actions from the dashboard, process private SyncThing inputs, run public-web search, call paid enrichment, create `selected_live_target.json`, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
 ## Turn 139 | 2026-06-14
 
 Continued Plan 0009 with Slice 0009-A63.

@@ -43,6 +43,8 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert operator_dashboard["selected_run_id"] == run_id
     assert operator_dashboard["commands"]["live_pilot_status"] == f"runs live-pilot-status {run_id} --no-write --json"
     assert operator_dashboard["review_counts"]["needs_review"] == 1
+    assert operator_dashboard["next_action_summary"]["by_action"] == {"review_contact": 1}
+    assert operator_dashboard["commands"]["next_actions"] == f"actions next --run-id {run_id} --json"
     assert operator_dashboard["writes_attempted"] == 0
     assert operator_dashboard["network_calls_made"] == 0
     runtime_readiness = client.get("/runtime/readiness").json()

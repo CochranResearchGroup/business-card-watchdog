@@ -101,6 +101,7 @@ Inspect runs, jobs, review queue, sinks, and watcher state:
 .venv/bin/bcw jobs list --run-id <run-id>
 .venv/bin/bcw jobs show <job-id> --run-id <run-id>
 .venv/bin/bcw reviews list --run-id <run-id>
+.venv/bin/bcw actions next --run-id <run-id> --json
 .venv/bin/bcw sinks check --json
 .venv/bin/bcw watch-status --json
 ```

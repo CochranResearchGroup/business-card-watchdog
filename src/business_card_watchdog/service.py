@@ -357,6 +357,13 @@ class BusinessCardService:
         phase_dashboard: dict[str, Any] | None = None
         review_counts: dict[str, int] = {}
         live_pilot_summary: dict[str, Any] | None = None
+        next_action_summary: dict[str, Any] = {
+            "action_count": 0,
+            "safe_auto_count": 0,
+            "explicit_operator_count": 0,
+            "by_action": {},
+            "sample_actions": [],
+        }
 
         if selected_run_id:
             run_summary = self.run_summary(selected_run_id)
@@ -373,6 +380,38 @@ class BusinessCardService:
                 "observed_writes_attempted": live_status.get("observed_writes_attempted", 0),
                 "observed_network_calls_made": live_status.get("observed_network_calls_made", 0),
                 "commands": live_status.get("commands") or {},
+            }
+            next_actions = self.next_actions(run_id=selected_run_id, limit=20)
+            action_counts: dict[str, int] = {}
+            safe_auto_count = 0
+            explicit_operator_count = 0
+            sample_actions: list[dict[str, Any]] = []
+            for action in next_actions["actions"]:
+                action_name = str(action.get("action") or "unknown")
+                action_counts[action_name] = action_counts.get(action_name, 0) + 1
+                if action.get("safe_to_auto_continue"):
+                    safe_auto_count += 1
+                if action.get("requires_explicit_operator_action"):
+                    explicit_operator_count += 1
+                sample_actions.append(
+                    {
+                        "run_id": action.get("run_id"),
+                        "job_id": action.get("job_id"),
+                        "action": action_name,
+                        "command": action.get("command"),
+                        "safe_to_auto_continue": action.get("safe_to_auto_continue", False),
+                        "requires_explicit_operator_action": action.get(
+                            "requires_explicit_operator_action",
+                            False,
+                        ),
+                    }
+                )
+            next_action_summary = {
+                "action_count": next_actions["action_count"],
+                "safe_auto_count": safe_auto_count,
+                "explicit_operator_count": explicit_operator_count,
+                "by_action": dict(sorted(action_counts.items())),
+                "sample_actions": sample_actions,
             }
 
         blocked_reasons: list[str] = []
@@ -399,6 +438,7 @@ class BusinessCardService:
             "run_summary": run_summary,
             "phase_dashboard_summary": phase_dashboard,
             "review_counts": review_counts,
+            "next_action_summary": next_action_summary,
             "live_pilot_summary": live_pilot_summary,
             "blocked_reasons": blocked_reasons,
             "commands": {
@@ -422,6 +462,14 @@ class BusinessCardService:
                 ),
                 "phase_report": (
                     f"runs phase-report {selected_run_id} --json" if selected_run_id else "runs list --json"
+                ),
+                "next_actions": (
+                    f"actions next --run-id {selected_run_id} --json" if selected_run_id else "runs list --json"
+                ),
+                "run_next_safe": (
+                    f"actions run-next --run-id {selected_run_id} --limit 10 --json"
+                    if selected_run_id
+                    else "runs list --json"
                 ),
                 "live_pilot_status": (
                     f"runs live-pilot-status {selected_run_id} --no-write --json"

@@ -64,6 +64,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
     phase = dict(payload.get("phase_dashboard_summary") or {})
     live = dict(payload.get("live_pilot_summary") or {})
     review_counts = dict(payload.get("review_counts") or {})
+    next_actions = dict(payload.get("next_action_summary") or {})
     commands = dict(payload.get("commands") or {})
     blocked = payload.get("blocked_reasons") or []
     safe_actions = payload.get("safe_next_actions") or []
@@ -80,6 +81,10 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
         + " ".join(f"{key}={value}" for key, value in sorted(review_counts.items()))
         if review_counts
         else "Review counts: none",
+        "Next actions: "
+        f"total={next_actions.get('action_count', 0)} "
+        f"safe={next_actions.get('safe_auto_count', 0)} "
+        f"explicit={next_actions.get('explicit_operator_count', 0)}",
         f"Phase status: {phase.get('status_line') or 'none'}",
         f"Live pilot: {live.get('state') or 'none'}",
         f"Observed: writes={payload.get('writes_attempted', 0)} network={payload.get('network_calls_made', 0)}",
@@ -92,12 +97,28 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
         ("Runs list", "runs_list"),
         ("Review queue", "review_queue"),
         ("Phase report", "phase_report"),
+        ("Next actions", "next_actions"),
+        ("Run next safe", "run_next_safe"),
         ("Live pilot status", "live_pilot_status"),
         ("Live pilot handoff", "live_pilot_handoff"),
     ]:
         command = commands.get(key)
         if command:
             lines.append(f" - {label}: {command}")
+    sample_rows = next_actions.get("sample_actions") or []
+    rows = sample_rows if isinstance(sample_rows, list) else []
+    if rows:
+        lines.append("Next action samples:")
+        for action in rows[:5]:
+            if isinstance(action, dict):
+                lines.append(
+                    " - "
+                    f"{action.get('job_id')} "
+                    f"action={action.get('action')} "
+                    f"safe={action.get('safe_to_auto_continue')} "
+                    f"explicit={action.get('requires_explicit_operator_action')} "
+                    f"command={action.get('command') or 'none'}"
+                )
     blocked_rows = blocked if isinstance(blocked, list) else []
     lines.append(f"Blocked reasons: {len(blocked_rows)}")
     for reason in blocked_rows:
@@ -957,6 +978,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     actions = sub.add_parser("actions")
     actions_sub = actions.add_subparsers(dest="actions_command", required=True)
+    actions_next = actions_sub.add_parser("next")
+    actions_next.add_argument("--run-id", default=None)
+    actions_next.add_argument("--limit", type=int, default=20)
+    actions_next.add_argument("--json", action="store_true")
     actions_run_next = actions_sub.add_parser("run-next")
     actions_run_next.add_argument("--run-id", default=None)
     actions_run_next.add_argument("--limit", type=int, default=10)
@@ -1335,7 +1360,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "actions":
-        payload = service.run_next_actions(run_id=args.run_id, limit=args.limit)
+        if args.actions_command == "next":
+            payload = service.next_actions(run_id=args.run_id, limit=args.limit)
+        else:
+            payload = service.run_next_actions(run_id=args.run_id, limit=args.limit)
         print(json.dumps(payload, indent=2) if args.json else payload)
         return 0
 

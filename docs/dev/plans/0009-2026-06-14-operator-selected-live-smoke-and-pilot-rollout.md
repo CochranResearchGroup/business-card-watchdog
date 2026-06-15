@@ -1119,6 +1119,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_operator_dashboard_composes_no_live_readiness tests/test_cli_surfaces.py::test_cli_operator_dashboard_reports_no_live_summary tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service tests/test_mcp.py::test_mcp_jsonl_server_lists_and_calls_tools -q` passed with 5 tests.
 
+### Slice 0009-A64 | 2026-06-14 | Dashboard Next-Action Readback
+
+Implemented:
+
+- Operator dashboard now includes `next_action_summary` with total, safe-auto, explicit-operator, action-group, and sample-action readback.
+- Dashboard command map now links to read-only next-action inspection and the bounded safe executor.
+- Added CLI `bcw actions next` for read-only next-action inspection.
+- CLI/API/MCP/service tests protect dashboard next-action summary and command hints.
+
+Safety:
+
+- This slice is readback-only unless an operator separately invokes the pre-existing `actions run-next` executor.
+- It does not execute next actions from the dashboard, process private SyncThing inputs, run public-web search, call paid enrichment, create `selected_live_target.json`, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_operator_dashboard_composes_no_live_readiness tests/test_cli_surfaces.py::test_cli_operator_dashboard_reports_no_live_summary tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 4 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:
