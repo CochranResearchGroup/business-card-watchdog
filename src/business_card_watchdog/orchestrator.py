@@ -10,6 +10,7 @@ from .dedupe import assess_duplicate, remember_identity
 from .fanout import (
     build_candidate_work_item_manifest,
     build_child_verification_request_manifest,
+    build_synthetic_child_verification_result_manifest,
     materialize_candidate_crops,
 )
 from .ledger import RunLedger
@@ -149,6 +150,31 @@ class BatchOrchestrator:
                     {
                         "job": job.to_dict(),
                         "verification_request_manifest": verification_request_manifest,
+                    },
+                )
+                verification_result_manifest, work_item_manifest = (
+                    build_synthetic_child_verification_result_manifest(
+                        request_manifest=verification_request_manifest,
+                        work_item_manifest=work_item_manifest,
+                        result_dir=artifact_dir / "child_verification_results",
+                    )
+                )
+                verification_result_manifest_path = artifact_dir / "child_verification_results.json"
+                verification_result_manifest_path.write_text(
+                    json.dumps(verification_result_manifest, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+                ledger.record_artifact(
+                    job_id=job.job_id,
+                    kind="child_verification_results",
+                    path=verification_result_manifest_path,
+                    metadata={"result_count": verification_result_manifest["result_count"]},
+                )
+                ledger.record_event(
+                    "child_verification_results_recorded",
+                    {
+                        "job": job.to_dict(),
+                        "verification_result_manifest": verification_result_manifest,
                     },
                 )
                 work_item_manifest_path = artifact_dir / "candidate_work_items.json"

@@ -69,6 +69,7 @@ def test_orchestrator_records_multi_card_candidate_manifest(tmp_path: Path, monk
     manifest = json.loads((artifact_dir / "card_candidates.json").read_text(encoding="utf-8"))
     crops = json.loads((artifact_dir / "candidate_crops.json").read_text(encoding="utf-8"))
     requests = json.loads((artifact_dir / "child_verification_requests.json").read_text(encoding="utf-8"))
+    results = json.loads((artifact_dir / "child_verification_results.json").read_text(encoding="utf-8"))
     work_items = json.loads((artifact_dir / "candidate_work_items.json").read_text(encoding="utf-8"))
     artifact_kinds = [record["kind"] for record in read_jsonl(run_dir / "artifacts.jsonl")]
     events = read_jsonl(run_dir / "events.jsonl")
@@ -84,8 +85,8 @@ def test_orchestrator_records_multi_card_candidate_manifest(tmp_path: Path, monk
     assert work_items["work_item_count"] == manifest["candidate_count"]
     assert len(work_items["work_items"]) == manifest["candidate_count"]
     assert work_items["work_items"][0]["candidate_id"] == manifest["candidates"][0]["candidate_id"]
-    assert work_items["work_items"][0]["phase"] == "verification_request_ready"
-    assert work_items["work_items"][0]["state"] == "crop_ready"
+    assert work_items["work_items"][0]["phase"] == "awaiting_child_review"
+    assert work_items["work_items"][0]["state"] == "verification_result_ready"
     assert all(item["routing_allowed"] is False for item in work_items["work_items"])
     assert crops["schema"] == "business-card-watchdog.card-candidate-crops.v1"
     assert crops["parent_job_id"] == job["job_id"]
@@ -102,13 +103,27 @@ def test_orchestrator_records_multi_card_candidate_manifest(tmp_path: Path, monk
     assert requests["requests"][0]["executed"] is False
     assert requests["requests"][0]["requires_explicit_execution"] is True
     assert all(request["routing_allowed"] is False for request in requests["requests"])
+    assert results["schema"] == "business-card-watchdog.child-verification-results.v1"
+    assert results["parent_job_id"] == job["job_id"]
+    assert results["mode"] == "synthetic_offline"
+    assert results["result_count"] == manifest["candidate_count"]
+    assert len(results["results"]) == manifest["candidate_count"]
+    assert results["results"][0]["request_id"] == requests["requests"][0]["request_id"]
+    assert Path(results["results"][0]["result_path"]).exists()
+    result_detail = json.loads(Path(results["results"][0]["result_path"]).read_text(encoding="utf-8"))
+    assert result_detail["state"] == "verification_result_ready"
+    assert result_detail["requires_review"] is True
+    assert result_detail["routing_allowed"] is False
+    assert result_detail["contact_spec"]["email"] == "fixture@example.test"
     assert "card_candidates" in artifact_kinds
     assert "candidate_crops" in artifact_kinds
     assert "child_verification_requests" in artifact_kinds
+    assert "child_verification_results" in artifact_kinds
     assert "candidate_work_items" in artifact_kinds
     assert any(event["event_type"] == "card_candidates_recorded" for event in events)
     assert any(event["event_type"] == "candidate_crops_recorded" for event in events)
     assert any(event["event_type"] == "child_verification_requests_recorded" for event in events)
+    assert any(event["event_type"] == "child_verification_results_recorded" for event in events)
     assert any(event["event_type"] == "candidate_work_items_recorded" for event in events)
     assert adapter.apply_google_calls == [False]
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -8,6 +9,7 @@ from typing import Any
 CANDIDATE_WORK_ITEMS_SCHEMA = "business-card-watchdog.card-candidate-work-items.v1"
 CANDIDATE_CROPS_SCHEMA = "business-card-watchdog.card-candidate-crops.v1"
 CHILD_VERIFICATION_REQUESTS_SCHEMA = "business-card-watchdog.child-verification-requests.v1"
+CHILD_VERIFICATION_RESULTS_SCHEMA = "business-card-watchdog.child-verification-results.v1"
 
 
 def build_candidate_work_item_manifest(candidate_manifest: dict[str, Any]) -> dict[str, Any]:
@@ -184,6 +186,98 @@ def build_child_verification_request_manifest(
                 "These are execution requests only; OCR/App Intelligence has not run.",
                 "Do not route, enrich, or write contacts until verification results are reviewed.",
                 "Real OCR/App Intelligence execution requires an explicit operator-selected run or adapter invocation.",
+            ],
+        },
+        updated_manifest,
+    )
+
+
+def build_synthetic_child_verification_result_manifest(
+    *,
+    request_manifest: dict[str, Any],
+    work_item_manifest: dict[str, Any],
+    result_dir: Path,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    result_dir.mkdir(parents=True, exist_ok=True)
+    updated_manifest = deepcopy(work_item_manifest)
+    work_items_by_id = {
+        str(item["work_item_id"]): item
+        for item in updated_manifest["work_items"]
+        if isinstance(item, dict)
+    }
+    results: list[dict[str, Any]] = []
+    for request in request_manifest.get("requests", []):
+        if not isinstance(request, dict):
+            continue
+        work_item = work_items_by_id.get(str(request["work_item_id"]))
+        if work_item is None:
+            continue
+        result_path = result_dir / f"{request['candidate_id']}-verification-result.json"
+        result = {
+            "request_id": request["request_id"],
+            "work_item_id": request["work_item_id"],
+            "candidate_id": request["candidate_id"],
+            "parent_job_id": request["parent_job_id"],
+            "crop_path": request["crop_path"],
+            "adapter": request["adapter"],
+            "mode": "synthetic_offline",
+            "state": "verification_result_ready",
+            "executed": True,
+            "ocr_text": "Synthetic child OCR fixture\nFixture Labs\nfixture@example.test\n+1-555-0100\n",
+            "contact_spec": {
+                "full_name": "Synthetic Fixture",
+                "organization": "Fixture Labs",
+                "title": "Validation Contact",
+                "email": "fixture@example.test",
+                "phone": "+1-555-0100",
+                "notes": "Synthetic offline child verification fixture.",
+            },
+            "confidence": {
+                "overall": 0.99,
+                "source": "synthetic_fixture",
+            },
+            "requires_review": True,
+            "routing_allowed": False,
+            "enrichment_allowed": False,
+            "sink_write_allowed": False,
+            "explicit_stop_conditions": [
+                "Synthetic child verification results are test fixtures, not production OCR.",
+                "Do not route, enrich, or write contacts until reviewed contact data exists.",
+            ],
+        }
+        result_path.write_text(
+            json.dumps(result, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        result_record = {
+            "request_id": request["request_id"],
+            "work_item_id": request["work_item_id"],
+            "candidate_id": request["candidate_id"],
+            "result_path": str(result_path),
+            "state": "verification_result_ready",
+            "requires_review": True,
+            "routing_allowed": False,
+            "enrichment_allowed": False,
+            "sink_write_allowed": False,
+        }
+        results.append(result_record)
+        work_item["state"] = "verification_result_ready"
+        work_item["phase"] = "awaiting_child_review"
+        work_item["verification_result_path"] = str(result_path)
+        work_item["requires_review"] = True
+
+    updated_manifest["verification_result_ready_count"] = len(results)
+    return (
+        {
+            "schema": CHILD_VERIFICATION_RESULTS_SCHEMA,
+            "parent_job_id": request_manifest["parent_job_id"],
+            "source_image_path": request_manifest["source_image_path"],
+            "mode": "synthetic_offline",
+            "result_count": len(results),
+            "results": results,
+            "explicit_stop_conditions": [
+                "Synthetic child verification results are not production OCR/App Intelligence output.",
+                "Do not route, enrich, or write contacts until child results are reviewed and promoted.",
             ],
         },
         updated_manifest,

@@ -4762,3 +4762,32 @@ Validation:
 Safety:
 
 - This created execution-request artifacts only. It did not execute OCR/App Intelligence, normalize child contacts, route, enrich, write sinks, execute command-copy text, run public-web search, call paid APIs, or call GWS/Odollo/Odoo.
+
+## Turn 221 | 2026-06-15
+
+Executed Plan 0015 with Slice 0015-A.
+
+Implemented:
+
+- Added `business-card-watchdog.child-verification-results.v1`.
+- Added synthetic offline child verification result construction from request artifacts.
+- Wired batch orchestration to persist `child_verification_results.json` and per-candidate result detail files.
+- Updated `candidate_work_items.json` so child items move to `verification_result_ready` and `awaiting_child_review`.
+- Recorded `child_verification_results` ledger artifacts and `child_verification_results_recorded` events.
+- Updated synthetic multi-card dry-run coverage to verify result lineage, synthetic OCR/contact data, review requirement, and route/enrichment/write denial flags.
+- Updated README and roadmap documentation for synthetic child verification result artifacts.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_preclassifier.py::test_orchestrator_records_multi_card_candidate_manifest -q` passed with 1 test.
+- `.venv/bin/ruff check src/business_card_watchdog/fanout.py src/business_card_watchdog/orchestrator.py tests/test_preclassifier.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 239 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This created synthetic offline result artifacts only. It did not process private SyncThing images, execute production OCR/App Intelligence, promote child contacts, route, enrich, write sinks, execute command-copy text, run public-web search, call paid APIs, or call GWS/Odollo/Odoo.
