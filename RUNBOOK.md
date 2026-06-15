@@ -2698,6 +2698,30 @@ Safety:
 
 - This was no-live readback/presentation only. It did not create or modify `selected_live_target.json`, invoke API routes or MCP tools, execute next actions, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
 
+## Turn 146 | 2026-06-15
+
+Continued Plan 0009 with Slice 0009-A70.
+
+Implemented:
+
+- `bcw runs live-pilot-handoff` text output now renders a top-level response-template count.
+- CLI tests protect readable response-template count visibility.
+- MCP direct tool tests now assert the promoted `operator_response_templates` packet and copyable approval fields.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_service.py::test_service_operator_dashboard_composes_no_live_readiness tests/test_api.py::test_api_health_status_runs_and_jobs -q` passed with 5 tests.
+- `.venv/bin/python -m pytest -q` passed with 226 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was readback/test coverage only. It did not create or modify `selected_live_target.json`, invoke API routes or MCP tools outside tests, execute next actions, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
 ## Turn 142 | 2026-06-14
 
 Continued Plan 0009 with Slice 0009-A66.

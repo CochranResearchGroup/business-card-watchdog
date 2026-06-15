@@ -571,6 +571,7 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     text_handoff = capsys.readouterr().out
     assert f"target={target_identity}" in text_handoff
     assert "abandonment=none" in text_handoff
+    assert "Response templates: 1" in text_handoff
     assert (
         f"Operator response: run_id={run_id} job_id={job_id} sink=google_contacts "
         "operator=tester scope=lookup safety_confirmation=<confirmation>"

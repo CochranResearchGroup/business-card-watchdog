@@ -254,6 +254,7 @@ def _render_live_pilot_status_text(payload: dict[str, object]) -> str:
 
 def _render_live_pilot_handoff_text(payload: dict[str, object]) -> str:
     action_counts = dict(payload.get("action_counts") or {})
+    response_templates = payload.get("operator_response_templates") or []
     entries = payload.get("entries") or []
     lines = [
         f"Run: {payload.get('run_id')}",
@@ -263,6 +264,7 @@ def _render_live_pilot_handoff_text(payload: dict[str, object]) -> str:
         + " ".join(f"{key}={value}" for key, value in sorted(action_counts.items()))
         if action_counts
         else "Actions: none",
+        f"Response templates: {len(response_templates) if isinstance(response_templates, list) else 0}",
     ]
     for entry in entries if isinstance(entries, list) else []:
         if isinstance(entry, dict):

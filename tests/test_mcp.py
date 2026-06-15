@@ -543,6 +543,15 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
         "operator=mcp-test scope=all safety_confirmation=<confirmation>"
     )
     assert live_handoff["entries"][0]["copyable_approval_fields"]["scope"] == "all"
+    assert live_handoff["operator_response_template_count"] == 1
+    assert live_handoff["operator_response_templates"][0]["schema"] == (
+        "business-card-watchdog.operator-response-template.v1"
+    )
+    assert live_handoff["operator_response_templates"][0]["template"] == (
+        f"run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=mcp-test scope=all safety_confirmation=<confirmation>"
+    )
+    assert live_handoff["operator_response_templates"][0]["copyable_approval_fields"]["scope"] == "all"
     assert abandonment["abandonment"]["schema"] == "business-card-watchdog.live-pilot-abandonment.v1"
     assert abandonment["abandonment"]["writes_attempted"] == 0
     assert write_pilot["pilot"]["schema"] == "business-card-watchdog.sink-write-pilot.v1"
