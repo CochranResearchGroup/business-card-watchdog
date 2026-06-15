@@ -172,6 +172,14 @@ def test_watch_status_cli_outputs_json(tmp_path: Path, capsys: pytest.CaptureFix
     assert payload["inputs"] == []
     assert payload["seen_count"] == 0
 
+    assert main(["--config", str(config_path), "watch-status"]) == 0
+    text = capsys.readouterr().out
+    assert "Watch status:" in text
+    assert "Inputs: 0" in text
+    assert "Seen: 0" in text
+    assert "Last error: none" in text
+    assert "{" not in text
+
 
 def test_watch_dry_run_cli_outputs_fixture_harness(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     config_path = tmp_path / "config.toml"
@@ -183,6 +191,20 @@ def test_watch_dry_run_cli_outputs_fixture_harness(tmp_path: Path, capsys: pytes
     assert payload["schema"] == "business-card-watchdog.watch-dry-run-harness.v1"
     assert payload["state"] == "passed"
     assert payload["private_sources_used"] is False
+    assert payload["commands"]["watch_status"] == "watch-status --json"
+    assert payload["commands"]["service_recovery"] == "service recovery --json"
+    assert payload["safe_next_actions"][0]["command"] == "watch-dry-run --json"
+
+    assert main(["--config", str(config_path), "watch-dry-run"]) == 0
+    text = capsys.readouterr().out
+    assert "Watch dry run: passed" in text
+    assert "Private sources used: False" in text
+    assert "Observed: writes=0 network=0" in text
+    assert "Watch status: watch-status --json" in text
+    assert "Safe next actions: 1" in text
+    assert "Stop conditions: 2" in text
+    assert "Do not process private SyncThing images from generic continuation." in text
+    assert "{" not in text
 
 
 def test_main_status_includes_watch_status(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

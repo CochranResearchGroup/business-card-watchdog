@@ -708,6 +708,9 @@ def test_api_enrichment_request_accepts_paid_provider_results(tmp_path: Path) ->
     assert watch_dry_run["schema"] == "business-card-watchdog.watch-dry-run-harness.v1"
     assert watch_dry_run["state"] == "passed"
     assert watch_dry_run["private_sources_used"] is False
+    assert watch_dry_run["commands"]["watch_status"] == "watch-status --json"
+    assert watch_dry_run["safe_next_actions"][0]["action"] == "inspect_watch_harness"
+    assert "Do not process private SyncThing images" in watch_dry_run["explicit_stop_conditions"][0]
 
 
 def test_api_executes_sink_lookup_pilot_with_mocked_matches(tmp_path: Path, monkeypatch) -> None:

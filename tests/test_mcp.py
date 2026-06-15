@@ -528,6 +528,8 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert abandoned_live_packet["existing_selected_target"]["abandon_command"] is None
     assert watch_dry_run["schema"] == "business-card-watchdog.watch-dry-run-harness.v1"
     assert watch_dry_run["state"] == "passed"
+    assert watch_dry_run["commands"]["watch_dry_run"] == "watch-dry-run --json"
+    assert watch_dry_run["safe_next_actions"][0]["action"] == "inspect_watch_harness"
     assert [entry["job_id"] for entry in reviews] == [job_id]
     assert review_bundle["schema"] == "business-card-watchdog.review-bundle.v1"
     assert review_bundle["entries"][0]["job_id"] == job_id

@@ -6314,7 +6314,7 @@ class BusinessCardService:
 
     def watch_dry_run_harness(self) -> dict[str, Any]:
         ensure_runtime_dirs(self.config)
-        harness_id = utc_now().replace(":", "-")
+        harness_id = f"{utc_now().replace(':', '-')}-{uuid4().hex[:8]}"
         harness_root = self.config.cache_dir / "watch-dry-run-harness" / harness_id
         source_dir = harness_root / "source"
         data_dir = harness_root / "data"
@@ -6386,6 +6386,12 @@ class BusinessCardService:
             "writes_attempted": 0,
             "network_calls_made": 0,
             "private_sources_used": False,
+            "commands": {
+                "watch_status": "watch-status --json",
+                "watch_dry_run": "watch-dry-run --json",
+                "status": "status --json",
+                "service_recovery": "service recovery --json",
+            },
             "safe_next_actions": [
                 {
                     "action": "inspect_watch_harness",

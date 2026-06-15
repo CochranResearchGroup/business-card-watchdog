@@ -57,6 +57,60 @@ def _render_status_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_watch_status_text(payload: dict[str, object]) -> str:
+    lines = [
+        "Watch status:",
+        f"Inputs: {len(payload.get('inputs') or [])}",
+        f"Seen: {payload.get('seen_count', 0)}",
+        f"Backlog: {payload.get('backlog_count', 0)}",
+        f"Unsettled: {payload.get('unsettled_count', 0)}",
+        f"Last processed: {payload.get('last_processed_path') or 'none'}",
+        f"Last error: {payload.get('last_error') or 'none'}",
+        f"Scan truncated: {payload.get('scan_truncated', False)}",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def _render_watch_dry_run_text(payload: dict[str, object]) -> str:
+    assertions = dict(payload.get("assertions") or {})
+    commands = dict(payload.get("commands") or {})
+    safe_actions = payload.get("safe_next_actions") or []
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    lines = [
+        f"Watch dry run: {payload.get('state')}",
+        f"Harness: {payload.get('harness_id')}",
+        f"Source: {payload.get('source_dir')}",
+        f"Processed first scan: {len(payload.get('first_scan_processed') or [])}",
+        f"Processed second scan: {len(payload.get('second_scan_processed') or [])}",
+        f"Private sources used: {payload.get('private_sources_used', False)}",
+        f"Observed: writes={payload.get('writes_attempted', 0)} network={payload.get('network_calls_made', 0)}",
+        "Assertions: "
+        + " ".join(f"{key}={value}" for key, value in sorted(assertions.items()))
+        if assertions
+        else "Assertions: none",
+        "Commands:",
+    ]
+    for label, key in [
+        ("Watch status", "watch_status"),
+        ("Watch dry run", "watch_dry_run"),
+        ("Status", "status"),
+        ("Service recovery", "service_recovery"),
+    ]:
+        command = commands.get(key)
+        if command:
+            lines.append(f" - {label}: {command}")
+    action_rows = safe_actions if isinstance(safe_actions, list) else []
+    lines.append(f"Safe next actions: {len(action_rows)}")
+    for action in action_rows:
+        if isinstance(action, dict):
+            lines.append(f" - {action.get('action')}: {action.get('command')}")
+    stop_rows = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stop_rows)}")
+    for condition in stop_rows:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
     runtime = dict(payload.get("runtime_readiness") or {})
     recovery = dict(payload.get("service_recovery") or {})
@@ -1770,12 +1824,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "watch-status":
         payload = service.watch_status()
-        print(json.dumps(payload, indent=2) if args.json else payload)
+        print(json.dumps(payload, indent=2) if args.json else _render_watch_status_text(payload), end="")
         return 0 if payload["last_error"] is None else 2
 
     if args.command == "watch-dry-run":
         payload = service.watch_dry_run_harness()
-        print(json.dumps(payload, indent=2) if args.json else payload)
+        print(json.dumps(payload, indent=2) if args.json else _render_watch_dry_run_text(payload), end="")
         return 0 if payload["state"] == "passed" else 2
 
     if args.command == "watch-reset":
