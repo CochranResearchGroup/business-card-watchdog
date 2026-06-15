@@ -66,6 +66,8 @@ Inspect local readiness and safe next commands:
 .venv/bin/bcw operator-dashboard
 ```
 
+The operator dashboard includes matching CLI commands, API routes, and MCP tool argument templates for read-only continuation and live-pilot handoff inspection.
+
 Dry-run a batch:
 
 ```bash

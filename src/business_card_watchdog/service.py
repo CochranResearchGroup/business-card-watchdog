@@ -506,6 +506,36 @@ class BusinessCardService:
                     else "GET /runs/{run_id}/live-pilot-handoff?write=false"
                 ),
             },
+            "mcp_tools": {
+                "operator_dashboard": {
+                    "tool": "business_card_watchdog_operator_dashboard",
+                    "arguments": {"run_id": selected_run_id} if selected_run_id else {},
+                },
+                "next_actions": {
+                    "tool": "business_card_watchdog_next_actions",
+                    "arguments": {"run_id": selected_run_id, "limit": 20}
+                    if selected_run_id
+                    else {"limit": 20},
+                },
+                "run_next_safe": {
+                    "tool": "business_card_watchdog_run_next_actions",
+                    "arguments": {"run_id": selected_run_id, "limit": 10}
+                    if selected_run_id
+                    else {"limit": 10},
+                },
+                "live_pilot_status": {
+                    "tool": "business_card_watchdog_live_pilot_status",
+                    "arguments": {"run_id": selected_run_id, "write": False}
+                    if selected_run_id
+                    else {"run_id": "<run-id>", "write": False},
+                },
+                "live_pilot_handoff": {
+                    "tool": "business_card_watchdog_live_pilot_handoff",
+                    "arguments": {"run_id": selected_run_id, "write": False}
+                    if selected_run_id
+                    else {"run_id": "<run-id>", "write": False},
+                },
+            },
             "safe_next_actions": [
                 {
                     "action": "inspect_runtime_readiness",

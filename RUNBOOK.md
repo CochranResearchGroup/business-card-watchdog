@@ -2628,6 +2628,26 @@ Safety:
 
 - This was command-link/readback hardening only. It did not create `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
 
+## Turn 142 | 2026-06-14
+
+Continued Plan 0009 with Slice 0009-A66.
+
+Implemented:
+
+- Operator dashboard now includes `mcp_tools` for dashboard refresh, next-action readback, safe run-next, live pilot status, and live pilot handoff.
+- MCP tool metadata uses concrete tool names plus selected-run argument templates when a run is selected.
+- MCP dashboard tool description now advertises CLI/API/MCP handoff commands.
+- README now notes that operator dashboard includes CLI commands, API routes, and MCP tool argument templates.
+- Service/API/MCP focused tests protect the MCP handoff metadata.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_operator_dashboard_composes_no_live_readiness tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service tests/test_mcp.py::test_mcp_jsonl_server_lists_and_calls_tools -q` passed with 4 tests.
+
+Safety:
+
+- This was metadata readback only. It did not invoke MCP tools, execute next actions, process private SyncThing inputs, run public-web search, call paid enrichment, create `selected_live_target.json`, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
 ## Turn 141 | 2026-06-14
 
 Continued Plan 0009 with Slice 0009-A65.

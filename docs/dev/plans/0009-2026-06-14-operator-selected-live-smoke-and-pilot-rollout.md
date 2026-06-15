@@ -1156,6 +1156,25 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_service.py::test_service_operator_dashboard_composes_no_live_readiness tests/test_cli_surfaces.py::test_cli_operator_dashboard_reports_no_live_summary tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 4 tests.
 
+### Slice 0009-A66 | 2026-06-14 | Dashboard MCP Tool Handoff
+
+Implemented:
+
+- Operator dashboard now includes `mcp_tools` for dashboard refresh, next-action readback, safe run-next, live pilot status, and live pilot handoff.
+- MCP tool metadata uses concrete tool names plus selected-run argument templates when a run is selected.
+- MCP dashboard tool description now advertises CLI/API/MCP handoff commands.
+- README now notes that operator dashboard includes CLI commands, API routes, and MCP tool argument templates.
+- Service/API/MCP focused tests protect the MCP handoff metadata.
+
+Safety:
+
+- This slice is metadata readback only.
+- It does not invoke MCP tools, execute next actions, process private SyncThing inputs, run public-web search, call paid enrichment, create `selected_live_target.json`, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_operator_dashboard_composes_no_live_readiness tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service tests/test_mcp.py::test_mcp_jsonl_server_lists_and_calls_tools -q` passed with 4 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

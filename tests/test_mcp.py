@@ -375,6 +375,8 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert operator_dashboard["selected_run_id"] == run_id
     assert operator_dashboard["commands"]["review_queue"] == f"reviews list --run-id {run_id} --state all --json"
     assert operator_dashboard["commands"]["next_actions"] == f"actions next --run-id {run_id} --json"
+    assert operator_dashboard["mcp_tools"]["next_actions"]["tool"] == "business_card_watchdog_next_actions"
+    assert operator_dashboard["mcp_tools"]["next_actions"]["arguments"] == {"run_id": run_id, "limit": 20}
     assert operator_dashboard["next_action_summary"]["by_action"] == {"review_contact": 1}
     assert operator_dashboard["writes_attempted"] == 0
     assert operator_dashboard["network_calls_made"] == 0

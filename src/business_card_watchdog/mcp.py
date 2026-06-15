@@ -33,7 +33,7 @@ def tool_manifest() -> dict[str, object]:
             },
             {
                 "name": "business_card_watchdog_operator_dashboard",
-                "description": "Compose no-live operator status, readiness, recovery, runs, review counts, and handoff commands.",
+                "description": "Compose no-live operator status, readiness, recovery, runs, review counts, next actions, and CLI/API/MCP handoff commands.",
                 "input_schema": {
                     "type": "object",
                     "properties": {"run_id": {"type": "string"}},
