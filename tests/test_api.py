@@ -97,7 +97,12 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert service_recovery["schema"] == "business-card-watchdog.service-recovery.v1"
     assert service_recovery["run_id"] == run_id
     assert service_recovery["commands"]["restart"] == "systemctl --user restart business-card-watchdog.service"
+    assert service_recovery["commands"]["live_pilot_status"].endswith(
+        f"runs live-pilot-status {run_id} --no-write --json"
+    )
     assert service_recovery["commands"]["live_pilot_handoff"].endswith(f"runs live-pilot-handoff {run_id}")
+    assert any(action["action"] == "inspect_live_pilot_status" for action in service_recovery["safe_next_actions"])
+    assert any(action["action"] == "inspect_live_pilot_handoff" for action in service_recovery["safe_next_actions"])
     assert service_recovery["network_calls_made"] == 0
     assert service_recovery["writes_attempted"] == 0
     live_targets = client.get("/live-target-candidates", params={"run_id": run_id}).json()

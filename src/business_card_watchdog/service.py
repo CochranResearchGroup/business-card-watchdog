@@ -4898,6 +4898,9 @@ class BusinessCardService:
             "recover": f"{command_prefix}service recovery --run-id {selected_run_id} --json"
             if selected_run_id
             else f"{command_prefix}service recovery --json",
+            "live_pilot_status": f"{command_prefix}runs live-pilot-status {selected_run_id} --no-write --json"
+            if selected_run_id
+            else f"{command_prefix}runs list --json",
             "live_pilot_handoff": f"{command_prefix}runs live-pilot-handoff {selected_run_id}"
             if selected_run_id
             else f"{command_prefix}runs list --json",
@@ -4962,6 +4965,25 @@ class BusinessCardService:
                     "safe_to_auto_continue": True,
                     "requires_explicit_operator_action": False,
                 }
+            )
+        if selected_run_id:
+            safe_next_actions.extend(
+                [
+                    {
+                        "action": "inspect_live_pilot_status",
+                        "command": commands["live_pilot_status"],
+                        "reason": "inspect selected-run live pilot state without writing artifacts or running live calls",
+                        "safe_to_auto_continue": True,
+                        "requires_explicit_operator_action": False,
+                    },
+                    {
+                        "action": "inspect_live_pilot_handoff",
+                        "command": commands["live_pilot_handoff"] + " --no-write --json",
+                        "reason": "inspect selected-run live pilot handoff without writing artifacts or running live calls",
+                        "safe_to_auto_continue": True,
+                        "requires_explicit_operator_action": False,
+                    },
+                ]
             )
         return {
             "schema": "business-card-watchdog.service-recovery.v1",

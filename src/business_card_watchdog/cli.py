@@ -433,9 +433,14 @@ def _render_service_recovery_text(payload: dict[str, object]) -> str:
         f"Status: {commands.get('status')}",
         f"Restart: {commands.get('restart')}",
         f"Resume: {commands.get('resume')}",
+        f"Live pilot status: {commands.get('live_pilot_status')}",
         f"Live pilot handoff: {commands.get('live_pilot_handoff')}",
         f"Recover: {commands.get('recover')}",
     ]
+    action_rows = safe_actions if isinstance(safe_actions, list) else []
+    for action in action_rows:
+        if isinstance(action, dict):
+            lines.append(f" - {action.get('action')}: {action.get('command')}")
     return "\n".join(lines) + "\n"
 
 
