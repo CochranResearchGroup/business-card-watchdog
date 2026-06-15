@@ -5610,6 +5610,9 @@ class BusinessCardService:
                 "live_target_candidates": f"live-target-candidates --run-id {run_id}",
                 "live_pilot_status": f"runs live-pilot-status {run_id}",
                 "live_pilot_handoff": f"runs live-pilot-handoff {run_id}",
+                "validate_operator_response": (
+                    f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+                ),
             },
             "explicit_stop_conditions": [
                 "This status report does not create selected_live_target.json.",

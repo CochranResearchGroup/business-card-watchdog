@@ -2341,6 +2341,9 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert live_status["network_calls_made"] == 0
     assert live_status["observed_writes_attempted"] == 0
     assert live_status["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id}"
+    assert live_status["commands"]["validate_operator_response"] == (
+        f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+    )
     assert live_status["operator_response_contract"]["creates_selected_live_target"] is False
     assert live_status["entries"][0]["operator_response_template"] == (
         f"run_id={run_id} job_id={job_id} sink=google_contacts "

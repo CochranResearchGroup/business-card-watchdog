@@ -546,6 +546,9 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert live_status["schema"] == "business-card-watchdog.live-pilot-status.v1"
     assert live_status["writes_attempted"] == 0
     assert live_status["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id}"
+    assert live_status["commands"]["validate_operator_response"] == (
+        f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+    )
     assert live_status["entries"][0]["selected_target_identity"] == selected_target["target"]["selection_id"]
     assert live_status["entries"][0]["abandonment_identity"] is None
     assert live_status["operator_response_contract"]["creates_selected_live_target"] is False
