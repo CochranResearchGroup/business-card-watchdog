@@ -694,6 +694,12 @@ class BusinessCardService:
                     if selected_run_id
                     else "runs list --json"
                 ),
+                "live_pilot_execution_checklist_from_response": (
+                    f"runs live-pilot-execution-checklist-from-response {selected_run_id} "
+                    "--response <operator-response> --json"
+                    if selected_run_id
+                    else "runs list --json"
+                ),
                 "mcp_manifest": "mcp-manifest",
             },
             "api_routes": {
@@ -788,6 +794,11 @@ class BusinessCardService:
                     f"POST /runs/{selected_run_id}/live-pilot-readiness-export-from-response"
                     if selected_run_id
                     else "POST /runs/{run_id}/live-pilot-readiness-export-from-response"
+                ),
+                "live_pilot_execution_checklist_from_response": (
+                    f"POST /runs/{selected_run_id}/live-pilot-execution-checklist-from-response"
+                    if selected_run_id
+                    else "POST /runs/{run_id}/live-pilot-execution-checklist-from-response"
                 ),
             },
             "mcp_tools": {
@@ -940,6 +951,12 @@ class BusinessCardService:
                     "arguments": {"run_id": selected_run_id, "response": "<operator-response>", "write": True}
                     if selected_run_id
                     else {"run_id": "<run-id>", "response": "<operator-response>", "write": True},
+                },
+                "live_pilot_execution_checklist_from_response": {
+                    "tool": "business_card_watchdog_live_pilot_execution_checklist_from_response",
+                    "arguments": {"run_id": selected_run_id, "response": "<operator-response>"}
+                    if selected_run_id
+                    else {"run_id": "<run-id>", "response": "<operator-response>"},
                 },
             },
             "safe_next_actions": [
@@ -8025,6 +8042,129 @@ class BusinessCardService:
             payload["export_written"] = True
             payload["export_path"] = str(export_path)
         return payload
+
+    def live_pilot_execution_checklist_from_response(
+        self,
+        *,
+        run_id: str,
+        response: str,
+    ) -> dict[str, Any]:
+        rehearsal = self.live_pilot_operator_rehearsal_from_response(
+            run_id=run_id,
+            response=response,
+        )
+        response_fields = _parse_operator_response_fields(response)
+        response_digest = hashlib.sha256(response.encode("utf-8")).hexdigest()
+        export_path = self.config.runs_dir / run_id / "live_pilot_readiness_export.json"
+        export = _read_json_file(export_path)
+        blocked_reasons: list[str] = []
+        export_text = ""
+        if not export_path.exists() or not export:
+            blocked_reasons.append("live_pilot_readiness_export.json is required before showing executable live command")
+        else:
+            export_text = export_path.read_text(encoding="utf-8")
+            if export.get("schema") != "business-card-watchdog.live-pilot-readiness-export-from-response.v1":
+                blocked_reasons.append("readiness export schema is not recognized")
+            redacted = dict(export.get("operator_response_redacted") or {})
+            if redacted.get("raw_response_stored") is not False:
+                blocked_reasons.append("readiness export does not prove raw response redaction")
+            if redacted.get("sha256") != response_digest:
+                blocked_reasons.append("readiness export response digest does not match current response")
+            redacted_fields = dict(redacted.get("fields") or {})
+            for field in ["run_id", "job_id", "sink", "operator", "scope"]:
+                expected = str(response_fields.get(field) or "")
+                actual = str(redacted_fields.get(field) or "")
+                if expected and actual != expected:
+                    blocked_reasons.append(f"readiness export {field} does not match current response")
+            if response in export_text:
+                blocked_reasons.append("readiness export contains the raw operator response")
+            safety_confirmation = str(response_fields.get("safety_confirmation") or "")
+            if safety_confirmation and safety_confirmation in export_text:
+                blocked_reasons.append("readiness export contains the safety confirmation")
+            for field in ["run_id", "job_id", "sink", "operator"]:
+                expected = str(rehearsal.get(field) or "")
+                actual = str(export.get(field) or "")
+                if expected and actual != expected:
+                    blocked_reasons.append(f"readiness export {field} does not match current rehearsal")
+        next_explicit_command = rehearsal.get("next_explicit_operator_command")
+        executable_live_command = next_explicit_command if not blocked_reasons else None
+        checklist_items = [
+            {
+                "name": "readiness_export_exists",
+                "ok": bool(export_path.exists() and export),
+                "evidence": str(export_path),
+            },
+            {
+                "name": "readiness_export_redacted",
+                "ok": bool(
+                    export
+                    and not any(
+                        "raw operator response" in reason or "safety confirmation" in reason
+                        for reason in blocked_reasons
+                    )
+                ),
+                "evidence": "raw_response_stored=false and response text absent",
+            },
+            {
+                "name": "response_digest_matches",
+                "ok": bool(export and dict(export.get("operator_response_redacted") or {}).get("sha256") == response_digest),
+                "evidence": "operator_response_redacted.sha256",
+            },
+            {
+                "name": "run_job_sink_operator_match",
+                "ok": bool(export and not any("does not match" in reason for reason in blocked_reasons)),
+                "evidence": "export fields compared to current response and rehearsal",
+            },
+            {
+                "name": "next_explicit_command_available",
+                "ok": bool(next_explicit_command),
+                "evidence": "current rehearsal next_explicit_operator_command",
+            },
+        ]
+        if not next_explicit_command:
+            blocked_reasons.append("current rehearsal has no explicit live command")
+        state = "ready_for_explicit_operator_command" if executable_live_command else "blocked"
+        return {
+            "schema": "business-card-watchdog.live-pilot-execution-checklist-from-response.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_id,
+            "job_id": rehearsal.get("job_id"),
+            "sink": rehearsal.get("sink"),
+            "operator": rehearsal.get("operator"),
+            "readiness_export_path": str(export_path),
+            "readiness_export_loaded": bool(export),
+            "checklist_items": checklist_items,
+            "blocked_reasons": blocked_reasons,
+            "executable_live_command": executable_live_command,
+            "next_safe_command": (
+                f"runs live-pilot-readiness-export-from-response {shlex.quote(run_id)} "
+                "--response <operator-response> --no-write --json"
+            ),
+            "commands": {
+                "readiness_export": (
+                    f"runs live-pilot-readiness-export-from-response {shlex.quote(run_id)} "
+                    "--response <operator-response> --json"
+                ),
+                "rehearsal": (
+                    f"runs live-pilot-operator-rehearsal-from-response {shlex.quote(run_id)} "
+                    "--response <operator-response> --json"
+                ),
+                "workflow_packet": (
+                    f"runs live-pilot-operator-workflow-packet-from-response {shlex.quote(run_id)} "
+                    "--response <operator-response> --json"
+                ),
+                "operator_dashboard": f"operator-dashboard --run-id {run_id} --json",
+            },
+            "explicit_stop_conditions": [
+                "Do not run executable_live_command unless checklist state is ready_for_explicit_operator_command.",
+                "Do not run the command if the readiness export is missing, unredacted, stale, or mismatched.",
+                "Recreate the readiness export after any selected-target, lookup, duplicate, write, or readback evidence changes.",
+                "Do not process private SyncThing images, run public-web search, or call paid enrichment from this checklist.",
+            ],
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
 
     def validate_live_pilot_operator_response(self, *, run_id: str, response: str) -> dict[str, Any]:
         parsed_response = _parse_operator_response_fields(response)

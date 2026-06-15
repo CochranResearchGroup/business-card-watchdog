@@ -117,6 +117,9 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert operator_dashboard["commands"]["live_pilot_readiness_export_from_response"] == (
         f"runs live-pilot-readiness-export-from-response {run_id} --response <operator-response> --json"
     )
+    assert operator_dashboard["commands"]["live_pilot_execution_checklist_from_response"] == (
+        f"runs live-pilot-execution-checklist-from-response {run_id} --response <operator-response> --json"
+    )
     assert operator_dashboard["api_routes"]["live_pilot_validate_response"] == (
         f"POST /runs/{run_id}/live-pilot-operator-response-validation"
     )
@@ -155,6 +158,9 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     )
     assert operator_dashboard["api_routes"]["live_pilot_readiness_export_from_response"] == (
         f"POST /runs/{run_id}/live-pilot-readiness-export-from-response"
+    )
+    assert operator_dashboard["api_routes"]["live_pilot_execution_checklist_from_response"] == (
+        f"POST /runs/{run_id}/live-pilot-execution-checklist-from-response"
     )
     assert operator_dashboard["api_routes"]["live_pilot_approval_packet"] == (
         f"GET /runs/{run_id}/live-pilot-approval-packet"
@@ -218,6 +224,10 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert operator_dashboard["mcp_tools"]["live_pilot_readiness_export_from_response"] == {
         "tool": "business_card_watchdog_live_pilot_readiness_export_from_response",
         "arguments": {"run_id": run_id, "response": "<operator-response>", "write": True},
+    }
+    assert operator_dashboard["mcp_tools"]["live_pilot_execution_checklist_from_response"] == {
+        "tool": "business_card_watchdog_live_pilot_execution_checklist_from_response",
+        "arguments": {"run_id": run_id, "response": "<operator-response>"},
     }
     assert operator_dashboard["writes_attempted"] == 0
     assert operator_dashboard["network_calls_made"] == 0
@@ -634,6 +644,19 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert response not in json.dumps(readiness_export, sort_keys=True)
     assert readiness_export["writes_attempted"] == 0
     assert readiness_export["network_calls_made"] == 0
+    checklist = client.post(
+        f"/runs/{run_id}/live-pilot-execution-checklist-from-response",
+        json={"response": response},
+    ).json()
+    assert checklist["schema"] == "business-card-watchdog.live-pilot-execution-checklist-from-response.v1"
+    assert checklist["state"] == "blocked"
+    assert checklist["readiness_export_loaded"] is False
+    assert checklist["executable_live_command"] is None
+    assert "live_pilot_readiness_export.json is required before showing executable live command" in checklist[
+        "blocked_reasons"
+    ]
+    assert checklist["writes_attempted"] == 0
+    assert checklist["network_calls_made"] == 0
     validation = client.post(
         f"/runs/{run_id}/live-pilot-operator-response-validation",
         json={"response": response},

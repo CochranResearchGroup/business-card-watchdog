@@ -881,6 +881,9 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     assert dashboard["commands"]["live_pilot_readiness_export_from_response"] == (
         f"runs live-pilot-readiness-export-from-response {run_id} --response <operator-response> --json"
     )
+    assert dashboard["commands"]["live_pilot_execution_checklist_from_response"] == (
+        f"runs live-pilot-execution-checklist-from-response {run_id} --response <operator-response> --json"
+    )
     assert dashboard["commands"]["live_pilot_validate_response"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
@@ -914,6 +917,9 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     )
     assert dashboard["api_routes"]["live_pilot_readiness_export_from_response"] == (
         f"POST /runs/{run_id}/live-pilot-readiness-export-from-response"
+    )
+    assert dashboard["api_routes"]["live_pilot_execution_checklist_from_response"] == (
+        f"POST /runs/{run_id}/live-pilot-execution-checklist-from-response"
     )
     assert dashboard["mcp_tools"]["next_actions"] == {
         "tool": "business_card_watchdog_next_actions",
@@ -966,6 +972,10 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     assert dashboard["mcp_tools"]["live_pilot_readiness_export_from_response"] == {
         "tool": "business_card_watchdog_live_pilot_readiness_export_from_response",
         "arguments": {"run_id": run_id, "response": "<operator-response>", "write": True},
+    }
+    assert dashboard["mcp_tools"]["live_pilot_execution_checklist_from_response"] == {
+        "tool": "business_card_watchdog_live_pilot_execution_checklist_from_response",
+        "arguments": {"run_id": run_id, "response": "<operator-response>"},
     }
     assert dashboard["mcp_tools"]["review_routing_drill"] == {
         "tool": "business_card_watchdog_review_routing_drill",
@@ -3042,6 +3052,20 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert "safety_confirmation" not in preview_export["operator_response_redacted"]["fields"]
     assert preselection_response not in json.dumps(preview_export, sort_keys=True)
 
+    blocked_checklist = service.live_pilot_execution_checklist_from_response(
+        run_id=run_id,
+        response=preselection_response,
+    )
+    assert blocked_checklist["schema"] == "business-card-watchdog.live-pilot-execution-checklist-from-response.v1"
+    assert blocked_checklist["state"] == "blocked"
+    assert blocked_checklist["readiness_export_loaded"] is False
+    assert blocked_checklist["executable_live_command"] is None
+    assert "live_pilot_readiness_export.json is required before showing executable live command" in blocked_checklist[
+        "blocked_reasons"
+    ]
+    assert blocked_checklist["writes_attempted"] == 0
+    assert blocked_checklist["network_calls_made"] == 0
+
     readiness_export = service.live_pilot_readiness_export_from_response(
         run_id=run_id,
         response=preselection_response,
@@ -3059,6 +3083,18 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert any(artifact["kind"] == "live_pilot_readiness_export" for artifact in service.list_artifacts(run_id))
     assert readiness_export["writes_attempted"] == 0
     assert readiness_export["network_calls_made"] == 0
+
+    ready_checklist = service.live_pilot_execution_checklist_from_response(
+        run_id=run_id,
+        response=preselection_response,
+    )
+    assert ready_checklist["state"] == "ready_for_explicit_operator_command"
+    assert ready_checklist["readiness_export_loaded"] is True
+    assert ready_checklist["blocked_reasons"] == []
+    assert ready_checklist["executable_live_command"] == rehearsal["next_explicit_operator_command"]
+    assert all(item["ok"] for item in ready_checklist["checklist_items"])
+    assert ready_checklist["writes_attempted"] == 0
+    assert ready_checklist["network_calls_made"] == 0
 
     blocked_closeout_write = service.live_pilot_closeout_packet_from_response(
         run_id=run_id,

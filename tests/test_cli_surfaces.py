@@ -1403,6 +1403,29 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
                 "--config",
                 str(config_path),
                 "runs",
+                "live-pilot-execution-checklist-from-response",
+                run_id,
+                "--response",
+                response,
+                "--json",
+            ]
+        )
+        == 0
+    )
+    checklist = json.loads(capsys.readouterr().out)
+    assert checklist["schema"] == "business-card-watchdog.live-pilot-execution-checklist-from-response.v1"
+    assert checklist["state"] == "blocked"
+    assert checklist["readiness_export_loaded"] is False
+    assert checklist["executable_live_command"] is None
+    assert checklist["writes_attempted"] == 0
+    assert checklist["network_calls_made"] == 0
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
                 "live-pilot-closeout-packet-from-response",
                 run_id,
                 "--response",
@@ -1482,6 +1505,28 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert "Rehearsal steps: 2" in readiness_export_text
     assert "Observed: writes=0 network=0" in readiness_export_text
     assert "{" not in readiness_export_text
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "live-pilot-execution-checklist-from-response",
+                run_id,
+                "--response",
+                response,
+            ]
+        )
+        == 0
+    )
+    checklist_text = capsys.readouterr().out
+    assert "State: blocked" in checklist_text
+    assert "Readiness export loaded: False" in checklist_text
+    assert "Executable live command: none" in checklist_text
+    assert "Checklist items: 5" in checklist_text
+    assert "Observed: writes=0 network=0" in checklist_text
+    assert "{" not in checklist_text
 
     assert (
         main(
