@@ -2210,6 +2210,32 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed; index is up to date.
 
+### Slice 0009-A121 | 2026-06-15 | Operator Approval Readback
+
+Implemented:
+
+- Added `business-card-watchdog.live-pilot-operator-approval-readback.v1`.
+- Live pilot operator-response validation now includes a compact approval readback that summarizes parsed fields, matched template identity, missing/mismatch counts, next safe command, and no-create/no-live counters.
+- CLI validation text now renders the approval readback for both ready and blocked responses.
+- Service, CLI, API, and MCP coverage assert ready approval readback, blocked readback, and zero-write/no-network behavior.
+
+Safety:
+
+- This slice is validation readback metadata and CLI presentation only.
+- It does not create or modify `selected_live_target.json` and does not execute lookup, write, or readback pilots.
+- It does not process configured/private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_jsonl_server_lists_and_calls_tools -q` passed with 4 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 231 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
 ### Slice 0009-A120 | 2026-06-15 | Dashboard Live Pilot Execution Packet
 
 Implemented:

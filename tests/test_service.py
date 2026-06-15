@@ -2818,6 +2818,31 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
         "lookup_smoke_handoff",
     ]
     assert validation_sequence["execution_policy"]["do_not_run_live_or_sink_write_from_handoff"] is True
+    approval_readback = validation["approval_readback"]
+    assert approval_readback["schema"] == "business-card-watchdog.live-pilot-operator-approval-readback.v1"
+    assert approval_readback["state"] == "ready"
+    assert approval_readback["validation_state"] == "ready_for_live_lookup_request"
+    assert approval_readback["response_matches_template"] is True
+    assert approval_readback["matched_template_job_id"] == job_id
+    assert approval_readback["parsed_fields"] == {
+        "run_id": run_id,
+        "job_id": job_id,
+        "sink": "google_contacts",
+        "operator": "tester",
+        "scope": "lookup",
+        "safety_confirmation_present": True,
+    }
+    assert approval_readback["template_fields"]["operator"] == "tester"
+    assert approval_readback["missing_field_count"] == 0
+    assert approval_readback["mismatch_count"] == 0
+    assert approval_readback["next_safe_step"] == "selected_target_audit"
+    assert approval_readback["next_safe_command"] == validation["selected_target_audit_command"]
+    assert approval_readback["select_target_command"] is None
+    assert approval_readback["selected_target_audit_command"] == validation["selected_target_audit_command"]
+    assert approval_readback["lookup_smoke_handoff_command"] == validation["lookup_smoke_handoff_command"]
+    assert approval_readback["creates_selected_live_target"] is False
+    assert approval_readback["writes_attempted"] == 0
+    assert approval_readback["network_calls_made"] == 0
     assert any("do not run select_target again" in item for item in validation["explicit_stop_conditions"])
     assert any("lookup-smoke handoff" in item for item in validation["explicit_stop_conditions"])
     assert validation["creates_selected_live_target"] is False

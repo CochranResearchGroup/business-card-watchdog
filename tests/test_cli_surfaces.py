@@ -900,6 +900,18 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert validation["validation_command_sequence"]["explicit_operator_step_count"] == 0
     assert validation["validation_command_sequence"]["live_call_step_count"] == 0
     assert validation["validation_command_sequence"]["sink_write_step_count"] == 0
+    approval_readback = validation["approval_readback"]
+    assert approval_readback["schema"] == "business-card-watchdog.live-pilot-operator-approval-readback.v1"
+    assert approval_readback["state"] == "ready"
+    assert approval_readback["validation_state"] == "ready_for_live_lookup_request"
+    assert approval_readback["response_matches_template"] is True
+    assert approval_readback["matched_template_job_id"] == job_id
+    assert approval_readback["parsed_fields"]["operator"] == "tester"
+    assert approval_readback["missing_field_count"] == 0
+    assert approval_readback["mismatch_count"] == 0
+    assert approval_readback["next_safe_step"] == "selected_target_audit"
+    assert approval_readback["next_safe_command"] == validation["selected_target_audit_command"]
+    assert approval_readback["creates_selected_live_target"] is False
 
     assert (
         main(
@@ -929,6 +941,10 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
         f"--run-id {run_id} --sink google_contacts --approved-by tester --json"
     ) in validation_text
     assert "Post-selection sequence:" in validation_text
+    assert (
+        "Approval readback: state=ready matches_template=True "
+        "missing=0 mismatches=0 next_safe=selected_target_audit"
+    ) in validation_text
     assert "Validation sequence groups: safe=2 explicit=0 live=0 sink_writes=0" in validation_text
     assert f" - select_target: sinks select-live-target {job_id}" not in validation_text
     assert (
@@ -965,6 +981,10 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     blocked_validation_text = capsys.readouterr().out
     assert "State: blocked" in blocked_validation_text
     assert "Mismatches: operator does not match current operator response template" in blocked_validation_text
+    assert (
+        "Approval readback: state=blocked matches_template=False "
+        "missing=0 mismatches=1 next_safe=none"
+    ) in blocked_validation_text
     assert "Select target:" not in blocked_validation_text
 
     assert (

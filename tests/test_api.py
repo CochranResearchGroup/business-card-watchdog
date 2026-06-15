@@ -316,6 +316,21 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert validation["validation_command_sequence"]["explicit_operator_step_count"] == 0
     assert validation["validation_command_sequence"]["live_call_step_count"] == 0
     assert validation["validation_command_sequence"]["sink_write_step_count"] == 0
+    api_approval_readback = validation["approval_readback"]
+    assert api_approval_readback["schema"] == "business-card-watchdog.live-pilot-operator-approval-readback.v1"
+    assert api_approval_readback["state"] == "ready"
+    assert api_approval_readback["validation_state"] == "ready_for_live_lookup_request"
+    assert api_approval_readback["response_matches_template"] is True
+    assert api_approval_readback["matched_template_job_id"] == job_id
+    assert api_approval_readback["parsed_fields"]["operator"] == "api-test"
+    assert api_approval_readback["parsed_fields"]["safety_confirmation_present"] is True
+    assert api_approval_readback["missing_field_count"] == 0
+    assert api_approval_readback["mismatch_count"] == 0
+    assert api_approval_readback["next_safe_step"] == "selected_target_audit"
+    assert api_approval_readback["next_safe_command"] == validation["selected_target_audit_command"]
+    assert api_approval_readback["creates_selected_live_target"] is False
+    assert api_approval_readback["writes_attempted"] == 0
+    assert api_approval_readback["network_calls_made"] == 0
     assert validation["creates_selected_live_target"] is False
     assert validation["writes_attempted"] == 0
     assert validation["network_calls_made"] == 0

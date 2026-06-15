@@ -6407,6 +6407,18 @@ class BusinessCardService:
                     }
                 )
         validation_command_sequence = _pilot_command_sequence(post_selection_sequence)
+        approval_readback = _live_pilot_operator_approval_readback(
+            state=state,
+            next_validation_step=next_validation_step,
+            parsed_response=parsed_response,
+            matching_template=matching_template,
+            missing_fields=missing_fields,
+            mismatches=mismatches,
+            validation_command_sequence=validation_command_sequence,
+            select_target_command=select_target_command,
+            selected_target_audit_command=selected_target_audit_command,
+            lookup_smoke_handoff_command=lookup_smoke_handoff_command,
+        )
 
         explicit_stop_conditions = [
             "This validation does not create selected_live_target.json.",
@@ -6453,6 +6465,7 @@ class BusinessCardService:
             "lookup_smoke_handoff_command": lookup_smoke_handoff_command,
             "post_selection_sequence": post_selection_sequence,
             "validation_command_sequence": validation_command_sequence,
+            "approval_readback": approval_readback,
             "operator_response_contract": contract,
             "writes_attempted": 0,
             "network_calls_made": 0,
@@ -8504,6 +8517,56 @@ def _operator_dashboard_live_pilot_execution_packet(run_id: str, handoff: dict[s
             "do_not_run_live_or_sink_write_from_dashboard": True,
         },
         "stop_conditions": handoff.get("operator_stop_conditions") or [],
+        "writes_attempted": 0,
+        "network_calls_made": 0,
+    }
+
+
+def _live_pilot_operator_approval_readback(
+    *,
+    state: str,
+    next_validation_step: str,
+    parsed_response: dict[str, str],
+    matching_template: dict[str, Any] | None,
+    missing_fields: list[str],
+    mismatches: list[str],
+    validation_command_sequence: dict[str, Any],
+    select_target_command: str | None,
+    selected_target_audit_command: str | None,
+    lookup_smoke_handoff_command: str | None,
+) -> dict[str, Any]:
+    template_fields = dict((matching_template or {}).get("copyable_approval_fields") or {})
+    next_safe = dict(validation_command_sequence.get("next_safe_inspection_step") or {})
+    return {
+        "schema": "business-card-watchdog.live-pilot-operator-approval-readback.v1",
+        "state": "ready" if state != "blocked" else "blocked",
+        "validation_state": state,
+        "next_validation_step": next_validation_step,
+        "response_matches_template": bool(matching_template) and not missing_fields and not mismatches,
+        "matched_template_job_id": (matching_template or {}).get("job_id"),
+        "parsed_fields": {
+            "run_id": parsed_response.get("run_id"),
+            "job_id": parsed_response.get("job_id"),
+            "sink": parsed_response.get("sink"),
+            "operator": parsed_response.get("operator"),
+            "scope": parsed_response.get("scope"),
+            "safety_confirmation_present": bool(str(parsed_response.get("safety_confirmation") or "").strip()),
+        },
+        "template_fields": {
+            "run_id": template_fields.get("run_id"),
+            "job_id": template_fields.get("job_id"),
+            "sink": template_fields.get("sink"),
+            "operator": template_fields.get("operator"),
+            "scope": template_fields.get("scope"),
+        },
+        "missing_field_count": len(missing_fields),
+        "mismatch_count": len(mismatches),
+        "next_safe_step": next_safe.get("step"),
+        "next_safe_command": next_safe.get("command"),
+        "select_target_command": select_target_command,
+        "selected_target_audit_command": selected_target_audit_command,
+        "lookup_smoke_handoff_command": lookup_smoke_handoff_command,
+        "creates_selected_live_target": False,
         "writes_attempted": 0,
         "network_calls_made": 0,
     }
