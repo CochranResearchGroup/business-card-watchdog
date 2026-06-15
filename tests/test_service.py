@@ -214,12 +214,18 @@ def test_service_live_selection_requirements_report_writes_run_level_artifact(tm
         f"sinks live-selection-packet {job_id} --run-id {run_id} --sink google_contacts --operator <operator>"
     )
     assert "select-live-target" in entry["commands"]["select_target"]
+    assert entry["commands"]["validate_operator_response"] == (
+        f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+    )
     assert report["commands"]["live_target_candidates"] == f"live-target-candidates --run-id {run_id} --sink google_contacts"
     assert report["commands"]["live_readiness_audit"] == f"live-readiness-audit --run-id {run_id} --sink google_contacts"
     assert report["commands"]["live_selection_requirements"] == (
         f"live-selection-requirements --run-id {run_id} --sink google_contacts"
     )
     assert report["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id}"
+    assert report["commands"]["validate_operator_response"] == (
+        f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+    )
     assert Path(report["requirements_path"]).exists()
     artifacts = BusinessCardService(config).list_artifacts(run_id)
     assert any(artifact["kind"] == "live_selection_requirements" for artifact in artifacts)

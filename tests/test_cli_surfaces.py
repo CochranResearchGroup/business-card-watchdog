@@ -290,10 +290,16 @@ def test_cli_live_selection_requirements_reports_text_and_json(tmp_path: Path, c
     assert entry["commands"]["selection_packet"] == (
         f"sinks live-selection-packet {entry['job_id']} --run-id {run_id} --sink google_contacts --operator <operator>"
     )
+    assert entry["commands"]["validate_operator_response"] == (
+        f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+    )
     assert payload["commands"]["live_target_candidates"] == f"live-target-candidates --run-id {run_id}"
     assert payload["commands"]["live_readiness_audit"] == f"live-readiness-audit --run-id {run_id}"
     assert payload["commands"]["live_selection_requirements"] == f"live-selection-requirements --run-id {run_id}"
     assert payload["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id}"
+    assert payload["commands"]["validate_operator_response"] == (
+        f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+    )
 
     assert main(["--config", str(config_path), "live-selection-requirements", "--run-id", run_id, "--no-write"]) == 0
     text = capsys.readouterr().out

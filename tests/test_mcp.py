@@ -436,6 +436,9 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert live_requirements["writes_attempted"] == 0
     assert live_requirements["network_calls_made"] == 0
     assert live_requirements["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id}"
+    assert live_requirements["commands"]["validate_operator_response"] == (
+        f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+    )
     assert live_requirements["operator_response_contract"]["schema"] == (
         "business-card-watchdog.operator-selection-response-contract.v1"
     )
@@ -443,6 +446,9 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert live_requirements["entries"][0]["operator_response_template"] == (
         f"run_id={run_id} job_id={job_id} sink=google_contacts "
         "operator=<operator> scope=lookup safety_confirmation=<confirmation>"
+    )
+    assert live_requirements["entries"][0]["commands"]["validate_operator_response"] == (
+        f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
     assert live_requirements["entries"][0]["copyable_approval_fields"]["job_id"] == job_id
     assert live_packet["schema"] == "business-card-watchdog.live-selection-packet.v1"

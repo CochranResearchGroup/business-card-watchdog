@@ -5313,6 +5313,10 @@ class BusinessCardService:
                             f"--sink {candidate_sink} --operator <operator> --scope lookup "
                             "--safety-confirmation <confirmation> --json"
                         ),
+                        "validate_operator_response": (
+                            f"runs live-pilot-validate-response {candidate_run_id} "
+                            "--response <operator-response> --json"
+                        ),
                     },
                 }
             )
@@ -5375,6 +5379,11 @@ class BusinessCardService:
                     + (f" --sink {selected_sink}" if selected_sink else "")
                 ),
                 "live_pilot_handoff": f"runs live-pilot-handoff {run_id}" if run_id else "runs list --json",
+                "validate_operator_response": (
+                    f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+                    if run_id
+                    else "runs list --json"
+                ),
             },
             "explicit_stop_conditions": [
                 "This report does not create selected_live_target.json.",
