@@ -1106,6 +1106,41 @@ def test_api_run_dry_run_safe_loop_executes_bounded_safe_actions(tmp_path: Path,
     assert payload["runtime_artifact_written"] is False
 
 
+def test_api_run_review_route_readiness_reports_route_state(tmp_path: Path, monkeypatch) -> None:
+    from business_card_watchdog.api import create_app
+
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+    source_dir = tmp_path / "cards"
+    write_synthetic_image(source_dir / "card.png")
+    config = AppConfig(
+        config_path=config_path,
+        data_dir=data_dir,
+        prefilter=PrefilterConfig(enabled=False),
+        sink=SinkConfig(google_contacts=True, odoo=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts", "odoo"]}],
+    )
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+    client = TestClient(create_app(config_path))
+
+    payload = client.get(
+        f"/runs/{run_dir.name}/review-route-readiness",
+        params={"write": "false"},
+    ).json()
+
+    assert payload["schema"] == "business-card-watchdog.review-route-readiness.v1"
+    assert payload["state"] == "ready_for_safe_agent_loop"
+    assert payload["counts"]["route_ready"] == 1
+    assert payload["counts"]["safe_auto"] == 1
+    assert payload["next_action_counts"] == {"plan_sink_lookup": 1}
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert payload["runtime_artifact_written"] is False
+
+
 def test_api_offline_pilot_gap_audit_reports_remaining_boundaries(tmp_path: Path) -> None:
     from business_card_watchdog.api import create_app
 

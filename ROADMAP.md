@@ -6,9 +6,9 @@ Build a robust, installable business-card ingestion system that can process arbi
 
 Product authority: `PRODUCT_SPEC.md`.
 Latest completed control-plane plan: `docs/dev/plans/0008-2026-06-14-runtime-installation-and-pilot-operations.md`.
-Latest completed offline product-hardening plan: `docs/dev/plans/0045-2026-06-15-dry-run-safe-loop.md`.
+Latest completed offline product-hardening plan: `docs/dev/plans/0046-2026-06-15-review-route-readiness.md`.
 Next production plan: `docs/dev/plans/0009-2026-06-14-operator-selected-live-smoke-and-pilot-rollout.md`.
-Next offline boundary: after an operator-selected dry-run batch exists, run `bcw runs dry-run-closeout <run-id> --json`, `bcw runs dry-run-review-handoff <run-id> --json`, and bounded `bcw runs dry-run-safe-loop <run-id> --limit <n> --json` until the run reaches an explicit operator boundary.
+Next offline boundary: after an operator-selected dry-run batch exists, run `bcw runs dry-run-closeout <run-id> --json`, `bcw runs dry-run-review-handoff <run-id> --json`, bounded `bcw runs dry-run-safe-loop <run-id> --limit <n> --json`, and `bcw runs review-route-readiness <run-id> --json` until the run reaches an explicit operator boundary.
 Next production boundary: operator-selected live smoke/pilot rollout for one run, one job, and one sink at a time.
 
 ## Milestones
@@ -43,7 +43,7 @@ Status evidence: Plans 0004 and 0005 are reconciled/closed for review queues, re
 - Add user-scope service install helpers.
 - Add health/status commands for watcher readiness.
 
-Status evidence: Plan 0008 closed runtime readiness, fixture-backed watch dry-run proof, service recovery reporting, and user-scope runtime operations. Plan 0038 added a redacted watch backlog preflight for configured inputs. Plan 0039 added operator-response validation and a command-copy packet for the configured private-source watch dry-run boundary. Plan 0040 added a synthetic sample-output drill for that selection workflow. Plan 0041 added a synthetic watched dry-run execution drill through the real batch orchestrator. Plan 0042 added a no-processing configured-source readiness packet before private dry-run command copy. Plan 0043 added a post-dry-run closeout audit across CLI, API, and MCP before review/routing or live-pilot selection. Plan 0044 added a post-closeout review/routing handoff that summarizes safe agent-loop next actions without live sink calls. Plan 0045 added a gated bounded safe-loop executor for those safe actions. Real SyncThing/private source processing still requires explicit operator action.
+Status evidence: Plan 0008 closed runtime readiness, fixture-backed watch dry-run proof, service recovery reporting, and user-scope runtime operations. Plan 0038 added a redacted watch backlog preflight for configured inputs. Plan 0039 added operator-response validation and a command-copy packet for the configured private-source watch dry-run boundary. Plan 0040 added a synthetic sample-output drill for that selection workflow. Plan 0041 added a synthetic watched dry-run execution drill through the real batch orchestrator. Plan 0042 added a no-processing configured-source readiness packet before private dry-run command copy. Plan 0043 added a post-dry-run closeout audit across CLI, API, and MCP before review/routing or live-pilot selection. Plan 0044 added a post-closeout review/routing handoff that summarizes safe agent-loop next actions without live sink calls. Plan 0045 added a gated bounded safe-loop executor for those safe actions. Plan 0046 added a run-level review-route readiness report before live sink selection. Real SyncThing/private source processing still requires explicit operator action.
 
 ### M4 | Live Sink Adapters | READY_FOR_OPERATOR_SELECTED_PILOTS
 

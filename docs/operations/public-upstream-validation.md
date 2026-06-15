@@ -563,3 +563,23 @@ Validation:
 Safety:
 
 - The Plan 0045 safe loop is gated by dry-run closeout and dry-run review handoff. It did not process configured SyncThing/private watch inputs; run OCR/App Intelligence beyond the synthetic fixture drill; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.
+
+## 2026-06-15 Local Gate For Plan 0046
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_review_route_readiness_summarizes_review_and_route_state tests/test_cli_surfaces.py::test_cli_runs_review_route_readiness_reports_route_state tests/test_api.py::test_api_run_review_route_readiness_reports_route_state tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_review_route_readiness_reports_route_state -q` passed with 5 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/api.py src/business_card_watchdog/mcp.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 313 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `rg -n "review-route-readiness|review_route_readiness|Review-route readiness|business_card_watchdog_review_route_readiness|Plan 0046" README.md ROADMAP.md RUNBOOK.md docs src tests` passed.
+- `uv build --out-dir dist` built source and wheel distributions.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `codegraph sync && codegraph status` passed; index is up to date.
+- `.venv/bin/bcw drills watch-dry-run-execution --json` passed with one synthetic fixture file processed through a completed dry-run batch and no writes or network calls.
+- `.venv/bin/bcw --config <temp-fixture-config> runs review-route-readiness 2026-06-15T13-34-46+00-00 --no-write --json` passed with `state=ready_for_safe_agent_loop`, one route-ready job, one safe `plan_sink_lookup`, zero writes, zero network calls, and no live sink calls.
+
+Safety:
+
+- The Plan 0046 readiness report reads local dry-run review, duplicate, enrichment, and route artifacts only. It did not process configured SyncThing/private watch inputs; run OCR/App Intelligence; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.

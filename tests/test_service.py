@@ -1688,6 +1688,51 @@ def test_service_dry_run_safe_loop_executes_bounded_safe_actions(tmp_path: Path,
     assert "dry_run_safe_loop_created" in events
 
 
+def test_service_review_route_readiness_summarizes_review_and_route_state(tmp_path: Path, monkeypatch) -> None:
+    source_dir = tmp_path / "cards"
+    write_synthetic_image(source_dir / "card.png")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        prefilter=PrefilterConfig(enabled=False),
+        sink=SinkConfig(google_contacts=True, odoo=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts", "odoo"]}],
+    )
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+
+    payload = BusinessCardService(config).review_route_readiness(run_dir.name, write=True)
+
+    assert payload["schema"] == "business-card-watchdog.review-route-readiness.v1"
+    assert payload["state"] == "ready_for_safe_agent_loop"
+    assert payload["closeout_state"] == "ready_for_review_and_routing"
+    assert payload["handoff_state"] == "ready_for_safe_agent_loop"
+    assert payload["counts"]["ready_to_route"] == 1
+    assert payload["counts"]["route_ready"] == 1
+    assert payload["counts"]["safe_auto"] == 1
+    assert payload["counts"]["blocked"] == 0
+    assert payload["next_action_counts"] == {"plan_sink_lookup": 1}
+    assert payload["rows"][0]["duplicate_state"] == "no_match"
+    assert payload["rows"][0]["enrichment_state"] == "not_requested"
+    assert payload["rows"][0]["route_ready"] is True
+    assert payload["rows"][0]["next_action"]["action"] == "plan_sink_lookup"
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert payload["live_sink_calls_made"] is False
+    assert payload["runtime_artifact_written"] is True
+    assert Path(payload["readiness_path"]).exists()
+    assert payload["commands"]["review_route_readiness"] == f"runs review-route-readiness {run_dir.name} --json"
+    assert "Do not execute live lookup, write, or readback from this report." in (
+        payload["explicit_stop_conditions"]
+    )
+
+    recorded = BusinessCardService(config).get_run(run_dir.name)
+    assert any(artifact["kind"] == "review_route_readiness" for artifact in recorded["artifacts"])
+    events = (run_dir / "events.jsonl").read_text(encoding="utf-8")
+    assert "review_route_readiness_created" in events
+
+
 def test_service_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",
