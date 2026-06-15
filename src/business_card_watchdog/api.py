@@ -865,6 +865,10 @@ def create_app(config_path: Path | None = None):
     def multi_card_preclassification_drill() -> dict[str, object]:
         return service().multi_card_preclassification_drill()
 
+    @app.post("/drills/watch-dry-run-selection")
+    def watch_dry_run_selection_drill() -> dict[str, object]:
+        return service().watch_dry_run_selection_drill()
+
     @app.post("/drills/review-routing")
     def review_routing_drill() -> dict[str, object]:
         return service().review_routing_drill()

@@ -1545,6 +1545,27 @@ def test_api_multi_card_preclassification_drill_records_candidate_boxes(tmp_path
     assert Path(drill["drill_path"]).exists()
 
 
+def test_api_watch_dry_run_selection_drill_exports_sample_output(tmp_path: Path) -> None:
+    from business_card_watchdog.api import create_app
+
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+    client = TestClient(create_app(config_path))
+
+    drill = client.post("/drills/watch-dry-run-selection").json()
+
+    assert drill["schema"] == "business-card-watchdog.watch-dry-run-selection-drill.v1"
+    assert drill["state"] == "passed"
+    assert drill["command_copy_ready"] is True
+    assert drill["files_processed"] == 0
+    assert drill["ocr_attempted"] == 0
+    assert drill["network_calls_made"] == 0
+    sample_output_path = Path(drill["sample_outputs"]["watch_dry_run_selection_markdown_path"])
+    assert sample_output_path.exists()
+    assert "Command copy packet: `ready_for_operator_copy`" in sample_output_path.read_text(encoding="utf-8")
+
+
 def test_api_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: Path) -> None:
     from business_card_watchdog.api import create_app
 

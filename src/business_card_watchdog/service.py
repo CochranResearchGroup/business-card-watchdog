@@ -2423,6 +2423,204 @@ class BusinessCardService:
         payload["drill_path"] = str(drill_path)
         return payload
 
+    def watch_dry_run_selection_drill(self) -> dict[str, Any]:
+        ensure_runtime_dirs(self.config)
+        run_id = f"fixture-watch-dry-run-selection-{utc_now().replace(':', '-')}-{uuid4().hex[:8]}"
+        run_dir = self.config.runs_dir / run_id
+        fixture_root = self.config.cache_dir / "fixture-drills" / run_id
+        source_dir = fixture_root / "source"
+        image_path = _write_synthetic_business_card_image(source_dir / "synthetic-watch-card.png")
+        fixture_config = replace(
+            self.config,
+            data_dir=run_dir / "fixture-data",
+            cache_dir=fixture_root / "cache",
+            watch=WatchConfig(inputs=[str(source_dir)], settle_seconds=0.0),
+        )
+        fixture_service = BusinessCardService(fixture_config)
+        preflight = fixture_service.watch_backlog_preflight(write=False)
+        handoff = fixture_service.watch_dry_run_selection_handoff(write=True)
+        operator_response = (
+            "input_ref=input_0 operator=fixture-operator mode=dry_run "
+            "safety_confirmation='private dry run approved for this fixture source'"
+        )
+        validation = fixture_service.validate_watch_dry_run_operator_response(response=operator_response)
+        command_copy_packet = fixture_service.watch_dry_run_command_copy_packet(
+            response=operator_response,
+            acknowledgement="I understand this will dry-run the configured private watch backlog",
+        )
+        handoff_entries = [entry for entry in list(handoff.get("entries") or []) if isinstance(entry, dict)]
+        first_handoff_entry = handoff_entries[0] if handoff_entries else {}
+        assertions = {
+            "preflight_ready": preflight.get("state") == "ready_for_operator_selected_dry_run",
+            "handoff_ready": handoff.get("state") == "awaiting_operator_response",
+            "validation_ready": validation.get("state") == "ready_for_command_copy",
+            "command_copy_ready": command_copy_packet.get("state") == "ready_for_operator_copy",
+            "fixture_source_only": str(image_path).startswith(str(fixture_root)),
+            "no_configured_watch_inputs_used": first_handoff_entry.get("configured_ref_display") == "<redacted-path>",
+            "no_files_processed": command_copy_packet.get("files_processed") == 0,
+            "no_ocr_attempted": command_copy_packet.get("ocr_attempted") == 0,
+            "no_network_calls": command_copy_packet.get("network_calls_made") == 0,
+        }
+        state = "passed" if all(assertions.values()) else "needs_attention"
+        payload: dict[str, Any] = {
+            "schema": "business-card-watchdog.watch-dry-run-selection-drill.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_id,
+            "fixture_root": str(fixture_root),
+            "fixture_source_dir": str(source_dir),
+            "fixture_image_path": str(image_path),
+            "private_sources_used": False,
+            "public_web_search_used": False,
+            "paid_enrichment_used": False,
+            "live_sink_calls_made": False,
+            "files_processed": 0,
+            "ocr_attempted": 0,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "operator_response_redacted": {
+                "raw_response_stored": False,
+                "fields": {
+                    "input_ref": "input_0",
+                    "operator": "fixture-operator",
+                    "mode": "dry_run",
+                },
+            },
+            "acknowledgement_redacted": {
+                "required": True,
+                "ok": command_copy_packet.get("acknowledgement_ok") is True,
+                "raw_acknowledgement_stored": False,
+            },
+            "assertions": assertions,
+            "packets": {
+                "preflight": preflight,
+                "handoff": handoff,
+                "validation": validation,
+                "command_copy_packet": command_copy_packet,
+            },
+            "command_copy_ready": command_copy_packet.get("state") == "ready_for_operator_copy",
+            "command_copy_text": command_copy_packet.get("command_copy_text"),
+            "commands": {
+                "watch_backlog_preflight": "watch-backlog-preflight --no-write --json",
+                "watch_dry_run_selection_handoff": "watch-dry-run-selection-handoff --json",
+                "watch_dry_run_validate_response": "watch-dry-run-validate-response --response <operator-response> --json",
+                "watch_dry_run_command_copy_packet": (
+                    "watch-dry-run-command-copy-packet --response <operator-response> "
+                    "--acknowledgement <operator-acknowledgement> --json"
+                ),
+                "watch_dry_run_selection_drill": "drills watch-dry-run-selection --json",
+            },
+            "explicit_stop_conditions": [
+                "This drill uses only a synthetic fixture image written under the cache directory.",
+                "This drill does not execute command_copy_text.",
+                "Do not treat fixture command-copy text as approval for configured private SyncThing inputs.",
+                "Do not process private SyncThing images, run public-web search, call paid enrichment, or call GWS/Odollo/Odoo from this drill.",
+            ],
+        }
+        sample_output_path = run_dir / "watch_dry_run_selection_sample_output.md"
+        drill_path = run_dir / "watch_dry_run_selection_drill.json"
+        payload["sample_outputs"] = {
+            "watch_dry_run_selection_markdown_path": str(sample_output_path),
+            "raw_operator_response_stored": False,
+            "raw_acknowledgement_stored": False,
+        }
+        run_dir.mkdir(parents=True, exist_ok=True)
+        sample_output_path.write_text(
+            self._render_watch_dry_run_selection_sample_output(payload),
+            encoding="utf-8",
+        )
+        drill_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(run_dir)
+        ledger.initialize(source=str(fixture_root), dry_run=True)
+        ledger.transition_run("discovering")
+        ledger.transition_run("completed")
+        ledger.record_artifact(
+            job_id="__run__",
+            kind="watch_dry_run_selection_sample_output",
+            path=sample_output_path,
+        )
+        ledger.record_artifact(job_id="__run__", kind="watch_dry_run_selection_drill", path=drill_path)
+        ledger.record_event(
+            "watch_dry_run_selection_drill_completed",
+            {
+                "run_id": run_id,
+                "drill_path": str(drill_path),
+                "sample_output_path": str(sample_output_path),
+                "state": state,
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        payload["drill_path"] = str(drill_path)
+        return payload
+
+    def _render_watch_dry_run_selection_sample_output(self, payload: dict[str, Any]) -> str:
+        packets = dict(payload.get("packets") or {})
+        preflight = dict(packets.get("preflight") or {})
+        handoff = dict(packets.get("handoff") or {})
+        validation = dict(packets.get("validation") or {})
+        command_copy_packet = dict(packets.get("command_copy_packet") or {})
+        commands = dict(payload.get("commands") or {})
+        stop_conditions = list(payload.get("explicit_stop_conditions") or [])
+        redacted_fields = dict(payload.get("operator_response_redacted", {}).get("fields") or {})
+        lines = [
+            "# Watch Dry-Run Selection Sample Output",
+            "",
+            "Synthetic fixture only. Do not use this sample as approval for configured private watch inputs.",
+            "",
+            "## Drill State",
+            "",
+            f"- Run: `{payload.get('run_id')}`",
+            f"- State: `{payload.get('state')}`",
+            f"- Preflight: `{preflight.get('state')}`",
+            f"- Handoff: `{handoff.get('state')}`",
+            f"- Validation: `{validation.get('state')}`",
+            f"- Command copy packet: `{command_copy_packet.get('state')}`",
+            f"- Command copy ready: `{payload.get('command_copy_ready')}`",
+            f"- Files processed: `{payload.get('files_processed', 0)}`",
+            f"- OCR attempted: `{payload.get('ocr_attempted', 0)}`",
+            f"- Writes attempted: `{payload.get('writes_attempted', 0)}`",
+            f"- Network calls made: `{payload.get('network_calls_made', 0)}`",
+            "",
+            "## Redaction",
+            "",
+            "- Raw operator response stored: `False`",
+            "- Raw acknowledgement stored: `False`",
+            "- Operator response fields retained:",
+        ]
+        for key in ["input_ref", "operator", "mode"]:
+            lines.append(f"  - {key}: `{redacted_fields.get(key)}`")
+        lines.extend(
+            [
+                "",
+                "## Watch Counts",
+                "",
+                f"- Input count: `{preflight.get('input_count', 0)}`",
+                f"- Backlog count: `{dict(preflight.get('counts') or {}).get('backlog', 0)}`",
+                f"- Unsettled count: `{dict(preflight.get('counts') or {}).get('unsettled', 0)}`",
+                "",
+                "## Commands",
+                "",
+                f"- Backlog preflight: `{commands.get('watch_backlog_preflight')}`",
+                f"- Selection handoff: `{commands.get('watch_dry_run_selection_handoff')}`",
+                f"- Validate response: `{commands.get('watch_dry_run_validate_response')}`",
+                f"- Command copy packet: `{commands.get('watch_dry_run_command_copy_packet')}`",
+                f"- Re-run drill: `{commands.get('watch_dry_run_selection_drill')}`",
+                "",
+                "## Command Copy",
+                "",
+                "- The drill proves command-copy gating but does not execute the copied command.",
+                f"- Command copy text: `{payload.get('command_copy_text')}`",
+                "",
+                "## Stop Conditions",
+                "",
+            ]
+        )
+        for condition in stop_conditions:
+            lines.append(f"- {condition}")
+        lines.append("")
+        return "\n".join(lines)
+
     def live_pilot_rehearsal_drill(self) -> dict[str, Any]:
         routing_drill = self.review_routing_drill()
         run_id = str(routing_drill["run_id"])

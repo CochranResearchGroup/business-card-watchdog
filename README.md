@@ -111,6 +111,7 @@ Inspect runs, jobs, review queue, sinks, and watcher state:
 .venv/bin/bcw watch-status --json
 .venv/bin/bcw watch-backlog-preflight --json
 .venv/bin/bcw watch-dry-run-selection-handoff --json
+.venv/bin/bcw drills watch-dry-run-selection
 ```
 
 Add `--json` to run, job, and review commands when consuming them from automation.
@@ -128,6 +129,12 @@ response template with `watch-dry-run-validate-response`, and request
 `watch-dry-run-command-copy-packet` with the required acknowledgement. The packet
 returns `watch --once --dry-run` as copyable text only after validation; it does
 not execute the private-source dry run.
+
+`drills watch-dry-run-selection` creates a synthetic watched source and rehearses
+the preflight, handoff, response validation, and command-copy packet without
+using configured watch inputs. It writes markdown sample output for operator
+review and does not execute the copied command, run OCR/App Intelligence, or call
+network/sink surfaces.
 
 Ordinary dry-run batch processing also writes `card_candidates.json` beside a job's
 `preclassification.json` when deterministic OpenCV boxes exist. Those records are
@@ -217,6 +224,11 @@ exports review bundle, review HTML, review workbook, and operator dashboard samp
 outputs. It proves the blocked audit/validation states before refresh and the
 ready handoff, response, checklist, command-copy, and closeout states after
 replacement refresh. It uses fixture data only and does not call live sinks.
+
+`drills watch-dry-run-selection` exports sample output for the configured-watch
+dry-run approval workflow using only a synthetic watch source. It proves the
+command-copy packet can be reached without touching private SyncThing inputs or
+executing `watch --once --dry-run`.
 
 `offline-pilot-gap-audit` inspects offline drill and documentation coverage and
 reports the remaining live/operator-only boundaries without running private

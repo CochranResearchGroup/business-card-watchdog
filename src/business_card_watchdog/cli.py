@@ -441,6 +441,45 @@ def _render_multi_card_preclassification_drill_text(payload: dict[str, object]) 
     return "\n".join(lines) + "\n"
 
 
+def _render_watch_dry_run_selection_drill_text(payload: dict[str, object]) -> str:
+    assertions = dict(payload.get("assertions") or {})
+    sample_outputs = dict(payload.get("sample_outputs") or {})
+    commands = dict(payload.get("commands") or {})
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    failed = [key for key, value in assertions.items() if value is not True]
+    lines = [
+        "Watch dry-run selection drill:",
+        f"Run: {payload.get('run_id')}",
+        f"State: {payload.get('state')}",
+        f"Command copy ready: {payload.get('command_copy_ready', False)}",
+        "Observed: "
+        f"files={payload.get('files_processed', 0)} "
+        f"ocr={payload.get('ocr_attempted', 0)} "
+        f"writes={payload.get('writes_attempted', 0)} "
+        f"network={payload.get('network_calls_made', 0)}",
+        f"Assertions: {len(assertions)}",
+    ]
+    if failed:
+        lines.append("Failed assertions: " + ", ".join(sorted(failed)))
+    if sample_outputs.get("watch_dry_run_selection_markdown_path"):
+        lines.append(f"Sample output: {sample_outputs.get('watch_dry_run_selection_markdown_path')}")
+    lines.append("Commands:")
+    for label, key in [
+        ("Backlog preflight", "watch_backlog_preflight"),
+        ("Selection handoff", "watch_dry_run_selection_handoff"),
+        ("Validate response", "watch_dry_run_validate_response"),
+        ("Command copy packet", "watch_dry_run_command_copy_packet"),
+    ]:
+        command = commands.get(key)
+        if command:
+            lines.append(f" - {label}: {command}")
+    stop_rows = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stop_rows)}")
+    for condition in stop_rows:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
     runtime = dict(payload.get("runtime_readiness") or {})
     recovery = dict(payload.get("service_recovery") or {})
@@ -2494,6 +2533,8 @@ def build_parser() -> argparse.ArgumentParser:
     drills_sub = drills.add_subparsers(dest="drills_command", required=True)
     drills_multi_card_preclassification = drills_sub.add_parser("multi-card-preclassification")
     drills_multi_card_preclassification.add_argument("--json", action="store_true")
+    drills_watch_dry_run_selection = drills_sub.add_parser("watch-dry-run-selection")
+    drills_watch_dry_run_selection.add_argument("--json", action="store_true")
     drills_review_routing = drills_sub.add_parser("review-routing")
     drills_review_routing.add_argument("--json", action="store_true")
     drills_live_pilot_rehearsal = drills_sub.add_parser("live-pilot-rehearsal")
@@ -3191,6 +3232,11 @@ def main(argv: list[str] | None = None) -> int:
             payload = service.multi_card_preclassification_drill()
             if not args.json:
                 print(_render_multi_card_preclassification_drill_text(payload), end="")
+                return 0
+        elif args.drills_command == "watch-dry-run-selection":
+            payload = service.watch_dry_run_selection_drill()
+            if not args.json:
+                print(_render_watch_dry_run_selection_drill_text(payload), end="")
                 return 0
         elif args.drills_command == "review-routing":
             payload = service.review_routing_drill()

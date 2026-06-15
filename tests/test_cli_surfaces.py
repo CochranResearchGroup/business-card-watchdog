@@ -255,6 +255,35 @@ def test_cli_multi_card_preclassification_drill_records_candidate_boxes(
     assert "{" not in text
 
 
+def test_cli_watch_dry_run_selection_drill_exports_sample_output(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+
+    assert main(["--config", str(config_path), "drills", "watch-dry-run-selection", "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["schema"] == "business-card-watchdog.watch-dry-run-selection-drill.v1"
+    assert payload["state"] == "passed"
+    assert payload["command_copy_ready"] is True
+    assert payload["files_processed"] == 0
+    assert payload["ocr_attempted"] == 0
+    sample_output_path = Path(payload["sample_outputs"]["watch_dry_run_selection_markdown_path"])
+    assert sample_output_path.exists()
+    assert "Watch Dry-Run Selection Sample Output" in sample_output_path.read_text(encoding="utf-8")
+
+    assert main(["--config", str(config_path), "drills", "watch-dry-run-selection"]) == 0
+    text = capsys.readouterr().out
+    assert "Watch dry-run selection drill:" in text
+    assert "State: passed" in text
+    assert "Command copy ready: True" in text
+    assert "Sample output:" in text
+    assert "{" not in text
+
+
 def test_cli_child_reviews_lists_promoted_child_candidates(
     tmp_path: Path,
     monkeypatch,

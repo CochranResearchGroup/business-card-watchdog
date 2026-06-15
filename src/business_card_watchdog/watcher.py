@@ -240,12 +240,14 @@ class PollingWatcher:
             )
             scan_truncated = scan_truncated or truncated
             backlog_count += len(images)
-            now = time.time()
-            unsettled_count += sum(
-                1
-                for path in images
-                if now - (path.stat().st_mtime_ns / 1_000_000_000) < float(self.settle_seconds or 0)
-            )
+            settle_seconds = float(self.settle_seconds or 0)
+            if settle_seconds > 0:
+                now = time.time()
+                unsettled_count += sum(
+                    1
+                    for path in images
+                    if now - (path.stat().st_mtime_ns / 1_000_000_000) < settle_seconds
+                )
 
         status = WatchStatus(
             inputs=self.config.watch_inputs,
@@ -270,8 +272,11 @@ class PollingWatcher:
             time.sleep(self.interval_seconds)
 
     def _is_settled(self, current: FileSnapshot, previous: FileSnapshot | None) -> bool:
+        settle_seconds = float(self.settle_seconds or 0)
+        if settle_seconds <= 0:
+            return True
         age_seconds = time.time() - (current.mtime_ns / 1_000_000_000)
-        if age_seconds < float(self.settle_seconds or 0):
+        if age_seconds < settle_seconds:
             return False
         return previous is None or current.stable_identity() == previous.stable_identity()
 

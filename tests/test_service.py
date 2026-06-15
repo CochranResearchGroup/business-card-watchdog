@@ -1450,6 +1450,42 @@ def test_service_multi_card_preclassification_drill_records_candidate_boxes(tmp_
     }
 
 
+def test_service_watch_dry_run_selection_drill_exports_sample_output(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        cache_dir=tmp_path / "cache",
+    )
+
+    payload = BusinessCardService(config).watch_dry_run_selection_drill()
+    run_id = payload["run_id"]
+
+    assert payload["schema"] == "business-card-watchdog.watch-dry-run-selection-drill.v1"
+    assert payload["state"] == "passed"
+    assert payload["private_sources_used"] is False
+    assert payload["files_processed"] == 0
+    assert payload["ocr_attempted"] == 0
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert payload["command_copy_ready"] is True
+    assert payload["command_copy_text"] == "watch --once --dry-run"
+    assert payload["packets"]["preflight"]["counts"]["backlog"] == 1
+    assert payload["packets"]["handoff"]["entries"][0]["configured_ref_display"] == "<redacted-path>"
+    assert payload["sample_outputs"]["raw_operator_response_stored"] is False
+    assert payload["sample_outputs"]["raw_acknowledgement_stored"] is False
+    sample_output_path = Path(payload["sample_outputs"]["watch_dry_run_selection_markdown_path"])
+    assert sample_output_path.exists()
+    sample_output = sample_output_path.read_text(encoding="utf-8")
+    assert "# Watch Dry-Run Selection Sample Output" in sample_output
+    assert "Command copy packet: `ready_for_operator_copy`" in sample_output
+    assert "private dry run approved" not in sample_output
+    artifacts = [json.loads(line) for line in (config.runs_dir / run_id / "artifacts.jsonl").read_text().splitlines()]
+    assert {artifact["kind"] for artifact in artifacts} >= {
+        "watch_dry_run_selection_sample_output",
+        "watch_dry_run_selection_drill",
+    }
+
+
 def test_service_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",

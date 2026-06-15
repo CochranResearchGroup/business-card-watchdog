@@ -57,6 +57,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_run_next_actions" in names
     assert "business_card_watchdog_offline_pilot_gap_audit" in names
     assert "business_card_watchdog_multi_card_preclassification_drill" in names
+    assert "business_card_watchdog_watch_dry_run_selection_drill" in names
     assert "business_card_watchdog_review_routing_drill" in names
     assert "business_card_watchdog_live_pilot_rehearsal_drill" in names
     assert "business_card_watchdog_child_replacement_readiness_drill" in names
@@ -216,6 +217,26 @@ def test_mcp_multi_card_preclassification_drill_records_candidate_boxes(tmp_path
     assert payload["live_sink_calls_made"] is False
     assert payload["writes_attempted"] == 0
     assert payload["network_calls_made"] == 0
+
+
+def test_mcp_watch_dry_run_selection_drill_exports_sample_output(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        cache_dir=tmp_path / "cache",
+    )
+
+    payload = call_tool("business_card_watchdog_watch_dry_run_selection_drill", {}, config=config)
+
+    assert payload["schema"] == "business-card-watchdog.watch-dry-run-selection-drill.v1"
+    assert payload["state"] == "passed"
+    assert payload["command_copy_ready"] is True
+    assert payload["files_processed"] == 0
+    assert payload["ocr_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    sample_output_path = Path(payload["sample_outputs"]["watch_dry_run_selection_markdown_path"])
+    assert sample_output_path.exists()
+    assert "private dry run approved" not in sample_output_path.read_text(encoding="utf-8")
 
 
 def test_mcp_offline_pilot_gap_audit_reports_remaining_boundaries(tmp_path: Path) -> None:
