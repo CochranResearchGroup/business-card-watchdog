@@ -613,6 +613,11 @@ class BusinessCardService:
                     if selected_run_id
                     else "runs list --json"
                 ),
+                "live_pilot_approval_packet": (
+                    f"runs live-pilot-approval-packet {selected_run_id} --json"
+                    if selected_run_id
+                    else "runs list --json"
+                ),
                 "live_pilot_validate_response": (
                     f"runs live-pilot-validate-response {selected_run_id} --response <operator-response> --json"
                     if selected_run_id
@@ -642,6 +647,11 @@ class BusinessCardService:
                     f"GET /runs/{selected_run_id}/live-pilot-handoff?write=false"
                     if selected_run_id
                     else "GET /runs/{run_id}/live-pilot-handoff?write=false"
+                ),
+                "live_pilot_approval_packet": (
+                    f"GET /runs/{selected_run_id}/live-pilot-approval-packet"
+                    if selected_run_id
+                    else "GET /runs/{run_id}/live-pilot-approval-packet"
                 ),
                 "live_pilot_validate_response": (
                     f"POST /runs/{selected_run_id}/live-pilot-operator-response-validation"
@@ -681,6 +691,10 @@ class BusinessCardService:
                     "arguments": {"run_id": selected_run_id, "write": False}
                     if selected_run_id
                     else {"run_id": "<run-id>", "write": False},
+                },
+                "live_pilot_approval_packet": {
+                    "tool": "business_card_watchdog_live_pilot_approval_packet",
+                    "arguments": {"run_id": selected_run_id} if selected_run_id else {"run_id": "<run-id>"},
                 },
                 "live_pilot_validate_response": {
                     "tool": "business_card_watchdog_live_pilot_operator_response_validation",
@@ -6282,6 +6296,61 @@ class BusinessCardService:
             )
             payload["handoff_path"] = str(handoff_path)
         return payload
+
+    def live_pilot_approval_packet(self, *, run_id: str, job_id: str | None = None) -> dict[str, Any]:
+        handoff = self.live_pilot_handoff(run_id=run_id, write=False)
+        entries: list[dict[str, Any]] = []
+        for template in list(handoff.get("operator_response_templates") or []):
+            if not isinstance(template, dict):
+                continue
+            if job_id and str(template.get("job_id") or "") != job_id:
+                continue
+            fields = dict(template.get("copyable_approval_fields") or {})
+            entries.append(
+                {
+                    "schema": "business-card-watchdog.live-pilot-approval-packet-entry.v1",
+                    "run_id": template.get("run_id"),
+                    "job_id": template.get("job_id"),
+                    "sink": fields.get("sink"),
+                    "operator": fields.get("operator"),
+                    "scope": fields.get("scope"),
+                    "next_action": template.get("next_action"),
+                    "operator_response_template": template.get("template"),
+                    "operator_prompt": template.get("prompt"),
+                    "copyable_approval_fields": fields,
+                    "validation_command": template.get("validation_command"),
+                    "validation_command_prefilled": template.get("validation_command_prefilled"),
+                    "next_explicit_command": template.get("command"),
+                }
+            )
+        state = "ready" if entries else "empty"
+        return {
+            "schema": "business-card-watchdog.live-pilot-approval-packet.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_id,
+            "job_id": job_id,
+            "entry_count": len(entries),
+            "entries": entries,
+            "operator_response_contract": handoff.get("operator_response_contract"),
+            "commands": {
+                "live_pilot_handoff": f"runs live-pilot-handoff {run_id} --no-write --json",
+                "approval_packet": (
+                    f"runs live-pilot-approval-packet {run_id} --job-id {job_id} --json"
+                    if job_id
+                    else f"runs live-pilot-approval-packet {run_id} --json"
+                ),
+            },
+            "explicit_stop_conditions": [
+                "This packet does not create selected_live_target.json.",
+                "Validate the operator response before selecting a live target.",
+                "Do not run live lookup, live write, or live readback from this approval packet.",
+                "Do not process private SyncThing images, run public-web search, or call paid enrichment from this packet.",
+            ],
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "creates_selected_live_target": False,
+        }
 
     def validate_live_pilot_operator_response(self, *, run_id: str, response: str) -> dict[str, Any]:
         parsed_response = _parse_operator_response_fields(response)

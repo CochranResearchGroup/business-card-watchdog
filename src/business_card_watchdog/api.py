@@ -248,6 +248,10 @@ def create_app(config_path: Path | None = None):
     def get_run_live_pilot_handoff(run_id: str, write: bool = True) -> dict[str, object]:
         return service().live_pilot_handoff(run_id=run_id, write=write)
 
+    @app.get("/runs/{run_id}/live-pilot-approval-packet")
+    def get_run_live_pilot_approval_packet(run_id: str, job_id: str | None = None) -> dict[str, object]:
+        return service().live_pilot_approval_packet(run_id=run_id, job_id=job_id)
+
     @app.post("/runs/{run_id}/live-pilot-operator-response-validation")
     def validate_run_live_pilot_operator_response(
         run_id: str,

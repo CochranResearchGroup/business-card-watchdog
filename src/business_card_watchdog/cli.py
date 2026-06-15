@@ -245,6 +245,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
         ("Review routing drill", "review_routing_drill"),
         ("Live pilot status", "live_pilot_status"),
         ("Live pilot handoff", "live_pilot_handoff"),
+        ("Live pilot approval packet", "live_pilot_approval_packet"),
         ("Live pilot validate response", "live_pilot_validate_response"),
     ]:
         command = commands.get(key)
@@ -259,6 +260,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
             ("Review routing drill", "review_routing_drill"),
             ("Live pilot status", "live_pilot_status"),
             ("Live pilot handoff", "live_pilot_handoff"),
+            ("Live pilot approval packet", "live_pilot_approval_packet"),
             ("Live pilot validate response", "live_pilot_validate_response"),
         ]:
             route = api_routes.get(key)
@@ -273,6 +275,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
             ("Review routing drill", "review_routing_drill"),
             ("Live pilot status", "live_pilot_status"),
             ("Live pilot handoff", "live_pilot_handoff"),
+            ("Live pilot approval packet", "live_pilot_approval_packet"),
             ("Live pilot validate response", "live_pilot_validate_response"),
         ]:
             tool_entry = mcp_tools.get(key)
@@ -534,6 +537,39 @@ def _render_live_pilot_operator_response_validation_text(payload: dict[str, obje
             f"live={grouped_sequence.get('live_call_step_count', 0)} "
             f"sink_writes={grouped_sequence.get('sink_write_step_count', 0)}"
         )
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    stops = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stops)}")
+    for condition in stops:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
+def _render_live_pilot_approval_packet_text(payload: dict[str, object]) -> str:
+    lines = [
+        f"Run: {payload.get('run_id')}",
+        f"State: {payload.get('state')}",
+        f"Approval entries: {payload.get('entry_count', 0)}",
+        f"Creates selected target: {payload.get('creates_selected_live_target', False)}",
+        f"Observed: writes={payload.get('writes_attempted', 0)} network={payload.get('network_calls_made', 0)}",
+    ]
+    entries = payload.get("entries") or []
+    rows = entries if isinstance(entries, list) else []
+    if rows:
+        lines.append("Approval packet entries:")
+        for entry in rows:
+            if isinstance(entry, dict):
+                lines.append(
+                    " - "
+                    f"{entry.get('job_id')} "
+                    f"sink={entry.get('sink')} "
+                    f"scope={entry.get('scope')} "
+                    f"next={entry.get('next_action')}"
+                )
+                if entry.get("operator_response_template"):
+                    lines.append(f"   Operator response: {entry.get('operator_response_template')}")
+                if entry.get("validation_command_prefilled"):
+                    lines.append(f"   Validate prefilled response: {entry.get('validation_command_prefilled')}")
     stop_conditions = payload.get("explicit_stop_conditions") or []
     stops = stop_conditions if isinstance(stop_conditions, list) else []
     lines.append(f"Stop conditions: {len(stops)}")
@@ -1252,6 +1288,10 @@ def build_parser() -> argparse.ArgumentParser:
     runs_live_pilot_handoff.add_argument("run_id")
     runs_live_pilot_handoff.add_argument("--no-write", action="store_true")
     runs_live_pilot_handoff.add_argument("--json", action="store_true")
+    runs_live_pilot_approval_packet = runs_sub.add_parser("live-pilot-approval-packet")
+    runs_live_pilot_approval_packet.add_argument("run_id")
+    runs_live_pilot_approval_packet.add_argument("--job-id", default=None)
+    runs_live_pilot_approval_packet.add_argument("--json", action="store_true")
     runs_live_pilot_validate_response = runs_sub.add_parser("live-pilot-validate-response")
     runs_live_pilot_validate_response.add_argument("run_id")
     runs_live_pilot_validate_response.add_argument("--response", required=True)
@@ -1631,10 +1671,15 @@ def main(argv: list[str] | None = None) -> int:
             payload = service.live_pilot_status(run_id=args.run_id, write=not args.no_write)
         elif args.runs_command == "live-pilot-handoff":
             payload = service.live_pilot_handoff(run_id=args.run_id, write=not args.no_write)
+        elif args.runs_command == "live-pilot-approval-packet":
+            payload = service.live_pilot_approval_packet(run_id=args.run_id, job_id=args.job_id)
         elif args.runs_command == "live-pilot-validate-response":
             payload = service.validate_live_pilot_operator_response(run_id=args.run_id, response=args.response)
         else:
             payload = service.get_run(args.run_id)
+        if args.runs_command == "live-pilot-approval-packet" and not args.json:
+            print(_render_live_pilot_approval_packet_text(payload), end="")
+            return 0
         if args.runs_command == "live-pilot-validate-response" and not args.json:
             print(_render_live_pilot_operator_response_validation_text(payload), end="")
             return 0

@@ -843,6 +843,9 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     assert dashboard["commands"]["review_queue"] == f"reviews list --run-id {run_id} --state all --json"
     assert dashboard["commands"]["next_actions"] == f"actions next --run-id {run_id} --json"
     assert dashboard["commands"]["run_next_safe"] == f"actions run-next --run-id {run_id} --limit 10 --json"
+    assert dashboard["commands"]["live_pilot_approval_packet"] == (
+        f"runs live-pilot-approval-packet {run_id} --json"
+    )
     assert dashboard["commands"]["live_pilot_validate_response"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
@@ -857,6 +860,10 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     assert dashboard["mcp_tools"]["live_pilot_handoff"] == {
         "tool": "business_card_watchdog_live_pilot_handoff",
         "arguments": {"run_id": run_id, "write": False},
+    }
+    assert dashboard["mcp_tools"]["live_pilot_approval_packet"] == {
+        "tool": "business_card_watchdog_live_pilot_approval_packet",
+        "arguments": {"run_id": run_id},
     }
     assert dashboard["mcp_tools"]["review_routing_drill"] == {
         "tool": "business_card_watchdog_review_routing_drill",
@@ -2774,6 +2781,34 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert handoff["writes_attempted"] == 0
     assert handoff["network_calls_made"] == 0
     assert Path(handoff["handoff_path"]).exists()
+
+    approval_packet = service.live_pilot_approval_packet(run_id=run_id, job_id=job_id)
+    assert approval_packet["schema"] == "business-card-watchdog.live-pilot-approval-packet.v1"
+    assert approval_packet["state"] == "ready"
+    assert approval_packet["run_id"] == run_id
+    assert approval_packet["job_id"] == job_id
+    assert approval_packet["entry_count"] == 1
+    assert approval_packet["creates_selected_live_target"] is False
+    assert approval_packet["writes_attempted"] == 0
+    assert approval_packet["network_calls_made"] == 0
+    assert approval_packet["commands"]["approval_packet"] == (
+        f"runs live-pilot-approval-packet {run_id} --job-id {job_id} --json"
+    )
+    approval_entry = approval_packet["entries"][0]
+    assert approval_entry["schema"] == "business-card-watchdog.live-pilot-approval-packet-entry.v1"
+    assert approval_entry["job_id"] == job_id
+    assert approval_entry["sink"] == "google_contacts"
+    assert approval_entry["operator"] == "tester"
+    assert approval_entry["scope"] == "lookup"
+    assert approval_entry["operator_response_template"] == handoff["operator_response_templates"][0]["template"]
+    assert approval_entry["copyable_approval_fields"] == handoff["operator_response_templates"][0][
+        "copyable_approval_fields"
+    ]
+    assert approval_entry["validation_command_prefilled"] == handoff["operator_response_templates"][0][
+        "validation_command_prefilled"
+    ]
+    assert approval_entry["next_explicit_command"] == handoff["operator_response_templates"][0]["command"]
+    assert "does not create selected_live_target.json" in approval_packet["explicit_stop_conditions"][0]
 
     response = (
         f"run_id={run_id} job_id={job_id} sink=google_contacts "

@@ -30,6 +30,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_pilot_readiness_report" in names
     assert "business_card_watchdog_live_pilot_status" in names
     assert "business_card_watchdog_live_pilot_handoff" in names
+    assert "business_card_watchdog_live_pilot_approval_packet" in names
     assert "business_card_watchdog_live_pilot_operator_response_validation" in names
     assert "business_card_watchdog_next_actions" in names
     assert "business_card_watchdog_run_next_actions" in names
@@ -249,6 +250,11 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
         {"run_id": run_id, "write": False},
         config=config,
     )
+    approval_packet = call_tool(
+        "business_card_watchdog_live_pilot_approval_packet",
+        {"run_id": run_id, "job_id": job_id},
+        config=config,
+    )
     operator_response_validation = call_tool(
         "business_card_watchdog_live_pilot_operator_response_validation",
         {
@@ -402,6 +408,9 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert operator_dashboard["commands"]["live_pilot_validate_response"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
+    assert operator_dashboard["commands"]["live_pilot_approval_packet"] == (
+        f"runs live-pilot-approval-packet {run_id} --json"
+    )
     assert operator_dashboard["safe_next_actions"][3]["action"] == "inspect_live_pilot_status"
     assert operator_dashboard["safe_next_actions"][3]["command"] == (
         f"runs live-pilot-status {run_id} --no-write --json"
@@ -419,6 +428,10 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert operator_dashboard["mcp_tools"]["live_pilot_validate_response"] == {
         "tool": "business_card_watchdog_live_pilot_operator_response_validation",
         "arguments": {"run_id": run_id, "response": "<operator-response>"},
+    }
+    assert operator_dashboard["mcp_tools"]["live_pilot_approval_packet"] == {
+        "tool": "business_card_watchdog_live_pilot_approval_packet",
+        "arguments": {"run_id": run_id},
     }
     assert operator_dashboard["next_action_summary"]["by_action"] == {"review_contact": 1}
     assert operator_dashboard["live_pilot_handoff_summary"]["operator_required_count"] == 1
@@ -714,6 +727,18 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
         f"--response 'run_id={run_id} job_id={job_id} sink=google_contacts "
         "operator=mcp-test scope=all safety_confirmation=<tenant-profile-account-confirmation>' --json"
     )
+    assert approval_packet["schema"] == "business-card-watchdog.live-pilot-approval-packet.v1"
+    assert approval_packet["state"] == "ready"
+    assert approval_packet["entry_count"] == 1
+    assert approval_packet["entries"][0]["job_id"] == job_id
+    assert approval_packet["entries"][0]["operator"] == "mcp-test"
+    assert approval_packet["entries"][0]["scope"] == "all"
+    assert approval_packet["entries"][0]["validation_command_prefilled"] == live_handoff["entries"][0]["commands"][
+        "validate_operator_response_prefilled"
+    ]
+    assert approval_packet["creates_selected_live_target"] is False
+    assert approval_packet["writes_attempted"] == 0
+    assert approval_packet["network_calls_made"] == 0
     assert operator_response_validation["schema"] == (
         "business-card-watchdog.live-pilot-operator-response-validation.v1"
     )

@@ -42,6 +42,9 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert operator_dashboard["schema"] == "business-card-watchdog.operator-dashboard.v1"
     assert operator_dashboard["selected_run_id"] == run_id
     assert operator_dashboard["commands"]["live_pilot_status"] == f"runs live-pilot-status {run_id} --no-write --json"
+    assert operator_dashboard["commands"]["live_pilot_approval_packet"] == (
+        f"runs live-pilot-approval-packet {run_id} --json"
+    )
     assert operator_dashboard["safe_next_actions"][3]["action"] == "inspect_live_pilot_status"
     assert operator_dashboard["safe_next_actions"][3]["command"] == (
         f"runs live-pilot-status {run_id} --no-write --json"
@@ -76,6 +79,9 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert operator_dashboard["api_routes"]["live_pilot_validate_response"] == (
         f"POST /runs/{run_id}/live-pilot-operator-response-validation"
     )
+    assert operator_dashboard["api_routes"]["live_pilot_approval_packet"] == (
+        f"GET /runs/{run_id}/live-pilot-approval-packet"
+    )
     assert operator_dashboard["mcp_tools"]["next_actions"] == {
         "tool": "business_card_watchdog_next_actions",
         "arguments": {"run_id": run_id, "limit": 20},
@@ -83,6 +89,10 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert operator_dashboard["mcp_tools"]["live_pilot_validate_response"] == {
         "tool": "business_card_watchdog_live_pilot_operator_response_validation",
         "arguments": {"run_id": run_id, "response": "<operator-response>"},
+    }
+    assert operator_dashboard["mcp_tools"]["live_pilot_approval_packet"] == {
+        "tool": "business_card_watchdog_live_pilot_approval_packet",
+        "arguments": {"run_id": run_id},
     }
     assert operator_dashboard["writes_attempted"] == 0
     assert operator_dashboard["network_calls_made"] == 0
@@ -287,6 +297,23 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert dashboard_packet["forbidden_live_or_sink_write_from_dashboard"] is True
     assert dashboard_packet["writes_attempted"] == 0
     assert dashboard_packet["network_calls_made"] == 0
+    approval_packet = client.get(
+        f"/runs/{run_id}/live-pilot-approval-packet",
+        params={"job_id": job_id},
+    ).json()
+    assert approval_packet["schema"] == "business-card-watchdog.live-pilot-approval-packet.v1"
+    assert approval_packet["state"] == "ready"
+    assert approval_packet["entry_count"] == 1
+    assert approval_packet["entries"][0]["job_id"] == job_id
+    assert approval_packet["entries"][0]["sink"] == "google_contacts"
+    assert approval_packet["entries"][0]["operator"] == "api-test"
+    assert approval_packet["entries"][0]["scope"] == "lookup"
+    assert approval_packet["entries"][0]["validation_command_prefilled"] == live_handoff["entries"][0]["commands"][
+        "validate_operator_response_prefilled"
+    ]
+    assert approval_packet["creates_selected_live_target"] is False
+    assert approval_packet["writes_attempted"] == 0
+    assert approval_packet["network_calls_made"] == 0
     response = (
         f"run_id={run_id} job_id={job_id} sink=google_contacts "
         "operator=api-test scope=lookup safety_confirmation=fixture contact is safe for google contacts test profile"

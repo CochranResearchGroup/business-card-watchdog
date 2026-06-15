@@ -856,6 +856,58 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert "Do not run live lookup, live write, or live readback" in text_handoff
     assert "{" not in text_handoff
 
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "live-pilot-approval-packet",
+                run_id,
+                "--job-id",
+                job_id,
+                "--json",
+            ]
+        )
+        == 0
+    )
+    approval_packet = json.loads(capsys.readouterr().out)
+    assert approval_packet["schema"] == "business-card-watchdog.live-pilot-approval-packet.v1"
+    assert approval_packet["state"] == "ready"
+    assert approval_packet["entry_count"] == 1
+    assert approval_packet["entries"][0]["job_id"] == job_id
+    assert approval_packet["entries"][0]["operator"] == "tester"
+    assert approval_packet["entries"][0]["scope"] == "lookup"
+    assert approval_packet["entries"][0]["validation_command_prefilled"] == handoff["entries"][0]["commands"][
+        "validate_operator_response_prefilled"
+    ]
+    assert approval_packet["creates_selected_live_target"] is False
+    assert approval_packet["writes_attempted"] == 0
+    assert approval_packet["network_calls_made"] == 0
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "live-pilot-approval-packet",
+                run_id,
+                "--job-id",
+                job_id,
+            ]
+        )
+        == 0
+    )
+    approval_text = capsys.readouterr().out
+    assert "State: ready" in approval_text
+    assert "Approval entries: 1" in approval_text
+    assert f" - {job_id} sink=google_contacts scope=lookup next=request_live_lookup_smoke" in approval_text
+    assert "Validate prefilled response: runs live-pilot-validate-response" in approval_text
+    assert "Creates selected target: False" in approval_text
+    assert "Stop conditions: 4" in approval_text
+    assert "{" not in approval_text
+
     response = (
         f"run_id={run_id} job_id={job_id} sink=google_contacts "
         "operator=tester scope=lookup safety_confirmation=fixture contact is safe for google contacts test profile"
