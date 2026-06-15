@@ -137,6 +137,8 @@ def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) 
     assert payload["next_action_summary"]["by_action"] == {"review_contact": 1}
     assert payload["live_pilot_handoff_summary"]["action_counts"] == {"no_live_candidate": 1}
     assert payload["live_pilot_handoff_summary"]["operator_required_count"] == 0
+    assert payload["latest_review_routing_drill"]["state"] == "not_run"
+    assert payload["latest_review_routing_drill"]["has_drill"] is False
     assert len(payload["live_pilot_summary"]["explicit_stop_conditions"]) == 3
     assert "Do not run live lookup, live write, or live readback from this status report." in (
         payload["live_pilot_summary"]["explicit_stop_conditions"]
@@ -170,6 +172,7 @@ def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) 
     assert f"Operator dashboard: business_card_watchdog_operator_dashboard args=run_id={run_id}" in text
     assert f"Next actions: business_card_watchdog_next_actions args=limit=20, run_id={run_id}" in text
     assert "Review routing drill: business_card_watchdog_review_routing_drill" in text
+    assert "Latest review routing drill: not_run run=none readback=none manual=none" in text
     assert f"Live pilot status: business_card_watchdog_live_pilot_status args=run_id={run_id}, write=False" in text
     assert "Safe next actions: 6" in text
     assert f"inspect_live_pilot_status: runs live-pilot-status {run_id} --no-write --json" in text
@@ -217,6 +220,7 @@ def test_cli_service_recovery_reports_status_shape(tmp_path: Path, capsys) -> No
     assert payload["commands"]["review_routing_drill"] == (
         f"bcw --config {config_path} drills review-routing --json"
     )
+    assert payload["latest_review_routing_drill"]["state"] == "not_run"
     assert any(action["action"] == "inspect_live_pilot_status" for action in payload["safe_next_actions"])
     assert any(action["action"] == "inspect_live_pilot_handoff" for action in payload["safe_next_actions"])
     assert any(action["action"] == "run_fixture_review_routing_drill" for action in payload["safe_next_actions"])
@@ -225,6 +229,7 @@ def test_cli_service_recovery_reports_status_shape(tmp_path: Path, capsys) -> No
 
     assert main(["--config", str(config_path), "service", "recovery", "--run-id", run_id]) == 0
     text = capsys.readouterr().out
+    assert "Latest review routing drill: not_run run=none readback=none" in text
     assert "Service recovery:" in text
     assert f"Run: {run_id}" in text
     assert "Restart: systemctl --user restart business-card-watchdog.service" in text

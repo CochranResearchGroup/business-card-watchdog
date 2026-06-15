@@ -754,6 +754,14 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     assert dashboard["live_pilot_handoff_summary"]["operator_response_templates"] == []
     assert dashboard["live_pilot_handoff_summary"]["writes_attempted"] == 0
     assert dashboard["live_pilot_handoff_summary"]["network_calls_made"] == 0
+    assert dashboard["latest_review_routing_drill"]["schema"] == (
+        "business-card-watchdog.latest-review-routing-drill.v1"
+    )
+    assert dashboard["latest_review_routing_drill"]["state"] == "not_run"
+    assert dashboard["latest_review_routing_drill"]["has_drill"] is False
+    assert dashboard["latest_review_routing_drill"]["commands"] == {
+        "run_fixture_review_routing_drill": "drills review-routing --json"
+    }
     assert dashboard["commands"]["review_queue"] == f"reviews list --run-id {run_id} --state all --json"
     assert dashboard["commands"]["next_actions"] == f"actions next --run-id {run_id} --json"
     assert dashboard["commands"]["run_next_safe"] == f"actions run-next --run-id {run_id} --limit 10 --json"
@@ -804,6 +812,39 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     }
     assert dashboard["writes_attempted"] == 0
     assert dashboard["network_calls_made"] == 0
+
+
+def test_service_dashboard_and_recovery_report_latest_review_routing_drill(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        cache_dir=tmp_path / "cache",
+    )
+    service = BusinessCardService(config)
+    drill = service.review_routing_drill()
+
+    dashboard = service.operator_dashboard(run_id=drill["run_id"])
+    recovery = service.service_recovery_report(run_id=drill["run_id"])
+
+    for payload in (dashboard, recovery):
+        latest = payload["latest_review_routing_drill"]
+        assert latest["schema"] == "business-card-watchdog.latest-review-routing-drill.v1"
+        assert latest["state"] == "passed"
+        assert latest["has_drill"] is True
+        assert latest["selected_run_matches"] is True
+        assert latest["run_id"] == drill["run_id"]
+        assert latest["job_id"] == drill["job_id"]
+        assert latest["agent_readback_state"] == "passed"
+        assert latest["next_manual_boundary"] == "decide_sink_apply"
+        assert latest["artifact_check_count"] == 7
+        assert latest["artifact_check_passed_count"] == 7
+        assert latest["safe_action_counts"] == {"executed": 7, "skipped": 1}
+        assert latest["private_sources_used"] is False
+        assert latest["public_web_search_used"] is False
+        assert latest["paid_enrichment_used"] is False
+        assert latest["live_sink_calls_made"] is False
+        assert latest["writes_attempted"] == 0
+        assert latest["network_calls_made"] == 0
 
 
 def test_service_sink_readiness_reports_apply_policy(tmp_path: Path) -> None:

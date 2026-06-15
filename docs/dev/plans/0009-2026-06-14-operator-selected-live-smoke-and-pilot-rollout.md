@@ -2210,6 +2210,32 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed; index is up to date.
 
+### Slice 0009-A112 | 2026-06-15 | Latest Drill Dashboard Readback
+
+Implemented:
+
+- Added `business-card-watchdog.latest-review-routing-drill.v1`.
+- Operator dashboard and service recovery now summarize the latest run-level `review_routing_drill.json` artifact.
+- The summary reports latest drill state, run/job IDs, selected-run match, agent readback state, manual boundary, artifact-check counts, safe action counts, zero write/network counters, and no-private/no-live flags.
+- CLI dashboard and recovery text output now render the latest review/routing drill state.
+- Service and CLI coverage now assert both the no-drill state and the passed synthetic-drill readback.
+
+Safety:
+
+- This was read-only drill evidence discovery only.
+- It did not process configured/private SyncThing inputs, run public-web search, call paid enrichment, validate a real operator response, create or modify `selected_live_target.json`, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_operator_dashboard_composes_no_live_readiness tests/test_service.py::test_service_dashboard_and_recovery_report_latest_review_routing_drill tests/test_service.py::test_service_recovery_report_composes_status_and_recovery_commands tests/test_cli_surfaces.py::test_cli_operator_dashboard_reports_no_live_summary tests/test_cli_surfaces.py::test_cli_service_recovery_reports_status_shape tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 7 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_service.py tests/test_cli_surfaces.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 230 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
 ### Slice 0009-A111 | 2026-06-15 | Drill Agent Readback
 
 Implemented:

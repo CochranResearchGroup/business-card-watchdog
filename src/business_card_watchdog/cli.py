@@ -187,6 +187,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
     phase = dict(payload.get("phase_dashboard_summary") or {})
     live = dict(payload.get("live_pilot_summary") or {})
     live_handoff = dict(payload.get("live_pilot_handoff_summary") or {})
+    latest_drill = dict(payload.get("latest_review_routing_drill") or {})
     review_counts = dict(payload.get("review_counts") or {})
     next_actions = dict(payload.get("next_action_summary") or {})
     commands = dict(payload.get("commands") or {})
@@ -217,6 +218,11 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
         f"state={live_handoff.get('state') or 'none'} "
         f"operator_required={live_handoff.get('operator_required_count', 0)} "
         f"response_templates={live_handoff.get('operator_response_template_count', 0)}",
+        "Latest review routing drill: "
+        f"{latest_drill.get('state') or 'not_run'} "
+        f"run={latest_drill.get('run_id') or 'none'} "
+        f"readback={latest_drill.get('agent_readback_state') or 'none'} "
+        f"manual={latest_drill.get('next_manual_boundary') or 'none'}",
         f"Observed: writes={payload.get('writes_attempted', 0)} network={payload.get('network_calls_made', 0)}",
         "Commands:",
     ]
@@ -554,6 +560,7 @@ def _render_runtime_readiness_text(payload: dict[str, object]) -> str:
 
 def _render_service_recovery_text(payload: dict[str, object]) -> str:
     commands = dict(payload.get("commands") or {})
+    latest_drill = dict(payload.get("latest_review_routing_drill") or {})
     blocked = payload.get("blocked_reasons") or []
     safe_actions = payload.get("safe_next_actions") or []
     explicit_actions = payload.get("explicit_operator_actions") or []
@@ -565,6 +572,10 @@ def _render_service_recovery_text(payload: dict[str, object]) -> str:
         f"Blocked reasons: {len(blocked) if isinstance(blocked, list) else 0}",
         f"Safe next actions: {len(safe_actions) if isinstance(safe_actions, list) else 0}",
         f"Explicit operator actions: {len(explicit_actions) if isinstance(explicit_actions, list) else 0}",
+        "Latest review routing drill: "
+        f"{latest_drill.get('state') or 'not_run'} "
+        f"run={latest_drill.get('run_id') or 'none'} "
+        f"readback={latest_drill.get('agent_readback_state') or 'none'}",
         f"Install: {commands.get('install')}",
         f"Start: {commands.get('start')}",
         f"Status: {commands.get('status')}",

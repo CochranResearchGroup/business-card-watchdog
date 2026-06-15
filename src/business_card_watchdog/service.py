@@ -349,12 +349,94 @@ class BusinessCardService:
             latest[str(row["run_id"])] = row
         return sorted(latest.values(), key=lambda row: str(row.get("updated_at", "")), reverse=True)
 
+    def latest_review_routing_drill(self, *, selected_run_id: str | None = None) -> dict[str, Any]:
+        summary: dict[str, Any] = {
+            "schema": "business-card-watchdog.latest-review-routing-drill.v1",
+            "state": "not_run",
+            "has_drill": False,
+            "selected_run_id": selected_run_id,
+            "selected_run_matches": False,
+            "run_id": None,
+            "job_id": None,
+            "drill_path": None,
+            "generated_at": None,
+            "agent_readback_state": None,
+            "next_manual_boundary": None,
+            "expected_manual_boundary": None,
+            "artifact_check_count": 0,
+            "artifact_check_passed_count": 0,
+            "safe_action_counts": {"executed": 0, "skipped": 0},
+            "private_sources_used": False,
+            "public_web_search_used": False,
+            "paid_enrichment_used": False,
+            "live_sink_calls_made": False,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "commands": {"run_fixture_review_routing_drill": "drills review-routing --json"},
+            "explicit_stop_conditions": [
+                "Latest drill readback is fixture-only evidence.",
+                "Do not treat a passed fixture drill as approval for private inputs or live sinks.",
+            ],
+        }
+        candidates: list[dict[str, Any]] = []
+        for run in self.list_runs():
+            run_id = str(run.get("run_id") or "")
+            if not run_id:
+                continue
+            for artifact in self.list_artifacts(run_id):
+                if artifact.get("kind") == "review_routing_drill" and artifact.get("job_id") == "__run__":
+                    candidates.append({**artifact, "run_id": run_id})
+        if not candidates:
+            return summary
+
+        candidates.sort(key=lambda row: str(row.get("created_at") or ""), reverse=True)
+        latest = candidates[0]
+        drill_path = str(latest.get("path") or "")
+        payload = _read_json_file(Path(drill_path))
+        if payload is None:
+            return {
+                **summary,
+                "state": "unreadable",
+                "has_drill": True,
+                "run_id": latest.get("run_id"),
+                "drill_path": drill_path,
+                "selected_run_matches": bool(selected_run_id and latest.get("run_id") == selected_run_id),
+            }
+
+        readback = dict(payload.get("agent_loop_readback") or {})
+        artifact_checks = [check for check in readback.get("artifact_checks") or [] if isinstance(check, dict)]
+        passed_checks = [check for check in artifact_checks if check.get("exists")]
+        readback_state = str(readback.get("state") or "unknown")
+        return {
+            **summary,
+            "state": "passed" if readback_state == "passed" else "needs_attention",
+            "has_drill": True,
+            "selected_run_matches": bool(selected_run_id and payload.get("run_id") == selected_run_id),
+            "run_id": payload.get("run_id"),
+            "job_id": payload.get("job_id"),
+            "drill_path": drill_path,
+            "generated_at": payload.get("generated_at"),
+            "agent_readback_state": readback_state,
+            "next_manual_boundary": readback.get("next_manual_boundary"),
+            "expected_manual_boundary": readback.get("expected_manual_boundary"),
+            "artifact_check_count": len(artifact_checks),
+            "artifact_check_passed_count": len(passed_checks),
+            "safe_action_counts": readback.get("safe_action_counts") or {"executed": 0, "skipped": 0},
+            "private_sources_used": bool(payload.get("private_sources_used")),
+            "public_web_search_used": bool(payload.get("public_web_search_used")),
+            "paid_enrichment_used": bool(payload.get("paid_enrichment_used")),
+            "live_sink_calls_made": bool(payload.get("live_sink_calls_made")),
+            "writes_attempted": _int(payload.get("writes_attempted")),
+            "network_calls_made": _int(payload.get("network_calls_made")),
+        }
+
     def operator_dashboard(self, *, run_id: str | None = None) -> dict[str, Any]:
         status = self.status()
         runtime = self.runtime_readiness()
         runs = self.list_runs()
         selected_run_id = run_id or (str(runs[0]["run_id"]) if runs else None)
         recovery = self.service_recovery_report(run_id=selected_run_id)
+        latest_drill = self.latest_review_routing_drill(selected_run_id=selected_run_id)
         run_summary: dict[str, Any] | None = None
         phase_dashboard: dict[str, Any] | None = None
         review_counts: dict[str, int] = {}
@@ -478,6 +560,7 @@ class BusinessCardService:
             "next_action_summary": next_action_summary,
             "live_pilot_summary": live_pilot_summary,
             "live_pilot_handoff_summary": live_pilot_handoff_summary,
+            "latest_review_routing_drill": latest_drill,
             "blocked_reasons": blocked_reasons,
             "commands": {
                 "operator_dashboard": (
@@ -5126,6 +5209,7 @@ class BusinessCardService:
         watch = dict(readiness["watch"])
         runs = self.list_runs()
         selected_run_id = run_id or (str(runs[0]["run_id"]) if runs else None)
+        latest_drill = self.latest_review_routing_drill(selected_run_id=selected_run_id)
         run_summary: dict[str, Any] | None = None
         phase_report: dict[str, Any] | None = None
         pilot_readiness: dict[str, Any] | None = None
@@ -5261,6 +5345,7 @@ class BusinessCardService:
             "phase_dashboard_summary": (phase_report or {}).get("dashboard_summary") if phase_report else None,
             "pilot_readiness": pilot_readiness,
             "next_actions": (next_actions or {}).get("actions", []) if next_actions else [],
+            "latest_review_routing_drill": latest_drill,
             "blocked_reasons": blocked_reasons,
             "commands": commands,
             "safe_next_actions": safe_next_actions,
