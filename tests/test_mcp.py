@@ -3,14 +3,14 @@ import json
 from io import StringIO
 from pathlib import Path
 
-from business_card_watchdog.config import AppConfig, EnrichmentConfig, EnrichmentProviderConfig, SinkConfig
+from business_card_watchdog.config import AppConfig, EnrichmentConfig, EnrichmentProviderConfig, SinkConfig, WatchConfig
 from business_card_watchdog.contact import build_contact_candidate
 from business_card_watchdog.mcp import call_tool, tool_manifest
 from business_card_watchdog.mcp_server import serve_jsonl
 from business_card_watchdog.orchestrator import BatchOrchestrator
 from business_card_watchdog.service import BusinessCardService
 
-from synthetic_fixtures import SyntheticSkillAdapter, write_multi_card_image
+from synthetic_fixtures import SyntheticSkillAdapter, write_multi_card_image, write_synthetic_image
 from test_service import make_recorded_run
 
 
@@ -24,6 +24,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_live_readiness_audit" in names
     assert "business_card_watchdog_live_selection_requirements" in names
     assert "business_card_watchdog_operator_selected_live_smoke_preflight" in names
+    assert "business_card_watchdog_watch_backlog_preflight" in names
     assert "business_card_watchdog_live_selection_packet" in names
     assert "business_card_watchdog_runs_list" in names
     assert "business_card_watchdog_job_show" in names
@@ -119,6 +120,31 @@ def test_manifest_has_process_tool() -> None:
     assert "resolve_duplicate" in review_tool["input_schema"]["properties"]["action"]["enum"]
     assert "reject_not_card" in review_tool["input_schema"]["properties"]["action"]["enum"]
     assert "skip" in review_tool["input_schema"]["properties"]["action"]["enum"]
+
+
+def test_mcp_watch_backlog_preflight_redacts_private_source_paths(tmp_path: Path) -> None:
+    source = tmp_path / "Private Phone Camera"
+    write_synthetic_image(source / "private-card-photo.png")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        watch=WatchConfig(inputs=[str(source)], settle_seconds=0.0),
+    )
+
+    payload = call_tool(
+        "business_card_watchdog_watch_backlog_preflight",
+        {"write": False},
+        config=config,
+    )
+    serialized = json.dumps(payload, sort_keys=True)
+
+    assert payload["schema"] == "business-card-watchdog.watch-backlog-preflight.v1"
+    assert payload["counts"]["backlog"] == 1
+    assert payload["runtime_artifact_written"] is False
+    assert payload["commands"]["watch_backlog_preflight"] == "watch-backlog-preflight --json"
+    assert payload["safe_next_actions"][0]["action"] == "operator_explicit_watch_dry_run"
+    assert str(source) not in serialized
+    assert "private-card-photo.png" not in serialized
 
 
 def test_mcp_multi_card_preclassification_drill_records_candidate_boxes(tmp_path: Path) -> None:

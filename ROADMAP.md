@@ -6,9 +6,9 @@ Build a robust, installable business-card ingestion system that can process arbi
 
 Product authority: `PRODUCT_SPEC.md`.
 Latest completed control-plane plan: `docs/dev/plans/0008-2026-06-14-runtime-installation-and-pilot-operations.md`.
-Latest completed offline product-hardening plan: `docs/dev/plans/0037-2026-06-15-operator-selected-preflight-sample-output-docs.md`.
+Latest completed offline product-hardening plan: `docs/dev/plans/0038-2026-06-15-watch-backlog-preflight.md`.
 Next production plan: `docs/dev/plans/0009-2026-06-14-operator-selected-live-smoke-and-pilot-rollout.md`.
-Next offline boundary: use the preflight sample and live-pilot rehearsal sample to choose one explicit run/job/sink/operator scope.
+Next offline boundary: use `watch-backlog-preflight --json` and the preflight sample output to choose one explicit private-source watch dry run or one run/job/sink/operator scope.
 Next production boundary: operator-selected live smoke/pilot rollout for one run, one job, and one sink at a time.
 
 ## Milestones
@@ -43,7 +43,7 @@ Status evidence: Plans 0004 and 0005 are reconciled/closed for review queues, re
 - Add user-scope service install helpers.
 - Add health/status commands for watcher readiness.
 
-Status evidence: Plan 0008 closed runtime readiness, fixture-backed watch dry-run proof, service recovery reporting, and user-scope runtime operations. Real SyncThing/private source processing still requires explicit operator action.
+Status evidence: Plan 0008 closed runtime readiness, fixture-backed watch dry-run proof, service recovery reporting, and user-scope runtime operations. Plan 0038 added a redacted watch backlog preflight for configured inputs. Real SyncThing/private source processing still requires explicit operator action.
 
 ### M4 | Live Sink Adapters | READY_FOR_OPERATOR_SELECTED_PILOTS
 

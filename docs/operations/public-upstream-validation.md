@@ -418,3 +418,18 @@ Validation:
 - `uv build --out-dir dist` built source and wheel distributions.
 - `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
 - `codegraph sync && codegraph status` passed; index is up to date.
+
+## 2026-06-15 Local Gate For Plan 0038
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_watch_backlog_preflight_redacts_private_source_paths tests/test_service.py::test_service_watch_backlog_preflight_can_preview_without_writing tests/test_watcher.py::test_watch_backlog_preflight_cli_outputs_redacted_counts tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_watch_backlog_preflight_redacts_private_source_paths -q` passed with 6 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/api.py src/business_card_watchdog/mcp.py tests/test_service.py tests/test_watcher.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 283 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `rg -n "watch-backlog-preflight|watch_backlog_preflight|Watch backlog preflight|business_card_watchdog_watch_backlog_preflight" README.md ROADMAP.md RUNBOOK.md docs src tests` passed.
+- `uv build --out-dir dist` built source and wheel distributions.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `codegraph sync && codegraph status` passed; index is up to date.
+- `.venv/bin/bcw watch-backlog-preflight --no-write --json` passed against the user config and reported `$fsr:sync_phone` as one redacted input with 5 backlog items, 0 unsettled items, no last error, no runtime artifact write, no OCR, no file processing, and no network calls.

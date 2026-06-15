@@ -5,11 +5,12 @@ import json
 from io import StringIO
 from pathlib import Path
 
-from business_card_watchdog.config import AppConfig, EnrichmentConfig, EnrichmentProviderConfig, SinkConfig
+from business_card_watchdog.config import AppConfig, EnrichmentConfig, EnrichmentProviderConfig, SinkConfig, WatchConfig
 from business_card_watchdog.contact import build_contact_candidate
 from business_card_watchdog.ledger import RunLedger
 from business_card_watchdog.models import CardJob
 from business_card_watchdog.service import BusinessCardService
+from synthetic_fixtures import write_synthetic_image
 
 
 def make_recorded_run(config: AppConfig, run_id: str = "run-001") -> tuple[str, str]:
@@ -160,6 +161,63 @@ def test_service_recovery_report_composes_status_and_recovery_commands(tmp_path:
         for action in report["safe_next_actions"]
     )
     assert "Do not scan or process private SyncThing images from generic recovery." in report["explicit_stop_conditions"]
+
+
+def test_service_watch_backlog_preflight_redacts_private_source_paths(tmp_path: Path) -> None:
+    source = tmp_path / "Private Phone Camera"
+    write_synthetic_image(source / "private-card-photo.png")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        watch=WatchConfig(inputs=[str(source)], settle_seconds=0.0),
+    )
+
+    payload = BusinessCardService(config).watch_backlog_preflight(write=True)
+    serialized = json.dumps(payload, sort_keys=True)
+
+    assert payload["schema"] == "business-card-watchdog.watch-backlog-preflight.v1"
+    assert payload["state"] == "ready_for_operator_selected_dry_run"
+    assert payload["recommended_next_action"] == "operator_explicit_watch_dry_run"
+    assert payload["counts"]["backlog"] == 1
+    assert payload["counts"]["unsettled"] == 0
+    assert payload["inputs"] == [
+        {
+            "input_ref": "input_0",
+            "configured_ref_kind": "path",
+            "configured_ref_display": "<redacted-path>",
+        }
+    ]
+    assert payload["private_paths_redacted"] is True
+    assert payload["private_filenames_redacted"] is True
+    assert payload["files_processed"] == 0
+    assert payload["ocr_attempted"] == 0
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert payload["runtime_artifact_written"] is True
+    assert Path(payload["preflight_path"]).exists()
+    assert str(source) not in serialized
+    assert "private-card-photo.png" not in serialized
+    assert payload["safe_next_actions"][0]["requires_explicit_operator_action"] is True
+    assert "This preflight does not process watched files." in payload["explicit_stop_conditions"][0]
+
+
+def test_service_watch_backlog_preflight_can_preview_without_writing(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        watch=WatchConfig(inputs=["$fsr:sync_phone"], settle_seconds=0.0),
+        path_aliases={"sync_phone": str(tmp_path / "missing")},
+    )
+
+    payload = BusinessCardService(config).watch_backlog_preflight(write=False)
+
+    assert payload["state"] == "blocked"
+    assert payload["last_error_present"] is True
+    assert "missing" not in json.dumps(payload, sort_keys=True)
+    assert payload["inputs"][0]["configured_ref_display"] == "$fsr:sync_phone"
+    assert payload["runtime_artifact_written"] is False
+    assert payload["preflight_path"] is None
+    assert not (config.data_dir / "watch_backlog_preflight.json").exists()
 
 
 def test_service_live_target_candidates_report_blocks_unready_jobs(tmp_path: Path) -> None:

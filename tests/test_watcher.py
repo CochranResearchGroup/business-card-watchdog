@@ -220,6 +220,41 @@ def test_watch_dry_run_cli_outputs_fixture_harness(tmp_path: Path, capsys: pytes
     assert "{" not in text
 
 
+def test_watch_backlog_preflight_cli_outputs_redacted_counts(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source = tmp_path / "Private Phone Camera"
+    write_synthetic_image(source / "private-card-photo.png")
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    config_path.write_text(
+        f'data_dir = "{data_dir}"\n[watch]\ninputs = ["{source}"]\nsettle_seconds = 0.0\n',
+        encoding="utf-8",
+    )
+
+    assert main(["--config", str(config_path), "watch-backlog-preflight", "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    serialized = json.dumps(payload, sort_keys=True)
+    assert payload["schema"] == "business-card-watchdog.watch-backlog-preflight.v1"
+    assert payload["counts"]["backlog"] == 1
+    assert payload["inputs"][0]["configured_ref_display"] == "<redacted-path>"
+    assert payload["commands"]["watch_once_dry_run"] == "watch --once --dry-run"
+    assert Path(payload["preflight_path"]).exists()
+    assert str(source) not in serialized
+    assert "private-card-photo.png" not in serialized
+
+    assert main(["--config", str(config_path), "watch-backlog-preflight", "--no-write"]) == 0
+    text = capsys.readouterr().out
+    assert "Watch backlog preflight: ready_for_operator_selected_dry_run" in text
+    assert "Backlog: 1" in text
+    assert "Observed: files=0 ocr=0 writes=0 network=0" in text
+    assert "Watch once dry run: watch --once --dry-run" in text
+    assert str(source) not in text
+    assert "private-card-photo.png" not in text
+    assert "{" not in text
+
+
 def test_main_status_includes_watch_status(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     config_path = tmp_path / "config.toml"
     config_path.write_text("[watch]\ninputs = []\n", encoding="utf-8")

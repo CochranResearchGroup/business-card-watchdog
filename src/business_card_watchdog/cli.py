@@ -38,6 +38,7 @@ def _render_status_text(payload: dict[str, object]) -> str:
         ("Operator-selected live smoke preflight", "operator_selected_live_smoke_preflight"),
         ("Service recovery", "service_recovery"),
         ("Watch status", "watch_status"),
+        ("Watch backlog preflight", "watch_backlog_preflight"),
         ("Watch dry run", "watch_dry_run"),
         ("Runs list", "runs_list"),
         ("MCP manifest", "mcp_manifest"),
@@ -97,6 +98,52 @@ def _render_watch_dry_run_text(payload: dict[str, object]) -> str:
         ("Watch dry run", "watch_dry_run"),
         ("Status", "status"),
         ("Service recovery", "service_recovery"),
+    ]:
+        command = commands.get(key)
+        if command:
+            lines.append(f" - {label}: {command}")
+    action_rows = safe_actions if isinstance(safe_actions, list) else []
+    lines.append(f"Safe next actions: {len(action_rows)}")
+    for action in action_rows:
+        if isinstance(action, dict):
+            lines.append(f" - {action.get('action')}: {action.get('command')}")
+    stop_rows = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stop_rows)}")
+    for condition in stop_rows:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
+def _render_watch_backlog_preflight_text(payload: dict[str, object]) -> str:
+    counts = dict(payload.get("counts") or {})
+    commands = dict(payload.get("commands") or {})
+    safe_actions = payload.get("safe_next_actions") or []
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    lines = [
+        f"Watch backlog preflight: {payload.get('state')}",
+        f"Inputs: {payload.get('input_count', 0)}",
+        f"Seen: {counts.get('seen', 0)}",
+        f"Backlog: {counts.get('backlog', 0)}",
+        f"Unsettled: {counts.get('unsettled', 0)}",
+        f"Scan truncated: {payload.get('scan_truncated', False)}",
+        f"Last error present: {payload.get('last_error_present', False)}",
+        f"Recommended next action: {payload.get('recommended_next_action')}",
+        "Observed: "
+        f"files={payload.get('files_processed', 0)} "
+        f"ocr={payload.get('ocr_attempted', 0)} "
+        f"writes={payload.get('writes_attempted', 0)} "
+        f"network={payload.get('network_calls_made', 0)}",
+        f"Runtime artifact written: {payload.get('runtime_artifact_written', False)}",
+    ]
+    if payload.get("preflight_path"):
+        lines.append(f"Preflight path: {payload.get('preflight_path')}")
+    lines.append("Commands:")
+    for label, key in [
+        ("Watch status", "watch_status"),
+        ("Watch backlog preflight", "watch_backlog_preflight"),
+        ("Watch dry run", "watch_dry_run"),
+        ("Watch once dry run", "watch_once_dry_run"),
+        ("Runtime readiness", "runtime_readiness"),
     ]:
         command = commands.get(key)
         if command:
@@ -2560,6 +2607,10 @@ def build_parser() -> argparse.ArgumentParser:
     watch_status = sub.add_parser("watch-status")
     watch_status.add_argument("--json", action="store_true")
 
+    watch_backlog_preflight = sub.add_parser("watch-backlog-preflight")
+    watch_backlog_preflight.add_argument("--no-write", action="store_true")
+    watch_backlog_preflight.add_argument("--json", action="store_true")
+
     watch_dry_run = sub.add_parser("watch-dry-run")
     watch_dry_run.add_argument("--json", action="store_true")
 
@@ -3333,6 +3384,11 @@ def main(argv: list[str] | None = None) -> int:
         payload = service.watch_status()
         print(json.dumps(payload, indent=2) if args.json else _render_watch_status_text(payload), end="")
         return 0 if payload["last_error"] is None else 2
+
+    if args.command == "watch-backlog-preflight":
+        payload = service.watch_backlog_preflight(write=not args.no_write)
+        print(json.dumps(payload, indent=2) if args.json else _render_watch_backlog_preflight_text(payload), end="")
+        return 0 if payload["state"] != "blocked" else 2
 
     if args.command == "watch-dry-run":
         payload = service.watch_dry_run_harness()

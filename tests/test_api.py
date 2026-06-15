@@ -12,7 +12,7 @@ from business_card_watchdog.contact import build_contact_candidate
 from business_card_watchdog.orchestrator import BatchOrchestrator
 from business_card_watchdog.service import BusinessCardService
 
-from synthetic_fixtures import SyntheticSkillAdapter, write_multi_card_image
+from synthetic_fixtures import SyntheticSkillAdapter, write_multi_card_image, write_synthetic_image
 from test_service import make_recorded_run
 
 
@@ -1793,6 +1793,19 @@ def test_api_enrichment_request_accepts_paid_provider_results(tmp_path: Path) ->
     assert result["provider_result"]["paid_api_calls_attempted"] == 0
     assert client.post("/sinks/check").json()["dry_run"] is True
     assert client.get("/watch/status").json()["seen_count"] == 0
+    source = tmp_path / "Private Phone Camera"
+    write_synthetic_image(source / "private-card-photo.png")
+    config_path.write_text(
+        f'data_dir = "{data_dir}"\n[watch]\ninputs = ["{source}"]\nsettle_seconds = 0.0\n',
+        encoding="utf-8",
+    )
+    watch_preflight = client.post("/watch/backlog-preflight", json={"write": False}).json()
+    serialized_preflight = json.dumps(watch_preflight, sort_keys=True)
+    assert watch_preflight["schema"] == "business-card-watchdog.watch-backlog-preflight.v1"
+    assert watch_preflight["counts"]["backlog"] == 1
+    assert watch_preflight["runtime_artifact_written"] is False
+    assert str(source) not in serialized_preflight
+    assert "private-card-photo.png" not in serialized_preflight
     watch_dry_run = client.post("/watch/dry-run").json()
     assert watch_dry_run["schema"] == "business-card-watchdog.watch-dry-run-harness.v1"
     assert watch_dry_run["state"] == "passed"

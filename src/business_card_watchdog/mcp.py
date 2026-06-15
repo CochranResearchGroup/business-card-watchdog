@@ -1267,6 +1267,14 @@ def tool_manifest() -> dict[str, object]:
                 "input_schema": {"type": "object", "properties": {}},
             },
             {
+                "name": "business_card_watchdog_watch_backlog_preflight",
+                "description": "Report redacted configured-watch backlog counts and explicit next steps without processing private files.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"write": {"type": "boolean", "default": True}},
+                },
+            },
+            {
                 "name": "business_card_watchdog_watch_dry_run",
                 "description": "Run a fixture-backed watched-folder dry-run harness without touching configured private watch inputs.",
                 "input_schema": {"type": "object", "properties": {}},
@@ -1873,6 +1881,8 @@ def call_tool(
         )
     if tool_name == "business_card_watchdog_watch_status":
         return service.watch_status()
+    if tool_name == "business_card_watchdog_watch_backlog_preflight":
+        return service.watch_backlog_preflight(write=bool(args.get("write", True)))
     if tool_name == "business_card_watchdog_watch_dry_run":
         return service.watch_dry_run_harness()
     if tool_name == "business_card_watchdog_doctor":

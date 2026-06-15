@@ -359,6 +359,7 @@ class BusinessCardService:
                 "operator_selected_live_smoke_preflight": "operator-selected-live-smoke-preflight --json",
                 "service_recovery": "service recovery --json",
                 "watch_status": "watch-status --json",
+                "watch_backlog_preflight": "watch-backlog-preflight --json",
                 "watch_dry_run": "watch-dry-run --json",
                 "runs_list": "runs list --json",
                 "mcp_manifest": "mcp-manifest",
@@ -389,6 +390,13 @@ class BusinessCardService:
                     "action": "inspect_operator_selected_live_smoke_preflight",
                     "command": "operator-selected-live-smoke-preflight --json",
                     "reason": "review the no-live operator-selection boundary before any live smoke",
+                    "safe_to_auto_continue": True,
+                    "requires_explicit_operator_action": False,
+                },
+                {
+                    "action": "inspect_watch_backlog_preflight",
+                    "command": "watch-backlog-preflight --json",
+                    "reason": "review configured watch backlog counts without exposing private paths or processing files",
                     "safe_to_auto_continue": True,
                     "requires_explicit_operator_action": False,
                 },
@@ -12217,6 +12225,83 @@ class BusinessCardService:
     def watch_status(self) -> dict[str, Any]:
         return PollingWatcher(self.config).status().to_dict()
 
+    def watch_backlog_preflight(self, *, write: bool = True) -> dict[str, Any]:
+        ensure_runtime_dirs(self.config)
+        watch_status = PollingWatcher(self.config).status().to_dict()
+        input_summaries = [
+            _redacted_watch_input_summary(index, raw_input)
+            for index, raw_input in enumerate(self.config.watch_inputs)
+        ]
+        backlog_count = int(watch_status.get("backlog_count") or 0)
+        unsettled_count = int(watch_status.get("unsettled_count") or 0)
+        last_error = str(watch_status.get("last_error") or "")
+        scan_truncated = bool(watch_status.get("scan_truncated", False))
+        if last_error:
+            state = "blocked"
+            recommended_next_action = "repair_watch_input"
+        elif unsettled_count:
+            state = "waiting_for_settle"
+            recommended_next_action = "wait_for_settle_then_recheck"
+        elif backlog_count:
+            state = "ready_for_operator_selected_dry_run"
+            recommended_next_action = "operator_explicit_watch_dry_run"
+        elif not input_summaries:
+            state = "not_configured"
+            recommended_next_action = "configure_watch_inputs"
+        else:
+            state = "empty"
+            recommended_next_action = "monitor_watch_inputs"
+
+        payload: dict[str, Any] = {
+            "schema": "business-card-watchdog.watch-backlog-preflight.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "recommended_next_action": recommended_next_action,
+            "input_count": len(input_summaries),
+            "inputs": input_summaries,
+            "counts": {
+                "seen": int(watch_status.get("seen_count") or 0),
+                "backlog": backlog_count,
+                "unsettled": unsettled_count,
+            },
+            "scan_truncated": scan_truncated,
+            "last_error_present": bool(last_error),
+            "last_error_redacted": _redacted_watch_error(last_error),
+            "private_paths_redacted": True,
+            "private_filenames_redacted": True,
+            "private_sources_used": False,
+            "files_processed": 0,
+            "ocr_attempted": 0,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "runtime_artifact_written": False,
+            "preflight_path": None,
+            "commands": {
+                "watch_status": "watch-status --json",
+                "watch_backlog_preflight": "watch-backlog-preflight --json",
+                "watch_dry_run": "watch-dry-run --json",
+                "watch_once_dry_run": "watch --once --dry-run",
+                "runtime_readiness": "runtime-readiness --json",
+                "service_recovery": "service recovery --json",
+            },
+            "safe_next_actions": _watch_backlog_preflight_actions(
+                state=state,
+                recommended_next_action=recommended_next_action,
+            ),
+            "explicit_stop_conditions": [
+                "This preflight does not process watched files.",
+                "Do not OCR/process private SyncThing images from this preflight.",
+                "Run watch-dry-run --json or watch --once --dry-run only after explicit operator selection.",
+                "Do not run public-web search, paid enrichment, or live sink operations from watch backlog preflight.",
+            ],
+        }
+        if write:
+            preflight_path = self.config.data_dir / "watch_backlog_preflight.json"
+            payload["runtime_artifact_written"] = True
+            payload["preflight_path"] = str(preflight_path)
+            preflight_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        return payload
+
     def watch_dry_run_harness(self) -> dict[str, Any]:
         ensure_runtime_dirs(self.config)
         harness_id = f"{utc_now().replace(':', '-')}-{uuid4().hex[:8]}"
@@ -14318,6 +14403,94 @@ def _runtime_safe_next_actions(
             }
         )
     return actions
+
+
+def _redacted_watch_input_summary(index: int, raw_input: str) -> dict[str, Any]:
+    if raw_input.startswith("$fsr:"):
+        kind = "fsr_alias"
+        display = raw_input
+    elif raw_input.startswith("$fsr "):
+        kind = "fsr_path"
+        display = "$fsr <redacted-path>"
+    else:
+        kind = "path"
+        display = "<redacted-path>"
+    return {
+        "input_ref": f"input_{index}",
+        "configured_ref_kind": kind,
+        "configured_ref_display": display,
+    }
+
+
+def _redacted_watch_error(last_error: str) -> str | None:
+    if not last_error:
+        return None
+    if "unknown $fsr alias" in last_error:
+        return last_error
+    return "configured watch input is not readable; run watch-status --json locally for full operator detail"
+
+
+def _watch_backlog_preflight_actions(
+    *,
+    state: str,
+    recommended_next_action: str,
+) -> list[dict[str, Any]]:
+    if recommended_next_action == "operator_explicit_watch_dry_run":
+        return [
+            {
+                "action": "operator_explicit_watch_dry_run",
+                "command": "watch-dry-run --json",
+                "reason": "backlog is present and settled; run only after the operator explicitly selects this private-source dry run",
+                "safe_to_auto_continue": False,
+                "requires_explicit_operator_action": True,
+            },
+            {
+                "action": "operator_explicit_watch_once_dry_run",
+                "command": "watch --once --dry-run",
+                "reason": "process configured watch backlog in dry-run mode only after explicit operator selection",
+                "safe_to_auto_continue": False,
+                "requires_explicit_operator_action": True,
+            },
+        ]
+    if recommended_next_action == "wait_for_settle_then_recheck":
+        return [
+            {
+                "action": "wait_for_settle_then_recheck",
+                "command": "watch-backlog-preflight --json",
+                "reason": "some files are still within the configured settle window",
+                "safe_to_auto_continue": True,
+                "requires_explicit_operator_action": False,
+            }
+        ]
+    if recommended_next_action == "repair_watch_input":
+        return [
+            {
+                "action": "repair_watch_input",
+                "command": "watch-status --json",
+                "reason": "configured watch input has a local readability error",
+                "safe_to_auto_continue": False,
+                "requires_explicit_operator_action": True,
+            }
+        ]
+    if recommended_next_action == "configure_watch_inputs":
+        return [
+            {
+                "action": "configure_watch_inputs",
+                "command": "edit user config [watch].inputs",
+                "reason": "no watched inputs are configured",
+                "safe_to_auto_continue": False,
+                "requires_explicit_operator_action": True,
+            }
+        ]
+    return [
+        {
+            "action": "monitor_watch_inputs",
+            "command": "watch-backlog-preflight --json",
+            "reason": f"watch backlog preflight state is {state}",
+            "safe_to_auto_continue": True,
+            "requires_explicit_operator_action": False,
+        }
+    ]
 
 
 def _write_synthetic_business_card_image(path: Path) -> Path:

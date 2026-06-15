@@ -289,6 +289,9 @@ def create_app(config_path: Path | None = None):
         sink: str | None = None
         write: bool = True
 
+    class WatchBacklogPreflightRequest(BaseModel):
+        write: bool = True
+
     app = FastAPI(title="Business Card Watchdog")
 
     def service() -> BusinessCardService:
@@ -1161,6 +1164,12 @@ def create_app(config_path: Path | None = None):
     @app.get("/watch/status")
     def watch_status() -> dict[str, object]:
         return service().watch_status()
+
+    @app.post("/watch/backlog-preflight")
+    def watch_backlog_preflight(
+        request: WatchBacklogPreflightRequest = Body(default=WatchBacklogPreflightRequest()),
+    ) -> dict[str, object]:
+        return service().watch_backlog_preflight(write=request.write)
 
     @app.post("/watch/dry-run")
     def watch_dry_run() -> dict[str, object]:

@@ -86,8 +86,9 @@ def test_cli_status_reports_command_map_text_and_json(tmp_path: Path, capsys) ->
     assert "Offline pilot gap audit: offline-pilot-gap-audit --json" in text
     assert "Operator-selected live smoke preflight: operator-selected-live-smoke-preflight --json" in text
     assert "Service recovery: service recovery --json" in text
+    assert "Watch backlog preflight: watch-backlog-preflight --json" in text
     assert "Runs list: runs list --json" in text
-    assert "Safe next actions: 5" in text
+    assert "Safe next actions: 6" in text
     assert "Stop conditions: 3" in text
     assert "Observed: writes=0 network=0" in text
     assert "{" not in text
