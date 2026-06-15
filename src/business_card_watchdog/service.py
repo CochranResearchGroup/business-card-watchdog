@@ -357,6 +357,7 @@ class BusinessCardService:
         phase_dashboard: dict[str, Any] | None = None
         review_counts: dict[str, int] = {}
         live_pilot_summary: dict[str, Any] | None = None
+        live_pilot_handoff_summary: dict[str, Any] | None = None
         next_action_summary: dict[str, Any] = {
             "action_count": 0,
             "safe_auto_count": 0,
@@ -380,6 +381,31 @@ class BusinessCardService:
                 "observed_writes_attempted": live_status.get("observed_writes_attempted", 0),
                 "observed_network_calls_made": live_status.get("observed_network_calls_made", 0),
                 "commands": live_status.get("commands") or {},
+            }
+            handoff = self.live_pilot_handoff(run_id=selected_run_id, write=False)
+            operator_entries = [
+                {
+                    "job_id": entry.get("job_id"),
+                    "next_action": entry.get("next_action"),
+                    "command": entry.get("command"),
+                    "operator_response_template": entry.get("operator_response_template"),
+                    "operator_prompt": entry.get("operator_prompt"),
+                }
+                for entry in handoff.get("entries") or []
+                if isinstance(entry, dict) and entry.get("operator_required")
+            ]
+            live_pilot_handoff_summary = {
+                "schema": "business-card-watchdog.operator-dashboard.live-pilot-handoff-summary.v1",
+                "state": handoff.get("state"),
+                "job_count": handoff.get("job_count", 0),
+                "action_counts": handoff.get("action_counts") or {},
+                "operator_required_count": len(operator_entries),
+                "operator_entries": operator_entries[:5],
+                "operator_response_contract": handoff.get("operator_response_contract"),
+                "writes_attempted": handoff.get("writes_attempted", 0),
+                "network_calls_made": handoff.get("network_calls_made", 0),
+                "observed_writes_attempted": handoff.get("observed_writes_attempted", 0),
+                "observed_network_calls_made": handoff.get("observed_network_calls_made", 0),
             }
             next_actions = self.next_actions(run_id=selected_run_id, limit=20)
             action_counts: dict[str, int] = {}
@@ -440,6 +466,7 @@ class BusinessCardService:
             "review_counts": review_counts,
             "next_action_summary": next_action_summary,
             "live_pilot_summary": live_pilot_summary,
+            "live_pilot_handoff_summary": live_pilot_handoff_summary,
             "blocked_reasons": blocked_reasons,
             "commands": {
                 "operator_dashboard": (

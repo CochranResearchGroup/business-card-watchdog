@@ -671,6 +671,15 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     assert dashboard["next_action_summary"]["sample_actions"][0]["command"] == "jobs review"
     assert dashboard["next_action_summary"]["sample_actions"][0]["requires_explicit_operator_action"] is True
     assert dashboard["live_pilot_summary"]["state"] == "blocked"
+    assert dashboard["live_pilot_handoff_summary"]["schema"] == (
+        "business-card-watchdog.operator-dashboard.live-pilot-handoff-summary.v1"
+    )
+    assert dashboard["live_pilot_handoff_summary"]["state"] == "blocked"
+    assert dashboard["live_pilot_handoff_summary"]["action_counts"] == {"no_live_candidate": 1}
+    assert dashboard["live_pilot_handoff_summary"]["operator_required_count"] == 0
+    assert dashboard["live_pilot_handoff_summary"]["operator_entries"] == []
+    assert dashboard["live_pilot_handoff_summary"]["writes_attempted"] == 0
+    assert dashboard["live_pilot_handoff_summary"]["network_calls_made"] == 0
     assert dashboard["commands"]["review_queue"] == f"reviews list --run-id {run_id} --state all --json"
     assert dashboard["commands"]["next_actions"] == f"actions next --run-id {run_id} --json"
     assert dashboard["commands"]["run_next_safe"] == f"actions run-next --run-id {run_id} --limit 10 --json"

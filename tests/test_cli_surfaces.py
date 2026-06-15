@@ -95,6 +95,8 @@ def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) 
     assert payload["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id} --no-write --json"
     assert payload["review_counts"]["needs_review"] == 1
     assert payload["next_action_summary"]["by_action"] == {"review_contact": 1}
+    assert payload["live_pilot_handoff_summary"]["action_counts"] == {"no_live_candidate": 1}
+    assert payload["live_pilot_handoff_summary"]["operator_required_count"] == 0
     assert payload["writes_attempted"] == 0
     assert payload["network_calls_made"] == 0
 
@@ -112,6 +114,7 @@ def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) 
     assert f"Next actions: actions next --run-id {run_id} --json" in text
     assert "Next actions: total=1 safe=0 explicit=1" in text
     assert "action=review_contact" in text
+    assert "Live handoff: state=blocked operator_required=0" in text
     assert f"Live pilot status: runs live-pilot-status {run_id} --no-write --json" in text
     assert "Observed: writes=0 network=0" in text
     assert "Stop conditions: 3" in text

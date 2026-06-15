@@ -63,6 +63,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
     run_summary = dict(payload.get("run_summary") or {})
     phase = dict(payload.get("phase_dashboard_summary") or {})
     live = dict(payload.get("live_pilot_summary") or {})
+    live_handoff = dict(payload.get("live_pilot_handoff_summary") or {})
     review_counts = dict(payload.get("review_counts") or {})
     next_actions = dict(payload.get("next_action_summary") or {})
     commands = dict(payload.get("commands") or {})
@@ -87,6 +88,9 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
         f"explicit={next_actions.get('explicit_operator_count', 0)}",
         f"Phase status: {phase.get('status_line') or 'none'}",
         f"Live pilot: {live.get('state') or 'none'}",
+        "Live handoff: "
+        f"state={live_handoff.get('state') or 'none'} "
+        f"operator_required={live_handoff.get('operator_required_count', 0)}",
         f"Observed: writes={payload.get('writes_attempted', 0)} network={payload.get('network_calls_made', 0)}",
         "Commands:",
     ]
