@@ -31,7 +31,13 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     client = TestClient(create_app(config_path))
 
     assert client.get("/health").json()["ok"] is True
-    assert client.get("/status").json()["watch"]["inputs"] == []
+    status = client.get("/status").json()
+    assert status["schema"] == "business-card-watchdog.status.v1"
+    assert status["watch"]["inputs"] == []
+    assert status["commands"]["runtime_readiness"] == "runtime-readiness --json"
+    assert status["safe_next_actions"][0]["action"] == "inspect_runtime_readiness"
+    assert status["writes_attempted"] == 0
+    assert status["network_calls_made"] == 0
     runtime_readiness = client.get("/runtime/readiness").json()
     assert runtime_readiness["schema"] == "business-card-watchdog.runtime-readiness.v1"
     assert runtime_readiness["config"]["config_exists"] is True

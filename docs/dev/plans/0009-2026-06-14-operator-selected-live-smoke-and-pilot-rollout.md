@@ -1064,6 +1064,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 4 tests.
 
+### Slice 0009-A61 | 2026-06-14 | Top-Level Status Command Map
+
+Implemented:
+
+- Top-level status now has schema `business-card-watchdog.status.v1`.
+- Status reports now expose zero-call commands for runtime readiness, service recovery, watch status, watch dry-run, run listing, and MCP manifest inspection.
+- Status reports now include safe next actions, explicit stop conditions, and zero write/network counters.
+- Service, API, direct MCP, and MCP JSON-RPC tests protect the status command map.
+
+Safety:
+
+- This slice adds status readback and command links only.
+- It does not process private SyncThing inputs, run public-web search, call paid enrichment, create `selected_live_target.json`, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_status_and_sink_readiness_are_structured tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service tests/test_mcp.py::test_mcp_jsonl_server_lists_and_calls_tools -q` passed with 4 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

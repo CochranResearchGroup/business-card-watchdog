@@ -104,6 +104,7 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
+    status = call_tool("business_card_watchdog_status", {}, config=config)
     summary = call_tool("business_card_watchdog_run_summary", {"run_id": run_id}, config=config)
     phase_report = call_tool("business_card_watchdog_phase_report", {"run_id": run_id}, config=config)
     readiness_report = call_tool("business_card_watchdog_pilot_readiness_report", {"run_id": run_id}, config=config)
@@ -362,6 +363,9 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
         config=config,
     )
 
+    assert status["schema"] == "business-card-watchdog.status.v1"
+    assert status["commands"]["runtime_readiness"] == "runtime-readiness --json"
+    assert status["safe_next_actions"][0]["action"] == "inspect_runtime_readiness"
     assert summary["needs_review_count"] == 1
     assert phase_report["schema"] == "business-card-watchdog.phase-report.v1"
     assert phase_report["review_workbook_preview"]["schema"] == (
@@ -842,6 +846,8 @@ def test_mcp_jsonl_server_lists_and_calls_tools(tmp_path: Path) -> None:
     )
     assert responses[2]["result"]["isError"] is False
     assert responses[2]["result"]["structuredContent"]["skill_ready"] is True
+    assert responses[2]["result"]["structuredContent"]["schema"] == "business-card-watchdog.status.v1"
+    assert responses[2]["result"]["structuredContent"]["commands"]["runtime_readiness"] == "runtime-readiness --json"
     phase_report = responses[3]["result"]["structuredContent"]
     assert phase_report["schema"] == "business-card-watchdog.phase-report.v1"
     assert phase_report["review_workbook_preview"]["schema"] == (

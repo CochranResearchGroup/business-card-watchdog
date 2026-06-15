@@ -2628,6 +2628,25 @@ Safety:
 
 - This was command-link/readback hardening only. It did not create `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
 
+## Turn 137 | 2026-06-14
+
+Continued Plan 0009 with Slice 0009-A61.
+
+Implemented:
+
+- Top-level status now has schema `business-card-watchdog.status.v1`.
+- Status reports now expose zero-call commands for runtime readiness, service recovery, watch status, watch dry-run, run listing, and MCP manifest inspection.
+- Status reports now include safe next actions, explicit stop conditions, and zero write/network counters.
+- Service, API, direct MCP, and MCP JSON-RPC tests protect the status command map.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_status_and_sink_readiness_are_structured tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service tests/test_mcp.py::test_mcp_jsonl_server_lists_and_calls_tools -q` passed with 4 tests.
+
+Safety:
+
+- This was status readback and command-link hardening only. It did not process private SyncThing inputs, run public-web search, call paid enrichment, create `selected_live_target.json`, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
 ## Turn 136 | 2026-06-14
 
 Continued Plan 0009 with Slice 0009-A60.

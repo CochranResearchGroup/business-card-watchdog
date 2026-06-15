@@ -637,8 +637,14 @@ def test_service_status_and_sink_readiness_are_structured(tmp_path: Path) -> Non
     status = service.status()
     readiness = service.sink_readiness()
 
+    assert status["schema"] == "business-card-watchdog.status.v1"
     assert status["skill_ready"] is True
     assert "watch" in status
+    assert status["commands"]["runtime_readiness"] == "runtime-readiness --json"
+    assert status["commands"]["service_recovery"] == "service recovery --json"
+    assert status["safe_next_actions"][0]["action"] == "inspect_runtime_readiness"
+    assert status["writes_attempted"] == 0
+    assert status["network_calls_made"] == 0
     assert readiness["dry_run"] is True
     assert {sink["sink"] for sink in readiness["sinks"]} == {"google_contacts", "odoo"}
 

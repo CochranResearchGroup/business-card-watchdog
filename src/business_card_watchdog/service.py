@@ -286,12 +286,51 @@ class BusinessCardService:
         ready, message = BusinessCardSkillAdapter(self.config).check_ready()
         watch_status = PollingWatcher(self.config).status()
         return {
+            "schema": "business-card-watchdog.status.v1",
             "config_path": str(self.config.config_path),
             "data_dir": str(self.config.data_dir),
             "cache_dir": str(self.config.cache_dir),
             "skill_ready": ready,
             "skill_message": message,
             "watch": watch_status.to_dict(),
+            "commands": {
+                "runtime_readiness": "runtime-readiness --json",
+                "service_recovery": "service recovery --json",
+                "watch_status": "watch-status --json",
+                "watch_dry_run": "watch-dry-run --json",
+                "runs_list": "runs list --json",
+                "mcp_manifest": "mcp-manifest",
+            },
+            "safe_next_actions": [
+                {
+                    "action": "inspect_runtime_readiness",
+                    "command": "runtime-readiness --json",
+                    "reason": "confirm user-scope config, runtime directories, service, and watcher readiness",
+                    "safe_to_auto_continue": True,
+                    "requires_explicit_operator_action": False,
+                },
+                {
+                    "action": "inspect_service_recovery",
+                    "command": "service recovery --json",
+                    "reason": "review recovery commands and stop conditions without changing runtime state",
+                    "safe_to_auto_continue": True,
+                    "requires_explicit_operator_action": False,
+                },
+                {
+                    "action": "inspect_runs",
+                    "command": "runs list --json",
+                    "reason": "find existing run IDs before selecting review, routing, or live-pilot work",
+                    "safe_to_auto_continue": True,
+                    "requires_explicit_operator_action": False,
+                },
+            ],
+            "explicit_stop_conditions": [
+                "Do not process private SyncThing images from generic status checks.",
+                "Do not run public-web search or paid API enrichment from status checks.",
+                "Do not run live GWS/Odollo/Odoo lookup, write, or readback without selected target approval.",
+            ],
+            "writes_attempted": 0,
+            "network_calls_made": 0,
         }
 
     def process_source(self, source: str, *, dry_run: bool = True, workers: int = 2) -> dict[str, Any]:
