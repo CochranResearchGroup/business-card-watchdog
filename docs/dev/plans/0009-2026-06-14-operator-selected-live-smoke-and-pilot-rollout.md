@@ -2210,6 +2210,33 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed; index is up to date.
 
+### Slice 0009-A116 | 2026-06-15 | Dashboard Checklist Rollup
+
+Implemented:
+
+- Added `business-card-watchdog.live-pilot-checklist-rollup.v1`.
+- Operator dashboard handoff summaries now roll up operator-required pilot checklist jobs, total steps, live-call steps, sink-write steps, explicit-operator steps, runtime-artifact steps, and sample jobs.
+- Service recovery reports carry the same rollup so recovery handoffs show whether live-pilot checklist work is actually queued.
+- Dashboard and recovery text output now render compact live-pilot checklist counts.
+- Rollups intentionally count only operator-required handoff entries so no-candidate runs do not appear to have queued live-pilot work.
+
+Safety:
+
+- This slice is dashboard/recovery presentation only.
+- It reads live-pilot handoff state with `write=False`; it does not create or modify `selected_live_target.json` or execute lookup, write, or readback pilots.
+- It does not process configured/private SyncThing inputs, run public-web search, call paid enrichment, validate a real operator response, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_operator_dashboard_composes_no_live_readiness tests/test_cli_surfaces.py::test_cli_operator_dashboard_reports_no_live_summary tests/test_cli_surfaces.py::test_cli_live_target_candidates_reports_text_and_json tests/test_cli_surfaces.py::test_cli_service_recovery_reports_status_shape tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 231 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
 ### Slice 0009-A115 | 2026-06-15 | Handoff Checklist Summary
 
 Implemented:

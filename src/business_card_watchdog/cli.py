@@ -187,6 +187,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
     phase = dict(payload.get("phase_dashboard_summary") or {})
     live = dict(payload.get("live_pilot_summary") or {})
     live_handoff = dict(payload.get("live_pilot_handoff_summary") or {})
+    checklist_rollup = dict(live_handoff.get("pilot_checklist_rollup") or {})
     latest_drill = dict(payload.get("latest_review_routing_drill") or {})
     review_counts = dict(payload.get("review_counts") or {})
     next_actions = dict(payload.get("next_action_summary") or {})
@@ -218,6 +219,12 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
         f"state={live_handoff.get('state') or 'none'} "
         f"operator_required={live_handoff.get('operator_required_count', 0)} "
         f"response_templates={live_handoff.get('operator_response_template_count', 0)}",
+        "Live pilot checklist: "
+        f"jobs={checklist_rollup.get('checklist_job_count', 0)} "
+        f"steps={checklist_rollup.get('step_count', 0)} "
+        f"live_calls={checklist_rollup.get('live_call_count', 0)} "
+        f"sink_writes={checklist_rollup.get('sink_write_step_count', 0)} "
+        f"explicit_steps={checklist_rollup.get('explicit_operator_step_count', 0)}",
         "Latest review routing drill: "
         f"{latest_drill.get('state') or 'not_run'} "
         f"run={latest_drill.get('run_id') or 'none'} "
@@ -561,6 +568,7 @@ def _render_runtime_readiness_text(payload: dict[str, object]) -> str:
 def _render_service_recovery_text(payload: dict[str, object]) -> str:
     commands = dict(payload.get("commands") or {})
     latest_drill = dict(payload.get("latest_review_routing_drill") or {})
+    checklist_rollup = dict(payload.get("live_pilot_checklist_rollup") or {})
     blocked = payload.get("blocked_reasons") or []
     safe_actions = payload.get("safe_next_actions") or []
     explicit_actions = payload.get("explicit_operator_actions") or []
@@ -576,6 +584,11 @@ def _render_service_recovery_text(payload: dict[str, object]) -> str:
         f"{latest_drill.get('state') or 'not_run'} "
         f"run={latest_drill.get('run_id') or 'none'} "
         f"readback={latest_drill.get('agent_readback_state') or 'none'}",
+        "Live pilot checklist: "
+        f"jobs={checklist_rollup.get('checklist_job_count', 0)} "
+        f"steps={checklist_rollup.get('step_count', 0)} "
+        f"live_calls={checklist_rollup.get('live_call_count', 0)} "
+        f"sink_writes={checklist_rollup.get('sink_write_step_count', 0)}",
         f"Install: {commands.get('install')}",
         f"Start: {commands.get('start')}",
         f"Status: {commands.get('status')}",

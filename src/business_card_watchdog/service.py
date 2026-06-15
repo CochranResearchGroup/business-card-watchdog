@@ -468,6 +468,7 @@ class BusinessCardService:
                 "explicit_stop_conditions": live_status.get("explicit_stop_conditions") or [],
             }
             handoff = self.live_pilot_handoff(run_id=selected_run_id, write=False)
+            pilot_checklist_rollup = _live_pilot_checklist_rollup(handoff)
             operator_entries = [
                 {
                     "job_id": entry.get("job_id"),
@@ -498,6 +499,7 @@ class BusinessCardService:
                 "network_calls_made": handoff.get("network_calls_made", 0),
                 "observed_writes_attempted": handoff.get("observed_writes_attempted", 0),
                 "observed_network_calls_made": handoff.get("observed_network_calls_made", 0),
+                "pilot_checklist_rollup": pilot_checklist_rollup,
                 "operator_stop_conditions": handoff.get("operator_stop_conditions") or [],
             }
             next_actions = self.next_actions(run_id=selected_run_id, limit=20)
@@ -5214,11 +5216,15 @@ class BusinessCardService:
         phase_report: dict[str, Any] | None = None
         pilot_readiness: dict[str, Any] | None = None
         next_actions: dict[str, Any] | None = None
+        live_pilot_checklist_rollup = _live_pilot_checklist_rollup(None)
         if selected_run_id:
             run_summary = self.run_summary(selected_run_id)
             phase_report = self.phase_report(selected_run_id)
             pilot_readiness = self.pilot_readiness_report(selected_run_id)
             next_actions = self.next_actions(run_id=selected_run_id, limit=20)
+            live_pilot_checklist_rollup = _live_pilot_checklist_rollup(
+                self.live_pilot_handoff(run_id=selected_run_id, write=False)
+            )
 
         command_prefix = f"bcw --config {self.config.config_path} "
         service_name = str(service.get("service_name") or "business-card-watchdog.service")
@@ -5346,6 +5352,7 @@ class BusinessCardService:
             "pilot_readiness": pilot_readiness,
             "next_actions": (next_actions or {}).get("actions", []) if next_actions else [],
             "latest_review_routing_drill": latest_drill,
+            "live_pilot_checklist_rollup": live_pilot_checklist_rollup,
             "blocked_reasons": blocked_reasons,
             "commands": commands,
             "safe_next_actions": safe_next_actions,
@@ -8371,6 +8378,45 @@ def _pilot_command_checklist_summary(checklist: list[Any]) -> dict[str, Any]:
                 "requires_explicit_operator_action": bool(row.get("requires_explicit_operator_action", False)),
             }
             for row in rows[:8]
+        ],
+    }
+
+
+def _live_pilot_checklist_rollup(handoff: dict[str, Any] | None) -> dict[str, Any]:
+    entries = [entry for entry in list((handoff or {}).get("entries") or []) if isinstance(entry, dict)]
+    actionable_entries = [entry for entry in entries if entry.get("operator_required")]
+    checklist_summaries = [
+        dict(entry.get("pilot_command_checklist_summary") or {})
+        for entry in actionable_entries
+        if isinstance(entry.get("pilot_command_checklist_summary"), dict)
+    ]
+    return {
+        "schema": "business-card-watchdog.live-pilot-checklist-rollup.v1",
+        "job_count": len(entries),
+        "operator_required_job_count": len(actionable_entries),
+        "checklist_job_count": len(checklist_summaries),
+        "step_count": sum(_int(summary.get("step_count")) for summary in checklist_summaries),
+        "live_call_count": sum(_int(summary.get("live_call_count")) for summary in checklist_summaries),
+        "sink_write_step_count": sum(_int(summary.get("sink_write_step_count")) for summary in checklist_summaries),
+        "explicit_operator_step_count": sum(
+            _int(summary.get("explicit_operator_step_count")) for summary in checklist_summaries
+        ),
+        "runtime_artifact_step_count": sum(
+            _int(summary.get("runtime_artifact_step_count")) for summary in checklist_summaries
+        ),
+        "sample_jobs": [
+            {
+                "job_id": entry.get("job_id"),
+                "next_action": entry.get("next_action"),
+                "step_count": _int((entry.get("pilot_command_checklist_summary") or {}).get("step_count")),
+                "live_call_count": _int(
+                    (entry.get("pilot_command_checklist_summary") or {}).get("live_call_count")
+                ),
+                "sink_write_step_count": _int(
+                    (entry.get("pilot_command_checklist_summary") or {}).get("sink_write_step_count")
+                ),
+            }
+            for entry in actionable_entries[:5]
         ],
     }
 

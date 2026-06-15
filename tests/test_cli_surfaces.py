@@ -137,6 +137,8 @@ def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) 
     assert payload["next_action_summary"]["by_action"] == {"review_contact": 1}
     assert payload["live_pilot_handoff_summary"]["action_counts"] == {"no_live_candidate": 1}
     assert payload["live_pilot_handoff_summary"]["operator_required_count"] == 0
+    assert payload["live_pilot_handoff_summary"]["pilot_checklist_rollup"]["checklist_job_count"] == 0
+    assert payload["live_pilot_handoff_summary"]["pilot_checklist_rollup"]["step_count"] == 0
     assert payload["latest_review_routing_drill"]["state"] == "not_run"
     assert payload["latest_review_routing_drill"]["has_drill"] is False
     assert len(payload["live_pilot_summary"]["explicit_stop_conditions"]) == 3
@@ -190,6 +192,7 @@ def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) 
     assert "Next actions: total=1 safe=0 explicit=1" in text
     assert "action=review_contact" in text
     assert "Live handoff: state=blocked operator_required=0 response_templates=0" in text
+    assert "Live pilot checklist: jobs=0 steps=0 live_calls=0 sink_writes=0 explicit_steps=0" in text
     assert f"Live pilot status: runs live-pilot-status {run_id} --no-write --json" in text
     assert (
         f"Live pilot validate response: runs live-pilot-validate-response {run_id} "
@@ -221,6 +224,8 @@ def test_cli_service_recovery_reports_status_shape(tmp_path: Path, capsys) -> No
         f"bcw --config {config_path} drills review-routing --json"
     )
     assert payload["latest_review_routing_drill"]["state"] == "not_run"
+    assert payload["live_pilot_checklist_rollup"]["checklist_job_count"] == 0
+    assert payload["live_pilot_checklist_rollup"]["step_count"] == 0
     assert any(action["action"] == "inspect_live_pilot_status" for action in payload["safe_next_actions"])
     assert any(action["action"] == "inspect_live_pilot_handoff" for action in payload["safe_next_actions"])
     assert any(action["action"] == "run_fixture_review_routing_drill" for action in payload["safe_next_actions"])
@@ -230,6 +235,7 @@ def test_cli_service_recovery_reports_status_shape(tmp_path: Path, capsys) -> No
     assert main(["--config", str(config_path), "service", "recovery", "--run-id", run_id]) == 0
     text = capsys.readouterr().out
     assert "Latest review routing drill: not_run run=none readback=none" in text
+    assert "Live pilot checklist: jobs=0 steps=0 live_calls=0 sink_writes=0" in text
     assert "Service recovery:" in text
     assert f"Run: {run_id}" in text
     assert "Restart: systemctl --user restart business-card-watchdog.service" in text
@@ -300,15 +306,31 @@ def test_cli_live_target_candidates_reports_text_and_json(tmp_path: Path, capsys
     assert main(["--config", str(config_path), "operator-dashboard", "--run-id", run_id, "--json"]) == 0
     dashboard = json.loads(capsys.readouterr().out)
     dashboard_entry = dashboard["live_pilot_handoff_summary"]["operator_entries"][0]
+    checklist_rollup = dashboard["live_pilot_handoff_summary"]["pilot_checklist_rollup"]
     assert dashboard_entry["job_id"] == candidate["job_id"]
+    assert checklist_rollup["schema"] == "business-card-watchdog.live-pilot-checklist-rollup.v1"
+    assert checklist_rollup["operator_required_job_count"] == 1
+    assert checklist_rollup["checklist_job_count"] == 1
+    assert checklist_rollup["step_count"] == 5
+    assert checklist_rollup["live_call_count"] == 1
+    assert checklist_rollup["sink_write_step_count"] == 0
+    assert checklist_rollup["explicit_operator_step_count"] == 2
+    assert checklist_rollup["sample_jobs"][0]["job_id"] == candidate["job_id"]
     assert dashboard_entry["validation_command_prefilled"] == (
         f"runs live-pilot-validate-response {run_id} "
         f"--response 'run_id={run_id} job_id={candidate['job_id']} sink=google_contacts "
         "operator=<operator> scope=lookup safety_confirmation=<tenant-profile-account-confirmation>' --json"
     )
 
+    assert main(["--config", str(config_path), "service", "recovery", "--run-id", run_id, "--json"]) == 0
+    recovery = json.loads(capsys.readouterr().out)
+    assert recovery["live_pilot_checklist_rollup"]["checklist_job_count"] == 1
+    assert recovery["live_pilot_checklist_rollup"]["step_count"] == 5
+    assert recovery["live_pilot_checklist_rollup"]["live_call_count"] == 1
+
     assert main(["--config", str(config_path), "operator-dashboard", "--run-id", run_id]) == 0
     dashboard_text = capsys.readouterr().out
+    assert "Live pilot checklist: jobs=1 steps=5 live_calls=1 sink_writes=0 explicit_steps=2" in dashboard_text
     assert "Live handoff operator entries:" in dashboard_text
     assert (
         f"Validate prefilled response: runs live-pilot-validate-response {run_id} "

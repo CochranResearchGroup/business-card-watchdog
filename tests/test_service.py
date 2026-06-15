@@ -815,6 +815,13 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     assert dashboard["live_pilot_handoff_summary"]["operator_response_templates"] == []
     assert dashboard["live_pilot_handoff_summary"]["writes_attempted"] == 0
     assert dashboard["live_pilot_handoff_summary"]["network_calls_made"] == 0
+    checklist_rollup = dashboard["live_pilot_handoff_summary"]["pilot_checklist_rollup"]
+    assert checklist_rollup["schema"] == "business-card-watchdog.live-pilot-checklist-rollup.v1"
+    assert checklist_rollup["operator_required_job_count"] == 0
+    assert checklist_rollup["checklist_job_count"] == 0
+    assert checklist_rollup["step_count"] == 0
+    assert checklist_rollup["live_call_count"] == 0
+    assert dashboard["service_recovery"]["live_pilot_checklist_rollup"]["checklist_job_count"] == 0
     assert dashboard["latest_review_routing_drill"]["schema"] == (
         "business-card-watchdog.latest-review-routing-drill.v1"
     )
