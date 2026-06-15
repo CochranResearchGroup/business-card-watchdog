@@ -308,6 +308,42 @@ def test_watch_dry_run_selection_cli_validates_and_builds_command_copy(
     assert "private-card-photo.png" not in json.dumps(packet, sort_keys=True)
 
 
+def test_watch_dry_run_readiness_cli_redacts_and_blocks_command_copy(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source = tmp_path / "Private Phone Camera"
+    write_synthetic_image(source / "private-card-photo.png")
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    config_path.write_text(
+        f'data_dir = "{data_dir}"\n[watch]\ninputs = ["{source}"]\nsettle_seconds = 0.0\n',
+        encoding="utf-8",
+    )
+
+    assert main(["--config", str(config_path), "watch-dry-run-readiness", "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    serialized = json.dumps(payload, sort_keys=True)
+
+    assert payload["schema"] == "business-card-watchdog.watch-dry-run-readiness.v1"
+    assert payload["state"] == "ready_for_operator_response"
+    assert payload["command_copy_text"] is None
+    assert payload["preflight_summary"]["counts"]["backlog"] == 1
+    assert payload["runtime_artifact_written"] is True
+    assert str(source) not in serialized
+    assert "private-card-photo.png" not in serialized
+
+    assert main(["--config", str(config_path), "watch-dry-run-readiness", "--no-write"]) == 0
+    text = capsys.readouterr().out
+    assert "Watch dry-run readiness: ready_for_operator_response" in text
+    assert "Backlog: 1" in text
+    assert "Observed: files=0 ocr=0 writes=0 network=0" in text
+    assert "Watch once dry run: watch --once --dry-run" in text
+    assert str(source) not in text
+    assert "private-card-photo.png" not in text
+    assert "{" not in text
+
+
 def test_main_status_includes_watch_status(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     config_path = tmp_path / "config.toml"
     config_path.write_text("[watch]\ninputs = []\n", encoding="utf-8")

@@ -28,6 +28,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_watch_dry_run_selection_handoff" in names
     assert "business_card_watchdog_watch_dry_run_operator_response_validation" in names
     assert "business_card_watchdog_watch_dry_run_command_copy_packet" in names
+    assert "business_card_watchdog_watch_dry_run_readiness" in names
     assert "business_card_watchdog_live_selection_packet" in names
     assert "business_card_watchdog_runs_list" in names
     assert "business_card_watchdog_job_show" in names
@@ -196,6 +197,14 @@ def test_mcp_watch_dry_run_selection_flow_returns_command_copy(tmp_path: Path) -
     assert packet["processes_watched_files"] is False
     assert str(source) not in serialized_packet
     assert "private-card-photo.png" not in serialized_packet
+    readiness = call_tool("business_card_watchdog_watch_dry_run_readiness", {"write": False}, config=config)
+    serialized_readiness = json.dumps(readiness, sort_keys=True)
+    assert readiness["schema"] == "business-card-watchdog.watch-dry-run-readiness.v1"
+    assert readiness["state"] == "ready_for_operator_response"
+    assert readiness["command_copy_text"] is None
+    assert readiness["runtime_artifact_written"] is False
+    assert str(source) not in serialized_readiness
+    assert "private-card-photo.png" not in serialized_readiness
 
 
 def test_mcp_multi_card_preclassification_drill_records_candidate_boxes(tmp_path: Path) -> None:

@@ -5555,3 +5555,32 @@ Validation:
 Safety:
 
 - This used a synthetic fixture watch source under the cache directory. It did not process configured SyncThing/private watch inputs; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.
+
+## Turn 248 | 2026-06-15
+
+Executed Plan 0042 with Slice 0042-A.
+
+Implemented:
+
+- Added `BusinessCardService.watch_dry_run_readiness`.
+- Added CLI `bcw watch-dry-run-readiness`.
+- Added API `POST /watch/dry-run-readiness`.
+- Added MCP tool `business_card_watchdog_watch_dry_run_readiness`.
+- Updated README and ROADMAP for the configured-source no-processing readiness packet.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_watch_dry_run_readiness_redacts_private_source_and_blocks_command tests/test_watcher.py::test_watch_dry_run_readiness_cli_redacts_and_blocks_command_copy tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_watch_dry_run_selection_flow_returns_command_copy -q` passed with 5 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/api.py src/business_card_watchdog/mcp.py tests/test_service.py tests/test_watcher.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 297 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `rg -n "watch-dry-run-readiness|watch_dry_run_readiness|Watch dry-run readiness|business_card_watchdog_watch_dry_run_readiness|Plan 0042" README.md ROADMAP.md RUNBOOK.md docs src tests` passed.
+- `uv build --out-dir dist` built source and wheel distributions.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `codegraph sync && codegraph status` passed; index is up to date.
+- `.venv/bin/bcw watch-dry-run-readiness --no-write --json` passed against the configured watcher and reported `$fsr:sync_phone` as one redacted input with 5 backlog items, 0 unsettled items, no runtime artifact write, no copyable command, no OCR, no file processing, and no network calls.
+
+Safety:
+
+- This created a no-processing readiness packet only. It did not process configured SyncThing/private watch inputs; run OCR/App Intelligence; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.

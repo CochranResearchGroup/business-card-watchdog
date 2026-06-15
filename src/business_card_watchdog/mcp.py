@@ -1320,6 +1320,14 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_watch_dry_run_readiness",
+                "description": "Build a no-processing readiness checklist before any configured private-source watch dry run.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"write": {"type": "boolean", "default": True}},
+                },
+            },
+            {
                 "name": "business_card_watchdog_watch_dry_run",
                 "description": "Run a fixture-backed watched-folder dry-run harness without touching configured private watch inputs.",
                 "input_schema": {"type": "object", "properties": {}},
@@ -1941,6 +1949,8 @@ def call_tool(
             response=str(args["response"]),
             acknowledgement=str(args.get("acknowledgement") or ""),
         )
+    if tool_name == "business_card_watchdog_watch_dry_run_readiness":
+        return service.watch_dry_run_readiness(write=bool(args.get("write", True)))
     if tool_name == "business_card_watchdog_watch_dry_run":
         return service.watch_dry_run_harness()
     if tool_name == "business_card_watchdog_doctor":

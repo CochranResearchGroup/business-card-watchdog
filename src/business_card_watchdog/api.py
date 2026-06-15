@@ -1207,6 +1207,12 @@ def create_app(config_path: Path | None = None):
             acknowledgement=request.acknowledgement,
         )
 
+    @app.post("/watch/dry-run-readiness")
+    def watch_dry_run_readiness(
+        request: WatchBacklogPreflightRequest = Body(default=WatchBacklogPreflightRequest()),
+    ) -> dict[str, object]:
+        return service().watch_dry_run_readiness(write=request.write)
+
     @app.post("/watch/dry-run")
     def watch_dry_run() -> dict[str, object]:
         return service().watch_dry_run_harness()

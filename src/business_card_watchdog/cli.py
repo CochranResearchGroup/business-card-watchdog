@@ -235,6 +235,65 @@ def _render_watch_dry_run_command_copy_packet_text(payload: dict[str, object]) -
     return "\n".join(lines) + "\n"
 
 
+def _render_watch_dry_run_readiness_text(payload: dict[str, object]) -> str:
+    preflight = dict(payload.get("preflight_summary") or {})
+    counts = dict(preflight.get("counts") or {})
+    handoff = dict(payload.get("handoff_summary") or {})
+    checks = payload.get("readiness_checks") or []
+    sequence = payload.get("operator_sequence") or []
+    blocked_reasons = payload.get("blocked_reasons") or []
+    commands = dict(payload.get("commands") or {})
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    lines = [
+        f"Watch dry-run readiness: {payload.get('state')}",
+        f"Recommended next step: {payload.get('recommended_next_step')}",
+        f"Inputs: {preflight.get('input_count', 0)}",
+        f"Backlog: {counts.get('backlog', 0)}",
+        f"Unsettled: {counts.get('unsettled', 0)}",
+        f"Handoff: {handoff.get('state')}",
+        f"Entries: {handoff.get('entry_count', 0)}",
+        "Observed: "
+        f"files={payload.get('files_processed', 0)} "
+        f"ocr={payload.get('ocr_attempted', 0)} "
+        f"writes={payload.get('writes_attempted', 0)} "
+        f"network={payload.get('network_calls_made', 0)}",
+        f"Runtime artifact written: {payload.get('runtime_artifact_written', False)}",
+    ]
+    if payload.get("readiness_path"):
+        lines.append(f"Readiness path: {payload.get('readiness_path')}")
+    check_rows = checks if isinstance(checks, list) else []
+    lines.append(f"Readiness checks: {len(check_rows)}")
+    for check in check_rows:
+        if isinstance(check, dict):
+            lines.append(f" - {check.get('check')}: {check.get('status')}")
+    blocked_rows = blocked_reasons if isinstance(blocked_reasons, list) else []
+    if blocked_rows:
+        lines.append("Blocked reasons:")
+        for reason in blocked_rows:
+            lines.append(f" - {reason}")
+    sequence_rows = sequence if isinstance(sequence, list) else []
+    lines.append(f"Operator sequence: {len(sequence_rows)}")
+    for step in sequence_rows:
+        if isinstance(step, dict):
+            lines.append(f" - {step.get('step')}: {step.get('command')}")
+    lines.append("Commands:")
+    for label, key in [
+        ("Readiness", "watch_dry_run_readiness"),
+        ("Execution drill", "watch_dry_run_execution_drill"),
+        ("Selection handoff", "watch_dry_run_selection_handoff"),
+        ("Command copy packet", "watch_dry_run_command_copy_packet"),
+        ("Watch once dry run", "watch_once_dry_run"),
+    ]:
+        command = commands.get(key)
+        if command:
+            lines.append(f" - {label}: {command}")
+    stop_rows = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stop_rows)}")
+    for condition in stop_rows:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_review_routing_drill_text(payload: dict[str, object]) -> str:
     review = dict(payload.get("review") or {})
     safe_actions = dict(payload.get("safe_actions") or {})
@@ -2783,6 +2842,10 @@ def build_parser() -> argparse.ArgumentParser:
     watch_dry_run_command_copy_packet.add_argument("--acknowledgement", default="")
     watch_dry_run_command_copy_packet.add_argument("--json", action="store_true")
 
+    watch_dry_run_readiness = sub.add_parser("watch-dry-run-readiness")
+    watch_dry_run_readiness.add_argument("--no-write", action="store_true")
+    watch_dry_run_readiness.add_argument("--json", action="store_true")
+
     watch_dry_run = sub.add_parser("watch-dry-run")
     watch_dry_run.add_argument("--json", action="store_true")
 
@@ -3596,6 +3659,12 @@ def main(argv: list[str] | None = None) -> int:
         output = json.dumps(payload, indent=2) if args.json else _render_watch_dry_run_command_copy_packet_text(payload)
         print(output, end="")
         return 0 if payload["state"] == "ready_for_operator_copy" else 2
+
+    if args.command == "watch-dry-run-readiness":
+        payload = service.watch_dry_run_readiness(write=not args.no_write)
+        output = json.dumps(payload, indent=2) if args.json else _render_watch_dry_run_readiness_text(payload)
+        print(output, end="")
+        return 0 if payload["state"] == "ready_for_operator_response" else 2
 
     if args.command == "watch-dry-run":
         payload = service.watch_dry_run_harness()

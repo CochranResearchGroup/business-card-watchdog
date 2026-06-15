@@ -12922,6 +12922,168 @@ class BusinessCardService:
             ],
         }
 
+    def watch_dry_run_readiness(self, *, write: bool = True) -> dict[str, Any]:
+        ensure_runtime_dirs(self.config)
+        preflight = self.watch_backlog_preflight(write=False)
+        handoff = self.watch_dry_run_selection_handoff(write=False)
+        preflight_state = str(preflight.get("state") or "")
+        handoff_state = str(handoff.get("state") or "")
+        counts = dict(preflight.get("counts") or {})
+        backlog_count = int(counts.get("backlog") or 0)
+        unsettled_count = int(counts.get("unsettled") or 0)
+        blocked_reasons: list[str] = []
+        if preflight_state != "ready_for_operator_selected_dry_run":
+            blocked_reasons.append(f"watch backlog preflight is {preflight_state or 'unknown'}")
+        if handoff_state != "awaiting_operator_response":
+            blocked_reasons.append(f"watch dry-run selection handoff is {handoff_state or 'unknown'}")
+        if backlog_count <= 0:
+            blocked_reasons.append("configured watch backlog is empty")
+        if unsettled_count:
+            blocked_reasons.append("configured watch backlog still has unsettled files")
+        state = "ready_for_operator_response" if not blocked_reasons else "blocked"
+        payload: dict[str, Any] = {
+            "schema": "business-card-watchdog.watch-dry-run-readiness.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "recommended_next_step": "validate_operator_response" if state == "ready_for_operator_response" else "resolve_blockers",
+            "preflight_summary": {
+                "schema": preflight.get("schema"),
+                "state": preflight_state,
+                "input_count": preflight.get("input_count", 0),
+                "counts": counts,
+                "scan_truncated": preflight.get("scan_truncated", False),
+                "last_error_present": preflight.get("last_error_present", False),
+                "private_paths_redacted": True,
+                "private_filenames_redacted": True,
+            },
+            "handoff_summary": {
+                "schema": handoff.get("schema"),
+                "state": handoff_state,
+                "entry_count": handoff.get("entry_count", 0),
+                "entries": [
+                    {
+                        "input_ref": entry.get("input_ref"),
+                        "state": entry.get("state"),
+                        "configured_ref_kind": entry.get("configured_ref_kind"),
+                        "configured_ref_display": entry.get("configured_ref_display"),
+                    }
+                    for entry in list(handoff.get("entries") or [])
+                    if isinstance(entry, dict)
+                ],
+            },
+            "readiness_checks": [
+                {
+                    "check": "configured_watch_backlog_settled",
+                    "status": "ready" if preflight_state == "ready_for_operator_selected_dry_run" else "blocked",
+                    "evidence": {
+                        "preflight_state": preflight_state,
+                        "backlog": backlog_count,
+                        "unsettled": unsettled_count,
+                        "input_count": preflight.get("input_count", 0),
+                    },
+                },
+                {
+                    "check": "operator_response_handoff_available",
+                    "status": "ready" if handoff_state == "awaiting_operator_response" else "blocked",
+                    "evidence": {
+                        "handoff_state": handoff_state,
+                        "entry_count": handoff.get("entry_count", 0),
+                    },
+                },
+                {
+                    "check": "fixture_execution_drill_review",
+                    "status": "operator_review_required",
+                    "evidence": {
+                        "command": "drills watch-dry-run-execution --json",
+                        "requires_operator_to_review_sample_output": True,
+                    },
+                },
+                {
+                    "check": "command_copy_packet_required",
+                    "status": "operator_response_required",
+                    "evidence": {
+                        "command": (
+                            "watch-dry-run-command-copy-packet --response <operator-response> "
+                            "--acknowledgement <operator-acknowledgement> --json"
+                        ),
+                        "required_acknowledgement": "I understand this will dry-run the configured private watch backlog",
+                    },
+                },
+            ],
+            "blocked_reasons": blocked_reasons,
+            "operator_sequence": [
+                {
+                    "step": "review_fixture_execution_drill",
+                    "command": "drills watch-dry-run-execution --json",
+                    "requires_explicit_operator_action": False,
+                    "safe_to_auto_continue": True,
+                },
+                {
+                    "step": "inspect_selection_handoff",
+                    "command": "watch-dry-run-selection-handoff --json",
+                    "requires_explicit_operator_action": False,
+                    "safe_to_auto_continue": True,
+                },
+                {
+                    "step": "validate_operator_response",
+                    "command": "watch-dry-run-validate-response --response <operator-response> --json",
+                    "requires_explicit_operator_action": True,
+                    "safe_to_auto_continue": False,
+                },
+                {
+                    "step": "build_command_copy_packet",
+                    "command": (
+                        "watch-dry-run-command-copy-packet --response <operator-response> "
+                        "--acknowledgement <operator-acknowledgement> --json"
+                    ),
+                    "requires_explicit_operator_action": True,
+                    "safe_to_auto_continue": False,
+                },
+                {
+                    "step": "run_private_watch_dry_run",
+                    "command": "watch --once --dry-run",
+                    "requires_explicit_operator_action": True,
+                    "safe_to_auto_continue": False,
+                    "blocked_until": "command_copy_packet_state_ready_for_operator_copy",
+                },
+            ],
+            "command_copy_text": None,
+            "private_paths_redacted": True,
+            "private_filenames_redacted": True,
+            "private_sources_used": False,
+            "files_processed": 0,
+            "ocr_attempted": 0,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "runtime_artifact_written": False,
+            "readiness_path": None,
+            "commands": {
+                "watch_dry_run_readiness": "watch-dry-run-readiness --json",
+                "watch_backlog_preflight": "watch-backlog-preflight --no-write --json",
+                "watch_dry_run_execution_drill": "drills watch-dry-run-execution --json",
+                "watch_dry_run_selection_handoff": "watch-dry-run-selection-handoff --json",
+                "watch_dry_run_validate_response": "watch-dry-run-validate-response --response <operator-response> --json",
+                "watch_dry_run_command_copy_packet": (
+                    "watch-dry-run-command-copy-packet --response <operator-response> "
+                    "--acknowledgement <operator-acknowledgement> --json"
+                ),
+                "watch_once_dry_run": "watch --once --dry-run",
+            },
+            "explicit_stop_conditions": [
+                "This readiness packet does not process watched files.",
+                "This readiness packet does not return a copyable private-source dry-run command.",
+                "Only run watch --once --dry-run after response validation and command-copy acknowledgement.",
+                "Do not run public-web search, paid enrichment, or live sink operations from this readiness packet.",
+            ],
+        }
+        if write:
+            readiness_path = self.config.data_dir / "watch_dry_run_readiness.json"
+            readiness_path.parent.mkdir(parents=True, exist_ok=True)
+            readiness_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            payload["runtime_artifact_written"] = True
+            payload["readiness_path"] = str(readiness_path)
+        return payload
+
     def watch_dry_run_harness(self) -> dict[str, Any]:
         ensure_runtime_dirs(self.config)
         harness_id = f"{utc_now().replace(':', '-')}-{uuid4().hex[:8]}"

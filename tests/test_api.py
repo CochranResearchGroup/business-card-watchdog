@@ -1867,6 +1867,14 @@ def test_api_enrichment_request_accepts_paid_provider_results(tmp_path: Path) ->
     assert watch_command_copy["state"] == "ready_for_operator_copy"
     assert watch_command_copy["command_copy_text"] == "watch --once --dry-run"
     assert watch_command_copy["files_processed"] == 0
+    watch_readiness = client.post("/watch/dry-run-readiness", json={"write": False}).json()
+    serialized_readiness = json.dumps(watch_readiness, sort_keys=True)
+    assert watch_readiness["schema"] == "business-card-watchdog.watch-dry-run-readiness.v1"
+    assert watch_readiness["state"] == "ready_for_operator_response"
+    assert watch_readiness["command_copy_text"] is None
+    assert watch_readiness["runtime_artifact_written"] is False
+    assert str(source) not in serialized_readiness
+    assert "private-card-photo.png" not in serialized_readiness
     watch_dry_run = client.post("/watch/dry-run").json()
     assert watch_dry_run["schema"] == "business-card-watchdog.watch-dry-run-harness.v1"
     assert watch_dry_run["state"] == "passed"

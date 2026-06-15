@@ -292,6 +292,36 @@ def test_service_watch_dry_run_command_copy_blocks_without_acknowledgement(tmp_p
     assert "acknowledgement does not match required text" in packet["blocked_reasons"]
 
 
+def test_service_watch_dry_run_readiness_redacts_private_source_and_blocks_command(tmp_path: Path) -> None:
+    source = tmp_path / "Private Phone Camera"
+    write_synthetic_image(source / "private-card-photo.png")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        watch=WatchConfig(inputs=[str(source)], settle_seconds=0.0),
+    )
+
+    payload = BusinessCardService(config).watch_dry_run_readiness(write=True)
+    serialized = json.dumps(payload, sort_keys=True)
+
+    assert payload["schema"] == "business-card-watchdog.watch-dry-run-readiness.v1"
+    assert payload["state"] == "ready_for_operator_response"
+    assert payload["preflight_summary"]["counts"]["backlog"] == 1
+    assert payload["handoff_summary"]["entry_count"] == 1
+    assert payload["handoff_summary"]["entries"][0]["configured_ref_display"] == "<redacted-path>"
+    assert payload["command_copy_text"] is None
+    assert payload["files_processed"] == 0
+    assert payload["ocr_attempted"] == 0
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert payload["runtime_artifact_written"] is True
+    assert Path(payload["readiness_path"]).exists()
+    assert payload["operator_sequence"][-1]["command"] == "watch --once --dry-run"
+    assert payload["operator_sequence"][-1]["blocked_until"] == "command_copy_packet_state_ready_for_operator_copy"
+    assert str(source) not in serialized
+    assert "private-card-photo.png" not in serialized
+
+
 def test_service_live_target_candidates_report_blocks_unready_jobs(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",

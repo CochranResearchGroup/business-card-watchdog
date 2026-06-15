@@ -110,6 +110,7 @@ Inspect runs, jobs, review queue, sinks, and watcher state:
 .venv/bin/bcw sinks check --json
 .venv/bin/bcw watch-status --json
 .venv/bin/bcw watch-backlog-preflight --json
+.venv/bin/bcw watch-dry-run-readiness --json
 .venv/bin/bcw watch-dry-run-selection-handoff --json
 .venv/bin/bcw drills watch-dry-run-selection
 .venv/bin/bcw drills watch-dry-run-execution
@@ -142,6 +143,12 @@ one real watcher scan through the dry-run batch orchestrator using a fixture
 skill adapter. It proves seen-file persistence, contact artifact creation, and
 dry-run sink payload planning without using configured watch inputs or calling
 live sink/network surfaces.
+
+`watch-dry-run-readiness` inspects the configured watch backlog without
+processing files and emits the operator checklist required before any
+private-source `watch --once --dry-run`. It keeps paths and filenames redacted,
+requires fixture execution review plus response validation, and does not return a
+copyable dry-run command.
 
 Ordinary dry-run batch processing also writes `card_candidates.json` beside a job's
 `preclassification.json` when deterministic OpenCV boxes exist. Those records are
@@ -241,6 +248,11 @@ executing `watch --once --dry-run`.
 dry-run execution. It does execute fixture OCR/spec/review/normalization/routing
 through the real batch orchestrator, but it does not use configured SyncThing
 inputs and does not call live sinks.
+
+`watch-dry-run-readiness` is the no-processing configured-source checkpoint
+between fixture execution review and any operator-selected private dry run. It
+reports only redacted aggregate backlog state and keeps `watch --once --dry-run`
+blocked behind the existing response-validation and command-copy packet.
 
 `offline-pilot-gap-audit` inspects offline drill and documentation coverage and
 reports the remaining live/operator-only boundaries without running private
