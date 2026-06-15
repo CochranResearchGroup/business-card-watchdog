@@ -9,7 +9,7 @@ from .contact import build_contact_candidate, contact_candidate_to_spec
 from .dedupe import assess_duplicate, remember_identity
 from .ledger import RunLedger
 from .models import CardJob, utc_now
-from .preclassifier import assess_business_card_candidate
+from .preclassifier import assess_business_card_candidate, build_card_candidate_box_manifest
 from .review import assess_contact_spec, write_review_packet
 from .routing import decide_sinks, load_contact_spec
 from .sinks import build_sink_payloads, write_sink_payloads
@@ -79,6 +79,27 @@ class BatchOrchestrator:
                 "image_preclassified",
                 {"job": job.to_dict(), "assessment": assessment.to_dict()},
             )
+            candidate_manifest = build_card_candidate_box_manifest(
+                assessment=assessment,
+                source_image_path=Path(job.image_path),
+                job_id=job.job_id,
+            )
+            if candidate_manifest["candidate_count"]:
+                candidate_manifest_path = artifact_dir / "card_candidates.json"
+                candidate_manifest_path.write_text(
+                    json.dumps(candidate_manifest, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+                ledger.record_artifact(
+                    job_id=job.job_id,
+                    kind="card_candidates",
+                    path=candidate_manifest_path,
+                    metadata={"candidate_count": candidate_manifest["candidate_count"]},
+                )
+                ledger.record_event(
+                    "card_candidates_recorded",
+                    {"job": job.to_dict(), "candidate_manifest": candidate_manifest},
+                )
             if assessment.decision == "not_business_card" or (
                 assessment.decision == "uncertain" and not self.config.prefilter.process_uncertain
             ):

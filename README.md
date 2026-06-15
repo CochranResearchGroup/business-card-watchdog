@@ -118,6 +118,11 @@ with multiple card rectangles and proves the deterministic OpenCV prefilter reco
 candidate card boxes before OCR/App Intelligence. It uses only cache-local fixture
 data and makes no private, enrichment, or sink calls.
 
+Ordinary dry-run batch processing also writes `card_candidates.json` beside a job's
+`preclassification.json` when deterministic OpenCV boxes exist. Those records are
+stable pre-OCR candidate boxes for later fanout; they are not contacts and cannot be
+routed or enriched without OCR/App Intelligence verification.
+
 `drills review-routing` creates a synthetic fixture run and proves review approval,
 review bundle/workbook export, duplicate lookup planning, dry-run sink routing, and
 apply preflight without configured watch inputs, private images, enrichment calls, or

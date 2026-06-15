@@ -46,6 +46,23 @@ def write_square_image(path: Path) -> Path:
     return path
 
 
+def write_multi_card_image(path: Path) -> Path:
+    cv2 = __import__("cv2")
+    np = __import__("numpy")
+    image = np.zeros((900, 1400, 3), dtype=np.uint8)
+    cards = [
+        ((100, 120), (520, 360)),
+        ((650, 140), (1070, 380)),
+        ((240, 520), (660, 760)),
+    ]
+    for top_left, bottom_right in cards:
+        cv2.rectangle(image, top_left, bottom_right, (255, 255, 255), thickness=-1)
+        cv2.rectangle(image, top_left, bottom_right, (0, 0, 0), thickness=4)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    assert cv2.imwrite(str(path), image)
+    return path
+
+
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
 

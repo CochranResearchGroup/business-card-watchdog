@@ -74,3 +74,15 @@ Validation:
 - `.venv/bin/python -m pytest -q` should pass with the CI-equivalent dev and vision extras installed.
 - `.venv/bin/ruff check .` passed.
 - `uv build --out-dir dist` built source and wheel distributions.
+
+## 2026-06-15 Local Gate For Plan 0011
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_preclassifier.py::test_preclassifier_detects_multiple_cards_in_large_photo tests/test_preclassifier.py::test_orchestrator_records_multi_card_candidate_manifest -q` passed with 2 tests.
+- `.venv/bin/python -m pytest -q` passed with 239 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` built source and wheel distributions.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.

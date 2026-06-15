@@ -7,6 +7,7 @@ from typing import Any, Literal
 
 
 CardCandidateDecision = Literal["likely_business_card", "not_business_card", "uncertain"]
+CARD_CANDIDATE_BOXES_SCHEMA = "business-card-watchdog.card-candidate-boxes.v1"
 
 
 @dataclass(frozen=True)
@@ -95,6 +96,53 @@ def assess_business_card_candidate(path: Path, *, min_score: float = 0.55) -> Ca
         dimensions=dimensions,
         analyzers=analyzers,
     )
+
+
+def build_card_candidate_box_manifest(
+    *,
+    assessment: CardCandidateAssessment,
+    source_image_path: Path,
+    job_id: str,
+) -> dict[str, Any]:
+    payload = assessment.to_dict()
+    rectangle = dict(payload.get("analyzers", {}).get("opencv_rectangle") or {})
+    boxes = [box for box in list(rectangle.get("boxes") or []) if isinstance(box, dict)]
+    candidates = [
+        {
+            "candidate_id": f"{job_id}-card-{index:03d}",
+            "candidate_index": index,
+            "source_job_id": job_id,
+            "source_image_path": str(source_image_path),
+            "box": box,
+            "preclassification_decision": assessment.decision,
+            "preclassification_score": assessment.score,
+            "analyzer": "opencv_rectangle",
+            "requires_ocr_verification": True,
+        }
+        for index, box in enumerate(boxes, start=1)
+    ]
+    return {
+        "schema": CARD_CANDIDATE_BOXES_SCHEMA,
+        "source_job_id": job_id,
+        "source_image_path": str(source_image_path),
+        "candidate_count": len(candidates),
+        "candidates": candidates,
+        "preclassification": {
+            "decision": assessment.decision,
+            "score": assessment.score,
+            "reasons": list(assessment.reasons),
+            "dimensions": payload.get("dimensions"),
+        },
+        "analyzer_summary": {
+            "opencv_rectangle_available": rectangle.get("available") is True,
+            "card_like_count": int(rectangle.get("card_like_count") or 0),
+            "area_fraction_total": float(rectangle.get("area_fraction_total") or 0.0),
+        },
+        "explicit_stop_conditions": [
+            "Candidate boxes are deterministic pre-OCR evidence, not verified contacts.",
+            "Do not route, enrich, or write contacts from candidate boxes without OCR/App Intelligence verification.",
+        ],
+    }
 
 
 def read_image_dimensions(path: Path) -> ImageDimensions | None:

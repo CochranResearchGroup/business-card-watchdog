@@ -11,6 +11,7 @@ from synthetic_fixtures import (
     SyntheticSkillAdapter,
     latest_jobs_by_id,
     read_jsonl,
+    write_multi_card_image,
     write_square_image,
     write_synthetic_image,
 )
@@ -40,20 +41,8 @@ def test_preclassifier_reports_opencv_availability_when_installed(tmp_path: Path
 
 def test_preclassifier_detects_multiple_cards_in_large_photo(tmp_path: Path) -> None:
     pytest = __import__("pytest")
-    cv2 = pytest.importorskip("cv2")
-    import numpy as np
-
-    image = np.zeros((900, 1400, 3), dtype=np.uint8)
-    cards = [
-        ((100, 120), (520, 360)),
-        ((650, 140), (1070, 380)),
-        ((240, 520), (660, 760)),
-    ]
-    for top_left, bottom_right in cards:
-        cv2.rectangle(image, top_left, bottom_right, (255, 255, 255), thickness=-1)
-        cv2.rectangle(image, top_left, bottom_right, (0, 0, 0), thickness=4)
-    path = tmp_path / "IMG_20260511_103704.jpg"
-    assert cv2.imwrite(str(path), image)
+    pytest.importorskip("cv2")
+    path = write_multi_card_image(tmp_path / "IMG_20260511_103704.jpg")
 
     assessment = assess_business_card_candidate(path)
     rectangle = assessment.analyzers["opencv_rectangle"]
@@ -62,6 +51,34 @@ def test_preclassifier_detects_multiple_cards_in_large_photo(tmp_path: Path) -> 
     assert rectangle["available"] is True
     assert rectangle["card_like_count"] >= 3
     assert len(rectangle["boxes"]) >= 3
+
+
+def test_orchestrator_records_multi_card_candidate_manifest(tmp_path: Path, monkeypatch) -> None:
+    pytest = __import__("pytest")
+    pytest.importorskip("cv2")
+    source_dir = tmp_path / "images"
+    write_multi_card_image(source_dir / "IMG_20260511_103704.jpg")
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    adapter = SyntheticSkillAdapter()
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", adapter)
+
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+    job = next(iter(latest_jobs_by_id(run_dir / "jobs.jsonl").values()))
+    artifact_dir = Path(job["artifact_dir"])
+    manifest = json.loads((artifact_dir / "card_candidates.json").read_text(encoding="utf-8"))
+    artifact_kinds = [record["kind"] for record in read_jsonl(run_dir / "artifacts.jsonl")]
+    events = read_jsonl(run_dir / "events.jsonl")
+
+    assert manifest["schema"] == "business-card-watchdog.card-candidate-boxes.v1"
+    assert manifest["source_job_id"] == job["job_id"]
+    assert manifest["candidate_count"] >= 3
+    assert len(manifest["candidates"]) >= 3
+    assert manifest["candidates"][0]["candidate_id"].startswith(job["job_id"] + "-card-")
+    assert all(candidate["requires_ocr_verification"] is True for candidate in manifest["candidates"])
+    assert "card_candidates" in artifact_kinds
+    assert any(event["event_type"] == "card_candidates_recorded" for event in events)
+    assert adapter.apply_google_calls == [False]
 
 
 def test_preclassifier_rejects_square_photo_shape(tmp_path: Path) -> None:
