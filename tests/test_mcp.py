@@ -427,10 +427,19 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert live_targets["candidate_count"] == 1
     assert live_targets["network_calls_made"] == 0
     assert live_targets["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id}"
+    assert live_targets["commands"]["validate_operator_response"] == (
+        f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+    )
+    assert live_targets["candidates"][0]["commands"]["validate_operator_response"] == (
+        f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+    )
     assert live_audit["schema"] == "business-card-watchdog.live-readiness-audit.v1"
     assert live_audit["run_id"] == run_id
     assert live_audit["writes_attempted"] == 0
     assert live_audit["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id}"
+    assert live_audit["commands"]["validate_operator_response"] == (
+        f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+    )
     assert live_requirements["schema"] == "business-card-watchdog.live-selection-requirements.v1"
     assert live_requirements["run_id"] == run_id
     assert live_requirements["writes_attempted"] == 0

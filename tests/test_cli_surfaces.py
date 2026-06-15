@@ -194,9 +194,15 @@ def test_cli_live_target_candidates_reports_text_and_json(tmp_path: Path, capsys
         f"sinks select-live-target {candidate['job_id']} --run-id {run_id} --sink google_contacts "
         "--operator <operator> --scope lookup --safety-confirmation <confirmation> --json"
     )
+    assert candidate["commands"]["validate_operator_response"] == (
+        f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+    )
     assert payload["commands"]["live_readiness_audit"] == f"live-readiness-audit --run-id {run_id}"
     assert payload["commands"]["live_selection_requirements"] == f"live-selection-requirements --run-id {run_id}"
     assert payload["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id}"
+    assert payload["commands"]["validate_operator_response"] == (
+        f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+    )
 
     assert main(["--config", str(config_path), "live-target-candidates", "--run-id", run_id]) == 0
     text = capsys.readouterr().out
@@ -207,6 +213,10 @@ def test_cli_live_target_candidates_reports_text_and_json(tmp_path: Path, capsys
     assert (
         f"Select lookup target: sinks select-live-target {candidate['job_id']} --run-id {run_id} "
         "--sink google_contacts --operator <operator> --scope lookup --safety-confirmation <confirmation> --json"
+    ) in text
+    assert (
+        f"Validate response: runs live-pilot-validate-response {run_id} "
+        "--response <operator-response> --json"
     ) in text
     assert f"Live readiness audit: live-readiness-audit --run-id {run_id}" in text
     assert f"Selection requirements: live-selection-requirements --run-id {run_id}" in text
@@ -239,6 +249,9 @@ def test_cli_live_readiness_audit_reports_text_and_json(tmp_path: Path, capsys) 
     assert payload["commands"]["target_candidates"] == f"live-target-candidates --run-id {run_id}"
     assert payload["commands"]["selection_requirements"] == f"live-selection-requirements --run-id {run_id}"
     assert payload["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id}"
+    assert payload["commands"]["validate_operator_response"] == (
+        f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+    )
 
     assert main(["--config", str(config_path), "live-readiness-audit", "--run-id", run_id, "--no-write"]) == 0
     text = capsys.readouterr().out
@@ -247,6 +260,10 @@ def test_cli_live_readiness_audit_reports_text_and_json(tmp_path: Path, capsys) 
     assert f"Target candidates: live-target-candidates --run-id {run_id}" in text
     assert f"Selection requirements: live-selection-requirements --run-id {run_id}" in text
     assert f"Live pilot handoff: runs live-pilot-handoff {run_id}" in text
+    assert (
+        f"Validate response: runs live-pilot-validate-response {run_id} "
+        "--response <operator-response> --json"
+    ) in text
     assert "Runtime readiness: runtime-readiness --json" in text
     assert "{" not in text
 

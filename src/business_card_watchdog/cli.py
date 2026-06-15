@@ -411,6 +411,7 @@ def _render_live_target_candidates_text(payload: dict[str, object]) -> str:
             ("Pilot readiness", "pilot_readiness"),
             ("Lookup readiness", "lookup_readiness"),
             ("Select lookup target", "select_lookup_target"),
+            ("Validate response", "validate_operator_response"),
         ]:
             command = candidate_commands.get(key)
             if command:
@@ -419,6 +420,7 @@ def _render_live_target_candidates_text(payload: dict[str, object]) -> str:
         ("Live readiness audit", "live_readiness_audit"),
         ("Selection requirements", "live_selection_requirements"),
         ("Live pilot handoff", "live_pilot_handoff"),
+        ("Validate response", "validate_operator_response"),
     ]:
         command = commands.get(key)
         if command:
@@ -453,6 +455,7 @@ def _render_live_readiness_audit_text(payload: dict[str, object]) -> str:
         ("Service recovery", "service_recovery"),
         ("Pilot readiness", "pilot_readiness"),
         ("Live pilot handoff", "live_pilot_handoff"),
+        ("Validate response", "validate_operator_response"),
     ]:
         command = commands.get(key)
         if command:

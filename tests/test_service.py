@@ -128,6 +128,9 @@ def test_service_live_target_candidates_report_blocks_unready_jobs(tmp_path: Pat
     assert candidate["state"] == "blocked"
     assert "job state is needs_review" in candidate["stop_reasons"]
     assert "sinks select-live-target" in candidate["commands"]["select_lookup_target"]
+    assert candidate["commands"]["validate_operator_response"] == (
+        f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+    )
 
 
 def test_service_live_readiness_audit_writes_run_level_artifact(tmp_path: Path) -> None:
@@ -147,6 +150,9 @@ def test_service_live_readiness_audit_writes_run_level_artifact(tmp_path: Path) 
     assert audit["writes_attempted"] == 0
     assert audit["network_calls_made"] == 0
     assert audit["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id}"
+    assert audit["commands"]["validate_operator_response"] == (
+        f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+    )
     assert "audit_path" in audit
     assert Path(audit["audit_path"]).exists()
     artifacts = BusinessCardService(config).list_artifacts(run_id)
