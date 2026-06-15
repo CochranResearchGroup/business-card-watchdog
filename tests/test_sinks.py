@@ -48,7 +48,7 @@ def test_live_readiness_blocks_when_apply_disabled() -> None:
     assert "disabled" in readiness.reason
 
 
-def test_live_odoo_readiness_is_blocked_until_implemented_when_apply_enabled() -> None:
+def test_live_odoo_readiness_blocks_until_local_evidence_when_apply_enabled() -> None:
     readiness = check_sink_readiness("odoo", dry_run=False, apply_enabled=True, odollo_tenant="saber")
 
     assert not readiness.ready
@@ -82,7 +82,8 @@ def test_live_odoo_readiness_reports_local_evidence_without_call(tmp_path, monke
 
     assert not readiness.ready
     assert readiness.status == "blocked"
-    assert "not implemented" in readiness.reason
+    assert "selected-target audit" in readiness.reason
+    assert "one-job pilot commands" in readiness.reason
     assert readiness.details["tenant_home_present"] is True
     assert readiness.details["state_evidence_present"] is True
     assert readiness.details["live_probe"]["status"] == "not_invoked_without_operator_approval"
@@ -440,7 +441,8 @@ def test_build_sink_apply_preflight_is_zero_write_and_explicitly_gated() -> None
     assert preview["writes_attempted"] == 0
     assert preview["network_calls_made"] == 0
     assert blocked["state"] == "blocked"
-    assert "not implemented" in blocked["reason"]
+    assert "broad live apply is disabled" in blocked["reason"]
+    assert "selected-target write/readback pilot commands" in blocked["reason"]
 
 
 def test_build_sink_apply_decision_is_zero_write_and_decision_oriented() -> None:
@@ -484,7 +486,8 @@ def test_build_sink_apply_result_blocks_live_write_after_approval() -> None:
 
     assert result["schema"] == "business-card-watchdog.sink-apply-result.v1"
     assert result["state"] == "blocked"
-    assert "not implemented" in result["reason"]
+    assert "broad live apply is disabled" in result["reason"]
+    assert "selected-target write/readback pilot commands" in result["reason"]
     assert result["writes_attempted"] == 0
     assert result["network_calls_made"] == 0
     assert result["readback"] == []

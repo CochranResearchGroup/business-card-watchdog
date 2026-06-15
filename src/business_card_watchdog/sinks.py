@@ -189,7 +189,7 @@ def build_sink_apply_preflight(
     ]
     if apply:
         state = "blocked"
-        reasons.append("live sink apply/readback is not implemented yet")
+        reasons.append("broad live apply is disabled; use the selected-target write/readback pilot commands")
     elif blocked_actions:
         state = "blocked"
     else:
@@ -282,7 +282,7 @@ def build_sink_apply_result(
         reasons.append("mock sink adapter produced readback evidence; no live write attempted")
     else:
         state = "blocked"
-        reasons.append("live sink write/readback adapters are not implemented yet")
+        reasons.append("broad live apply is disabled; use selected-target write/readback pilot commands")
     actions = [
         {
             "sink": action.get("sink"),
@@ -533,7 +533,10 @@ def check_sink_readiness(
         return SinkReadiness(
             sink=sink,
             status="blocked",
-            reason="gws local readiness evidence exists; live Google Contacts write/readback gate is not implemented yet",
+            reason=(
+                "gws local readiness evidence exists; live Google Contacts write/readback requires "
+                "selected-target audit and explicit one-job pilot commands"
+            ),
             details=gws_details,
         )
 
@@ -570,7 +573,10 @@ def check_sink_readiness(
         return SinkReadiness(
             sink=sink,
             status="blocked",
-            reason="Odollo local readiness evidence exists; live Odoo/Odollo tenant readiness gate is not implemented yet",
+            reason=(
+                "Odollo local readiness evidence exists; live Odoo/Odollo write/readback requires "
+                "selected-target audit and explicit one-job pilot commands"
+            ),
             details=odollo_details,
         )
 

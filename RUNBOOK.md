@@ -3919,3 +3919,29 @@ Validation:
 Safety:
 
 - This was read-only drill evidence discovery only. It did not process configured/private SyncThing inputs, run public-web search, call paid enrichment, validate a real operator response, create or modify `selected_live_target.json`, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+## Turn 189 | 2026-06-15
+
+Continued Plan 0009 with Slice 0009-A113.
+
+Implemented:
+
+- Updated sink apply preflight and apply-result reasons to describe the current boundary accurately: broad live apply is disabled and operators must use selected-target write/readback pilot commands.
+- Updated live Google Contacts and Odollo/Odoo readiness messages to describe existing local readiness evidence plus selected-target audit and explicit one-job pilot requirements.
+- Removed stale active-surface wording that said live write/readback adapters were not implemented.
+- Sink/service/API/MCP focused coverage now asserts the selected-target pilot boundary language and zero write/network behavior.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sinks.py::test_live_odoo_readiness_blocks_until_local_evidence_when_apply_enabled tests/test_sinks.py::test_live_odoo_readiness_reports_local_evidence_without_call tests/test_sinks.py::test_build_sink_apply_preflight_is_zero_write_and_explicitly_gated tests/test_sinks.py::test_build_sink_apply_result_blocks_live_write_after_approval tests/test_service.py::test_service_preflight_sink_apply_writes_zero_write_artifact tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 7 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/sinks.py tests/test_sinks.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 230 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was messaging and readiness-boundary hardening only. It did not process configured/private SyncThing inputs, run public-web search, call paid enrichment, validate a real operator response, create or modify `selected_live_target.json`, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
