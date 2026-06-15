@@ -1193,6 +1193,30 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_operator_dashboard_composes_no_live_readiness tests/test_cli_surfaces.py::test_cli_operator_dashboard_reports_no_live_summary tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 4 tests.
 
+### Slice 0009-A68 | 2026-06-15 | Dashboard API/MCP Text Handoff
+
+Implemented:
+
+- Operator dashboard text output now renders the dashboard API route map.
+- Operator dashboard text output now renders MCP tool names and selected-run argument templates.
+- MCP arguments are rendered as compact `key=value` text so terminal output stays readable and does not fall back to raw JSON.
+- CLI tests protect API route and MCP tool visibility in the human-readable dashboard.
+
+Safety:
+
+- This slice is presentation/readback only.
+- It does not invoke API routes or MCP tools, execute next actions, process private SyncThing inputs, run public-web search, call paid enrichment, create `selected_live_target.json`, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_operator_dashboard_reports_no_live_summary tests/test_service.py::test_service_operator_dashboard_composes_no_live_readiness tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 4 tests.
+- `.venv/bin/python -m pytest -q` passed with 226 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

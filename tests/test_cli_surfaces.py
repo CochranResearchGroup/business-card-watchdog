@@ -112,6 +112,13 @@ def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) 
     assert f"Selected run: {run_id}" in text
     assert f"Review queue: reviews list --run-id {run_id} --state all --json" in text
     assert f"Next actions: actions next --run-id {run_id} --json" in text
+    assert "API routes:" in text
+    assert f"Next actions: GET /actions/next?run_id={run_id}&limit=20" in text
+    assert f"Live pilot handoff: GET /runs/{run_id}/live-pilot-handoff?write=false" in text
+    assert "MCP tools:" in text
+    assert f"Operator dashboard: business_card_watchdog_operator_dashboard args=run_id={run_id}" in text
+    assert f"Next actions: business_card_watchdog_next_actions args=limit=20, run_id={run_id}" in text
+    assert f"Live pilot status: business_card_watchdog_live_pilot_status args=run_id={run_id}, write=False" in text
     assert "Next actions: total=1 safe=0 explicit=1" in text
     assert "action=review_contact" in text
     assert "Live handoff: state=blocked operator_required=0" in text

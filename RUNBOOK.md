@@ -2647,6 +2647,31 @@ Safety:
 
 - This was no-write live handoff readback only. It did not write `live_pilot_handoff.json`, create `selected_live_target.json`, execute next actions, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
 
+## Turn 144 | 2026-06-15
+
+Continued Plan 0009 with Slice 0009-A68.
+
+Implemented:
+
+- Operator dashboard text output now renders API route handoff entries.
+- Operator dashboard text output now renders MCP tool names and selected-run argument templates.
+- MCP arguments are rendered as compact `key=value` text instead of raw nested JSON.
+- CLI tests protect readable API/MCP handoff visibility from `bcw operator-dashboard`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_operator_dashboard_reports_no_live_summary tests/test_service.py::test_service_operator_dashboard_composes_no_live_readiness tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 4 tests.
+- `.venv/bin/python -m pytest -q` passed with 226 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was presentation/readback only. It did not invoke API routes or MCP tools, execute next actions, process private SyncThing inputs, run public-web search, call paid enrichment, create `selected_live_target.json`, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
 ## Turn 142 | 2026-06-14
 
 Continued Plan 0009 with Slice 0009-A66.

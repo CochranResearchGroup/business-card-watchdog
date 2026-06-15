@@ -67,6 +67,8 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
     review_counts = dict(payload.get("review_counts") or {})
     next_actions = dict(payload.get("next_action_summary") or {})
     commands = dict(payload.get("commands") or {})
+    api_routes = dict(payload.get("api_routes") or {})
+    mcp_tools = dict(payload.get("mcp_tools") or {})
     blocked = payload.get("blocked_reasons") or []
     safe_actions = payload.get("safe_next_actions") or []
     stop_conditions = payload.get("explicit_stop_conditions") or []
@@ -109,6 +111,35 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
         command = commands.get(key)
         if command:
             lines.append(f" - {label}: {command}")
+    if api_routes:
+        lines.append("API routes:")
+        for label, key in [
+            ("Operator dashboard", "operator_dashboard"),
+            ("Next actions", "next_actions"),
+            ("Run next safe", "run_next_safe"),
+            ("Live pilot status", "live_pilot_status"),
+            ("Live pilot handoff", "live_pilot_handoff"),
+        ]:
+            route = api_routes.get(key)
+            if route:
+                lines.append(f" - {label}: {route}")
+    if mcp_tools:
+        lines.append("MCP tools:")
+        for label, key in [
+            ("Operator dashboard", "operator_dashboard"),
+            ("Next actions", "next_actions"),
+            ("Run next safe", "run_next_safe"),
+            ("Live pilot status", "live_pilot_status"),
+            ("Live pilot handoff", "live_pilot_handoff"),
+        ]:
+            tool_entry = mcp_tools.get(key)
+            if isinstance(tool_entry, dict):
+                tool_name = tool_entry.get("tool")
+                arguments = dict(tool_entry.get("arguments") or {})
+                rendered_args = ", ".join(f"{arg_key}={arguments[arg_key]}" for arg_key in sorted(arguments))
+                suffix = f" args={rendered_args}" if rendered_args else ""
+                if tool_name:
+                    lines.append(f" - {label}: {tool_name}{suffix}")
     sample_rows = next_actions.get("sample_actions") or []
     rows = sample_rows if isinstance(sample_rows, list) else []
     if rows:
