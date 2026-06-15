@@ -5850,3 +5850,32 @@ Validation:
 Safety:
 
 - This exposed existing selected-target gates from the operator dashboard only. It did not create `selected_live_target.json`; process configured SyncThing/private watch inputs; run OCR/App Intelligence; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.
+
+## Turn 258 | 2026-06-15
+
+Executed Plan 0052 with Slice 0052-A.
+
+Implemented:
+
+- Added selected-target approval boundary execution to the synthetic live-pilot rehearsal drill.
+- Added selected-target command-copy packet execution before synthetic selected-target creation.
+- Updated rehearsal sample output and CLI text to show both selected-target gate states and commands.
+- Updated ROADMAP for the new rehearsal evidence.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_live_pilot_rehearsal_drill_reaches_command_copy_gate tests/test_cli_surfaces.py::test_cli_live_pilot_rehearsal_drill_reaches_command_copy_gate tests/test_api.py::test_api_live_pilot_rehearsal_drill_reaches_command_copy_gate tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 4 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 329 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `rg -n "selected_target_approval_boundary|selected-target-approval-boundary|selected_target_command_copy_packet|selected-target-command-copy-packet|Plan 0052|live-pilot rehearsal|live_pilot_rehearsal" README.md ROADMAP.md RUNBOOK.md docs src tests` passed.
+- `uv build --out-dir dist` built source and wheel distributions.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `codegraph sync && codegraph status` passed; index is up to date.
+- `.venv/bin/bcw drills live-pilot-rehearsal --json` passed with the selected-target approval boundary at `ready_for_explicit_selected_target_creation`, the selected-target command-copy packet at `ready_for_operator_copy`, zero writes, and zero network calls.
+- `.venv/bin/bcw drills watch-dry-run-execution --json` passed with one synthetic fixture file processed through a completed dry-run batch and no writes or network calls.
+
+Safety:
+
+- This changed only a synthetic rehearsal drill and local sample output. It did not process configured SyncThing/private watch inputs; run private OCR/App Intelligence; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.

@@ -2043,6 +2043,14 @@ def test_service_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: 
     assert payload["routing_drill"]["state"] == "passed"
     assert payload["packets"]["selection_packet"]["schema"] == "business-card-watchdog.live-selection-packet.v1"
     assert payload["packets"]["validation"]["state"] == "ready_to_select_live_target"
+    assert payload["packets"]["selected_target_approval_boundary"]["state"] == (
+        "ready_for_explicit_selected_target_creation"
+    )
+    assert payload["packets"]["selected_target_approval_boundary"]["creates_selected_live_target"] is False
+    assert payload["packets"]["selected_target_command_copy_packet"]["state"] == "ready_for_operator_copy"
+    assert payload["packets"]["selected_target_command_copy_packet"]["acknowledgement_ok"] is True
+    assert payload["packets"]["selected_target_command_copy_packet"]["creates_selected_live_target"] is False
+    assert "--write-selected-target" in payload["packets"]["selected_target_command_copy_packet"]["command_copy_text"]
     assert payload["packets"]["selected_target"]["state"] == "created"
     assert payload["packets"]["selected_target_handoff"]["schema"] == (
         "business-card-watchdog.selected-live-target-handoff-from-response.v1"
@@ -2079,12 +2087,15 @@ def test_service_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: 
     assert "Preflight written: `True`" in preflight_sample_output
     assert "Command copy packet: `ready_for_operator_copy`" in sample_output
     assert f"Operator-selected preflight: `{payload['packets']['operator_selected_preflight']['state']}`" in sample_output
+    assert "Selected target approval boundary: `ready_for_explicit_selected_target_creation`" in sample_output
+    assert "Selected target command copy packet: `ready_for_operator_copy`" in sample_output
     assert "fixture contact is safe for google contacts test profile" not in sample_output
     assert "fixture contact is safe for google contacts test profile" not in preflight_sample_output
     assert Path(payload["drill_path"]).exists()
     assert (artifact_dir / "selected_live_target.json").exists()
     assert (artifact_dir / "selected_live_target_audit.json").exists()
     assert (artifact_dir / "sink_lookup_smoke_handoff.json").exists()
+    assert (config.runs_dir / run_id / "selected_target_approval_boundary.json").exists()
     assert (config.runs_dir / run_id / "live_pilot_readiness_export.json").exists()
     assert (config.runs_dir / run_id / "operator_selected_live_smoke_preflight_sample_output.md").exists()
     assert (config.runs_dir / run_id / "live_pilot_rehearsal_sample_output.md").exists()

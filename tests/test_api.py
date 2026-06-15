@@ -1996,6 +1996,10 @@ def test_api_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: Path
     assert drill["paid_enrichment_used"] is False
     assert drill["live_sink_calls_made"] is False
     assert drill["command_copy_ready"] is True
+    assert drill["packets"]["selected_target_approval_boundary"]["state"] == (
+        "ready_for_explicit_selected_target_creation"
+    )
+    assert drill["packets"]["selected_target_command_copy_packet"]["state"] == "ready_for_operator_copy"
     assert drill["packets"]["command_copy_packet"]["state"] == "ready_for_operator_copy"
     assert drill["writes_attempted"] == 0
     assert drill["network_calls_made"] == 0
@@ -2006,6 +2010,9 @@ def test_api_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: Path
     assert sample_output_path.exists()
     assert preflight_sample_output_path.exists()
     assert "Command copy packet: `ready_for_operator_copy`" in sample_output_path.read_text(encoding="utf-8")
+    assert "Selected target approval boundary: `ready_for_explicit_selected_target_creation`" in (
+        sample_output_path.read_text(encoding="utf-8")
+    )
     assert drill["packets"]["operator_selected_preflight"]["schema"] == (
         "business-card-watchdog.operator-selected-live-smoke-preflight.v1"
     )

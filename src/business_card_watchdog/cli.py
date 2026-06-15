@@ -391,6 +391,8 @@ def _render_live_pilot_rehearsal_drill_text(payload: dict[str, object]) -> str:
         ("Operator dashboard", "operator_dashboard"),
         ("Live pilot status", "live_pilot_status"),
         ("Live pilot handoff", "live_pilot_handoff"),
+        ("Selected target approval boundary", "selected_target_approval_boundary"),
+        ("Selected target command copy packet", "selected_target_command_copy_packet"),
         ("Command copy packet", "command_copy_packet"),
     ]:
         command = commands.get(key)

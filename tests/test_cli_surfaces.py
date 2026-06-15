@@ -166,6 +166,10 @@ def test_cli_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: Path
     assert payload["private_sources_used"] is False
     assert payload["live_sink_calls_made"] is False
     assert payload["command_copy_ready"] is True
+    assert payload["packets"]["selected_target_approval_boundary"]["state"] == (
+        "ready_for_explicit_selected_target_creation"
+    )
+    assert payload["packets"]["selected_target_command_copy_packet"]["state"] == "ready_for_operator_copy"
     assert payload["packets"]["command_copy_packet"]["state"] == "ready_for_operator_copy"
     assert payload["writes_attempted"] == 0
     assert payload["network_calls_made"] == 0
@@ -190,6 +194,8 @@ def test_cli_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: Path
     assert "State: passed" in text
     assert "Command copy ready: True" in text
     assert "Observed: writes=0 network=0 private_sources=False live_sinks=False" in text
+    assert "Selected target approval boundary: runs selected-target-approval-boundary" in text
+    assert "Selected target command copy packet: runs selected-target-command-copy-packet" in text
     assert "Command copy packet: runs live-pilot-command-copy-packet-from-response" in text
     assert "Sample output:" in text
     assert "Stop conditions: 4" in text

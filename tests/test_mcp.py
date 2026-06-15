@@ -1892,6 +1892,12 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert live_pilot_rehearsal_drill["private_sources_used"] is False
     assert live_pilot_rehearsal_drill["live_sink_calls_made"] is False
     assert live_pilot_rehearsal_drill["command_copy_ready"] is True
+    assert live_pilot_rehearsal_drill["packets"]["selected_target_approval_boundary"]["state"] == (
+        "ready_for_explicit_selected_target_creation"
+    )
+    assert live_pilot_rehearsal_drill["packets"]["selected_target_command_copy_packet"]["state"] == (
+        "ready_for_operator_copy"
+    )
     assert live_pilot_rehearsal_drill["packets"]["command_copy_packet"]["state"] == "ready_for_operator_copy"
     assert live_pilot_rehearsal_drill["writes_attempted"] == 0
     assert live_pilot_rehearsal_drill["network_calls_made"] == 0

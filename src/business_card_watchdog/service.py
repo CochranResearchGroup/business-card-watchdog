@@ -4052,6 +4052,22 @@ class BusinessCardService:
             sink=sink,
             write=True,
         )
+        selected_target_approval_boundary = drill_service.selected_target_approval_boundary(
+            run_id,
+            operator=operator,
+            sink=sink,
+            job_id=job_id,
+            response=operator_response,
+            write=True,
+        )
+        selected_target_command_copy_packet = drill_service.selected_target_command_copy_packet(
+            run_id,
+            operator=operator,
+            sink=sink,
+            job_id=job_id,
+            response=operator_response,
+            acknowledgement=acknowledgement,
+        )
         selected_target = drill_service.selected_live_target_from_response(
             run_id=run_id,
             response=operator_response,
@@ -4098,6 +4114,11 @@ class BusinessCardService:
             == "business-card-watchdog.operator-selected-live-smoke-preflight.v1"
             and operator_selected_preflight.get("writes_attempted") == 0
             and operator_selected_preflight.get("network_calls_made") == 0,
+            "selected_target_approval_boundary_ready": selected_target_approval_boundary.get("state")
+            == "ready_for_explicit_selected_target_creation",
+            "selected_target_command_copy_ready": selected_target_command_copy_packet.get("state")
+            == "ready_for_operator_copy"
+            and selected_target_command_copy_packet.get("creates_selected_live_target") is False,
             "selected_target_created": selected_target.get("state") == "created",
             "selected_target_handoff_generated": selected_target_handoff.get("schema")
             == "business-card-watchdog.selected-live-target-handoff-from-response.v1",
@@ -4156,6 +4177,8 @@ class BusinessCardService:
                 "operator_selected_preflight": operator_selected_preflight,
                 "selection_packet": selection_packet,
                 "validation": validation,
+                "selected_target_approval_boundary": selected_target_approval_boundary,
+                "selected_target_command_copy_packet": selected_target_command_copy_packet,
                 "selected_target": selected_target,
                 "selected_target_handoff": selected_target_handoff,
                 "lookup_handoff": lookup_handoff,
@@ -4173,6 +4196,17 @@ class BusinessCardService:
                 "operator_dashboard": f"operator-dashboard --run-id {run_id} --json",
                 "live_pilot_status": f"runs live-pilot-status {run_id} --no-write --json",
                 "live_pilot_handoff": f"runs live-pilot-handoff {run_id} --no-write --json",
+                "selected_target_approval_boundary": (
+                    f"runs selected-target-approval-boundary {shlex.quote(run_id)} "
+                    f"--operator {shlex.quote(operator)} --sink {shlex.quote(sink)} "
+                    f"--job-id {shlex.quote(job_id)} --response <operator-response> --json"
+                ),
+                "selected_target_command_copy_packet": (
+                    f"runs selected-target-command-copy-packet {shlex.quote(run_id)} "
+                    f"--operator {shlex.quote(operator)} --sink {shlex.quote(sink)} "
+                    f"--job-id {shlex.quote(job_id)} --response <operator-response> "
+                    "--acknowledgement <operator-acknowledgement> --json"
+                ),
                 "readiness_export": (
                     f"runs live-pilot-readiness-export-from-response {shlex.quote(run_id)} "
                     "--response <operator-response> --json"
@@ -4204,6 +4238,8 @@ class BusinessCardService:
                 "operator_selected_preflight",
                 "selection_packet",
                 "validation",
+                "selected_target_approval_boundary",
+                "selected_target_command_copy_packet",
                 "selected_target_handoff",
                 "lookup_handoff",
                 "workflow_packet",
@@ -4288,6 +4324,10 @@ class BusinessCardService:
                 f"- Operator-selected preflight: `{dict(packets.get('operator_selected_preflight') or {}).get('state')}`",
                 f"- Selection packet: `{dict(packets.get('selection_packet') or {}).get('state')}`",
                 f"- Operator response validation: `{dict(packets.get('validation') or {}).get('state')}`",
+                "- Selected target approval boundary: "
+                f"`{dict(packets.get('selected_target_approval_boundary') or {}).get('state')}`",
+                "- Selected target command copy packet: "
+                f"`{dict(packets.get('selected_target_command_copy_packet') or {}).get('state')}`",
                 f"- Selected target: `{dict(packets.get('selected_target') or {}).get('state')}`",
                 f"- Selected target handoff: `{dict(packets.get('selected_target_handoff') or {}).get('state')}`",
                 f"- Lookup handoff: `{dict(packets.get('lookup_handoff') or {}).get('state')}`",
@@ -4302,6 +4342,8 @@ class BusinessCardService:
                 f"- Dashboard: `{commands.get('operator_dashboard')}`",
                 f"- Live pilot status: `{commands.get('live_pilot_status')}`",
                 f"- Live pilot handoff: `{commands.get('live_pilot_handoff')}`",
+                f"- Selected target approval boundary: `{commands.get('selected_target_approval_boundary')}`",
+                f"- Selected target command copy packet: `{commands.get('selected_target_command_copy_packet')}`",
                 f"- Readiness export: `{commands.get('readiness_export')}`",
                 f"- Execution checklist: `{commands.get('execution_checklist')}`",
                 f"- Command copy packet: `{commands.get('command_copy_packet')}`",
