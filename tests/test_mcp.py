@@ -526,6 +526,16 @@ def test_mcp_child_selected_target_response_validation_and_checklist(tmp_path: P
         },
         config=config,
     )
+    review_bundle = call_tool(
+        "business_card_watchdog_review_bundle",
+        {"run_id": run_dir.name},
+        config=config,
+    )
+    operator_dashboard = call_tool(
+        "business_card_watchdog_operator_dashboard",
+        {"run_id": run_dir.name},
+        config=config,
+    )
 
     assert validation["schema"] == "business-card-watchdog.child-selected-target-response-validation.v1"
     assert validation["state"] == "ready_for_no_live_child_checklist"
@@ -591,6 +601,11 @@ def test_mcp_child_selected_target_response_validation_and_checklist(tmp_path: P
     assert closeout["rollup"]["executable_live_command"] is None
     assert closeout["writes_attempted"] == 0
     assert closeout["network_calls_made"] == 0
+    bundle_entry = next(entry for entry in review_bundle["entries"] if entry["job_id"] == closeout["job_id"])
+    assert bundle_entry["child_replacement_status"]["state"] == "ready_for_operator_closeout"
+    assert review_bundle["groups"]["by_child_replacement_state"]["ready_for_operator_closeout"]["count"] == 1
+    assert operator_dashboard["child_replacement_summary"]["closeout_count"] == 1
+    assert operator_dashboard["child_replacement_summary"]["ready_count"] == 1
 
 
 def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:

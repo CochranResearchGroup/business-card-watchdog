@@ -5224,3 +5224,32 @@ Validation:
 Safety:
 
 - This created local child replacement closeout/status artifacts only. It did not create selected targets; process private SyncThing images; execute live lookup; route to live sinks; enrich; write contacts; run public-web search; call paid APIs; or call GWS/Odollo/Odoo.
+
+## Turn 237 | 2026-06-15
+
+Executed Plan 0031 with Slice 0031-A.
+
+Implemented:
+
+- Added `child_replacement_closeout_status` artifact visibility to review bundles.
+- Added per-entry `child_replacement_status` summaries.
+- Added `by_child_replacement_state` review bundle grouping.
+- Added operator dashboard child replacement summary sourced from review bundle data.
+- Added review HTML and workbook columns for child replacement closeout state.
+- Added synthetic multi-card coverage for service, CLI, API, and MCP visibility behavior.
+- Updated README and roadmap documentation for child replacement rollup visibility.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_review_surface.py::test_child_selected_target_response_validation_and_checklist tests/test_cli_surfaces.py::test_cli_child_selected_target_response_validation_and_checklist tests/test_api.py::test_api_child_selected_target_response_validation_and_checklist tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_child_selected_target_response_validation_and_checklist -q` passed with 5 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py tests/test_review_surface.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 267 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `uv build --out-dir dist` built source and wheel distributions.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This exposed existing no-live child replacement closeout state through review surfaces only. It did not create selected targets; process private SyncThing images; execute live lookup; route to live sinks; enrich; write contacts; run public-web search; call paid APIs; or call GWS/Odollo/Odoo.

@@ -275,6 +275,7 @@ _REVIEW_BUNDLE_ARTIFACT_KINDS = {
     "sink_readback_pilot",
     "sink_apply_pilot_report",
     "route_refresh",
+    "child_replacement_closeout_status",
 }
 
 
@@ -450,6 +451,7 @@ class BusinessCardService:
         review_counts: dict[str, int] = {}
         live_pilot_summary: dict[str, Any] | None = None
         live_pilot_handoff_summary: dict[str, Any] | None = None
+        child_replacement_summary: dict[str, Any] | None = None
         next_action_summary: dict[str, Any] = {
             "action_count": 0,
             "safe_auto_count": 0,
@@ -518,6 +520,40 @@ class BusinessCardService:
                 "execution_packet": live_pilot_execution_packet,
                 "operator_stop_conditions": handoff.get("operator_stop_conditions") or [],
             }
+            review_bundle = self.review_bundle(run_id=selected_run_id, state="all", write=False)
+            child_replacement_entries = [
+                {
+                    "job_id": entry.get("job_id"),
+                    "candidate_id": (entry.get("child_replacement_status") or {}).get("candidate_id"),
+                    "state": (entry.get("child_replacement_status") or {}).get("state"),
+                    "sink": (entry.get("child_replacement_status") or {}).get("sink"),
+                    "operator": (entry.get("child_replacement_status") or {}).get("operator"),
+                    "predecessor_artifacts_stale": (entry.get("child_replacement_status") or {}).get(
+                        "predecessor_artifacts_stale"
+                    ),
+                    "replacement_copy_ready": (entry.get("child_replacement_status") or {}).get(
+                        "replacement_copy_ready"
+                    ),
+                    "closeout_command": (
+                        (entry.get("child_replacement_status") or {}).get("commands") or {}
+                    ).get("closeout_status"),
+                }
+                for entry in review_bundle.get("entries") or []
+                if (entry.get("child_replacement_status") or {}).get("has_closeout")
+            ]
+            child_replacement_summary = {
+                "schema": "business-card-watchdog.operator-dashboard.child-replacement-summary.v1",
+                "state_counts": (review_bundle.get("groups") or {}).get("by_child_replacement_state") or {},
+                "closeout_count": len(child_replacement_entries),
+                "ready_count": sum(
+                    1
+                    for entry in child_replacement_entries
+                    if entry.get("state") == "ready_for_operator_closeout"
+                ),
+                "entries": child_replacement_entries[:5],
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            }
             next_actions = self.next_actions(run_id=selected_run_id, limit=20)
             action_counts: dict[str, int] = {}
             safe_auto_count = 0
@@ -578,6 +614,7 @@ class BusinessCardService:
             "next_action_summary": next_action_summary,
             "live_pilot_summary": live_pilot_summary,
             "live_pilot_handoff_summary": live_pilot_handoff_summary,
+            "child_replacement_summary": child_replacement_summary,
             "latest_review_routing_drill": latest_drill,
             "blocked_reasons": blocked_reasons,
             "commands": {
@@ -4715,6 +4752,7 @@ class BusinessCardService:
                 kind: self._artifact_bundle_entry(record)
                 for kind, record in sorted(by_kind.items())
             }
+            child_replacement_status = self._child_replacement_bundle_status(artifact_entries)
             review_matrix = self._review_matrix_entry(
                 job=job,
                 artifacts=artifact_entries,
@@ -4731,6 +4769,7 @@ class BusinessCardService:
                     "artifact_dir": job.get("artifact_dir"),
                     "next_action": next_action,
                     "sink_pilot_status": sink_pilot_status,
+                    "child_replacement_status": child_replacement_status,
                     "review_matrix": review_matrix,
                     "artifact_kinds": sorted(by_kind),
                     "artifacts": artifact_entries,
@@ -11571,6 +11610,7 @@ class BusinessCardService:
         by_enrichment_state: dict[str, dict[str, Any]] = {}
         by_route_state: dict[str, dict[str, Any]] = {}
         by_sink_lookup_state: dict[str, dict[str, Any]] = {}
+        by_child_replacement_state: dict[str, dict[str, Any]] = {}
         for entry in entries:
             state = str(entry.get("state") or "unknown")
             state_group = by_state.setdefault(state, {"count": 0, "job_ids": []})
@@ -11584,6 +11624,15 @@ class BusinessCardService:
             pilot_group = by_sink_pilot_state.setdefault(pilot_state, {"count": 0, "job_ids": []})
             pilot_group["count"] += 1
             pilot_group["job_ids"].append(entry["job_id"])
+            child_replacement_state = str(
+                (entry.get("child_replacement_status") or {}).get("state") or "not_started"
+            )
+            child_replacement_group = by_child_replacement_state.setdefault(
+                child_replacement_state,
+                {"count": 0, "job_ids": []},
+            )
+            child_replacement_group["count"] += 1
+            child_replacement_group["job_ids"].append(entry["job_id"])
             matrix = entry.get("review_matrix") or {}
             for groups, key in [
                 (by_duplicate_state, "duplicate_state"),
@@ -11603,6 +11652,54 @@ class BusinessCardService:
             "by_enrichment_state": dict(sorted(by_enrichment_state.items())),
             "by_route_state": dict(sorted(by_route_state.items())),
             "by_sink_lookup_state": dict(sorted(by_sink_lookup_state.items())),
+            "by_child_replacement_state": dict(sorted(by_child_replacement_state.items())),
+        }
+
+    def _child_replacement_bundle_status(self, artifacts: dict[str, dict[str, Any]]) -> dict[str, Any]:
+        closeout = (artifacts.get("child_replacement_closeout_status") or {}).get("payload") or {}
+        if not closeout:
+            return {
+                "schema": "business-card-watchdog.child-replacement-bundle-status.v1",
+                "state": "not_started",
+                "has_closeout": False,
+                "closeout_path": None,
+                "candidate_id": None,
+                "sink": None,
+                "operator": None,
+                "scope": None,
+                "predecessor_artifacts_stale": False,
+                "replacement_copy_ready": False,
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+                "commands": {},
+            }
+        rollup = dict(closeout.get("rollup") or {})
+        commands = dict(closeout.get("commands") or {})
+        return {
+            "schema": "business-card-watchdog.child-replacement-bundle-status.v1",
+            "state": str(closeout.get("state") or "unknown"),
+            "has_closeout": True,
+            "closeout_path": closeout.get("closeout_path"),
+            "candidate_id": closeout.get("candidate_id"),
+            "sink": closeout.get("sink"),
+            "operator": closeout.get("operator"),
+            "scope": closeout.get("scope"),
+            "predecessor_artifacts_stale": bool(rollup.get("predecessor_artifacts_stale")),
+            "replacement_handoff_ready": bool(rollup.get("replacement_handoff_ready")),
+            "replacement_response_ready": bool(rollup.get("replacement_response_ready")),
+            "replacement_checklist_ready": bool(rollup.get("replacement_checklist_ready")),
+            "replacement_copy_ready": bool(rollup.get("replacement_copy_ready")),
+            "acknowledgement_ok": bool(rollup.get("acknowledgement_ok")),
+            "selected_target_created": bool(rollup.get("selected_target_created")),
+            "executable_live_command": rollup.get("executable_live_command"),
+            "offline_command_copy_text": rollup.get("offline_command_copy_text"),
+            "blocked_reasons": list(closeout.get("blocked_reasons") or []),
+            "writes_attempted": _int(closeout.get("writes_attempted") or 0),
+            "network_calls_made": _int(closeout.get("network_calls_made") or 0),
+            "commands": {
+                "closeout_status": commands.get("closeout_status"),
+                "replacement_command_copy_packet": commands.get("replacement_command_copy_packet"),
+            },
         }
 
     def _review_matrix_entry(
@@ -11817,6 +11914,13 @@ class BusinessCardService:
             "matrix_sink_lookup_match_count",
             "matrix_enrichment_accepted_count",
             "matrix_enrichment_rejected_count",
+            "child_replacement_state",
+            "child_replacement_candidate_id",
+            "child_replacement_sink",
+            "child_replacement_operator",
+            "child_replacement_predecessors_stale",
+            "child_replacement_copy_ready",
+            "child_replacement_closeout_command",
             "full_name",
             "organization",
             "title",
@@ -12062,6 +12166,7 @@ class BusinessCardService:
         route_refresh = (artifacts.get("route_refresh") or {}).get("payload") or {}
         next_action = entry.get("next_action") or {}
         pilot_status = entry.get("sink_pilot_status") or {}
+        child_replacement = entry.get("child_replacement_status") or {}
         decision_template = entry.get("decision_template") or {}
         return {
             "run_id": entry.get("run_id"),
@@ -12082,6 +12187,13 @@ class BusinessCardService:
             "matrix_sink_lookup_match_count": matrix.get("sink_lookup_match_count"),
             "matrix_enrichment_accepted_count": matrix.get("enrichment_accepted_count"),
             "matrix_enrichment_rejected_count": matrix.get("enrichment_rejected_count"),
+            "child_replacement_state": child_replacement.get("state"),
+            "child_replacement_candidate_id": child_replacement.get("candidate_id"),
+            "child_replacement_sink": child_replacement.get("sink"),
+            "child_replacement_operator": child_replacement.get("operator"),
+            "child_replacement_predecessors_stale": child_replacement.get("predecessor_artifacts_stale"),
+            "child_replacement_copy_ready": child_replacement.get("replacement_copy_ready"),
+            "child_replacement_closeout_command": (child_replacement.get("commands") or {}).get("closeout_status"),
             "full_name": self._review_contact_value(contact, "full_name"),
             "organization": self._review_contact_value(contact, "organization"),
             "title": self._review_contact_value(contact, "title"),
@@ -12161,6 +12273,9 @@ class BusinessCardService:
         enrichment_groups = self._review_html_groups(bundle["groups"].get("by_enrichment_state", {}))
         route_groups = self._review_html_groups(bundle["groups"].get("by_route_state", {}))
         lookup_groups = self._review_html_groups(bundle["groups"].get("by_sink_lookup_state", {}))
+        child_replacement_groups = self._review_html_groups(
+            bundle["groups"].get("by_child_replacement_state", {})
+        )
         commands = self._review_html_commands(bundle.get("commands") or {})
         return f"""<!doctype html>
 <html lang="en">
@@ -12220,6 +12335,10 @@ class BusinessCardService:
       <h2>By Sink Lookup State</h2>
       {lookup_groups}
     </div>
+    <div>
+      <h2>By Child Replacement State</h2>
+      {child_replacement_groups}
+    </div>
   </section>
   <h2>Jobs</h2>
   <table>
@@ -12231,6 +12350,7 @@ class BusinessCardService:
         <th>Next Action</th>
         <th>Review Matrix</th>
         <th>Sink Pilot</th>
+        <th>Child Replacement</th>
         <th>Artifacts</th>
         <th>Decision Template</th>
       </tr>
@@ -12260,6 +12380,7 @@ class BusinessCardService:
     def _review_html_row(self, entry: dict[str, Any]) -> str:
         next_action = entry.get("next_action") or {}
         pilot_status = entry.get("sink_pilot_status") or {}
+        child_replacement = entry.get("child_replacement_status") or {}
         matrix = entry.get("review_matrix") or {}
         contact = matrix.get("contact") if isinstance(matrix.get("contact"), dict) else {}
         artifacts = ", ".join(escape(kind) for kind in entry.get("artifact_kinds") or [])
@@ -12280,6 +12401,7 @@ class BusinessCardService:
     lookup: <code>{escape(str(matrix.get("sink_lookup_state") or "unknown"))}</code>
   </td>
   <td><code>{escape(str(pilot_status.get("state") or "not_started"))}</code><br>safe: {escape(str(pilot_status.get("safe_to_auto_continue")))}<br>explicit: {escape(str(pilot_status.get("requires_explicit_operator_action")))}</td>
+  <td><code>{escape(str(child_replacement.get("state") or "not_started"))}</code><br>candidate: <code>{escape(str(child_replacement.get("candidate_id") or ""))}</code><br>stale: {escape(str(child_replacement.get("predecessor_artifacts_stale")))}<br>copy ready: {escape(str(child_replacement.get("replacement_copy_ready")))}<br><code>{escape(str((child_replacement.get("commands") or {}).get("closeout_status") or ""))}</code></td>
   <td>{artifacts}</td>
   <td><pre>{decision_template}</pre></td>
 </tr>"""

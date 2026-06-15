@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import csv
+from io import StringIO
 from pathlib import Path
 
 from business_card_watchdog.config import AppConfig, PrefilterConfig, SinkConfig
@@ -603,6 +605,28 @@ def test_child_selected_target_response_validation_and_checklist(tmp_path: Path,
     assert closeout["rollup"]["executable_live_command"] is None
     assert closeout["writes_attempted"] == 0
     assert closeout["network_calls_made"] == 0
+    bundle = service.review_bundle(run_id=run_dir.name, state="all", write=False)
+    bundle_entry = next(
+        entry
+        for entry in bundle["entries"]
+        if entry["job_id"] == closeout["job_id"]
+    )
+    assert "child_replacement_closeout_status" in bundle_entry["artifact_kinds"]
+    assert bundle_entry["child_replacement_status"]["state"] == "ready_for_operator_closeout"
+    assert bundle_entry["child_replacement_status"]["predecessor_artifacts_stale"] is True
+    assert bundle["groups"]["by_child_replacement_state"]["ready_for_operator_closeout"]["count"] == 1
+    html = service.review_html(run_id=run_dir.name, state="all", write=False)
+    assert "By Child Replacement State" in html["html"]
+    assert "ready_for_operator_closeout" in html["html"]
+    workbook = service.review_workbook(run_id=run_dir.name, state="all", write=False)
+    workbook_rows = list(csv.DictReader(StringIO(workbook["csv"])))
+    workbook_row = next(row for row in workbook_rows if row["job_id"] == closeout["job_id"])
+    assert workbook_row["child_replacement_state"] == "ready_for_operator_closeout"
+    assert workbook_row["child_replacement_copy_ready"] == "True"
+    dashboard = service.operator_dashboard(run_id=run_dir.name)
+    assert dashboard["child_replacement_summary"]["closeout_count"] == 1
+    assert dashboard["child_replacement_summary"]["ready_count"] == 1
+    assert dashboard["child_replacement_summary"]["state_counts"]["ready_for_operator_closeout"]["count"] == 1
     assert any(artifact["kind"] == "child_selected_target_response_validation" for artifact in artifacts)
     assert any(artifact["kind"] == "child_selected_target_execution_checklist" for artifact in artifacts)
     assert any(artifact["kind"] == "child_selected_target_command_copy_packet" for artifact in artifacts)

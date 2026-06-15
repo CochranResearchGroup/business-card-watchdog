@@ -785,6 +785,20 @@ def test_cli_child_selected_target_response_validation_and_checklist(
         ]
     ) == 0
     closeout = json.loads(capsys.readouterr().out)
+    assert main(
+        [
+            "--config",
+            str(config_path),
+            "reviews",
+            "bundle",
+            "--run-id",
+            run_dir.name,
+            "--json",
+        ]
+    ) == 0
+    bundle = json.loads(capsys.readouterr().out)
+    assert main(["--config", str(config_path), "operator-dashboard", "--run-id", run_dir.name, "--json"]) == 0
+    dashboard = json.loads(capsys.readouterr().out)
 
     assert validation["state"] == "ready_for_no_live_child_checklist"
     assert validation["writes_attempted"] == 0
@@ -848,6 +862,11 @@ def test_cli_child_selected_target_response_validation_and_checklist(
     assert closeout["rollup"]["executable_live_command"] is None
     assert closeout["writes_attempted"] == 0
     assert closeout["network_calls_made"] == 0
+    bundle_entry = next(entry for entry in bundle["entries"] if entry["job_id"] == closeout["job_id"])
+    assert bundle_entry["child_replacement_status"]["state"] == "ready_for_operator_closeout"
+    assert bundle["groups"]["by_child_replacement_state"]["ready_for_operator_closeout"]["count"] == 1
+    assert dashboard["child_replacement_summary"]["closeout_count"] == 1
+    assert dashboard["child_replacement_summary"]["ready_count"] == 1
 
 
 def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) -> None:
