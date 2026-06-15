@@ -1640,6 +1640,54 @@ def test_service_dry_run_review_handoff_summarizes_safe_next_steps(tmp_path: Pat
     assert "dry_run_review_handoff_created" in events
 
 
+def test_service_dry_run_safe_loop_executes_bounded_safe_actions(tmp_path: Path, monkeypatch) -> None:
+    source_dir = tmp_path / "cards"
+    write_synthetic_image(source_dir / "card.png")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        prefilter=PrefilterConfig(enabled=False),
+        sink=SinkConfig(google_contacts=True, odoo=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts", "odoo"]}],
+    )
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+
+    payload = BusinessCardService(config).dry_run_safe_loop(run_dir.name, limit=3, write=True)
+
+    assert payload["schema"] == "business-card-watchdog.dry-run-safe-loop.v1"
+    assert payload["state"] == "safe_loop_executed"
+    assert payload["before_handoff_state"] == "ready_for_safe_agent_loop"
+    assert payload["executed_count"] == 3
+    assert [action["action"] for action in payload["executed"]] == [
+        "plan_sink_lookup",
+        "prepare_sink_lookup_adapter",
+        "record_sink_lookup_result",
+    ]
+    assert payload["before_next_action_counts"] == {"plan_sink_lookup": 1}
+    assert payload["after_next_action_counts"] == {"assess_downstream_duplicates": 1}
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert payload["live_sink_calls_made"] is False
+    assert payload["runtime_artifact_written"] is True
+    assert Path(payload["safe_loop_path"]).exists()
+    assert payload["safe_inspection_commands"]["dry_run_safe_loop"] == (
+        f"runs dry-run-safe-loop {run_dir.name} --limit 3 --json"
+    )
+    assert "Only actions in the host-owned safe auto action allowlist may execute." in (
+        payload["explicit_stop_conditions"]
+    )
+
+    recorded = BusinessCardService(config).get_run(run_dir.name)
+    artifact_kinds = {artifact["kind"] for artifact in recorded["artifacts"]}
+    assert {"sink_lookup_plan", "sink_adapter_request_lookup", "sink_lookup_result", "dry_run_safe_loop"} <= (
+        artifact_kinds
+    )
+    events = (run_dir / "events.jsonl").read_text(encoding="utf-8")
+    assert "dry_run_safe_loop_created" in events
+
+
 def test_service_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",

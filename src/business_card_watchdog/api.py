@@ -391,6 +391,10 @@ def create_app(config_path: Path | None = None):
     def get_run_dry_run_review_handoff(run_id: str, write: bool = True) -> dict[str, object]:
         return service().dry_run_review_handoff(run_id, write=write)
 
+    @app.get("/runs/{run_id}/dry-run-safe-loop")
+    def get_run_dry_run_safe_loop(run_id: str, limit: int = 5, write: bool = True) -> dict[str, object]:
+        return service().dry_run_safe_loop(run_id, limit=limit, write=write)
+
     @app.get("/runs/{run_id}/live-pilot-status")
     def get_run_live_pilot_status(run_id: str, write: bool = True) -> dict[str, object]:
         return service().live_pilot_status(run_id=run_id, write=write)

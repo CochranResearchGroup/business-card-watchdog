@@ -393,6 +393,75 @@ def test_cli_runs_dry_run_review_handoff_reports_safe_next_steps(tmp_path: Path,
     assert "{" not in text
 
 
+def test_cli_runs_dry_run_safe_loop_executes_bounded_safe_actions(tmp_path: Path, monkeypatch, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+    source_dir = tmp_path / "cards"
+    write_synthetic_image(source_dir / "card.png")
+    config = AppConfig(
+        config_path=config_path,
+        data_dir=data_dir,
+        prefilter=PrefilterConfig(enabled=False),
+        sink=SinkConfig(google_contacts=True, odoo=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts", "odoo"]}],
+    )
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "dry-run-safe-loop",
+                run_dir.name,
+                "--limit",
+                "2",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["schema"] == "business-card-watchdog.dry-run-safe-loop.v1"
+    assert payload["state"] == "safe_loop_executed"
+    assert payload["executed_count"] == 2
+    assert [action["action"] for action in payload["executed"]] == [
+        "plan_sink_lookup",
+        "prepare_sink_lookup_adapter",
+    ]
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert Path(payload["safe_loop_path"]).exists()
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "dry-run-safe-loop",
+                run_dir.name,
+                "--limit",
+                "1",
+                "--no-write",
+            ]
+        )
+        == 0
+    )
+    text = capsys.readouterr().out
+    assert "Dry-run safe loop:" in text
+    assert "Executed: 1" in text
+    assert "Observed: writes=0 network=0 live_sinks=False" in text
+    assert "Safe loop: runs dry-run-safe-loop" in text
+    assert "Stop conditions: 5" in text
+    assert "{" not in text
+
+
 def test_cli_child_reviews_lists_promoted_child_candidates(
     tmp_path: Path,
     monkeypatch,

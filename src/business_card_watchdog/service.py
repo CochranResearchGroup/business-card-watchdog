@@ -1635,6 +1635,108 @@ class BusinessCardService:
             )
         return payload
 
+    def dry_run_safe_loop(self, run_id: str, *, limit: int = 5, write: bool = True) -> dict[str, Any]:
+        before_handoff = self.dry_run_review_handoff(run_id, write=False)
+        blocked_reasons = list(before_handoff.get("blocked_reasons") or [])
+        if before_handoff.get("state") == "blocked":
+            state = "blocked"
+            execution = {
+                "run_id": run_id,
+                "limit": limit,
+                "executed": [],
+                "skipped": [],
+                "executed_count": 0,
+                "skipped_count": 0,
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            }
+        elif _int(before_handoff.get("safe_auto_action_count")) <= 0:
+            state = "no_safe_actions"
+            execution = {
+                "run_id": run_id,
+                "limit": limit,
+                "executed": [],
+                "skipped": list(before_handoff.get("explicit_operator_actions") or []),
+                "executed_count": 0,
+                "skipped_count": _int(before_handoff.get("explicit_operator_action_count")),
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            }
+        else:
+            execution = self.run_next_actions(run_id=run_id, limit=max(0, limit))
+            state = "safe_loop_executed" if execution.get("executed_count") else "stopped"
+        after_handoff = self.dry_run_review_handoff(run_id, write=False)
+        payload: dict[str, Any] = {
+            "schema": "business-card-watchdog.dry-run-safe-loop.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_id,
+            "limit": limit,
+            "closeout_state": before_handoff.get("closeout_state"),
+            "blocked_reasons": blocked_reasons,
+            "before_handoff_state": before_handoff.get("state"),
+            "after_handoff_state": after_handoff.get("state"),
+            "before_next_action_counts": before_handoff.get("next_action_counts") or {},
+            "after_next_action_counts": after_handoff.get("next_action_counts") or {},
+            "before_safe_auto_action_count": before_handoff.get("safe_auto_action_count", 0),
+            "after_safe_auto_action_count": after_handoff.get("safe_auto_action_count", 0),
+            "after_explicit_operator_action_count": after_handoff.get("explicit_operator_action_count", 0),
+            "executed": execution.get("executed") or [],
+            "skipped": execution.get("skipped") or [],
+            "executed_count": execution.get("executed_count", 0),
+            "skipped_count": execution.get("skipped_count", 0),
+            "phase_report_before": execution.get("phase_report_before"),
+            "phase_report_after": execution.get("phase_report_after"),
+            "before_handoff": before_handoff,
+            "after_handoff": after_handoff,
+            "private_sources_used": False,
+            "public_web_search_used": False,
+            "paid_enrichment_used": False,
+            "live_sink_calls_made": False,
+            "writes_attempted": _int(execution.get("writes_attempted")),
+            "network_calls_made": _int(execution.get("network_calls_made")),
+            "runtime_artifact_written": False,
+            "safe_loop_path": None,
+            "safe_auto_actions": sorted(_SAFE_NEXT_ACTIONS),
+            "explicit_operator_actions": sorted(_EXPLICIT_OPERATOR_ACTIONS),
+            "safe_inspection_commands": {
+                "dry_run_closeout": f"runs dry-run-closeout {run_id} --json",
+                "dry_run_review_handoff": f"runs dry-run-review-handoff {run_id} --json",
+                "dry_run_safe_loop": f"runs dry-run-safe-loop {run_id} --limit {limit} --json",
+                "phase_report": f"runs phase-report {run_id} --json",
+                "review_bundle": f"reviews bundle --run-id {run_id} --state all --json",
+                "next_actions": f"actions next --run-id {run_id} --json",
+                "live_pilot_status": f"runs live-pilot-status {run_id} --no-write --json",
+                "live_pilot_handoff": f"runs live-pilot-handoff {run_id} --no-write --json",
+            },
+            "explicit_stop_conditions": [
+                "This safe loop is gated by dry-run closeout and dry-run review handoff.",
+                "Only actions in the host-owned safe auto action allowlist may execute.",
+                "Do not run public-web search or paid enrichment from this safe loop.",
+                "Do not execute live lookup, write, or readback from this safe loop.",
+                "Stop at explicit operator actions before any Google Contacts, Odoo, or Odollo calls.",
+            ],
+        }
+        if write:
+            safe_loop_path = self.config.runs_dir / run_id / "dry_run_safe_loop.json"
+            payload["runtime_artifact_written"] = True
+            payload["safe_loop_path"] = str(safe_loop_path)
+            safe_loop_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            ledger = RunLedger(self.config.runs_dir / run_id)
+            ledger.record_artifact(job_id="__run__", kind="dry_run_safe_loop", path=safe_loop_path)
+            ledger.record_event(
+                "dry_run_safe_loop_created",
+                {
+                    "run_id": run_id,
+                    "state": state,
+                    "safe_loop_path": str(safe_loop_path),
+                    "executed_count": _int(payload.get("executed_count")),
+                    "writes_attempted": 0,
+                    "network_calls_made": 0,
+                },
+            )
+        return payload
+
     def phase_report(self, run_id: str) -> dict[str, Any]:
         run = self.get_run(run_id)
         jobs = run["jobs"]

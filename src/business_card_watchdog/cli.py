@@ -1609,6 +1609,71 @@ def _render_dry_run_review_handoff_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_dry_run_safe_loop_text(payload: dict[str, object]) -> str:
+    before_counts = dict(payload.get("before_next_action_counts") or {})
+    after_counts = dict(payload.get("after_next_action_counts") or {})
+    commands = dict(payload.get("safe_inspection_commands") or {})
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    executed = payload.get("executed") or []
+    skipped = payload.get("skipped") or []
+    lines = [
+        f"Dry-run safe loop: {payload.get('state')}",
+        f"Run: {payload.get('run_id')}",
+        f"Closeout: {payload.get('closeout_state')}",
+        f"Before handoff: {payload.get('before_handoff_state')}",
+        f"After handoff: {payload.get('after_handoff_state')}",
+        f"Limit: {payload.get('limit', 0)}",
+        f"Executed: {payload.get('executed_count', 0)}",
+        f"Skipped: {payload.get('skipped_count', 0)}",
+        f"Before safe auto actions: {payload.get('before_safe_auto_action_count', 0)}",
+        f"After safe auto actions: {payload.get('after_safe_auto_action_count', 0)}",
+        f"After explicit operator actions: {payload.get('after_explicit_operator_action_count', 0)}",
+        "Observed: "
+        f"writes={payload.get('writes_attempted', 0)} "
+        f"network={payload.get('network_calls_made', 0)} "
+        f"live_sinks={payload.get('live_sink_calls_made', False)}",
+        f"Runtime artifact written: {payload.get('runtime_artifact_written', False)}",
+    ]
+    if payload.get("safe_loop_path"):
+        lines.append(f"Safe loop path: {payload.get('safe_loop_path')}")
+    if before_counts:
+        lines.append("Before next action counts:")
+        for action, count in sorted(before_counts.items()):
+            lines.append(f" - {action}: {count}")
+    if after_counts:
+        lines.append("After next action counts:")
+        for action, count in sorted(after_counts.items()):
+            lines.append(f" - {action}: {count}")
+    executed_rows = executed if isinstance(executed, list) else []
+    lines.append(f"Executed rows: {len(executed_rows)}")
+    for action in executed_rows[:10]:
+        if isinstance(action, dict):
+            lines.append(f" - {action.get('job_id')}: {action.get('action')}")
+    skipped_rows = skipped if isinstance(skipped, list) else []
+    lines.append(f"Skipped rows: {len(skipped_rows)}")
+    for action in skipped_rows[:10]:
+        if isinstance(action, dict):
+            lines.append(f" - {action.get('job_id')}: {action.get('action')}")
+    lines.append("Commands:")
+    for label, key in [
+        ("Safe loop", "dry_run_safe_loop"),
+        ("Handoff", "dry_run_review_handoff"),
+        ("Closeout", "dry_run_closeout"),
+        ("Phase report", "phase_report"),
+        ("Review bundle", "review_bundle"),
+        ("Next actions", "next_actions"),
+        ("Live pilot status", "live_pilot_status"),
+    ]:
+        command = commands.get(key)
+        if command:
+            lines.append(f" - {label}: {command}")
+    stop_rows = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stop_rows)}")
+    for condition in stop_rows:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_runtime_readiness_text(payload: dict[str, object]) -> str:
     checks = payload.get("checks") or []
     blocked = payload.get("blocked_checks") or []
@@ -2426,6 +2491,11 @@ def build_parser() -> argparse.ArgumentParser:
     runs_dry_run_review_handoff.add_argument("run_id")
     runs_dry_run_review_handoff.add_argument("--no-write", action="store_true")
     runs_dry_run_review_handoff.add_argument("--json", action="store_true")
+    runs_dry_run_safe_loop = runs_sub.add_parser("dry-run-safe-loop")
+    runs_dry_run_safe_loop.add_argument("run_id")
+    runs_dry_run_safe_loop.add_argument("--limit", type=int, default=5)
+    runs_dry_run_safe_loop.add_argument("--no-write", action="store_true")
+    runs_dry_run_safe_loop.add_argument("--json", action="store_true")
     runs_live_pilot_status = runs_sub.add_parser("live-pilot-status")
     runs_live_pilot_status.add_argument("run_id")
     runs_live_pilot_status.add_argument("--no-write", action="store_true")
@@ -3106,6 +3176,8 @@ def main(argv: list[str] | None = None) -> int:
             payload = service.dry_run_closeout(args.run_id, write=not args.no_write)
         elif args.runs_command == "dry-run-review-handoff":
             payload = service.dry_run_review_handoff(args.run_id, write=not args.no_write)
+        elif args.runs_command == "dry-run-safe-loop":
+            payload = service.dry_run_safe_loop(args.run_id, limit=args.limit, write=not args.no_write)
         elif args.runs_command == "live-pilot-status":
             payload = service.live_pilot_status(run_id=args.run_id, write=not args.no_write)
         elif args.runs_command == "live-pilot-handoff":
@@ -3252,6 +3324,9 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.runs_command == "dry-run-review-handoff" and not args.json:
             print(_render_dry_run_review_handoff_text(payload), end="")
+            return 0
+        if args.runs_command == "dry-run-safe-loop" and not args.json:
+            print(_render_dry_run_safe_loop_text(payload), end="")
             return 0
         if args.runs_command == "phase-report" and not args.json:
             print(_render_phase_report_text(payload), end="")

@@ -102,6 +102,7 @@ Inspect runs, jobs, review queue, sinks, and watcher state:
 .venv/bin/bcw runs phase-report <run-id>
 .venv/bin/bcw runs dry-run-closeout <run-id> --json
 .venv/bin/bcw runs dry-run-review-handoff <run-id> --json
+.venv/bin/bcw runs dry-run-safe-loop <run-id> --limit 5 --json
 .venv/bin/bcw operator-dashboard --run-id <run-id>
 .venv/bin/bcw drills review-routing
 .venv/bin/bcw sinks lookup-readiness <job-id> --run-id <run-id> --sink google_contacts --json
@@ -162,6 +163,12 @@ Then run `runs dry-run-review-handoff <run-id> --json` to summarize review
 groups, phase state, safe agent-loop actions, and explicit operator actions from
 the same local dry-run ledger. The handoff does not run enrichment or live sink
 calls; live-pilot commands in the packet are no-write inspection commands.
+
+If the handoff reports safe auto actions, run
+`runs dry-run-safe-loop <run-id> --limit <n> --json` to execute a bounded
+host-owned action loop. The loop is gated by dry-run closeout and review handoff,
+executes only the safe-action allowlist, and stops before explicit operator or
+live sink boundaries.
 
 Ordinary dry-run batch processing also writes `card_candidates.json` beside a job's
 `preclassification.json` when deterministic OpenCV boxes exist. Those records are
@@ -276,6 +283,11 @@ ledger markers, write attempts, or network calls.
 It composes the closeout, review bundle groups, phase report, and next-action
 counts so an operator or agent loop can continue safe dry-run planning without
 crossing into live lookup/write/readback.
+
+`runs dry-run-safe-loop` is the bounded post-handoff executor. It runs only
+host-owned safe actions such as dry-run lookup planning and local adapter-request
+artifact preparation, then recomputes the handoff state so the next operator or
+agent sees the new boundary.
 
 `offline-pilot-gap-audit` inspects offline drill and documentation coverage and
 reports the remaining live/operator-only boundaries without running private

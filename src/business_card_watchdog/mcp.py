@@ -165,6 +165,19 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_dry_run_safe_loop",
+                "description": "Execute a bounded dry-run-safe agent loop after dry-run closeout and review handoff.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "limit": {"type": "integer", "default": 5},
+                        "write": {"type": "boolean", "default": True},
+                    },
+                    "required": ["run_id"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_live_pilot_status",
                 "description": "Report run-level selected-target, live pilot evidence, and closeout status without executing live calls.",
                 "input_schema": {
@@ -1433,6 +1446,12 @@ def call_tool(
         return service.dry_run_closeout(str(args["run_id"]), write=bool(args.get("write", True)))
     if tool_name == "business_card_watchdog_dry_run_review_handoff":
         return service.dry_run_review_handoff(str(args["run_id"]), write=bool(args.get("write", True)))
+    if tool_name == "business_card_watchdog_dry_run_safe_loop":
+        return service.dry_run_safe_loop(
+            str(args["run_id"]),
+            limit=int(args.get("limit", 5)),
+            write=bool(args.get("write", True)),
+        )
     if tool_name == "business_card_watchdog_live_pilot_status":
         return service.live_pilot_status(
             run_id=str(args["run_id"]),

@@ -5643,3 +5643,32 @@ Validation:
 Safety:
 
 - This added a local-ledger dry-run review handoff only. It did not process configured SyncThing/private watch inputs; run OCR/App Intelligence; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.
+
+## Turn 251 | 2026-06-15
+
+Executed Plan 0045 with Slice 0045-A.
+
+Implemented:
+
+- Added `BusinessCardService.dry_run_safe_loop`.
+- Added CLI `bcw runs dry-run-safe-loop`.
+- Added API `GET /runs/{run_id}/dry-run-safe-loop`.
+- Added MCP tool `business_card_watchdog_dry_run_safe_loop`.
+- Updated README and ROADMAP for the gated bounded safe-loop executor.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_dry_run_safe_loop_executes_bounded_safe_actions tests/test_cli_surfaces.py::test_cli_runs_dry_run_safe_loop_executes_bounded_safe_actions tests/test_api.py::test_api_run_dry_run_safe_loop_executes_bounded_safe_actions tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_dry_run_safe_loop_executes_bounded_safe_actions -q` passed with 5 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/api.py src/business_card_watchdog/mcp.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 309 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `rg -n "dry-run-safe-loop|dry_run_safe_loop|Dry-run safe loop|business_card_watchdog_dry_run_safe_loop|Plan 0045" README.md ROADMAP.md RUNBOOK.md docs src tests` passed.
+- `uv build --out-dir dist` built source and wheel distributions.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `codegraph sync && codegraph status` passed; index is up to date.
+- `.venv/bin/bcw --config <temp-fixture-config> runs dry-run-safe-loop 2026-06-15T13-22-52+00-00 --limit 3 --no-write --json` passed with `state=safe_loop_executed`, three safe actions, zero writes, zero network calls, and no live sink calls.
+
+Safety:
+
+- This added a gated local-ledger safe-loop executor only. It did not process configured SyncThing/private watch inputs; run OCR/App Intelligence beyond the synthetic fixture drill; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.
