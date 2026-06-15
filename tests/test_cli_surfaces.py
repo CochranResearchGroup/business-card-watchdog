@@ -1426,6 +1426,34 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
                 "--config",
                 str(config_path),
                 "runs",
+                "live-pilot-command-copy-packet-from-response",
+                run_id,
+                "--response",
+                response,
+                "--json",
+            ]
+        )
+        == 0
+    )
+    command_copy_packet = json.loads(capsys.readouterr().out)
+    assert command_copy_packet["schema"] == (
+        "business-card-watchdog.live-pilot-command-copy-packet-from-response.v1"
+    )
+    assert command_copy_packet["state"] == "blocked"
+    assert command_copy_packet["checklist_state"] == "blocked"
+    assert command_copy_packet["acknowledgement_required"] is True
+    assert command_copy_packet["acknowledgement_ok"] is False
+    assert command_copy_packet["command_copy_text"] is None
+    assert command_copy_packet["executable_live_command"] is None
+    assert command_copy_packet["writes_attempted"] == 0
+    assert command_copy_packet["network_calls_made"] == 0
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
                 "live-pilot-closeout-packet-from-response",
                 run_id,
                 "--response",
@@ -1527,6 +1555,29 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert "Checklist items: 5" in checklist_text
     assert "Observed: writes=0 network=0" in checklist_text
     assert "{" not in checklist_text
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "live-pilot-command-copy-packet-from-response",
+                run_id,
+                "--response",
+                response,
+            ]
+        )
+        == 0
+    )
+    command_copy_text = capsys.readouterr().out
+    assert "State: blocked" in command_copy_text
+    assert "Checklist state: blocked" in command_copy_text
+    assert "Acknowledgement required: True" in command_copy_text
+    assert "Acknowledgement ok: False" in command_copy_text
+    assert "Command copy text: none" in command_copy_text
+    assert "Observed: writes=0 network=0" in command_copy_text
+    assert "{" not in command_copy_text
 
     assert (
         main(

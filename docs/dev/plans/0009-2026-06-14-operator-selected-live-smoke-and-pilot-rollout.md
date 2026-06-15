@@ -150,6 +150,30 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_operator_dashboard_composes_no_live_readiness tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
 - `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/api.py src/business_card_watchdog/mcp.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+
+### Slice 0009-A136 | 2026-06-15 | No-Send Live Pilot Command Copy Packet
+
+Implemented:
+
+- Added `business-card-watchdog.live-pilot-command-copy-packet-from-response.v1`.
+- Added run-scoped command-copy packet generation from a validated response across service, CLI, API, and MCP surfaces.
+- The packet composes the export-backed execution checklist and only returns `command_copy_text` when the checklist is ready and the operator acknowledgement names the run, job, sink, and operator with an approval/copy verb.
+- Operator dashboard command/API/MCP maps now advertise the command-copy packet surface.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_operator_dashboard_composes_no_live_readiness tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/api.py src/business_card_watchdog/mcp.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 231 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was command-copy/readback only. It did not execute lookup, write, readback, closeout, public-web search, paid enrichment, GWS/Odollo/Odoo calls, or configured/private SyncThing processing. It refuses to show command-copy text unless the persisted redacted readiness export matches current state and the operator acknowledgement matches the intended live-pilot context.
 - `.venv/bin/python -m pytest -q` passed with 231 tests.
 - `.venv/bin/ruff check .` passed.
 - `uv build --out-dir dist` passed.

@@ -260,6 +260,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
         ("Live pilot rehearsal", "live_pilot_operator_rehearsal_from_response"),
         ("Live pilot readiness export", "live_pilot_readiness_export_from_response"),
         ("Live pilot execution checklist", "live_pilot_execution_checklist_from_response"),
+        ("Live pilot command copy packet", "live_pilot_command_copy_packet_from_response"),
     ]:
         command = commands.get(key)
         if command:
@@ -288,6 +289,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
             ("Live pilot rehearsal", "live_pilot_operator_rehearsal_from_response"),
             ("Live pilot readiness export", "live_pilot_readiness_export_from_response"),
             ("Live pilot execution checklist", "live_pilot_execution_checklist_from_response"),
+            ("Live pilot command copy packet", "live_pilot_command_copy_packet_from_response"),
         ]:
             route = api_routes.get(key)
             if route:
@@ -316,6 +318,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
             ("Live pilot rehearsal", "live_pilot_operator_rehearsal_from_response"),
             ("Live pilot readiness export", "live_pilot_readiness_export_from_response"),
             ("Live pilot execution checklist", "live_pilot_execution_checklist_from_response"),
+            ("Live pilot command copy packet", "live_pilot_command_copy_packet_from_response"),
         ]:
             tool_entry = mcp_tools.get(key)
             if isinstance(tool_entry, dict):
@@ -968,6 +971,32 @@ def _render_live_pilot_execution_checklist_from_response_text(payload: dict[str,
     for check in check_rows:
         if isinstance(check, dict):
             lines.append(f" - {check.get('name')}: ok={check.get('ok')} evidence={check.get('evidence')}")
+    blockers = payload.get("blocked_reasons") or []
+    blocker_rows = blockers if isinstance(blockers, list) else []
+    lines.append(f"Blocked reasons: {len(blocker_rows)}")
+    for reason in blocker_rows:
+        lines.append(f" - {reason}")
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    stops = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stops)}")
+    for condition in stops:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
+def _render_live_pilot_command_copy_packet_from_response_text(payload: dict[str, object]) -> str:
+    lines = [
+        f"Run: {payload.get('run_id')}",
+        f"Job: {payload.get('job_id') or 'none'}",
+        f"State: {payload.get('state')}",
+        f"Sink: {payload.get('sink') or 'none'}",
+        f"Operator: {payload.get('operator') or 'none'}",
+        f"Checklist state: {payload.get('checklist_state') or 'none'}",
+        f"Acknowledgement required: {payload.get('acknowledgement_required', True)}",
+        f"Acknowledgement ok: {payload.get('acknowledgement_ok', False)}",
+        f"Command copy text: {payload.get('command_copy_text') or 'none'}",
+        f"Observed: writes={payload.get('writes_attempted', 0)} network={payload.get('network_calls_made', 0)}",
+    ]
     blockers = payload.get("blocked_reasons") or []
     blocker_rows = blockers if isinstance(blockers, list) else []
     lines.append(f"Blocked reasons: {len(blocker_rows)}")
@@ -1816,6 +1845,13 @@ def build_parser() -> argparse.ArgumentParser:
     runs_live_pilot_execution_checklist_from_response.add_argument("run_id")
     runs_live_pilot_execution_checklist_from_response.add_argument("--response", required=True)
     runs_live_pilot_execution_checklist_from_response.add_argument("--json", action="store_true")
+    runs_live_pilot_command_copy_packet_from_response = runs_sub.add_parser(
+        "live-pilot-command-copy-packet-from-response"
+    )
+    runs_live_pilot_command_copy_packet_from_response.add_argument("run_id")
+    runs_live_pilot_command_copy_packet_from_response.add_argument("--response", required=True)
+    runs_live_pilot_command_copy_packet_from_response.add_argument("--acknowledgement", default="")
+    runs_live_pilot_command_copy_packet_from_response.add_argument("--json", action="store_true")
     runs_live_pilot_validate_response = runs_sub.add_parser("live-pilot-validate-response")
     runs_live_pilot_validate_response.add_argument("run_id")
     runs_live_pilot_validate_response.add_argument("--response", required=True)
@@ -2265,10 +2301,19 @@ def main(argv: list[str] | None = None) -> int:
                 run_id=args.run_id,
                 response=args.response,
             )
+        elif args.runs_command == "live-pilot-command-copy-packet-from-response":
+            payload = service.live_pilot_command_copy_packet_from_response(
+                run_id=args.run_id,
+                response=args.response,
+                acknowledgement=args.acknowledgement,
+            )
         elif args.runs_command == "live-pilot-validate-response":
             payload = service.validate_live_pilot_operator_response(run_id=args.run_id, response=args.response)
         else:
             payload = service.get_run(args.run_id)
+        if args.runs_command == "live-pilot-command-copy-packet-from-response" and not args.json:
+            print(_render_live_pilot_command_copy_packet_from_response_text(payload), end="")
+            return 0
         if args.runs_command == "live-pilot-execution-checklist-from-response" and not args.json:
             print(_render_live_pilot_execution_checklist_from_response_text(payload), end="")
             return 0

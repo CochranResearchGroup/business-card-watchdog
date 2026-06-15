@@ -120,6 +120,10 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert operator_dashboard["commands"]["live_pilot_execution_checklist_from_response"] == (
         f"runs live-pilot-execution-checklist-from-response {run_id} --response <operator-response> --json"
     )
+    assert operator_dashboard["commands"]["live_pilot_command_copy_packet_from_response"] == (
+        f"runs live-pilot-command-copy-packet-from-response {run_id} "
+        "--response <operator-response> --acknowledgement <operator-acknowledgement> --json"
+    )
     assert operator_dashboard["api_routes"]["live_pilot_validate_response"] == (
         f"POST /runs/{run_id}/live-pilot-operator-response-validation"
     )
@@ -161,6 +165,9 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     )
     assert operator_dashboard["api_routes"]["live_pilot_execution_checklist_from_response"] == (
         f"POST /runs/{run_id}/live-pilot-execution-checklist-from-response"
+    )
+    assert operator_dashboard["api_routes"]["live_pilot_command_copy_packet_from_response"] == (
+        f"POST /runs/{run_id}/live-pilot-command-copy-packet-from-response"
     )
     assert operator_dashboard["api_routes"]["live_pilot_approval_packet"] == (
         f"GET /runs/{run_id}/live-pilot-approval-packet"
@@ -228,6 +235,14 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert operator_dashboard["mcp_tools"]["live_pilot_execution_checklist_from_response"] == {
         "tool": "business_card_watchdog_live_pilot_execution_checklist_from_response",
         "arguments": {"run_id": run_id, "response": "<operator-response>"},
+    }
+    assert operator_dashboard["mcp_tools"]["live_pilot_command_copy_packet_from_response"] == {
+        "tool": "business_card_watchdog_live_pilot_command_copy_packet_from_response",
+        "arguments": {
+            "run_id": run_id,
+            "response": "<operator-response>",
+            "acknowledgement": "<operator-acknowledgement>",
+        },
     }
     assert operator_dashboard["writes_attempted"] == 0
     assert operator_dashboard["network_calls_made"] == 0
@@ -657,6 +672,24 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     ]
     assert checklist["writes_attempted"] == 0
     assert checklist["network_calls_made"] == 0
+    command_copy_packet = client.post(
+        f"/runs/{run_id}/live-pilot-command-copy-packet-from-response",
+        json={"response": response},
+    ).json()
+    assert command_copy_packet["schema"] == (
+        "business-card-watchdog.live-pilot-command-copy-packet-from-response.v1"
+    )
+    assert command_copy_packet["state"] == "blocked"
+    assert command_copy_packet["checklist_state"] == "blocked"
+    assert command_copy_packet["acknowledgement_required"] is True
+    assert command_copy_packet["acknowledgement_ok"] is False
+    assert command_copy_packet["command_copy_text"] is None
+    assert command_copy_packet["executable_live_command"] is None
+    assert "operator acknowledgement is required before command copy text is shown" in command_copy_packet[
+        "blocked_reasons"
+    ]
+    assert command_copy_packet["writes_attempted"] == 0
+    assert command_copy_packet["network_calls_made"] == 0
     validation = client.post(
         f"/runs/{run_id}/live-pilot-operator-response-validation",
         json={"response": response},

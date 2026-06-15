@@ -160,6 +160,10 @@ def create_app(config_path: Path | None = None):
     class LivePilotExecutionChecklistFromResponseRequest(BaseModel):
         response: str
 
+    class LivePilotCommandCopyPacketFromResponseRequest(BaseModel):
+        response: str
+        acknowledgement: str = ""
+
     class SelectedLiveTargetAuditRequest(BaseModel):
         run_id: str
         scope: str | None = None
@@ -435,6 +439,17 @@ def create_app(config_path: Path | None = None):
         return service().live_pilot_execution_checklist_from_response(
             run_id=run_id,
             response=request.response,
+        )
+
+    @app.post("/runs/{run_id}/live-pilot-command-copy-packet-from-response")
+    def create_run_live_pilot_command_copy_packet_from_response(
+        run_id: str,
+        request: LivePilotCommandCopyPacketFromResponseRequest,
+    ) -> dict[str, object]:
+        return service().live_pilot_command_copy_packet_from_response(
+            run_id=run_id,
+            response=request.response,
+            acknowledgement=request.acknowledgement,
         )
 
     @app.get("/runs/{run_id}/jobs")

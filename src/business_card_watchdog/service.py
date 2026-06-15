@@ -700,6 +700,12 @@ class BusinessCardService:
                     if selected_run_id
                     else "runs list --json"
                 ),
+                "live_pilot_command_copy_packet_from_response": (
+                    f"runs live-pilot-command-copy-packet-from-response {selected_run_id} "
+                    "--response <operator-response> --acknowledgement <operator-acknowledgement> --json"
+                    if selected_run_id
+                    else "runs list --json"
+                ),
                 "mcp_manifest": "mcp-manifest",
             },
             "api_routes": {
@@ -799,6 +805,11 @@ class BusinessCardService:
                     f"POST /runs/{selected_run_id}/live-pilot-execution-checklist-from-response"
                     if selected_run_id
                     else "POST /runs/{run_id}/live-pilot-execution-checklist-from-response"
+                ),
+                "live_pilot_command_copy_packet_from_response": (
+                    f"POST /runs/{selected_run_id}/live-pilot-command-copy-packet-from-response"
+                    if selected_run_id
+                    else "POST /runs/{run_id}/live-pilot-command-copy-packet-from-response"
                 ),
             },
             "mcp_tools": {
@@ -957,6 +968,20 @@ class BusinessCardService:
                     "arguments": {"run_id": selected_run_id, "response": "<operator-response>"}
                     if selected_run_id
                     else {"run_id": "<run-id>", "response": "<operator-response>"},
+                },
+                "live_pilot_command_copy_packet_from_response": {
+                    "tool": "business_card_watchdog_live_pilot_command_copy_packet_from_response",
+                    "arguments": {
+                        "run_id": selected_run_id,
+                        "response": "<operator-response>",
+                        "acknowledgement": "<operator-acknowledgement>",
+                    }
+                    if selected_run_id
+                    else {
+                        "run_id": "<run-id>",
+                        "response": "<operator-response>",
+                        "acknowledgement": "<operator-acknowledgement>",
+                    },
                 },
             },
             "safe_next_actions": [
@@ -8161,6 +8186,81 @@ class BusinessCardService:
                 "Do not run the command if the readiness export is missing, unredacted, stale, or mismatched.",
                 "Recreate the readiness export after any selected-target, lookup, duplicate, write, or readback evidence changes.",
                 "Do not process private SyncThing images, run public-web search, or call paid enrichment from this checklist.",
+            ],
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+
+    def live_pilot_command_copy_packet_from_response(
+        self,
+        *,
+        run_id: str,
+        response: str,
+        acknowledgement: str = "",
+    ) -> dict[str, Any]:
+        checklist = self.live_pilot_execution_checklist_from_response(run_id=run_id, response=response)
+        blocked_reasons = list(checklist.get("blocked_reasons") or [])
+        normalized_acknowledgement = " ".join(str(acknowledgement or "").lower().split())
+        acknowledgement_terms = {
+            "run_id": str(checklist.get("run_id") or ""),
+            "job_id": str(checklist.get("job_id") or ""),
+            "sink": str(checklist.get("sink") or ""),
+            "operator": str(checklist.get("operator") or ""),
+        }
+        missing_acknowledgement_terms = [
+            f"{key}={value}"
+            for key, value in acknowledgement_terms.items()
+            if value and value.lower() not in normalized_acknowledgement
+        ]
+        acknowledgement_verb_ok = any(
+            verb in normalized_acknowledgement
+            for verb in ["acknowledge", "acknowledged", "approve", "approved", "copy", "ready"]
+        )
+        if not normalized_acknowledgement:
+            blocked_reasons.append("operator acknowledgement is required before command copy text is shown")
+        if missing_acknowledgement_terms:
+            blocked_reasons.append(
+                "operator acknowledgement must name "
+                + ", ".join(missing_acknowledgement_terms)
+                + " before command copy text is shown"
+            )
+        if not acknowledgement_verb_ok:
+            blocked_reasons.append(
+                "operator acknowledgement must include one of acknowledge, approved, copy, or ready"
+            )
+        checklist_ready = checklist.get("state") == "ready_for_explicit_operator_command"
+        acknowledgement_ok = bool(
+            normalized_acknowledgement
+            and not missing_acknowledgement_terms
+            and acknowledgement_verb_ok
+        )
+        executable_live_command = (
+            checklist.get("executable_live_command") if checklist_ready and acknowledgement_ok and not blocked_reasons else None
+        )
+        state = "ready_for_operator_copy" if executable_live_command else "blocked"
+        return {
+            "schema": "business-card-watchdog.live-pilot-command-copy-packet-from-response.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_id,
+            "job_id": checklist.get("job_id"),
+            "sink": checklist.get("sink"),
+            "operator": checklist.get("operator"),
+            "acknowledgement_required": True,
+            "acknowledgement_ok": acknowledgement_ok,
+            "acknowledgement_instruction": (
+                "Acknowledge the exact run_id, job_id, sink, and operator plus an approval/copy verb before copying."
+            ),
+            "checklist_state": checklist.get("state"),
+            "checklist": checklist,
+            "command_copy_text": executable_live_command,
+            "executable_live_command": executable_live_command,
+            "blocked_reasons": blocked_reasons,
+            "explicit_stop_conditions": [
+                "This packet only returns command text for operator copy; it never executes the command.",
+                "Do not copy command_copy_text unless state is ready_for_operator_copy.",
+                "Stop if the command, acknowledgement, checklist, or readiness export no longer matches the intended run.",
+                "Do not process private SyncThing images, run public-web search, or call paid enrichment from this packet.",
             ],
             "writes_attempted": 0,
             "network_calls_made": 0,

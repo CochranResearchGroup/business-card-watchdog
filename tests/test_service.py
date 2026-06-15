@@ -884,6 +884,10 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     assert dashboard["commands"]["live_pilot_execution_checklist_from_response"] == (
         f"runs live-pilot-execution-checklist-from-response {run_id} --response <operator-response> --json"
     )
+    assert dashboard["commands"]["live_pilot_command_copy_packet_from_response"] == (
+        f"runs live-pilot-command-copy-packet-from-response {run_id} "
+        "--response <operator-response> --acknowledgement <operator-acknowledgement> --json"
+    )
     assert dashboard["commands"]["live_pilot_validate_response"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
@@ -920,6 +924,9 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     )
     assert dashboard["api_routes"]["live_pilot_execution_checklist_from_response"] == (
         f"POST /runs/{run_id}/live-pilot-execution-checklist-from-response"
+    )
+    assert dashboard["api_routes"]["live_pilot_command_copy_packet_from_response"] == (
+        f"POST /runs/{run_id}/live-pilot-command-copy-packet-from-response"
     )
     assert dashboard["mcp_tools"]["next_actions"] == {
         "tool": "business_card_watchdog_next_actions",
@@ -976,6 +983,14 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     assert dashboard["mcp_tools"]["live_pilot_execution_checklist_from_response"] == {
         "tool": "business_card_watchdog_live_pilot_execution_checklist_from_response",
         "arguments": {"run_id": run_id, "response": "<operator-response>"},
+    }
+    assert dashboard["mcp_tools"]["live_pilot_command_copy_packet_from_response"] == {
+        "tool": "business_card_watchdog_live_pilot_command_copy_packet_from_response",
+        "arguments": {
+            "run_id": run_id,
+            "response": "<operator-response>",
+            "acknowledgement": "<operator-acknowledgement>",
+        },
     }
     assert dashboard["mcp_tools"]["review_routing_drill"] == {
         "tool": "business_card_watchdog_review_routing_drill",
@@ -3095,6 +3110,39 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert all(item["ok"] for item in ready_checklist["checklist_items"])
     assert ready_checklist["writes_attempted"] == 0
     assert ready_checklist["network_calls_made"] == 0
+
+    blocked_copy_packet = service.live_pilot_command_copy_packet_from_response(
+        run_id=run_id,
+        response=preselection_response,
+    )
+    assert blocked_copy_packet["schema"] == "business-card-watchdog.live-pilot-command-copy-packet-from-response.v1"
+    assert blocked_copy_packet["state"] == "blocked"
+    assert blocked_copy_packet["checklist_state"] == "ready_for_explicit_operator_command"
+    assert blocked_copy_packet["acknowledgement_required"] is True
+    assert blocked_copy_packet["acknowledgement_ok"] is False
+    assert blocked_copy_packet["command_copy_text"] is None
+    assert blocked_copy_packet["executable_live_command"] is None
+    assert "operator acknowledgement is required before command copy text is shown" in blocked_copy_packet[
+        "blocked_reasons"
+    ]
+    assert blocked_copy_packet["writes_attempted"] == 0
+    assert blocked_copy_packet["network_calls_made"] == 0
+
+    ready_copy_packet = service.live_pilot_command_copy_packet_from_response(
+        run_id=run_id,
+        response=preselection_response,
+        acknowledgement=(
+            f"acknowledge run_id={run_id} job_id={job_id} sink=google_contacts operator=tester copy command"
+        ),
+    )
+    assert ready_copy_packet["state"] == "ready_for_operator_copy"
+    assert ready_copy_packet["checklist_state"] == "ready_for_explicit_operator_command"
+    assert ready_copy_packet["acknowledgement_ok"] is True
+    assert ready_copy_packet["blocked_reasons"] == []
+    assert ready_copy_packet["command_copy_text"] == ready_checklist["executable_live_command"]
+    assert ready_copy_packet["executable_live_command"] == ready_checklist["executable_live_command"]
+    assert ready_copy_packet["writes_attempted"] == 0
+    assert ready_copy_packet["network_calls_made"] == 0
 
     blocked_closeout_write = service.live_pilot_closeout_packet_from_response(
         run_id=run_id,
