@@ -1785,6 +1785,63 @@ def test_service_lookup_selection_packet_selects_route_ready_job_without_live_ca
     assert "lookup_selection_packet_created" in events
 
 
+def test_service_close_lookup_prerequisites_executes_only_lookup_safe_actions(
+    tmp_path: Path,
+) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+    )
+
+    payload = service.close_lookup_prerequisites(
+        run_id,
+        operator="tester",
+        sink="google_contacts",
+        limit=4,
+        write=True,
+    )
+
+    assert payload["schema"] == "business-card-watchdog.close-lookup-prerequisites.v1"
+    assert payload["state"] == "lookup_prerequisites_advanced"
+    assert [row["action"] for row in payload["executed"]] == [
+        "plan_sink_lookup",
+        "prepare_sink_lookup_adapter",
+        "record_sink_lookup_result",
+        "assess_downstream_duplicates",
+    ]
+    assert payload["executed_count"] == 4
+    assert payload["after_packet"]["selected_packet"]["readiness"]["lookup"]["missing_requirements"] == [
+        "live_lookup_readiness_ready"
+    ]
+    assert payload["creates_selected_live_target"] is False
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert payload["live_sink_calls_made"] is False
+    assert payload["runtime_artifact_written"] is True
+    assert Path(payload["closeout_path"]).exists()
+    artifact_kinds = {artifact["kind"] for artifact in service.get_run(run_id)["artifacts"]}
+    assert {
+        "reviewed_contact",
+        "sink_lookup_plan",
+        "sink_adapter_request_lookup",
+        "sink_lookup_result",
+        "downstream_duplicate_assessment",
+        "close_lookup_prerequisites",
+    } <= artifact_kinds
+    assert "selected_live_target" not in artifact_kinds
+    events = (config.runs_dir / run_id / "events.jsonl").read_text(encoding="utf-8")
+    assert "close_lookup_prerequisites_created" in events
+
+
 def test_service_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",

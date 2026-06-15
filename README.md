@@ -105,6 +105,7 @@ Inspect runs, jobs, review queue, sinks, and watcher state:
 .venv/bin/bcw runs dry-run-safe-loop <run-id> --limit 5 --json
 .venv/bin/bcw runs review-route-readiness <run-id> --json
 .venv/bin/bcw runs lookup-selection-packet <run-id> --operator <operator> --json
+.venv/bin/bcw runs close-lookup-prerequisites <run-id> --operator <operator> --json
 .venv/bin/bcw operator-dashboard --run-id <run-id>
 .venv/bin/bcw drills review-routing
 .venv/bin/bcw sinks lookup-readiness <job-id> --run-id <run-id> --sink google_contacts --json

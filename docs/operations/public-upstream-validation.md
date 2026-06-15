@@ -603,3 +603,23 @@ Validation:
 Safety:
 
 - The Plan 0047 lookup selection packet reads local dry-run review-route readiness and previews the existing live selection packet. It did not create `selected_live_target.json`; process configured SyncThing/private watch inputs; run OCR/App Intelligence; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.
+
+## 2026-06-15 Local Gate For Plan 0048
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_close_lookup_prerequisites_executes_only_lookup_safe_actions tests/test_cli_surfaces.py::test_cli_runs_close_lookup_prerequisites_executes_lookup_steps tests/test_api.py::test_api_run_close_lookup_prerequisites_executes_lookup_steps tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_close_lookup_prerequisites_executes_lookup_steps -q` passed with 5 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/api.py src/business_card_watchdog/mcp.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 321 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `rg -n "close-lookup-prerequisites|close_lookup_prerequisites|Close lookup prerequisites|business_card_watchdog_close_lookup_prerequisites|Plan 0048" README.md ROADMAP.md RUNBOOK.md docs src tests` passed.
+- `uv build --out-dir dist` built source and wheel distributions.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `codegraph sync && codegraph status` passed; index is up to date.
+- `.venv/bin/bcw drills watch-dry-run-execution --json` passed with one synthetic fixture file processed through a completed dry-run batch and no writes or network calls.
+- Synthetic CLI close-lookup smoke passed with `state=lookup_prerequisites_advanced`, `executed_count=4`, remaining missing requirement `live_lookup_readiness_ready`, zero writes, zero network calls, no selected-target creation, and no runtime artifact write under `--no-write`.
+
+Safety:
+
+- The Plan 0048 closer executes only local lookup prerequisite actions and stops before selected-target approval. It did not approve contact review; create `selected_live_target.json`; process configured SyncThing/private watch inputs; run OCR/App Intelligence; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.

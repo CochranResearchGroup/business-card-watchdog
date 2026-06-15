@@ -572,6 +572,77 @@ def test_cli_runs_lookup_selection_packet_reports_selected_candidate(tmp_path: P
     assert "{" not in text
 
 
+def test_cli_runs_close_lookup_prerequisites_executes_lookup_steps(tmp_path: Path, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+    config = AppConfig(
+        config_path=config_path,
+        data_dir=data_dir,
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    run_id, job_id = make_recorded_run(config)
+    BusinessCardService(config).submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+    )
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "close-lookup-prerequisites",
+                run_id,
+                "--operator",
+                "tester",
+                "--sink",
+                "google_contacts",
+                "--limit",
+                "4",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["schema"] == "business-card-watchdog.close-lookup-prerequisites.v1"
+    assert payload["executed_count"] == 4
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert Path(payload["closeout_path"]).exists()
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "close-lookup-prerequisites",
+                run_id,
+                "--operator",
+                "tester",
+                "--sink",
+                "google_contacts",
+                "--limit",
+                "1",
+                "--no-write",
+            ]
+        )
+        == 0
+    )
+    text = capsys.readouterr().out
+    assert "Close lookup prerequisites:" in text
+    assert "creates_selected_target=False" in text
+    assert "Close lookup prerequisites: runs close-lookup-prerequisites" in text
+    assert "Stop conditions: 5" in text
+    assert "{" not in text
+
+
 def test_cli_child_reviews_lists_promoted_child_candidates(
     tmp_path: Path,
     monkeypatch,

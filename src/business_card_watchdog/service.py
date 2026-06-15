@@ -73,6 +73,13 @@ _SAFE_NEXT_ACTIONS = {
     "prepare_sink_apply_pilot_report",
 }
 
+_LOOKUP_PREREQUISITE_ACTIONS = {
+    "plan_sink_lookup",
+    "prepare_sink_lookup_adapter",
+    "record_sink_lookup_result",
+    "assess_downstream_duplicates",
+}
+
 
 def _selected_target_identity(payload: dict[str, Any]) -> str:
     return str(payload.get("selection_id") or payload.get("created_at") or "")
@@ -2074,6 +2081,139 @@ class BusinessCardService:
                     "sink": selected_sink or None,
                     "operator": operator,
                     "packet_path": str(packet_path),
+                    "writes_attempted": 0,
+                    "network_calls_made": 0,
+                },
+            )
+        return payload
+
+    def close_lookup_prerequisites(
+        self,
+        run_id: str,
+        *,
+        operator: str,
+        sink: str | None = None,
+        limit: int = 5,
+        write: bool = True,
+    ) -> dict[str, Any]:
+        before_packet = self.lookup_selection_packet(
+            run_id,
+            operator=operator,
+            sink=sink,
+            write=False,
+        )
+        executed: list[dict[str, Any]] = []
+        skipped: list[dict[str, Any]] = []
+        for _ in range(max(0, limit)):
+            candidates = self.next_actions(run_id=run_id, limit=max(10, limit))["actions"]
+            executable = next(
+                (
+                    candidate
+                    for candidate in candidates
+                    if candidate.get("action") in _LOOKUP_PREREQUISITE_ACTIONS
+                ),
+                None,
+            )
+            if executable is None:
+                skipped = [
+                    {
+                        **candidate,
+                        "status": "skipped",
+                        "skip_reason": "action is not a lookup prerequisite or requires operator review",
+                    }
+                    for candidate in candidates
+                ]
+                break
+            result = self._execute_safe_next_action(executable)
+            executed.append(
+                {
+                    **executable,
+                    "status": "executed",
+                    "result": result,
+                }
+            )
+        after_packet = self.lookup_selection_packet(
+            run_id,
+            operator=operator,
+            sink=sink,
+            write=False,
+        )
+        state = (
+            "lookup_prerequisites_advanced"
+            if executed
+            else "no_lookup_prerequisites_executed"
+        )
+        if after_packet.get("state") == "ready_for_operator_approval":
+            state = "ready_for_operator_approval"
+        commands = {
+            "close_lookup_prerequisites": (
+                f"runs close-lookup-prerequisites {run_id} --operator {operator}"
+                + (f" --sink {sink}" if sink else "")
+                + f" --limit {limit} --json"
+            ),
+            "lookup_selection_packet": (
+                f"runs lookup-selection-packet {run_id} --operator {operator}"
+                + (f" --sink {sink}" if sink else "")
+                + " --json"
+            ),
+            "review_route_readiness": f"runs review-route-readiness {run_id} --json",
+            "next_actions": f"actions next --run-id {run_id} --json",
+            "review_queue": f"reviews list --run-id {run_id} --state all --json",
+            "live_pilot_status": f"runs live-pilot-status {run_id} --no-write --json",
+        }
+        payload: dict[str, Any] = {
+            "schema": "business-card-watchdog.close-lookup-prerequisites.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_id,
+            "sink": sink,
+            "operator": operator,
+            "limit": limit,
+            "lookup_prerequisite_actions": sorted(_LOOKUP_PREREQUISITE_ACTIONS),
+            "before_packet_state": before_packet.get("state"),
+            "after_packet_state": after_packet.get("state"),
+            "before_blocked_reasons": list(before_packet.get("blocked_reasons") or []),
+            "after_blocked_reasons": list(after_packet.get("blocked_reasons") or []),
+            "executed": executed,
+            "skipped": skipped,
+            "executed_count": len(executed),
+            "skipped_count": len(skipped),
+            "before_packet": before_packet,
+            "after_packet": after_packet,
+            "private_sources_used": False,
+            "public_web_search_used": False,
+            "paid_enrichment_used": False,
+            "live_sink_calls_made": False,
+            "creates_selected_live_target": False,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "runtime_artifact_written": False,
+            "closeout_path": None,
+            "commands": commands,
+            "explicit_stop_conditions": [
+                "This closer executes only lookup prerequisite actions from the local safe allowlist.",
+                "This closer does not approve contact review or synthesize reviewed_contact.json.",
+                "This closer does not create selected_live_target.json.",
+                "This closer does not execute live lookup, write, or readback.",
+                "Do not process private SyncThing images, run public-web search, or call paid enrichment from this closer.",
+            ],
+        }
+        if write:
+            closeout_path = self.config.runs_dir / run_id / "close_lookup_prerequisites.json"
+            payload["runtime_artifact_written"] = True
+            payload["closeout_path"] = str(closeout_path)
+            closeout_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            ledger = RunLedger(self.config.runs_dir / run_id)
+            ledger.record_artifact(job_id="__run__", kind="close_lookup_prerequisites", path=closeout_path)
+            ledger.record_event(
+                "close_lookup_prerequisites_created",
+                {
+                    "run_id": run_id,
+                    "sink": sink,
+                    "operator": operator,
+                    "state": state,
+                    "executed_count": len(executed),
+                    "closeout_path": str(closeout_path),
                     "writes_attempted": 0,
                     "network_calls_made": 0,
                 },

@@ -1785,6 +1785,59 @@ def _render_lookup_selection_packet_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_close_lookup_prerequisites_text(payload: dict[str, object]) -> str:
+    commands = dict(payload.get("commands") or {})
+    executed = payload.get("executed") or []
+    skipped = payload.get("skipped") or []
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    lines = [
+        f"Close lookup prerequisites: {payload.get('state')}",
+        f"Run: {payload.get('run_id')}",
+        f"Sink: {payload.get('sink') or 'auto'}",
+        f"Operator: {payload.get('operator')}",
+        f"Limit: {payload.get('limit', 0)}",
+        f"Before packet: {payload.get('before_packet_state')}",
+        f"After packet: {payload.get('after_packet_state')}",
+        f"Executed: {payload.get('executed_count', 0)}",
+        f"Skipped: {payload.get('skipped_count', 0)}",
+        "Observed: "
+        f"writes={payload.get('writes_attempted', 0)} "
+        f"network={payload.get('network_calls_made', 0)} "
+        f"live_sinks={payload.get('live_sink_calls_made', False)} "
+        f"creates_selected_target={payload.get('creates_selected_live_target', False)}",
+        f"Runtime artifact written: {payload.get('runtime_artifact_written', False)}",
+    ]
+    if payload.get("closeout_path"):
+        lines.append(f"Closeout path: {payload.get('closeout_path')}")
+    executed_rows = executed if isinstance(executed, list) else []
+    lines.append(f"Executed rows: {len(executed_rows)}")
+    for row in executed_rows[:10]:
+        if isinstance(row, dict):
+            lines.append(f" - {row.get('job_id')}: {row.get('action')}")
+    skipped_rows = skipped if isinstance(skipped, list) else []
+    lines.append(f"Skipped rows: {len(skipped_rows)}")
+    for row in skipped_rows[:10]:
+        if isinstance(row, dict):
+            lines.append(f" - {row.get('job_id')}: {row.get('action')}")
+    lines.append("Commands:")
+    for label, key in [
+        ("Close lookup prerequisites", "close_lookup_prerequisites"),
+        ("Lookup selection packet", "lookup_selection_packet"),
+        ("Review-route readiness", "review_route_readiness"),
+        ("Next actions", "next_actions"),
+        ("Review queue", "review_queue"),
+        ("Live pilot status", "live_pilot_status"),
+    ]:
+        command = commands.get(key)
+        if command:
+            lines.append(f" - {label}: {command}")
+    stop_rows = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stop_rows)}")
+    for condition in stop_rows:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_runtime_readiness_text(payload: dict[str, object]) -> str:
     checks = payload.get("checks") or []
     blocked = payload.get("blocked_checks") or []
@@ -2617,6 +2670,13 @@ def build_parser() -> argparse.ArgumentParser:
     runs_lookup_selection_packet.add_argument("--sink", choices=["google_contacts", "odoo"], default=None)
     runs_lookup_selection_packet.add_argument("--no-write", action="store_true")
     runs_lookup_selection_packet.add_argument("--json", action="store_true")
+    runs_close_lookup_prerequisites = runs_sub.add_parser("close-lookup-prerequisites")
+    runs_close_lookup_prerequisites.add_argument("run_id")
+    runs_close_lookup_prerequisites.add_argument("--operator", required=True)
+    runs_close_lookup_prerequisites.add_argument("--sink", choices=["google_contacts", "odoo"], default=None)
+    runs_close_lookup_prerequisites.add_argument("--limit", type=int, default=5)
+    runs_close_lookup_prerequisites.add_argument("--no-write", action="store_true")
+    runs_close_lookup_prerequisites.add_argument("--json", action="store_true")
     runs_live_pilot_status = runs_sub.add_parser("live-pilot-status")
     runs_live_pilot_status.add_argument("run_id")
     runs_live_pilot_status.add_argument("--no-write", action="store_true")
@@ -3308,6 +3368,14 @@ def main(argv: list[str] | None = None) -> int:
                 sink=args.sink,
                 write=not args.no_write,
             )
+        elif args.runs_command == "close-lookup-prerequisites":
+            payload = service.close_lookup_prerequisites(
+                args.run_id,
+                operator=args.operator,
+                sink=args.sink,
+                limit=args.limit,
+                write=not args.no_write,
+            )
         elif args.runs_command == "live-pilot-status":
             payload = service.live_pilot_status(run_id=args.run_id, write=not args.no_write)
         elif args.runs_command == "live-pilot-handoff":
@@ -3463,6 +3531,9 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.runs_command == "lookup-selection-packet" and not args.json:
             print(_render_lookup_selection_packet_text(payload), end="")
+            return 0
+        if args.runs_command == "close-lookup-prerequisites" and not args.json:
+            print(_render_close_lookup_prerequisites_text(payload), end="")
             return 0
         if args.runs_command == "phase-report" and not args.json:
             print(_render_phase_report_text(payload), end="")

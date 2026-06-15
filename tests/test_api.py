@@ -1005,7 +1005,10 @@ def test_api_run_dry_run_closeout_reports_no_live(tmp_path: Path, monkeypatch) -
 
     config_path = tmp_path / "config.toml"
     data_dir = tmp_path / "data"
-    write_config(config_path, data_dir)
+    config_path.write_text(
+        f'data_dir = "{data_dir}"\n[watch]\ninputs = []\n[sink]\ngoogle_contacts = true\n',
+        encoding="utf-8",
+    )
     source_dir = tmp_path / "cards"
     write_synthetic_image(source_dir / "card.png")
     config = AppConfig(
@@ -1170,6 +1173,45 @@ def test_api_run_lookup_selection_packet_reports_selected_candidate(tmp_path: Pa
     assert payload["route_ready_count"] == 1
     assert payload["selected"]["sink"] == "google_contacts"
     assert payload["selected_packet"]["operator"] == "api-test"
+    assert payload["creates_selected_live_target"] is False
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert payload["runtime_artifact_written"] is False
+
+
+def test_api_run_close_lookup_prerequisites_executes_lookup_steps(tmp_path: Path) -> None:
+    from business_card_watchdog.api import create_app
+
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    config_path.write_text(
+        f'data_dir = "{data_dir}"\n[watch]\ninputs = []\n[sink]\ngoogle_contacts = true\n',
+        encoding="utf-8",
+    )
+    config = AppConfig(
+        config_path=config_path,
+        data_dir=data_dir,
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    run_id, job_id = make_recorded_run(config)
+    BusinessCardService(config).submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+    )
+    client = TestClient(create_app(config_path))
+
+    payload = client.post(
+        f"/runs/{run_id}/close-lookup-prerequisites",
+        json={"operator": "api-test", "sink": "google_contacts", "limit": 4, "write": False},
+    ).json()
+
+    assert payload["schema"] == "business-card-watchdog.close-lookup-prerequisites.v1"
+    assert payload["executed_count"] == 4
+    assert payload["after_packet"]["selected_packet"]["readiness"]["lookup"]["missing_requirements"] == [
+        "live_lookup_readiness_ready"
+    ]
     assert payload["creates_selected_live_target"] is False
     assert payload["writes_attempted"] == 0
     assert payload["network_calls_made"] == 0

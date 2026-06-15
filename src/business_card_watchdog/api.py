@@ -181,6 +181,12 @@ def create_app(config_path: Path | None = None):
         sink: str | None = None
         write: bool = True
 
+    class CloseLookupPrerequisitesRequest(BaseModel):
+        operator: str
+        sink: str | None = None
+        limit: int = 5
+        write: bool = True
+
     class SelectedLiveTargetRequest(BaseModel):
         run_id: str
         sink: str
@@ -413,6 +419,19 @@ def create_app(config_path: Path | None = None):
             run_id,
             operator=request.operator,
             sink=request.sink,
+            write=request.write,
+        )
+
+    @app.post("/runs/{run_id}/close-lookup-prerequisites")
+    def create_run_close_lookup_prerequisites(
+        run_id: str,
+        request: CloseLookupPrerequisitesRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().close_lookup_prerequisites(
+            run_id,
+            operator=request.operator,
+            sink=request.sink,
+            limit=request.limit,
             write=request.write,
         )
 

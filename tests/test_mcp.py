@@ -48,6 +48,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_dry_run_safe_loop" in names
     assert "business_card_watchdog_review_route_readiness" in names
     assert "business_card_watchdog_lookup_selection_packet" in names
+    assert "business_card_watchdog_close_lookup_prerequisites" in names
     assert "business_card_watchdog_live_pilot_status" in names
     assert "business_card_watchdog_live_pilot_handoff" in names
     assert "business_card_watchdog_live_pilot_approval_packet" in names
@@ -370,6 +371,43 @@ def test_mcp_lookup_selection_packet_reports_selected_candidate(tmp_path: Path, 
     assert payload["route_ready_count"] == 1
     assert payload["selected"]["sink"] == "google_contacts"
     assert payload["selected_packet"]["operator"] == "mcp-test"
+    assert payload["creates_selected_live_target"] is False
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert payload["runtime_artifact_written"] is False
+
+
+def test_mcp_close_lookup_prerequisites_executes_lookup_steps(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    run_id, job_id = make_recorded_run(config)
+    BusinessCardService(config).submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+    )
+
+    payload = call_tool(
+        "business_card_watchdog_close_lookup_prerequisites",
+        {
+            "run_id": run_id,
+            "operator": "mcp-test",
+            "sink": "google_contacts",
+            "limit": 4,
+            "write": False,
+        },
+        config=config,
+    )
+
+    assert payload["schema"] == "business-card-watchdog.close-lookup-prerequisites.v1"
+    assert payload["executed_count"] == 4
+    assert payload["after_packet"]["selected_packet"]["readiness"]["lookup"]["missing_requirements"] == [
+        "live_lookup_readiness_ready"
+    ]
     assert payload["creates_selected_live_target"] is False
     assert payload["writes_attempted"] == 0
     assert payload["network_calls_made"] == 0

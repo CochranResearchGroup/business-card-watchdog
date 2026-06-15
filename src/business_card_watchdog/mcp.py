@@ -204,6 +204,21 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_close_lookup_prerequisites",
+                "description": "Execute only no-live lookup prerequisite actions before selected-target approval.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "operator": {"type": "string"},
+                        "sink": {"type": "string"},
+                        "limit": {"type": "integer", "default": 5},
+                        "write": {"type": "boolean", "default": True},
+                    },
+                    "required": ["run_id", "operator"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_live_pilot_status",
                 "description": "Report run-level selected-target, live pilot evidence, and closeout status without executing live calls.",
                 "input_schema": {
@@ -1485,6 +1500,14 @@ def call_tool(
             str(args["run_id"]),
             operator=str(args["operator"]),
             sink=str(args["sink"]) if args.get("sink") else None,
+            write=bool(args.get("write", True)),
+        )
+    if tool_name == "business_card_watchdog_close_lookup_prerequisites":
+        return service.close_lookup_prerequisites(
+            str(args["run_id"]),
+            operator=str(args["operator"]),
+            sink=str(args["sink"]) if args.get("sink") else None,
+            limit=int(args.get("limit", 5)),
             write=bool(args.get("write", True)),
         )
     if tool_name == "business_card_watchdog_live_pilot_status":
