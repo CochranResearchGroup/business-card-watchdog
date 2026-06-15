@@ -1340,6 +1340,28 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed; index is up to date.
 
+### Slice 0009-A74 | 2026-06-15 | MCP JSONL Validation Transport Coverage
+
+Implemented:
+
+- MCP JSONL server regression coverage now calls `business_card_watchdog_live_pilot_operator_response_validation`.
+- The JSONL test prepares a fixture-only selected target, sends the filled operator response over JSON-RPC, and asserts ready validation, matching template, zero write/network counters, and no selected-target creation by validation.
+
+Safety:
+
+- This slice is transport test coverage only.
+- It uses fixture data and does not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_mcp.py::test_mcp_jsonl_server_lists_and_calls_tools tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup -q` passed with 4 tests.
+- `.venv/bin/python -m pytest -q` passed with 226 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

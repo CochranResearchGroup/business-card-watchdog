@@ -7,6 +7,7 @@ from business_card_watchdog.config import AppConfig, EnrichmentConfig, Enrichmen
 from business_card_watchdog.contact import build_contact_candidate
 from business_card_watchdog.mcp import call_tool, tool_manifest
 from business_card_watchdog.mcp_server import serve_jsonl
+from business_card_watchdog.service import BusinessCardService
 
 from test_service import make_recorded_run
 
@@ -814,6 +815,19 @@ def test_mcp_call_tool_rejects_unknown_tool(tmp_path: Path) -> None:
 def test_mcp_jsonl_server_lists_and_calls_tools(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, job_id = make_recorded_run(config)
+    BusinessCardService(config).select_live_target_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        operator="mcp-jsonl",
+        scope="lookup",
+        safety_confirmation="fixture contact is safe for google contacts test profile",
+    )
+    operator_response = (
+        f"run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=mcp-jsonl scope=lookup "
+        "safety_confirmation=fixture contact is safe for google contacts test profile"
+    )
     requests = [
         {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
         {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
@@ -882,7 +896,16 @@ def test_mcp_jsonl_server_lists_and_calls_tools(tmp_path: Path) -> None:
                 "arguments": {"run_id": run_id, "limit": 1},
             },
         },
-        {"jsonrpc": "2.0", "id": 9, "method": "shutdown", "params": {}},
+        {
+            "jsonrpc": "2.0",
+            "id": 9,
+            "method": "tools/call",
+            "params": {
+                "name": "business_card_watchdog_live_pilot_operator_response_validation",
+                "arguments": {"run_id": run_id, "response": operator_response},
+            },
+        },
+        {"jsonrpc": "2.0", "id": 10, "method": "shutdown", "params": {}},
     ]
     input_stream = StringIO(
         "\n".join(json.dumps(request, sort_keys=True) for request in requests) + "\n"
@@ -931,4 +954,13 @@ def test_mcp_jsonl_server_lists_and_calls_tools(tmp_path: Path) -> None:
     assert run_next["executed"][0]["action"] == "plan_sink_lookup"
     assert run_next["phase_report_before"]["schema"] == "business-card-watchdog.phase-report.v1"
     assert run_next["phase_report_after"]["schema"] == "business-card-watchdog.phase-report.v1"
-    assert responses[8]["result"]["shutdown"] is True
+    operator_response_validation = responses[8]["result"]["structuredContent"]
+    assert operator_response_validation["schema"] == (
+        "business-card-watchdog.live-pilot-operator-response-validation.v1"
+    )
+    assert operator_response_validation["state"] == "ready_to_select_live_target"
+    assert operator_response_validation["matching_template"]["job_id"] == job_id
+    assert operator_response_validation["creates_selected_live_target"] is False
+    assert operator_response_validation["writes_attempted"] == 0
+    assert operator_response_validation["network_calls_made"] == 0
+    assert responses[9]["result"]["shutdown"] is True
