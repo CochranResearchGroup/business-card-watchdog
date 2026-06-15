@@ -101,6 +101,7 @@ Inspect runs, jobs, review queue, sinks, and watcher state:
 .venv/bin/bcw runs summary <run-id>
 .venv/bin/bcw runs phase-report <run-id>
 .venv/bin/bcw runs dry-run-closeout <run-id> --json
+.venv/bin/bcw runs dry-run-review-handoff <run-id> --json
 .venv/bin/bcw operator-dashboard --run-id <run-id>
 .venv/bin/bcw drills review-routing
 .venv/bin/bcw sinks lookup-readiness <job-id> --run-id <run-id> --sink google_contacts --json
@@ -156,6 +157,11 @@ After an operator-selected dry-run batch completes, run
 The closeout reads only the local run ledger and checks that the run completed in
 dry-run mode with no live/pilot event markers, no live/pilot artifacts, no
 writes, and no network calls.
+
+Then run `runs dry-run-review-handoff <run-id> --json` to summarize review
+groups, phase state, safe agent-loop actions, and explicit operator actions from
+the same local dry-run ledger. The handoff does not run enrichment or live sink
+calls; live-pilot commands in the packet are no-write inspection commands.
 
 Ordinary dry-run batch processing also writes `card_candidates.json` beside a job's
 `preclassification.json` when deterministic OpenCV boxes exist. Those records are
@@ -265,6 +271,11 @@ blocked behind the existing response-validation and command-copy packet.
 run ledger, records an optional closeout artifact, and keeps review/routing or
 live-pilot selection blocked if it sees a non-dry run, incomplete run, live/pilot
 ledger markers, write attempts, or network calls.
+
+`runs dry-run-review-handoff` is the post-closeout review and routing checkpoint.
+It composes the closeout, review bundle groups, phase report, and next-action
+counts so an operator or agent loop can continue safe dry-run planning without
+crossing into live lookup/write/readback.
 
 `offline-pilot-gap-audit` inspects offline drill and documentation coverage and
 reports the remaining live/operator-only boundaries without running private

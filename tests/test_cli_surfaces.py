@@ -353,6 +353,46 @@ def test_cli_runs_dry_run_closeout_reports_no_live(tmp_path: Path, monkeypatch, 
     assert "{" not in text
 
 
+def test_cli_runs_dry_run_review_handoff_reports_safe_next_steps(tmp_path: Path, monkeypatch, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+    source_dir = tmp_path / "cards"
+    write_synthetic_image(source_dir / "card.png")
+    config = AppConfig(
+        config_path=config_path,
+        data_dir=data_dir,
+        prefilter=PrefilterConfig(enabled=False),
+        sink=SinkConfig(google_contacts=True, odoo=True, dry_run=True),
+        routing_rules=[{"match": "email_domain", "value": "*", "sinks": ["google_contacts", "odoo"]}],
+    )
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+
+    assert main(["--config", str(config_path), "runs", "dry-run-review-handoff", run_dir.name, "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["schema"] == "business-card-watchdog.dry-run-review-handoff.v1"
+    assert payload["state"] == "ready_for_safe_agent_loop"
+    assert payload["safe_auto_action_count"] == 1
+    assert payload["next_action_counts"] == {"plan_sink_lookup": 1}
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert Path(payload["handoff_path"]).exists()
+
+    assert main(["--config", str(config_path), "runs", "dry-run-review-handoff", run_dir.name, "--no-write"]) == 0
+    text = capsys.readouterr().out
+    assert "Dry-run review handoff: ready_for_safe_agent_loop" in text
+    assert "Closeout: ready_for_review_and_routing" in text
+    assert "Safe auto actions: 1" in text
+    assert "plan_sink_lookup: 1" in text
+    assert "Observed: writes=0 network=0 live_sinks=False" in text
+    assert "Live pilot status: runs live-pilot-status" in text
+    assert "Stop conditions: 4" in text
+    assert "{" not in text
+
+
 def test_cli_child_reviews_lists_promoted_child_candidates(
     tmp_path: Path,
     monkeypatch,

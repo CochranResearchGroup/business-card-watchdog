@@ -5614,3 +5614,32 @@ Validation:
 Safety:
 
 - This added a local-ledger dry-run closeout only. It did not process configured SyncThing/private watch inputs; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.
+
+## Turn 250 | 2026-06-15
+
+Executed Plan 0044 with Slice 0044-A.
+
+Implemented:
+
+- Added `BusinessCardService.dry_run_review_handoff`.
+- Added CLI `bcw runs dry-run-review-handoff`.
+- Added API `GET /runs/{run_id}/dry-run-review-handoff`.
+- Added MCP tool `business_card_watchdog_dry_run_review_handoff`.
+- Updated README and ROADMAP for the post-closeout review/routing handoff.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_dry_run_review_handoff_summarizes_safe_next_steps tests/test_cli_surfaces.py::test_cli_runs_dry_run_review_handoff_reports_safe_next_steps tests/test_api.py::test_api_run_dry_run_review_handoff_reports_safe_next_steps tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_dry_run_review_handoff_reports_safe_next_steps -q` passed with 5 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/api.py src/business_card_watchdog/mcp.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 305 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `rg -n "dry-run-review-handoff|dry_run_review_handoff|Dry-run review handoff|business_card_watchdog_dry_run_review_handoff|Plan 0044" README.md ROADMAP.md RUNBOOK.md docs src tests` passed.
+- `uv build --out-dir dist` built source and wheel distributions.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `codegraph sync && codegraph status` passed; index is up to date.
+- `.venv/bin/bcw --config <temp-fixture-config> runs dry-run-review-handoff 2026-06-15T13-15-20+00-00 --no-write --json` passed with `state=ready_for_safe_agent_loop`, one safe `plan_sink_lookup`, zero writes, zero network calls, and no live sink calls.
+
+Safety:
+
+- This added a local-ledger dry-run review handoff only. It did not process configured SyncThing/private watch inputs; run OCR/App Intelligence; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.

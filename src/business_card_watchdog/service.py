@@ -1496,6 +1496,145 @@ class BusinessCardService:
             )
         return payload
 
+    def dry_run_review_handoff(self, run_id: str, *, write: bool = True) -> dict[str, Any]:
+        closeout = self.dry_run_closeout(run_id, write=False)
+        run_summary = self.run_summary(run_id)
+        next_actions = self.next_actions(
+            run_id=run_id,
+            limit=max(1000, _int(run_summary.get("job_count")) + 10),
+        )
+        review_bundle = self.review_bundle(run_id=run_id, state="all", write=False)
+        phase_report = self.phase_report(run_id)
+        action_counts: dict[str, int] = {}
+        safe_auto_actions: list[dict[str, Any]] = []
+        explicit_operator_actions: list[dict[str, Any]] = []
+        for action in next_actions.get("actions") or []:
+            action_name = str(action.get("action") or "")
+            action_counts[action_name] = action_counts.get(action_name, 0) + 1
+            row = {
+                "run_id": action.get("run_id"),
+                "job_id": action.get("job_id"),
+                "action": action_name,
+                "reason": action.get("reason"),
+                "command": action.get("command"),
+            }
+            if action.get("safe_to_auto_continue"):
+                safe_auto_actions.append(row)
+            if action.get("requires_explicit_operator_action"):
+                explicit_operator_actions.append(row)
+
+        blocked_reasons = list(closeout.get("blocked_reasons") or [])
+        if blocked_reasons:
+            state = "blocked"
+        elif explicit_operator_actions:
+            state = "ready_for_operator_review"
+        elif safe_auto_actions:
+            state = "ready_for_safe_agent_loop"
+        elif _int(run_summary.get("ready_to_route_count")):
+            state = "ready_for_routing_inspection"
+        else:
+            state = "ready_for_review_inspection"
+
+        commands = {
+            "dry_run_closeout": f"runs dry-run-closeout {run_id} --json",
+            "dry_run_review_handoff": f"runs dry-run-review-handoff {run_id} --json",
+            "run_summary": f"runs summary {run_id} --json",
+            "phase_report": f"runs phase-report {run_id} --json",
+            "review_bundle": f"reviews bundle --run-id {run_id} --state all --json",
+            "review_workbook": f"reviews workbook --run-id {run_id} --state all",
+            "reviews": f"reviews list --run-id {run_id} --state all --json",
+            "next_actions": f"actions next --run-id {run_id} --json",
+            "run_next_safe": f"actions run-next --run-id {run_id} --json",
+            "operator_dashboard": f"operator-dashboard --run-id {run_id} --json",
+            "live_pilot_status": f"runs live-pilot-status {run_id} --no-write --json",
+            "live_pilot_handoff": f"runs live-pilot-handoff {run_id} --no-write --json",
+        }
+        payload: dict[str, Any] = {
+            "schema": "business-card-watchdog.dry-run-review-handoff.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_id,
+            "closeout_state": closeout.get("state"),
+            "blocked_reasons": blocked_reasons,
+            "job_count": run_summary.get("job_count"),
+            "run_state": run_summary.get("state"),
+            "state_counts": run_summary.get("state_counts") or {},
+            "artifact_counts": run_summary.get("artifact_counts") or {},
+            "needs_review_count": run_summary.get("needs_review_count", 0),
+            "ready_to_route_count": run_summary.get("ready_to_route_count", 0),
+            "failed_count": run_summary.get("failed_count", 0),
+            "duplicate_assessment_count": run_summary.get("duplicate_assessment_count", 0),
+            "reviewed_contact_count": run_summary.get("reviewed_contact_count", 0),
+            "review_groups": review_bundle.get("groups") or {},
+            "phase_dashboard_summary": phase_report.get("dashboard_summary") or {},
+            "review_workbook_preview": phase_report.get("review_workbook_preview") or {},
+            "next_action_count": next_actions.get("action_count", 0),
+            "next_action_counts": dict(sorted(action_counts.items())),
+            "safe_auto_action_count": len(safe_auto_actions),
+            "explicit_operator_action_count": len(explicit_operator_actions),
+            "safe_auto_actions": safe_auto_actions,
+            "explicit_operator_actions": explicit_operator_actions,
+            "private_sources_used": False,
+            "public_web_search_used": False,
+            "paid_enrichment_used": False,
+            "live_sink_calls_made": False,
+            "writes_attempted": _int(closeout.get("writes_attempted")),
+            "network_calls_made": _int(closeout.get("network_calls_made")),
+            "runtime_artifact_written": False,
+            "handoff_path": None,
+            "safe_next_actions": [
+                {
+                    "action": "inspect_review_bundle",
+                    "command": commands["review_bundle"],
+                    "safe_to_auto_continue": True,
+                    "requires_explicit_operator_action": False,
+                },
+                {
+                    "action": "inspect_phase_report",
+                    "command": commands["phase_report"],
+                    "safe_to_auto_continue": True,
+                    "requires_explicit_operator_action": False,
+                },
+                {
+                    "action": "inspect_next_actions",
+                    "command": commands["next_actions"],
+                    "safe_to_auto_continue": True,
+                    "requires_explicit_operator_action": False,
+                },
+                {
+                    "action": "inspect_live_pilot_status",
+                    "command": commands["live_pilot_status"],
+                    "safe_to_auto_continue": True,
+                    "requires_explicit_operator_action": False,
+                },
+            ],
+            "explicit_stop_conditions": [
+                "This handoff reads local dry-run ledger and review artifacts only.",
+                "Do not run public-web search or paid enrichment from this handoff.",
+                "Do not execute live lookup, write, or readback from this handoff.",
+                "Run live-pilot selection gates before any Google Contacts, Odoo, or Odollo calls.",
+            ],
+            "commands": commands,
+        }
+        if write:
+            handoff_path = self.config.runs_dir / run_id / "dry_run_review_handoff.json"
+            payload["runtime_artifact_written"] = True
+            payload["handoff_path"] = str(handoff_path)
+            handoff_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            ledger = RunLedger(self.config.runs_dir / run_id)
+            ledger.record_artifact(job_id="__run__", kind="dry_run_review_handoff", path=handoff_path)
+            ledger.record_event(
+                "dry_run_review_handoff_created",
+                {
+                    "run_id": run_id,
+                    "state": state,
+                    "handoff_path": str(handoff_path),
+                    "writes_attempted": 0,
+                    "network_calls_made": 0,
+                },
+            )
+        return payload
+
     def phase_report(self, run_id: str) -> dict[str, Any]:
         run = self.get_run(run_id)
         jobs = run["jobs"]

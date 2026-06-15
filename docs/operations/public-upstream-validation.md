@@ -525,3 +525,22 @@ Validation:
 Safety:
 
 - The Plan 0043 closeout reads local run ledgers only. It did not process configured SyncThing/private watch inputs; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.
+
+## 2026-06-15 Local Gate For Plan 0044
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_dry_run_review_handoff_summarizes_safe_next_steps tests/test_cli_surfaces.py::test_cli_runs_dry_run_review_handoff_reports_safe_next_steps tests/test_api.py::test_api_run_dry_run_review_handoff_reports_safe_next_steps tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_dry_run_review_handoff_reports_safe_next_steps -q` passed with 5 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/api.py src/business_card_watchdog/mcp.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 305 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `rg -n "dry-run-review-handoff|dry_run_review_handoff|Dry-run review handoff|business_card_watchdog_dry_run_review_handoff|Plan 0044" README.md ROADMAP.md RUNBOOK.md docs src tests` passed.
+- `uv build --out-dir dist` built source and wheel distributions.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `codegraph sync && codegraph status` passed; index is up to date.
+- `.venv/bin/bcw --config <temp-fixture-config> runs dry-run-review-handoff 2026-06-15T13-15-20+00-00 --no-write --json` passed with `state=ready_for_safe_agent_loop`, one safe `plan_sink_lookup`, zero writes, zero network calls, and no live sink calls.
+
+Safety:
+
+- The Plan 0044 handoff reads local dry-run ledger and review artifacts only. It did not process configured SyncThing/private watch inputs; run OCR/App Intelligence; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.
