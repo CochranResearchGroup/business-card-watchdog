@@ -4704,3 +4704,32 @@ Validation:
 Safety:
 
 - This was fixture/runtime-artifact only. It did not process private SyncThing inputs, crop images, run public-web search, call paid enrichment, invoke child OCR/App Intelligence, execute command-copy text, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+## Turn 219 | 2026-06-15
+
+Executed Plan 0013 with Slice 0013-A.
+
+Implemented:
+
+- Added `business-card-watchdog.card-candidate-crops.v1`.
+- Added bounded crop materialization from candidate work items.
+- Wired batch orchestration to persist `candidate_crops.json` and crop images under each job artifact directory.
+- Updated `candidate_work_items.json` so successfully cropped child work items move to `crop_ready` with crop path and bounds.
+- Recorded `candidate_crops` ledger artifacts and `candidate_crops_recorded` events.
+- Updated synthetic multi-card dry-run coverage to verify crop files, work item state, and ledger records.
+- Updated README and roadmap documentation for candidate crop generation.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_preclassifier.py::test_orchestrator_records_multi_card_candidate_manifest -q` passed with 1 test.
+- `.venv/bin/ruff check src/business_card_watchdog/fanout.py src/business_card_watchdog/orchestrator.py tests/test_preclassifier.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 239 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This used synthetic fixture images for validation. It did not run OCR/App Intelligence, normalize child contacts, route, enrich, write sinks, execute command-copy text, run public-web search, call paid APIs, or call GWS/Odollo/Odoo.

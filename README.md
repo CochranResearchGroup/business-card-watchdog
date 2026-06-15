@@ -124,7 +124,9 @@ stable pre-OCR candidate boxes for later fanout; they are not contacts and canno
 routed or enriched without OCR/App Intelligence verification. The same run also
 writes `candidate_work_items.json` with one pending child OCR/App Intelligence work
 item per candidate box so later agent loops can process large multi-card photos
-without losing parent image lineage.
+without losing parent image lineage. When crops can be materialized, the run writes
+`candidate_crops.json` and image files under the job artifact directory, then marks
+those child work items `crop_ready` for later OCR/App Intelligence verification.
 
 `drills review-routing` creates a synthetic fixture run and proves review approval,
 review bundle/workbook export, duplicate lookup planning, dry-run sink routing, and

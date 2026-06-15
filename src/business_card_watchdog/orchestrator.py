@@ -7,7 +7,7 @@ from pathlib import Path
 from .config import AppConfig, ensure_runtime_dirs, resolve_input_path
 from .contact import build_contact_candidate, contact_candidate_to_spec
 from .dedupe import assess_duplicate, remember_identity
-from .fanout import build_candidate_work_item_manifest
+from .fanout import build_candidate_work_item_manifest, materialize_candidate_crops
 from .ledger import RunLedger
 from .models import CardJob, utc_now
 from .preclassifier import assess_business_card_candidate, build_card_candidate_box_manifest
@@ -102,6 +102,26 @@ class BatchOrchestrator:
                     {"job": job.to_dict(), "candidate_manifest": candidate_manifest},
                 )
                 work_item_manifest = build_candidate_work_item_manifest(candidate_manifest)
+                crop_manifest, work_item_manifest = materialize_candidate_crops(
+                    source_image_path=Path(job.image_path),
+                    work_item_manifest=work_item_manifest,
+                    crop_dir=artifact_dir / "candidate_crops",
+                )
+                crop_manifest_path = artifact_dir / "candidate_crops.json"
+                crop_manifest_path.write_text(
+                    json.dumps(crop_manifest, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+                ledger.record_artifact(
+                    job_id=job.job_id,
+                    kind="candidate_crops",
+                    path=crop_manifest_path,
+                    metadata={"crop_count": crop_manifest["crop_count"]},
+                )
+                ledger.record_event(
+                    "candidate_crops_recorded",
+                    {"job": job.to_dict(), "crop_manifest": crop_manifest},
+                )
                 work_item_manifest_path = artifact_dir / "candidate_work_items.json"
                 work_item_manifest_path.write_text(
                     json.dumps(work_item_manifest, indent=2, sort_keys=True) + "\n",
