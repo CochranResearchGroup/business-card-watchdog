@@ -111,6 +111,9 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
         f"runs live-pilot-operator-workflow-packet-from-response {run_id} "
         "--response <operator-response> --json"
     )
+    assert operator_dashboard["commands"]["live_pilot_operator_rehearsal_from_response"] == (
+        f"runs live-pilot-operator-rehearsal-from-response {run_id} --response <operator-response> --json"
+    )
     assert operator_dashboard["api_routes"]["live_pilot_validate_response"] == (
         f"POST /runs/{run_id}/live-pilot-operator-response-validation"
     )
@@ -143,6 +146,9 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     )
     assert operator_dashboard["api_routes"]["live_pilot_operator_workflow_packet_from_response"] == (
         f"POST /runs/{run_id}/live-pilot-operator-workflow-packet-from-response"
+    )
+    assert operator_dashboard["api_routes"]["live_pilot_operator_rehearsal_from_response"] == (
+        f"POST /runs/{run_id}/live-pilot-operator-rehearsal-from-response"
     )
     assert operator_dashboard["api_routes"]["live_pilot_approval_packet"] == (
         f"GET /runs/{run_id}/live-pilot-approval-packet"
@@ -197,6 +203,10 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     }
     assert operator_dashboard["mcp_tools"]["live_pilot_operator_workflow_packet_from_response"] == {
         "tool": "business_card_watchdog_live_pilot_operator_workflow_packet_from_response",
+        "arguments": {"run_id": run_id, "response": "<operator-response>"},
+    }
+    assert operator_dashboard["mcp_tools"]["live_pilot_operator_rehearsal_from_response"] == {
+        "tool": "business_card_watchdog_live_pilot_operator_rehearsal_from_response",
         "arguments": {"run_id": run_id, "response": "<operator-response>"},
     }
     assert operator_dashboard["writes_attempted"] == 0
@@ -581,6 +591,25 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     ]
     assert workflow_packet["writes_attempted"] == 0
     assert workflow_packet["network_calls_made"] == 0
+    rehearsal = client.post(
+        f"/runs/{run_id}/live-pilot-operator-rehearsal-from-response",
+        json={"response": response},
+    ).json()
+    assert rehearsal["schema"] == "business-card-watchdog.live-pilot-operator-rehearsal-from-response.v1"
+    assert rehearsal["state"] == "ready_for_explicit_operator_step"
+    assert rehearsal["workflow_state"] == "workflow_blocked"
+    assert rehearsal["job_id"] == job_id
+    assert rehearsal["sink"] == "google_contacts"
+    assert rehearsal["operator"] == "api-test"
+    assert rehearsal["workflow_packet"]["schema"] == (
+        "business-card-watchdog.live-pilot-operator-workflow-packet-from-response.v1"
+    )
+    assert rehearsal["next_safe_command"].startswith("runs live-pilot-operator-workflow-packet-from-response")
+    assert rehearsal["next_explicit_operator_command"]
+    assert rehearsal["rehearsal_steps"][0]["safe_to_auto_continue"] is True
+    assert rehearsal["rehearsal_steps"][1]["requires_explicit_operator_action"] is True
+    assert rehearsal["writes_attempted"] == 0
+    assert rehearsal["network_calls_made"] == 0
     validation = client.post(
         f"/runs/{run_id}/live-pilot-operator-response-validation",
         json={"response": response},

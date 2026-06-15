@@ -875,6 +875,9 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
         f"runs live-pilot-operator-workflow-packet-from-response {run_id} "
         "--response <operator-response> --json"
     )
+    assert dashboard["commands"]["live_pilot_operator_rehearsal_from_response"] == (
+        f"runs live-pilot-operator-rehearsal-from-response {run_id} --response <operator-response> --json"
+    )
     assert dashboard["commands"]["live_pilot_validate_response"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
@@ -902,6 +905,9 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     )
     assert dashboard["api_routes"]["live_pilot_operator_workflow_packet_from_response"] == (
         f"POST /runs/{run_id}/live-pilot-operator-workflow-packet-from-response"
+    )
+    assert dashboard["api_routes"]["live_pilot_operator_rehearsal_from_response"] == (
+        f"POST /runs/{run_id}/live-pilot-operator-rehearsal-from-response"
     )
     assert dashboard["mcp_tools"]["next_actions"] == {
         "tool": "business_card_watchdog_next_actions",
@@ -945,6 +951,10 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     }
     assert dashboard["mcp_tools"]["live_pilot_operator_workflow_packet_from_response"] == {
         "tool": "business_card_watchdog_live_pilot_operator_workflow_packet_from_response",
+        "arguments": {"run_id": run_id, "response": "<operator-response>"},
+    }
+    assert dashboard["mcp_tools"]["live_pilot_operator_rehearsal_from_response"] == {
+        "tool": "business_card_watchdog_live_pilot_operator_rehearsal_from_response",
         "arguments": {"run_id": run_id, "response": "<operator-response>"},
     }
     assert dashboard["mcp_tools"]["review_routing_drill"] == {
@@ -2986,6 +2996,27 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     ]
     assert workflow_packet["writes_attempted"] == 0
     assert workflow_packet["network_calls_made"] == 0
+
+    rehearsal = service.live_pilot_operator_rehearsal_from_response(
+        run_id=run_id,
+        response=preselection_response,
+    )
+    assert rehearsal["schema"] == "business-card-watchdog.live-pilot-operator-rehearsal-from-response.v1"
+    assert rehearsal["state"] == "ready_for_explicit_operator_step"
+    assert rehearsal["workflow_state"] == "workflow_blocked"
+    assert rehearsal["job_id"] == job_id
+    assert rehearsal["sink"] == "google_contacts"
+    assert rehearsal["operator"] == "tester"
+    assert rehearsal["workflow_packet"]["schema"] == (
+        "business-card-watchdog.live-pilot-operator-workflow-packet-from-response.v1"
+    )
+    assert rehearsal["next_safe_command"].startswith("runs live-pilot-operator-workflow-packet-from-response")
+    assert rehearsal["next_explicit_operator_command"]
+    assert rehearsal["rehearsal_steps"][0]["safe_to_auto_continue"] is True
+    assert rehearsal["rehearsal_steps"][0]["executes_live_call"] is False
+    assert rehearsal["rehearsal_steps"][1]["requires_explicit_operator_action"] is True
+    assert rehearsal["writes_attempted"] == 0
+    assert rehearsal["network_calls_made"] == 0
 
     blocked_closeout_write = service.live_pilot_closeout_packet_from_response(
         run_id=run_id,

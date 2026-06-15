@@ -1352,6 +1352,30 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
                 "--config",
                 str(config_path),
                 "runs",
+                "live-pilot-operator-rehearsal-from-response",
+                run_id,
+                "--response",
+                response,
+                "--json",
+            ]
+        )
+        == 0
+    )
+    rehearsal = json.loads(capsys.readouterr().out)
+    assert rehearsal["schema"] == "business-card-watchdog.live-pilot-operator-rehearsal-from-response.v1"
+    assert rehearsal["state"] == "ready_for_explicit_operator_step"
+    assert rehearsal["workflow_state"] == "workflow_blocked"
+    assert rehearsal["rehearsal_steps"][0]["safe_to_auto_continue"] is True
+    assert rehearsal["rehearsal_steps"][1]["requires_explicit_operator_action"] is True
+    assert rehearsal["writes_attempted"] == 0
+    assert rehearsal["network_calls_made"] == 0
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
                 "live-pilot-closeout-packet-from-response",
                 run_id,
                 "--response",
@@ -1386,6 +1410,27 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert "Workflow steps: 6" in workflow_packet_text
     assert "Observed: writes=0 network=0" in workflow_packet_text
     assert "{" not in workflow_packet_text
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "live-pilot-operator-rehearsal-from-response",
+                run_id,
+                "--response",
+                response,
+            ]
+        )
+        == 0
+    )
+    rehearsal_text = capsys.readouterr().out
+    assert "State: ready_for_explicit_operator_step" in rehearsal_text
+    assert "Workflow state: workflow_blocked" in rehearsal_text
+    assert "Rehearsal steps: 2" in rehearsal_text
+    assert "Observed: writes=0 network=0" in rehearsal_text
+    assert "{" not in rehearsal_text
 
     assert (
         main(

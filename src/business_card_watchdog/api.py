@@ -150,6 +150,9 @@ def create_app(config_path: Path | None = None):
     class LivePilotOperatorWorkflowPacketFromResponseRequest(BaseModel):
         response: str
 
+    class LivePilotOperatorRehearsalFromResponseRequest(BaseModel):
+        response: str
+
     class SelectedLiveTargetAuditRequest(BaseModel):
         run_id: str
         scope: str | None = None
@@ -392,6 +395,16 @@ def create_app(config_path: Path | None = None):
         request: LivePilotOperatorWorkflowPacketFromResponseRequest,
     ) -> dict[str, object]:
         return service().live_pilot_operator_workflow_packet_from_response(
+            run_id=run_id,
+            response=request.response,
+        )
+
+    @app.post("/runs/{run_id}/live-pilot-operator-rehearsal-from-response")
+    def create_run_live_pilot_operator_rehearsal_from_response(
+        run_id: str,
+        request: LivePilotOperatorRehearsalFromResponseRequest,
+    ) -> dict[str, object]:
+        return service().live_pilot_operator_rehearsal_from_response(
             run_id=run_id,
             response=request.response,
         )

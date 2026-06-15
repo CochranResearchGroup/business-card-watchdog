@@ -681,6 +681,12 @@ class BusinessCardService:
                     if selected_run_id
                     else "runs list --json"
                 ),
+                "live_pilot_operator_rehearsal_from_response": (
+                    f"runs live-pilot-operator-rehearsal-from-response {selected_run_id} "
+                    "--response <operator-response> --json"
+                    if selected_run_id
+                    else "runs list --json"
+                ),
                 "mcp_manifest": "mcp-manifest",
             },
             "api_routes": {
@@ -765,6 +771,11 @@ class BusinessCardService:
                     f"POST /runs/{selected_run_id}/live-pilot-operator-workflow-packet-from-response"
                     if selected_run_id
                     else "POST /runs/{run_id}/live-pilot-operator-workflow-packet-from-response"
+                ),
+                "live_pilot_operator_rehearsal_from_response": (
+                    f"POST /runs/{selected_run_id}/live-pilot-operator-rehearsal-from-response"
+                    if selected_run_id
+                    else "POST /runs/{run_id}/live-pilot-operator-rehearsal-from-response"
                 ),
             },
             "mcp_tools": {
@@ -902,6 +913,12 @@ class BusinessCardService:
                 },
                 "live_pilot_operator_workflow_packet_from_response": {
                     "tool": "business_card_watchdog_live_pilot_operator_workflow_packet_from_response",
+                    "arguments": {"run_id": selected_run_id, "response": "<operator-response>"}
+                    if selected_run_id
+                    else {"run_id": "<run-id>", "response": "<operator-response>"},
+                },
+                "live_pilot_operator_rehearsal_from_response": {
+                    "tool": "business_card_watchdog_live_pilot_operator_rehearsal_from_response",
                     "arguments": {"run_id": selected_run_id, "response": "<operator-response>"}
                     if selected_run_id
                     else {"run_id": "<run-id>", "response": "<operator-response>"},
@@ -7783,6 +7800,82 @@ class BusinessCardService:
             ],
             "writes_attempted": int(closeout_report.get("writes_attempted") or 0),
             "network_calls_made": int(closeout_report.get("network_calls_made") or 0),
+        }
+
+    def live_pilot_operator_rehearsal_from_response(
+        self,
+        *,
+        run_id: str,
+        response: str,
+    ) -> dict[str, Any]:
+        workflow_packet = self.live_pilot_operator_workflow_packet_from_response(
+            run_id=run_id,
+            response=response,
+        )
+        step_summary = list(workflow_packet.get("step_summary") or [])
+        next_blocked_step = next(
+            (step for step in step_summary if isinstance(step, dict) and step.get("step") in workflow_packet.get("blocked_steps", [])),
+            None,
+        )
+        next_explicit_command = workflow_packet.get("next_explicit_operator_command")
+        safe_inspection_command = (
+            f"runs live-pilot-operator-workflow-packet-from-response {shlex.quote(run_id)} "
+            f"--response {shlex.quote(response)} --json"
+        )
+        rehearsal_steps = [
+            {
+                "step": "inspect_workflow_packet",
+                "command": safe_inspection_command,
+                "safe_to_auto_continue": True,
+                "requires_explicit_operator_action": False,
+                "executes_live_call": False,
+                "executes_sink_write": False,
+            }
+        ]
+        if next_explicit_command:
+            rehearsal_steps.append(
+                {
+                    "step": "run_next_explicit_operator_command",
+                    "command": next_explicit_command,
+                    "safe_to_auto_continue": False,
+                    "requires_explicit_operator_action": True,
+                    "executes_live_call": True,
+                    "executes_sink_write": "write-pilot" in str(next_explicit_command)
+                    or "apply --apply" in str(next_explicit_command),
+                }
+            )
+        state = "ready_for_explicit_operator_step" if next_explicit_command else "inspection_only"
+        if workflow_packet.get("state") == "workflow_complete":
+            state = "workflow_complete"
+        return {
+            "schema": "business-card-watchdog.live-pilot-operator-rehearsal-from-response.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_id,
+            "job_id": workflow_packet.get("job_id"),
+            "sink": workflow_packet.get("sink"),
+            "operator": workflow_packet.get("operator"),
+            "workflow_state": workflow_packet.get("state"),
+            "workflow_blocked_steps": list(workflow_packet.get("blocked_steps") or []),
+            "next_blocked_step": next_blocked_step,
+            "next_safe_command": safe_inspection_command,
+            "next_explicit_operator_command": next_explicit_command,
+            "rehearsal_steps": rehearsal_steps,
+            "workflow_packet": workflow_packet,
+            "commands": {
+                "inspect_workflow_packet": safe_inspection_command,
+                "operator_dashboard": f"operator-dashboard --run-id {run_id} --json",
+                "live_pilot_status": f"runs live-pilot-status {run_id} --no-write --json",
+                "live_pilot_handoff": f"runs live-pilot-handoff {run_id} --no-write --json",
+            },
+            "explicit_stop_conditions": [
+                "This rehearsal packet is read-only and never executes the explicit operator command.",
+                "Run the explicit command only after reviewing the workflow packet and confirming tenant/profile safety.",
+                "Stop if the workflow packet or selected target does not match the intended run, job, sink, operator, and scope.",
+                "Do not process private SyncThing images, run public-web search, or call paid enrichment from this packet.",
+            ],
+            "writes_attempted": int(workflow_packet.get("writes_attempted") or 0),
+            "network_calls_made": int(workflow_packet.get("network_calls_made") or 0),
         }
 
     def validate_live_pilot_operator_response(self, *, run_id: str, response: str) -> dict[str, Any]:

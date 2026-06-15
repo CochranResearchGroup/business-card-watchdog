@@ -42,6 +42,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_selected_readback_pilot_execution_packet_from_response" in names
     assert "business_card_watchdog_live_pilot_closeout_packet_from_response" in names
     assert "business_card_watchdog_live_pilot_operator_workflow_packet_from_response" in names
+    assert "business_card_watchdog_live_pilot_operator_rehearsal_from_response" in names
     assert "business_card_watchdog_next_actions" in names
     assert "business_card_watchdog_run_next_actions" in names
     assert "business_card_watchdog_review_routing_drill" in names
@@ -403,6 +404,18 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
         },
         config=config,
     )
+    live_pilot_operator_rehearsal_from_response = call_tool(
+        "business_card_watchdog_live_pilot_operator_rehearsal_from_response",
+        {
+            "run_id": run_id,
+            "response": (
+                f"run_id={run_id} job_id={job_id} sink=google_contacts "
+                "operator=mcp-test scope=all "
+                "safety_confirmation=fixture contact is safe for google contacts test profile"
+            ),
+        },
+        config=config,
+    )
     abandonment = call_tool(
         "business_card_watchdog_live_pilot_abandonment",
         {
@@ -582,6 +595,9 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
         f"runs live-pilot-operator-workflow-packet-from-response {run_id} "
         "--response <operator-response> --json"
     )
+    assert operator_dashboard["commands"]["live_pilot_operator_rehearsal_from_response"] == (
+        f"runs live-pilot-operator-rehearsal-from-response {run_id} --response <operator-response> --json"
+    )
     assert operator_dashboard["safe_next_actions"][3]["action"] == "inspect_live_pilot_status"
     assert operator_dashboard["safe_next_actions"][3]["command"] == (
         f"runs live-pilot-status {run_id} --no-write --json"
@@ -642,6 +658,10 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     }
     assert operator_dashboard["mcp_tools"]["live_pilot_operator_workflow_packet_from_response"] == {
         "tool": "business_card_watchdog_live_pilot_operator_workflow_packet_from_response",
+        "arguments": {"run_id": run_id, "response": "<operator-response>"},
+    }
+    assert operator_dashboard["mcp_tools"]["live_pilot_operator_rehearsal_from_response"] == {
+        "tool": "business_card_watchdog_live_pilot_operator_rehearsal_from_response",
         "arguments": {"run_id": run_id, "response": "<operator-response>"},
     }
     assert operator_dashboard["next_action_summary"]["by_action"] == {"review_contact": 1}
@@ -1072,6 +1092,27 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     ]
     assert live_pilot_operator_workflow_packet_from_response["writes_attempted"] == 0
     assert live_pilot_operator_workflow_packet_from_response["network_calls_made"] == 0
+    assert live_pilot_operator_rehearsal_from_response["schema"] == (
+        "business-card-watchdog.live-pilot-operator-rehearsal-from-response.v1"
+    )
+    assert live_pilot_operator_rehearsal_from_response["state"] == "ready_for_explicit_operator_step"
+    assert live_pilot_operator_rehearsal_from_response["workflow_state"] == "workflow_blocked"
+    assert live_pilot_operator_rehearsal_from_response["job_id"] == job_id
+    assert live_pilot_operator_rehearsal_from_response["sink"] == "google_contacts"
+    assert live_pilot_operator_rehearsal_from_response["operator"] == "mcp-test"
+    assert live_pilot_operator_rehearsal_from_response["workflow_packet"]["schema"] == (
+        "business-card-watchdog.live-pilot-operator-workflow-packet-from-response.v1"
+    )
+    assert live_pilot_operator_rehearsal_from_response["next_safe_command"].startswith(
+        "runs live-pilot-operator-workflow-packet-from-response"
+    )
+    assert live_pilot_operator_rehearsal_from_response["next_explicit_operator_command"]
+    assert live_pilot_operator_rehearsal_from_response["rehearsal_steps"][0]["safe_to_auto_continue"] is True
+    assert live_pilot_operator_rehearsal_from_response["rehearsal_steps"][1][
+        "requires_explicit_operator_action"
+    ] is True
+    assert live_pilot_operator_rehearsal_from_response["writes_attempted"] == 0
+    assert live_pilot_operator_rehearsal_from_response["network_calls_made"] == 0
     assert operator_response_validation["schema"] == (
         "business-card-watchdog.live-pilot-operator-response-validation.v1"
     )

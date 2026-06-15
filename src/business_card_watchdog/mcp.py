@@ -305,6 +305,18 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_live_pilot_operator_rehearsal_from_response",
+                "description": "Preview the next safe inspection command and next explicit live-pilot command without executing either.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "response": {"type": "string"},
+                    },
+                    "required": ["run_id", "response"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_next_actions",
                 "description": "Return deterministic next actions for agent-loop batch orchestration.",
                 "input_schema": {
@@ -1029,6 +1041,11 @@ def call_tool(
         )
     if tool_name == "business_card_watchdog_live_pilot_operator_workflow_packet_from_response":
         return service.live_pilot_operator_workflow_packet_from_response(
+            run_id=str(args["run_id"]),
+            response=str(args["response"]),
+        )
+    if tool_name == "business_card_watchdog_live_pilot_operator_rehearsal_from_response":
+        return service.live_pilot_operator_rehearsal_from_response(
             run_id=str(args["run_id"]),
             response=str(args["response"]),
         )
