@@ -515,6 +515,8 @@ def _render_runtime_readiness_text(payload: dict[str, object]) -> str:
     checks = payload.get("checks") or []
     blocked = payload.get("blocked_checks") or []
     warnings = payload.get("warning_checks") or []
+    safe_actions = payload.get("safe_next_actions") or []
+    stop_conditions = payload.get("explicit_stop_conditions") or []
     config = dict(payload.get("config") or {})
     service = dict(payload.get("service") or {})
     watch = dict(payload.get("watch") or {})
@@ -532,6 +534,15 @@ def _render_runtime_readiness_text(payload: dict[str, object]) -> str:
         f"blocked={len(blocked) if isinstance(blocked, list) else 0} "
         f"warnings={len(warnings) if isinstance(warnings, list) else 0}",
     ]
+    action_rows = safe_actions if isinstance(safe_actions, list) else []
+    lines.append(f"Safe next actions: {len(action_rows)}")
+    for action in action_rows:
+        if isinstance(action, dict):
+            lines.append(f" - {action.get('action')}: {action.get('command')}")
+    stop_rows = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stop_rows)}")
+    for condition in stop_rows:
+        lines.append(f" - {condition}")
     return "\n".join(lines) + "\n"
 
 

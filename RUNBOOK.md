@@ -3815,3 +3815,28 @@ Validation:
 Safety:
 
 - This was presentation and documentation hardening for the synthetic drill only. It did not process configured/private SyncThing inputs, run public-web search, call paid enrichment, validate a real operator response, create or modify `selected_live_target.json`, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+## Turn 185 | 2026-06-15
+
+Continued Plan 0009 with Slice 0009-A109.
+
+Implemented:
+
+- Runtime readiness `safe_next_actions` now includes `run_fixture_review_routing_drill` with command `drills review-routing` whenever runtime readiness is not blocked.
+- Non-JSON `bcw runtime-readiness` output now renders safe next actions and stop conditions instead of only aggregate check counts.
+- Service and CLI coverage now assert the fixture review/routing drill handoff from runtime readiness.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_runtime_readiness_reports_user_scope_runtime_state tests/test_cli_surfaces.py::test_cli_runtime_readiness_reports_local_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 4 tests.
+- `.venv/bin/python -m pytest -q` passed with 229 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_service.py tests/test_cli_surfaces.py` passed.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was runtime/readiness handoff and text presentation hardening only. It did not process configured/private SyncThing inputs, run public-web search, call paid enrichment, validate a real operator response, create or modify `selected_live_target.json`, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.

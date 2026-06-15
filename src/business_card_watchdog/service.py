@@ -8125,6 +8125,15 @@ def _runtime_safe_next_actions(
                 "requires_explicit_operator_action": False,
             }
         )
+        actions.append(
+            {
+                "action": "run_fixture_review_routing_drill",
+                "command": "drills review-routing",
+                "reason": "prove review, normalization, dedupe, and dry-run sink routing with synthetic fixture data",
+                "safe_to_auto_continue": True,
+                "requires_explicit_operator_action": False,
+            }
+        )
     return actions
 
 

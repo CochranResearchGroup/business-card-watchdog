@@ -81,6 +81,11 @@ def test_service_runtime_readiness_reports_user_scope_runtime_state(tmp_path: Pa
     assert checks["business_card_skill"]["status"] == "ready"
     assert checks["watch_inputs_configured"]["status"] == "warning"
     assert any(action["action"] == "configure_watch_inputs" for action in report["safe_next_actions"])
+    assert any(
+        action["action"] == "run_fixture_review_routing_drill"
+        and action["command"] == "drills review-routing"
+        for action in report["safe_next_actions"]
+    )
     assert any("Do not process private SyncThing images" in item for item in report["explicit_stop_conditions"])
 
 

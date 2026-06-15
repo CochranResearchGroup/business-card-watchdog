@@ -48,6 +48,9 @@ def test_cli_runtime_readiness_reports_local_runtime_state(tmp_path: Path, capsy
     text = capsys.readouterr().out
     assert "Runtime readiness:" in text
     assert "Config:" in text
+    assert "Safe next actions:" in text
+    assert "run_fixture_review_routing_drill: drills review-routing" in text
+    assert "Stop conditions: 3" in text
     assert "{" not in text
 
 
