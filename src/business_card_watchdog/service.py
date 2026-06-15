@@ -2375,6 +2375,101 @@ class BusinessCardService:
             )
         return payload
 
+    def selected_target_command_copy_packet(
+        self,
+        run_id: str,
+        *,
+        operator: str,
+        response: str,
+        acknowledgement: str = "",
+        sink: str | None = None,
+        job_id: str | None = None,
+    ) -> dict[str, Any]:
+        boundary = self.selected_target_approval_boundary(
+            run_id,
+            operator=operator,
+            sink=sink,
+            job_id=job_id,
+            response=response,
+            write=False,
+        )
+        blocked_reasons = list(boundary.get("blocked_reasons") or [])
+        normalized_acknowledgement = " ".join(str(acknowledgement or "").lower().split())
+        acknowledgement_terms = {
+            "run_id": str(boundary.get("run_id") or ""),
+            "job_id": str(boundary.get("job_id") or ""),
+            "sink": str(boundary.get("sink") or ""),
+            "operator": str(boundary.get("operator") or ""),
+        }
+        missing_acknowledgement_terms = [
+            f"{key}={value}"
+            for key, value in acknowledgement_terms.items()
+            if value and value.lower() not in normalized_acknowledgement
+        ]
+        acknowledgement_verb_ok = any(
+            verb in normalized_acknowledgement
+            for verb in ["acknowledge", "acknowledged", "approve", "approved", "copy", "ready"]
+        )
+        if not normalized_acknowledgement:
+            blocked_reasons.append("operator acknowledgement is required before selected-target command copy text is shown")
+        if missing_acknowledgement_terms:
+            blocked_reasons.append(
+                "operator acknowledgement must name "
+                + ", ".join(missing_acknowledgement_terms)
+                + " before selected-target command copy text is shown"
+            )
+        if not acknowledgement_verb_ok:
+            blocked_reasons.append(
+                "operator acknowledgement must include one of acknowledge, approved, copy, or ready"
+            )
+        boundary_ready = boundary.get("state") == "ready_for_explicit_selected_target_creation"
+        acknowledgement_ok = bool(
+            normalized_acknowledgement
+            and not missing_acknowledgement_terms
+            and acknowledgement_verb_ok
+        )
+        select_command = None
+        if boundary_ready and acknowledgement_ok and not blocked_reasons:
+            select_command = (
+                f"runs selected-live-target-from-response {shlex.quote(run_id)} "
+                f"--response {shlex.quote(response)} --write-selected-target --json"
+            )
+        state = "ready_for_operator_copy" if select_command else "blocked"
+        return {
+            "schema": "business-card-watchdog.selected-target-command-copy-packet.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_id,
+            "job_id": boundary.get("job_id"),
+            "sink": boundary.get("sink"),
+            "operator": operator,
+            "acknowledgement_required": True,
+            "acknowledgement_ok": acknowledgement_ok,
+            "acknowledgement_instruction": (
+                "Acknowledge the exact run_id, job_id, sink, and operator plus an approval/copy verb before copying."
+            ),
+            "acknowledgement_redacted": {
+                "raw_acknowledgement_stored": False,
+                "sha256": hashlib.sha256(acknowledgement.encode("utf-8")).hexdigest() if acknowledgement else None,
+                "required_terms": acknowledgement_terms,
+                "missing_terms": missing_acknowledgement_terms,
+            },
+            "boundary_state": boundary.get("state"),
+            "boundary": boundary,
+            "command_copy_text": select_command,
+            "selected_target_command": select_command,
+            "blocked_reasons": blocked_reasons,
+            "creates_selected_live_target": False,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "explicit_stop_conditions": [
+                "This packet only returns selected-target creation command text for operator copy; it never executes the command.",
+                "Do not copy command_copy_text unless state is ready_for_operator_copy.",
+                "Copying command_copy_text would create selected_live_target.json but would not execute live lookup, write, or readback.",
+                "Do not process private SyncThing images, run public-web search, or call paid enrichment from this packet.",
+            ],
+        }
+
     def phase_report(self, run_id: str) -> dict[str, Any]:
         run = self.get_run(run_id)
         jobs = run["jobs"]

@@ -1885,6 +1885,33 @@ def _render_selected_target_approval_boundary_text(payload: dict[str, object]) -
     return "\n".join(lines) + "\n"
 
 
+def _render_selected_target_command_copy_packet_text(payload: dict[str, object]) -> str:
+    lines = [
+        f"Selected-target command copy packet: {payload.get('state')}",
+        f"Run: {payload.get('run_id')}",
+        f"Job: {payload.get('job_id') or 'none'}",
+        f"Sink: {payload.get('sink') or 'none'}",
+        f"Operator: {payload.get('operator') or 'none'}",
+        f"Boundary state: {payload.get('boundary_state') or 'none'}",
+        f"Acknowledgement required: {payload.get('acknowledgement_required', True)}",
+        f"Acknowledgement ok: {payload.get('acknowledgement_ok', False)}",
+        f"Command copy text: {payload.get('command_copy_text') or 'none'}",
+        f"Creates selected target: {payload.get('creates_selected_live_target', False)}",
+        f"Observed: writes={payload.get('writes_attempted', 0)} network={payload.get('network_calls_made', 0)}",
+    ]
+    blockers = payload.get("blocked_reasons") or []
+    rows = blockers if isinstance(blockers, list) else []
+    lines.append(f"Blocked reasons: {len(rows)}")
+    for reason in rows:
+        lines.append(f" - {reason}")
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    stops = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stops)}")
+    for condition in stops:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_runtime_readiness_text(payload: dict[str, object]) -> str:
     checks = payload.get("checks") or []
     blocked = payload.get("blocked_checks") or []
@@ -2744,6 +2771,14 @@ def build_parser() -> argparse.ArgumentParser:
     runs_selected_target_approval_boundary.add_argument("--response", default=None)
     runs_selected_target_approval_boundary.add_argument("--no-write", action="store_true")
     runs_selected_target_approval_boundary.add_argument("--json", action="store_true")
+    runs_selected_target_command_copy_packet = runs_sub.add_parser("selected-target-command-copy-packet")
+    runs_selected_target_command_copy_packet.add_argument("run_id")
+    runs_selected_target_command_copy_packet.add_argument("--operator", required=True)
+    runs_selected_target_command_copy_packet.add_argument("--response", required=True)
+    runs_selected_target_command_copy_packet.add_argument("--acknowledgement", default="")
+    runs_selected_target_command_copy_packet.add_argument("--sink", choices=["google_contacts", "odoo"], default=None)
+    runs_selected_target_command_copy_packet.add_argument("--job-id", default=None)
+    runs_selected_target_command_copy_packet.add_argument("--json", action="store_true")
     runs_selected_live_target_preflight = runs_sub.add_parser("selected-live-target-preflight")
     runs_selected_live_target_preflight.add_argument("run_id")
     runs_selected_live_target_preflight.add_argument("--response", required=True)
@@ -3446,6 +3481,15 @@ def main(argv: list[str] | None = None) -> int:
                 response=args.response,
                 write=not args.no_write,
             )
+        elif args.runs_command == "selected-target-command-copy-packet":
+            payload = service.selected_target_command_copy_packet(
+                args.run_id,
+                operator=args.operator,
+                response=args.response,
+                acknowledgement=args.acknowledgement,
+                sink=args.sink,
+                job_id=args.job_id,
+            )
         elif args.runs_command == "selected-live-target-preflight":
             payload = service.selected_live_target_preflight(run_id=args.run_id, response=args.response)
         elif args.runs_command == "selected-live-target-preview":
@@ -3571,6 +3615,9 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.runs_command == "selected-target-approval-boundary" and not args.json:
             print(_render_selected_target_approval_boundary_text(payload), end="")
+            return 0
+        if args.runs_command == "selected-target-command-copy-packet" and not args.json:
+            print(_render_selected_target_command_copy_packet_text(payload), end="")
             return 0
         if args.runs_command == "live-pilot-validate-response" and not args.json:
             print(_render_live_pilot_operator_response_validation_text(payload), end="")

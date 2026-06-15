@@ -1288,6 +1288,77 @@ def test_api_run_selected_target_approval_boundary_previews_selection(tmp_path: 
     assert ready["runtime_artifact_written"] is False
 
 
+def test_api_run_selected_target_command_copy_packet_requires_ack(tmp_path: Path) -> None:
+    from business_card_watchdog.api import create_app
+
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    config_path.write_text(
+        f'data_dir = "{data_dir}"\n[watch]\ninputs = []\n[sink]\ngoogle_contacts = true\n',
+        encoding="utf-8",
+    )
+    config = AppConfig(
+        config_path=config_path,
+        data_dir=data_dir,
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+    )
+    service.close_lookup_prerequisites(
+        run_id,
+        operator="tester",
+        sink="google_contacts",
+        limit=4,
+        write=True,
+    )
+    client = TestClient(create_app(config_path))
+    response = (
+        f"run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=tester scope=lookup safety_confirmation=fixture contact is safe for google contacts test profile"
+    )
+
+    blocked = client.post(
+        f"/runs/{run_id}/selected-target-command-copy-packet",
+        json={"operator": "tester", "sink": "google_contacts", "job_id": job_id, "response": response},
+    ).json()
+    assert blocked["schema"] == "business-card-watchdog.selected-target-command-copy-packet.v1"
+    assert blocked["state"] == "blocked"
+    assert blocked["boundary_state"] == "ready_for_explicit_selected_target_creation"
+    assert blocked["acknowledgement_ok"] is False
+    assert blocked["command_copy_text"] is None
+    assert blocked["creates_selected_live_target"] is False
+    assert blocked["writes_attempted"] == 0
+    assert blocked["network_calls_made"] == 0
+
+    ready = client.post(
+        f"/runs/{run_id}/selected-target-command-copy-packet",
+        json={
+            "operator": "tester",
+            "sink": "google_contacts",
+            "job_id": job_id,
+            "response": response,
+            "acknowledgement": (
+                f"acknowledge run_id={run_id} job_id={job_id} "
+                "sink=google_contacts operator=tester copy command"
+            ),
+        },
+    ).json()
+    assert ready["state"] == "ready_for_operator_copy"
+    assert ready["acknowledgement_ok"] is True
+    assert ready["command_copy_text"].startswith(f"runs selected-live-target-from-response {run_id}")
+    assert "--write-selected-target" in ready["command_copy_text"]
+    assert ready["creates_selected_live_target"] is False
+    assert ready["writes_attempted"] == 0
+    assert ready["network_calls_made"] == 0
+    assert ready["acknowledgement_redacted"]["raw_acknowledgement_stored"] is False
+
+
 def test_api_offline_pilot_gap_audit_reports_remaining_boundaries(tmp_path: Path) -> None:
     from business_card_watchdog.api import create_app
 

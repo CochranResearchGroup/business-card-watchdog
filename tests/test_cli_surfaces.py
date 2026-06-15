@@ -732,6 +732,96 @@ def test_cli_runs_selected_target_approval_boundary_previews_selection(tmp_path:
     assert "{" not in text
 
 
+def test_cli_runs_selected_target_command_copy_packet_requires_ack(tmp_path: Path, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    config_path.write_text(
+        f'data_dir = "{data_dir}"\n[watch]\ninputs = []\n[sink]\ngoogle_contacts = true\n',
+        encoding="utf-8",
+    )
+    config = AppConfig(
+        config_path=config_path,
+        data_dir=data_dir,
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+    )
+    service.close_lookup_prerequisites(
+        run_id,
+        operator="tester",
+        sink="google_contacts",
+        limit=4,
+        write=True,
+    )
+    response = (
+        f"run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=tester scope=lookup safety_confirmation=fixture contact is safe for google contacts test profile"
+    )
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "selected-target-command-copy-packet",
+                run_id,
+                "--operator",
+                "tester",
+                "--sink",
+                "google_contacts",
+                "--job-id",
+                job_id,
+                "--response",
+                response,
+                "--json",
+            ]
+        )
+        == 0
+    )
+    blocked = json.loads(capsys.readouterr().out)
+    assert blocked["schema"] == "business-card-watchdog.selected-target-command-copy-packet.v1"
+    assert blocked["state"] == "blocked"
+    assert blocked["command_copy_text"] is None
+    assert blocked["creates_selected_live_target"] is False
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "selected-target-command-copy-packet",
+                run_id,
+                "--operator",
+                "tester",
+                "--sink",
+                "google_contacts",
+                "--job-id",
+                job_id,
+                "--response",
+                response,
+                "--acknowledgement",
+                f"acknowledge run_id={run_id} job_id={job_id} sink=google_contacts operator=tester copy command",
+            ]
+        )
+        == 0
+    )
+    text = capsys.readouterr().out
+    assert "Selected-target command copy packet: ready_for_operator_copy" in text
+    assert "Acknowledgement ok: True" in text
+    assert "Command copy text: runs selected-live-target-from-response" in text
+    assert "--write-selected-target" in text
+    assert "Creates selected target: False" in text
+    assert "{" not in text
+
+
 def test_cli_child_reviews_lists_promoted_child_candidates(
     tmp_path: Path,
     monkeypatch,

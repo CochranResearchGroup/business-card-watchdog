@@ -194,6 +194,13 @@ def create_app(config_path: Path | None = None):
         response: str | None = None
         write: bool = True
 
+    class SelectedTargetCommandCopyPacketRequest(BaseModel):
+        operator: str
+        response: str
+        acknowledgement: str = ""
+        sink: str | None = None
+        job_id: str | None = None
+
     class SelectedLiveTargetRequest(BaseModel):
         run_id: str
         sink: str
@@ -466,6 +473,20 @@ def create_app(config_path: Path | None = None):
             job_id=request.job_id,
             response=request.response,
             write=request.write,
+        )
+
+    @app.post("/runs/{run_id}/selected-target-command-copy-packet")
+    def create_run_selected_target_command_copy_packet(
+        run_id: str,
+        request: SelectedTargetCommandCopyPacketRequest,
+    ) -> dict[str, object]:
+        return service().selected_target_command_copy_packet(
+            run_id,
+            operator=request.operator,
+            response=request.response,
+            acknowledgement=request.acknowledgement,
+            sink=request.sink,
+            job_id=request.job_id,
         )
 
     @app.post("/runs/{run_id}/live-pilot-operator-response-validation")

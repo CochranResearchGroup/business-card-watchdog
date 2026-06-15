@@ -643,3 +643,23 @@ Validation:
 Safety:
 
 - The Plan 0049 boundary packet composes approval templates, response validation, selected-target preflight, and selected-target preview while stopping before selected-target creation. It did not create `selected_live_target.json`; process configured SyncThing/private watch inputs; run OCR/App Intelligence; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.
+
+## 2026-06-15 Local Gate For Plan 0050
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_target_command_copy_packet_requires_acknowledgement tests/test_cli_surfaces.py::test_cli_runs_selected_target_command_copy_packet_requires_ack tests/test_api.py::test_api_run_selected_target_command_copy_packet_requires_ack tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_selected_target_command_copy_packet_requires_ack -q` passed with 5 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/api.py src/business_card_watchdog/mcp.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 329 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `rg -n "selected-target-command-copy-packet|selected_target_command_copy_packet|Selected-target command copy packet|business_card_watchdog_selected_target_command_copy_packet|Plan 0050" README.md ROADMAP.md RUNBOOK.md docs src tests` passed.
+- `uv build --out-dir dist` built source and wheel distributions.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `codegraph sync && codegraph status` passed; index is up to date.
+- `.venv/bin/bcw drills watch-dry-run-execution --json` passed with one synthetic fixture file processed through a completed dry-run batch and no writes or network calls.
+- Synthetic CLI selected-target command-copy smoke passed with `state=ready_for_operator_copy`, boundary state `ready_for_explicit_selected_target_creation`, acknowledgement ok, command text for `runs selected-live-target-from-response ... --write-selected-target`, zero writes, zero network calls, and no selected-target creation from the packet.
+
+Safety:
+
+- The Plan 0050 packet requires matching acknowledgement before returning selected-target creation command text. It did not create `selected_live_target.json`; process configured SyncThing/private watch inputs; run OCR/App Intelligence; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.
