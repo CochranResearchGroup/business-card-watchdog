@@ -477,6 +477,10 @@ def test_child_selected_target_response_validation_and_checklist(tmp_path: Path,
             "sink=google_contacts operator=replacement-operator ready to copy"
         ),
     )
+    closeout = service.child_replacement_closeout_status(
+        run_id=run_dir.name,
+        candidate_id=candidate_id,
+    )
     artifacts = read_jsonl(run_dir / "artifacts.jsonl")
     events = read_jsonl(run_dir / "events.jsonl")
 
@@ -587,6 +591,18 @@ def test_child_selected_target_response_validation_and_checklist(tmp_path: Path,
     assert ready_replacement_copy_packet["writes_attempted"] == 0
     assert ready_replacement_copy_packet["network_calls_made"] == 0
     assert ready_replacement_copy_packet["acknowledgement_redacted"]["raw_acknowledgement_stored"] is False
+    assert closeout["schema"] == "business-card-watchdog.child-replacement-closeout-status.v1"
+    assert closeout["state"] == "ready_for_operator_closeout"
+    assert closeout["rollup"]["predecessor_artifacts_stale"] is True
+    assert closeout["rollup"]["replacement_handoff_ready"] is True
+    assert closeout["rollup"]["replacement_response_ready"] is True
+    assert closeout["rollup"]["replacement_checklist_ready"] is True
+    assert closeout["rollup"]["replacement_copy_ready"] is True
+    assert closeout["rollup"]["acknowledgement_ok"] is True
+    assert closeout["rollup"]["selected_target_created"] is False
+    assert closeout["rollup"]["executable_live_command"] is None
+    assert closeout["writes_attempted"] == 0
+    assert closeout["network_calls_made"] == 0
     assert any(artifact["kind"] == "child_selected_target_response_validation" for artifact in artifacts)
     assert any(artifact["kind"] == "child_selected_target_execution_checklist" for artifact in artifacts)
     assert any(artifact["kind"] == "child_selected_target_command_copy_packet" for artifact in artifacts)
@@ -598,6 +614,7 @@ def test_child_selected_target_response_validation_and_checklist(tmp_path: Path,
     assert any(artifact["kind"] == "child_replacement_response_validation" for artifact in artifacts)
     assert any(artifact["kind"] == "child_replacement_execution_checklist" for artifact in artifacts)
     assert any(artifact["kind"] == "child_replacement_command_copy_packet" for artifact in artifacts)
+    assert any(artifact["kind"] == "child_replacement_closeout_status" for artifact in artifacts)
     assert any(event["event_type"] == "child_selected_target_response_validated" for event in events)
     assert any(event["event_type"] == "child_selected_target_execution_checklist_created" for event in events)
     assert any(event["event_type"] == "child_selected_target_command_copy_packet_created" for event in events)
@@ -608,3 +625,4 @@ def test_child_selected_target_response_validation_and_checklist(tmp_path: Path,
     assert any(event["event_type"] == "child_replacement_response_validated" for event in events)
     assert any(event["event_type"] == "child_replacement_execution_checklist_created" for event in events)
     assert any(event["event_type"] == "child_replacement_command_copy_packet_created" for event in events)
+    assert any(event["event_type"] == "child_replacement_closeout_status_created" for event in events)

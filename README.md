@@ -183,7 +183,10 @@ marker are ready. Then use
 and
 `reviews child-replacement-command-copy-packet <candidate-id> --run-id <run-id> --response <operator-response> --acknowledgement <operator-acknowledgement> --json`
 to create replacement-specific no-live checklist and offline command-copy
-packets.
+packets. Use
+`reviews child-replacement-closeout-status <candidate-id> --run-id <run-id> --json`
+to summarize stale predecessor artifacts, refreshed replacement packet readiness,
+and no-live counters in one local rollup artifact.
 
 `drills review-routing` creates a synthetic fixture run and proves review approval,
 review bundle/workbook export, duplicate lookup planning, dry-run sink routing, and

@@ -4493,6 +4493,181 @@ class BusinessCardService:
         packet["packet_path"] = str(packet_path)
         return packet
 
+    def child_replacement_closeout_status(
+        self,
+        *,
+        run_id: str,
+        candidate_id: str,
+    ) -> dict[str, Any]:
+        entry = self._child_route_prep_entry(run_id=run_id, candidate_id=candidate_id)
+        prep_dir = self._child_route_prep_dir(entry)
+        artifact_specs = [
+            ("staleness", "child_selected_target_staleness", prep_dir / "child_selected_target_staleness.json"),
+            ("handoff_refresh", "child_replacement_handoff_refresh", prep_dir / "child_replacement_handoff_refresh.json"),
+            (
+                "response_validation",
+                "child_replacement_response_validation",
+                prep_dir / "child_replacement_response_validation.json",
+            ),
+            (
+                "execution_checklist",
+                "child_replacement_execution_checklist",
+                prep_dir / "child_replacement_execution_checklist.json",
+            ),
+            (
+                "command_copy_packet",
+                "child_replacement_command_copy_packet",
+                prep_dir / "child_replacement_command_copy_packet.json",
+            ),
+        ]
+        artifacts: dict[str, dict[str, Any]] = {}
+        blocked_reasons: list[str] = []
+        for name, kind, path in artifact_specs:
+            payload = _read_json_file(path)
+            exists = payload is not None
+            artifacts[name] = {
+                "kind": kind,
+                "path": str(path),
+                "exists": exists,
+                "state": (payload or {}).get("state"),
+                "payload": payload,
+            }
+            if not exists:
+                blocked_reasons.append(f"{kind} artifact is missing")
+        staleness = dict((artifacts.get("staleness") or {}).get("payload") or {})
+        refresh = dict((artifacts.get("handoff_refresh") or {}).get("payload") or {})
+        validation = dict((artifacts.get("response_validation") or {}).get("payload") or {})
+        checklist = dict((artifacts.get("execution_checklist") or {}).get("payload") or {})
+        command_copy = dict((artifacts.get("command_copy_packet") or {}).get("payload") or {})
+        expected_states = {
+            "staleness": "stale",
+            "handoff_refresh": "ready_for_replacement_handoff",
+            "response_validation": "ready_for_no_live_replacement_checklist",
+            "execution_checklist": "ready_for_replacement_operator_review",
+            "command_copy_packet": "ready_for_replacement_operator_copy",
+        }
+        for name, expected_state in expected_states.items():
+            artifact = artifacts.get(name) or {}
+            if artifact.get("exists") and artifact.get("state") != expected_state:
+                blocked_reasons.append(
+                    f"{artifact.get('kind') or name} state is {artifact.get('state') or 'missing'}"
+                )
+        stale_artifact_kinds = [
+            str(item.get("kind") or "")
+            for item in list(staleness.get("stale_artifacts") or [])
+            if isinstance(item, dict) and item.get("exists")
+        ]
+        if staleness and not stale_artifact_kinds:
+            blocked_reasons.append("child selected-target staleness marker does not name stale predecessor artifacts")
+        if command_copy and command_copy.get("executable_live_command") is not None:
+            blocked_reasons.append("replacement command-copy packet unexpectedly contains an executable live command")
+        selected_target_created = any(
+            bool(payload.get("selected_target_created") or payload.get("creates_selected_live_target"))
+            for payload in [refresh, validation, checklist, command_copy]
+            if isinstance(payload, dict)
+        )
+        if selected_target_created:
+            blocked_reasons.append("replacement artifact reports selected target creation")
+        writes_attempted = sum(
+            int(payload.get("writes_attempted") or 0)
+            for payload in [staleness, refresh, validation, checklist, command_copy]
+            if isinstance(payload, dict)
+        )
+        network_calls_made = sum(
+            int(payload.get("network_calls_made") or 0)
+            for payload in [staleness, refresh, validation, checklist, command_copy]
+            if isinstance(payload, dict)
+        )
+        if writes_attempted:
+            blocked_reasons.append("replacement artifacts report live writes attempted")
+        if network_calls_made:
+            blocked_reasons.append("replacement artifacts report network calls made")
+        state = "ready_for_operator_closeout" if not blocked_reasons else "blocked"
+        payload = {
+            "schema": "business-card-watchdog.child-replacement-closeout-status.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_id,
+            "job_id": entry.get("job_id"),
+            "candidate_id": candidate_id,
+            "work_item_id": entry.get("work_item_id"),
+            "sink": command_copy.get("sink") or checklist.get("sink") or validation.get("sink") or refresh.get("sink"),
+            "operator": (
+                command_copy.get("operator")
+                or checklist.get("operator")
+                or validation.get("operator")
+                or refresh.get("operator")
+            ),
+            "scope": command_copy.get("scope") or checklist.get("scope") or validation.get("scope") or refresh.get("scope"),
+            "blocked_reasons": blocked_reasons,
+            "artifacts": artifacts,
+            "rollup": {
+                "predecessor_artifacts_stale": staleness.get("state") == "stale" and bool(stale_artifact_kinds),
+                "stale_artifact_kinds": stale_artifact_kinds,
+                "replacement_handoff_ready": refresh.get("state") == "ready_for_replacement_handoff",
+                "replacement_response_ready": validation.get("state") == "ready_for_no_live_replacement_checklist",
+                "replacement_checklist_ready": checklist.get("state") == "ready_for_replacement_operator_review",
+                "replacement_copy_ready": command_copy.get("state") == "ready_for_replacement_operator_copy",
+                "acknowledgement_ok": bool(command_copy.get("acknowledgement_ok")),
+                "offline_command_copy_text": command_copy.get("offline_command_copy_text"),
+                "selected_target_created": selected_target_created,
+                "executable_live_command": command_copy.get("executable_live_command"),
+            },
+            "selected_target_created": False,
+            "creates_selected_live_target": False,
+            "writes_attempted": writes_attempted,
+            "network_calls_made": network_calls_made,
+            "commands": {
+                "refresh_handoff": (
+                    f"reviews child-replacement-handoff-refresh {shlex.quote(candidate_id)} "
+                    f"--run-id {run_id} --sink <sink> --operator <operator> --json"
+                ),
+                "validate_replacement_response": (
+                    f"reviews child-validate-replacement-response {shlex.quote(candidate_id)} "
+                    f"--run-id {run_id} --response <operator-response> --json"
+                ),
+                "replacement_execution_checklist": (
+                    f"reviews child-replacement-execution-checklist {shlex.quote(candidate_id)} "
+                    f"--run-id {run_id} --response <operator-response> --json"
+                ),
+                "replacement_command_copy_packet": (
+                    f"reviews child-replacement-command-copy-packet {shlex.quote(candidate_id)} "
+                    f"--run-id {run_id} --response <operator-response> "
+                    "--acknowledgement <operator-acknowledgement> --json"
+                ),
+                "closeout_status": (
+                    f"reviews child-replacement-closeout-status {shlex.quote(candidate_id)} "
+                    f"--run-id {run_id} --json"
+                ),
+            },
+            "explicit_stop_conditions": [
+                "This closeout/status packet is a no-live local rollup.",
+                "This packet does not create selected_live_target.json.",
+                "This packet does not execute any copied command.",
+                "Do not run live GWS/Odollo/Odoo lookup, write, or readback from this packet.",
+                "Do not process private SyncThing images, run public-web search, or call paid enrichment from this packet.",
+            ],
+        }
+        closeout_path = prep_dir / "child_replacement_closeout_status.json"
+        closeout_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        parent_job_id = str(entry.get("job_id") or "__run__")
+        ledger.record_artifact(job_id=parent_job_id, kind="child_replacement_closeout_status", path=closeout_path)
+        ledger.record_event(
+            "child_replacement_closeout_status_created",
+            {
+                "run_id": run_id,
+                "job_id": entry.get("job_id"),
+                "candidate_id": candidate_id,
+                "state": state,
+                "closeout_path": str(closeout_path),
+                "writes_attempted": writes_attempted,
+                "network_calls_made": network_calls_made,
+            },
+        )
+        payload["closeout_path"] = str(closeout_path)
+        return payload
+
     def _child_route_prep_entry(self, *, run_id: str, candidate_id: str) -> dict[str, Any]:
         entry = next(
             (

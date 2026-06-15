@@ -2149,6 +2149,12 @@ def build_parser() -> argparse.ArgumentParser:
     reviews_child_replacement_command_copy_packet.add_argument("--response", required=True)
     reviews_child_replacement_command_copy_packet.add_argument("--acknowledgement", default="")
     reviews_child_replacement_command_copy_packet.add_argument("--json", action="store_true")
+    reviews_child_replacement_closeout_status = reviews_sub.add_parser(
+        "child-replacement-closeout-status"
+    )
+    reviews_child_replacement_closeout_status.add_argument("candidate_id")
+    reviews_child_replacement_closeout_status.add_argument("--run-id", required=True)
+    reviews_child_replacement_closeout_status.add_argument("--json", action="store_true")
     reviews_bundle = reviews_sub.add_parser("bundle")
     reviews_bundle.add_argument("--run-id", required=True)
     reviews_bundle.add_argument("--state", default="all")
@@ -2822,6 +2828,11 @@ def main(argv: list[str] | None = None) -> int:
                 candidate_id=args.candidate_id,
                 response=args.response,
                 acknowledgement=args.acknowledgement,
+            )
+        elif args.reviews_command == "child-replacement-closeout-status":
+            payload = service.child_replacement_closeout_status(
+                run_id=args.run_id,
+                candidate_id=args.candidate_id,
             )
         else:
             payload = service.review_queue(

@@ -1390,6 +1390,10 @@ def test_api_child_selected_target_response_validation_and_checklist(tmp_path: P
             ),
         },
     ).json()
+    closeout = client.post(
+        f"/reviews/children/{candidate_id}/replacement-closeout-status",
+        json={"run_id": run_dir.name},
+    ).json()
 
     assert validation["schema"] == "business-card-watchdog.child-selected-target-response-validation.v1"
     assert validation["state"] == "ready_for_no_live_child_checklist"
@@ -1448,6 +1452,13 @@ def test_api_child_selected_target_response_validation_and_checklist(tmp_path: P
     assert replacement_command_copy["executable_live_command"] is None
     assert replacement_command_copy["writes_attempted"] == 0
     assert replacement_command_copy["network_calls_made"] == 0
+    assert closeout["schema"] == "business-card-watchdog.child-replacement-closeout-status.v1"
+    assert closeout["state"] == "ready_for_operator_closeout"
+    assert closeout["rollup"]["predecessor_artifacts_stale"] is True
+    assert closeout["rollup"]["replacement_copy_ready"] is True
+    assert closeout["rollup"]["executable_live_command"] is None
+    assert closeout["writes_attempted"] == 0
+    assert closeout["network_calls_made"] == 0
 
 
 def test_api_multi_card_preclassification_drill_records_candidate_boxes(tmp_path: Path) -> None:

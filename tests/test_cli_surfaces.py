@@ -772,6 +772,19 @@ def test_cli_child_selected_target_response_validation_and_checklist(
         ]
     ) == 0
     replacement_command_copy = json.loads(capsys.readouterr().out)
+    assert main(
+        [
+            "--config",
+            str(config_path),
+            "reviews",
+            "child-replacement-closeout-status",
+            candidate_id,
+            "--run-id",
+            run_dir.name,
+            "--json",
+        ]
+    ) == 0
+    closeout = json.loads(capsys.readouterr().out)
 
     assert validation["state"] == "ready_for_no_live_child_checklist"
     assert validation["writes_attempted"] == 0
@@ -828,6 +841,13 @@ def test_cli_child_selected_target_response_validation_and_checklist(
     assert replacement_command_copy["executable_live_command"] is None
     assert replacement_command_copy["writes_attempted"] == 0
     assert replacement_command_copy["network_calls_made"] == 0
+    assert closeout["schema"] == "business-card-watchdog.child-replacement-closeout-status.v1"
+    assert closeout["state"] == "ready_for_operator_closeout"
+    assert closeout["rollup"]["predecessor_artifacts_stale"] is True
+    assert closeout["rollup"]["replacement_copy_ready"] is True
+    assert closeout["rollup"]["executable_live_command"] is None
+    assert closeout["writes_attempted"] == 0
+    assert closeout["network_calls_made"] == 0
 
 
 def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) -> None:

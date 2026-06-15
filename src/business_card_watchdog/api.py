@@ -765,6 +765,16 @@ def create_app(config_path: Path | None = None):
             acknowledgement=request.acknowledgement,
         )
 
+    @app.post("/reviews/children/{candidate_id}/replacement-closeout-status")
+    def create_child_replacement_closeout_status(
+        candidate_id: str,
+        request: ChildRoutePrepRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().child_replacement_closeout_status(
+            run_id=request.run_id,
+            candidate_id=candidate_id,
+        )
+
     @app.post("/runs/{run_id}/review-bundle")
     def create_review_bundle(run_id: str, state: str = "all", write: bool = True) -> dict[str, object]:
         return service().review_bundle(run_id=run_id, state=state, write=write)

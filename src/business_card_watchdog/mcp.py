@@ -698,6 +698,18 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_child_replacement_closeout_status",
+                "description": "Create a no-live child replacement closeout/status rollup from existing stale and refreshed replacement packets.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "candidate_id": {"type": "string"},
+                    },
+                    "required": ["run_id", "candidate_id"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_review_bundle",
                 "description": "Create a run-level batch review bundle with inline review-relevant artifact payloads.",
                 "input_schema": {
@@ -1558,6 +1570,11 @@ def call_tool(
             candidate_id=str(args["candidate_id"]),
             response=str(args["response"]),
             acknowledgement=str(args.get("acknowledgement") or ""),
+        )
+    if tool_name == "business_card_watchdog_child_replacement_closeout_status":
+        return service.child_replacement_closeout_status(
+            run_id=str(args["run_id"]),
+            candidate_id=str(args["candidate_id"]),
         )
     if tool_name == "business_card_watchdog_review_bundle":
         return service.review_bundle(
