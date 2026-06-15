@@ -669,6 +669,11 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
         f"Operator response: run_id={run_id} job_id={job_id} sink=google_contacts "
         "operator=tester scope=lookup safety_confirmation=<tenant-profile-account-confirmation>"
     ) in text_handoff
+    assert (
+        f"Validate prefilled response: runs live-pilot-validate-response {run_id} "
+        f"--response 'run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=tester scope=lookup safety_confirmation=<tenant-profile-account-confirmation>' --json"
+    ) in text_handoff
     assert "{" not in text_handoff
 
     response = (

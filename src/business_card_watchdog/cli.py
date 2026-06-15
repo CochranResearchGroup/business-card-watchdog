@@ -285,6 +285,10 @@ def _render_live_pilot_handoff_text(payload: dict[str, object]) -> str:
             )
             if entry.get("operator_response_template"):
                 lines.append(f"   Operator response: {entry.get('operator_response_template')}")
+            entry_commands = dict(entry.get("commands") or {})
+            prefilled_validate_command = entry_commands.get("validate_operator_response_prefilled")
+            if prefilled_validate_command:
+                lines.append(f"   Validate prefilled response: {prefilled_validate_command}")
     return "\n".join(lines) + "\n"
 
 
