@@ -2377,6 +2377,36 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert handoff["network_calls_made"] == 0
     assert Path(handoff["handoff_path"]).exists()
 
+    response = (
+        f"run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=tester scope=lookup safety_confirmation=fixture contact is safe for google contacts test profile"
+    )
+    validation = service.validate_live_pilot_operator_response(run_id=run_id, response=response)
+    assert validation["schema"] == "business-card-watchdog.live-pilot-operator-response-validation.v1"
+    assert validation["state"] == "ready_to_select_live_target"
+    assert validation["missing_fields"] == []
+    assert validation["mismatches"] == []
+    assert validation["parsed_response"]["safety_confirmation"] == (
+        "fixture contact is safe for google contacts test profile"
+    )
+    assert validation["matching_template"]["job_id"] == job_id
+    assert validation["select_target_command"].startswith(f"sinks select-live-target {job_id}")
+    assert "--safety-confirmation 'fixture contact is safe for google contacts test profile'" in validation[
+        "select_target_command"
+    ]
+    assert validation["creates_selected_live_target"] is False
+    assert validation["writes_attempted"] == 0
+    assert validation["network_calls_made"] == 0
+    assert not (Path(target["target_path"]).parent / "selected_live_target_validation.json").exists()
+
+    blocked_validation = service.validate_live_pilot_operator_response(
+        run_id=run_id,
+        response=f"run_id={run_id} job_id={job_id} sink=google_contacts operator=<operator> scope=lookup",
+    )
+    assert blocked_validation["state"] == "blocked"
+    assert blocked_validation["select_target_command"] is None
+    assert set(blocked_validation["missing_fields"]) == {"operator", "safety_confirmation"}
+
     requirements = service.live_selection_requirements(run_id=run_id, sink="google_contacts", write=False)
     assert requirements["state"] == "selected_target_active"
     assert requirements["entries"][0]["missing_operator_fields"] == []

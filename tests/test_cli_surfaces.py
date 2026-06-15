@@ -578,6 +578,54 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     ) in text_handoff
     assert "{" not in text_handoff
 
+    response = (
+        f"run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=tester scope=lookup safety_confirmation=fixture contact is safe for google contacts test profile"
+    )
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "live-pilot-validate-response",
+                run_id,
+                "--response",
+                response,
+                "--json",
+            ]
+        )
+        == 0
+    )
+    validation = json.loads(capsys.readouterr().out)
+    assert validation["schema"] == "business-card-watchdog.live-pilot-operator-response-validation.v1"
+    assert validation["state"] == "ready_to_select_live_target"
+    assert validation["creates_selected_live_target"] is False
+    assert validation["writes_attempted"] == 0
+    assert validation["network_calls_made"] == 0
+    assert validation["matching_template"]["job_id"] == job_id
+    assert validation["select_target_command"].startswith(f"sinks select-live-target {job_id}")
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "live-pilot-validate-response",
+                run_id,
+                "--response",
+                response,
+            ]
+        )
+        == 0
+    )
+    validation_text = capsys.readouterr().out
+    assert "State: ready_to_select_live_target" in validation_text
+    assert "Creates selected target: False" in validation_text
+    assert f"Select target: sinks select-live-target {job_id}" in validation_text
+    assert "{" not in validation_text
+
     assert (
         main(
             [

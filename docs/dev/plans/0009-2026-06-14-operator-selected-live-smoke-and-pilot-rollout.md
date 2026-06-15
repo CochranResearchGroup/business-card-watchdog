@@ -1265,6 +1265,32 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed; index is up to date.
 
+### Slice 0009-A71 | 2026-06-15 | Operator Response Validation Gate
+
+Implemented:
+
+- Added read-only service validation for operator response strings shaped like the live handoff template.
+- The validator parses required fields, checks allowed sink/scope values, matches the response to current live handoff templates, and returns blockers or the exact `sinks select-live-target` command.
+- Added CLI `bcw runs live-pilot-validate-response <run-id> --response <response>`.
+- Added API `POST /runs/{run_id}/live-pilot-operator-response-validation`.
+- Added MCP tool `business_card_watchdog_live_pilot_operator_response_validation`.
+- Service, CLI, API, and MCP tests cover ready validation, missing-field blockers, zero write/network counters, and the fact that validation does not create selected target artifacts.
+
+Safety:
+
+- This slice is validation/readback only.
+- It does not create or modify `selected_live_target.json`, execute the returned select-target command, execute next actions, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+- `.venv/bin/python -m pytest -q` passed with 226 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

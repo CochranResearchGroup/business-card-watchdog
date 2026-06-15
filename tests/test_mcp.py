@@ -29,6 +29,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_pilot_readiness_report" in names
     assert "business_card_watchdog_live_pilot_status" in names
     assert "business_card_watchdog_live_pilot_handoff" in names
+    assert "business_card_watchdog_live_pilot_operator_response_validation" in names
     assert "business_card_watchdog_next_actions" in names
     assert "business_card_watchdog_run_next_actions" in names
     assert "business_card_watchdog_reviews_list" in names
@@ -243,6 +244,18 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     live_handoff = call_tool(
         "business_card_watchdog_live_pilot_handoff",
         {"run_id": run_id, "write": False},
+        config=config,
+    )
+    operator_response_validation = call_tool(
+        "business_card_watchdog_live_pilot_operator_response_validation",
+        {
+            "run_id": run_id,
+            "response": (
+                f"run_id={run_id} job_id={job_id} sink=google_contacts "
+                "operator=mcp-test scope=all "
+                "safety_confirmation=fixture contact is safe for google contacts test profile"
+            ),
+        },
         config=config,
     )
     abandonment = call_tool(
@@ -552,6 +565,17 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
         "operator=mcp-test scope=all safety_confirmation=<confirmation>"
     )
     assert live_handoff["operator_response_templates"][0]["copyable_approval_fields"]["scope"] == "all"
+    assert operator_response_validation["schema"] == (
+        "business-card-watchdog.live-pilot-operator-response-validation.v1"
+    )
+    assert operator_response_validation["state"] == "ready_to_select_live_target"
+    assert operator_response_validation["matching_template"]["job_id"] == job_id
+    assert operator_response_validation["select_target_command"].startswith(
+        f"sinks select-live-target {job_id}"
+    )
+    assert operator_response_validation["creates_selected_live_target"] is False
+    assert operator_response_validation["writes_attempted"] == 0
+    assert operator_response_validation["network_calls_made"] == 0
     assert abandonment["abandonment"]["schema"] == "business-card-watchdog.live-pilot-abandonment.v1"
     assert abandonment["abandonment"]["writes_attempted"] == 0
     assert write_pilot["pilot"]["schema"] == "business-card-watchdog.sink-write-pilot.v1"

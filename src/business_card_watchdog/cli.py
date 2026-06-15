@@ -282,6 +282,22 @@ def _render_live_pilot_handoff_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_live_pilot_operator_response_validation_text(payload: dict[str, object]) -> str:
+    missing = payload.get("missing_fields") or []
+    mismatches = payload.get("mismatches") or []
+    lines = [
+        f"Run: {payload.get('run_id')}",
+        f"State: {payload.get('state')}",
+        f"Missing fields: {', '.join(str(item) for item in missing) if isinstance(missing, list) and missing else 'none'}",
+        f"Mismatches: {', '.join(str(item) for item in mismatches) if isinstance(mismatches, list) and mismatches else 'none'}",
+        f"Creates selected target: {payload.get('creates_selected_live_target', False)}",
+        f"Observed: writes={payload.get('writes_attempted', 0)} network={payload.get('network_calls_made', 0)}",
+    ]
+    if payload.get("select_target_command"):
+        lines.append(f"Select target: {payload.get('select_target_command')}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_run_summary_text(payload: dict[str, object]) -> str:
     enrichment_budget = dict(payload.get("enrichment_budget") or {})
     public_web = dict(enrichment_budget.get("public_web") or {})
@@ -941,6 +957,10 @@ def build_parser() -> argparse.ArgumentParser:
     runs_live_pilot_handoff.add_argument("run_id")
     runs_live_pilot_handoff.add_argument("--no-write", action="store_true")
     runs_live_pilot_handoff.add_argument("--json", action="store_true")
+    runs_live_pilot_validate_response = runs_sub.add_parser("live-pilot-validate-response")
+    runs_live_pilot_validate_response.add_argument("run_id")
+    runs_live_pilot_validate_response.add_argument("--response", required=True)
+    runs_live_pilot_validate_response.add_argument("--json", action="store_true")
 
     jobs = sub.add_parser("jobs")
     jobs_sub = jobs.add_subparsers(dest="jobs_command", required=True)
@@ -1311,8 +1331,13 @@ def main(argv: list[str] | None = None) -> int:
             payload = service.live_pilot_status(run_id=args.run_id, write=not args.no_write)
         elif args.runs_command == "live-pilot-handoff":
             payload = service.live_pilot_handoff(run_id=args.run_id, write=not args.no_write)
+        elif args.runs_command == "live-pilot-validate-response":
+            payload = service.validate_live_pilot_operator_response(run_id=args.run_id, response=args.response)
         else:
             payload = service.get_run(args.run_id)
+        if args.runs_command == "live-pilot-validate-response" and not args.json:
+            print(_render_live_pilot_operator_response_validation_text(payload), end="")
+            return 0
         if args.runs_command == "live-pilot-handoff" and not args.json:
             print(_render_live_pilot_handoff_text(payload), end="")
             return 0

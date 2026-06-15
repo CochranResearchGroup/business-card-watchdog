@@ -145,6 +145,9 @@ def create_app(config_path: Path | None = None):
         run_id: str
         write: bool = True
 
+    class LivePilotOperatorResponseValidationRequest(BaseModel):
+        response: str
+
     class RunNextActionsRequest(BaseModel):
         run_id: str | None = None
         limit: int = 10
@@ -244,6 +247,13 @@ def create_app(config_path: Path | None = None):
     @app.get("/runs/{run_id}/live-pilot-handoff")
     def get_run_live_pilot_handoff(run_id: str, write: bool = True) -> dict[str, object]:
         return service().live_pilot_handoff(run_id=run_id, write=write)
+
+    @app.post("/runs/{run_id}/live-pilot-operator-response-validation")
+    def validate_run_live_pilot_operator_response(
+        run_id: str,
+        request: LivePilotOperatorResponseValidationRequest,
+    ) -> dict[str, object]:
+        return service().validate_live_pilot_operator_response(run_id=run_id, response=request.response)
 
     @app.get("/runs/{run_id}/jobs")
     def list_run_jobs(run_id: str) -> list[dict[str, object]]:

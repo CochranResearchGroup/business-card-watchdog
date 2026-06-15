@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import shlex
 from html import escape
 from io import StringIO
 from pathlib import Path
@@ -5785,6 +5786,86 @@ class BusinessCardService:
             payload["handoff_path"] = str(handoff_path)
         return payload
 
+    def validate_live_pilot_operator_response(self, *, run_id: str, response: str) -> dict[str, Any]:
+        parsed_response = _parse_operator_response_fields(response)
+        handoff = self.live_pilot_handoff(run_id=run_id, write=False)
+        contract = dict(handoff.get("operator_response_contract") or {})
+        required_fields = list(contract.get("required_fields") or [])
+        allowed_sinks = set(str(item) for item in contract.get("allowed_sinks") or ["google_contacts", "odoo"])
+        allowed_scopes = set(str(item) for item in contract.get("allowed_scopes") or ["lookup", "write", "readback", "all"])
+        missing_fields = [
+            field
+            for field in required_fields
+            if not str(parsed_response.get(field) or "").strip()
+            or str(parsed_response.get(field) or "").strip().startswith("<")
+        ]
+        mismatches: list[str] = []
+        if parsed_response.get("run_id") and parsed_response.get("run_id") != run_id:
+            mismatches.append("run_id does not match validation run")
+        sink = str(parsed_response.get("sink") or "")
+        if sink and sink not in allowed_sinks:
+            mismatches.append(f"sink must be one of {sorted(allowed_sinks)}")
+        scope = str(parsed_response.get("scope") or "")
+        if scope and scope not in allowed_scopes:
+            mismatches.append(f"scope must be one of {sorted(allowed_scopes)}")
+
+        matching_template: dict[str, Any] | None = None
+        for template in list(handoff.get("operator_response_templates") or []):
+            if not isinstance(template, dict):
+                continue
+            fields = dict(template.get("copyable_approval_fields") or {})
+            if (
+                str(fields.get("run_id") or "") == str(parsed_response.get("run_id") or "")
+                and str(fields.get("job_id") or "") == str(parsed_response.get("job_id") or "")
+                and str(fields.get("sink") or "") == sink
+            ):
+                matching_template = template
+                break
+        if not matching_template and not missing_fields:
+            mismatches.append("response does not match a current operator response template")
+
+        state = "ready_to_select_live_target" if not missing_fields and not mismatches else "blocked"
+        select_target_command = None
+        if state == "ready_to_select_live_target":
+            select_target_command = (
+                f"sinks select-live-target {shlex.quote(str(parsed_response['job_id']))} "
+                f"--run-id {shlex.quote(str(parsed_response['run_id']))} "
+                f"--sink {shlex.quote(str(parsed_response['sink']))} "
+                f"--operator {shlex.quote(str(parsed_response['operator']))} "
+                f"--scope {shlex.quote(str(parsed_response['scope']))} "
+                f"--safety-confirmation {shlex.quote(str(parsed_response['safety_confirmation']))} --json"
+            )
+
+        return {
+            "schema": "business-card-watchdog.live-pilot-operator-response-validation.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_id,
+            "response": response,
+            "parsed_response": parsed_response,
+            "missing_fields": missing_fields,
+            "mismatches": mismatches,
+            "matching_template": matching_template,
+            "select_target_command": select_target_command,
+            "operator_response_contract": contract,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "creates_selected_live_target": False,
+            "commands": {
+                "live_pilot_handoff": f"runs live-pilot-handoff {run_id} --no-write --json",
+                "validate_again": (
+                    f"runs live-pilot-validate-response {shlex.quote(run_id)} "
+                    f"--response {shlex.quote(response)} --json"
+                ),
+                "select_target": select_target_command,
+            },
+            "explicit_stop_conditions": [
+                "This validation does not create selected_live_target.json.",
+                "Run the select_target command only after confirming the card/contact is safe for the target tenant/profile.",
+                "Do not run live lookup, live write, or live readback from this validation report.",
+            ],
+        }
+
     def live_selection_packet(
         self,
         *,
@@ -7469,6 +7550,20 @@ def _path_check(name: str, path: Path) -> dict[str, Any]:
 
 def _readiness_check(name: str, status: str, detail: str) -> dict[str, Any]:
     return {"name": name, "status": status, "detail": detail}
+
+
+def _parse_operator_response_fields(response: str) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    current_key = ""
+    for token in shlex.split(response):
+        if "=" in token:
+            key, value = token.split("=", 1)
+            current_key = key.strip()
+            if current_key:
+                fields[current_key] = value.strip()
+        elif current_key:
+            fields[current_key] = f"{fields[current_key]} {token}".strip()
+    return fields
 
 
 def _runtime_safe_next_actions(
