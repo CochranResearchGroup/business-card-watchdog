@@ -4731,6 +4731,7 @@ class BusinessCardService:
                     + (f" --run-id {run_id}" if run_id else "")
                     + (f" --sink {selected_sink}" if selected_sink else "")
                 ),
+                "live_pilot_handoff": f"runs live-pilot-handoff {run_id}" if run_id else "runs list --json",
             },
             "explicit_stop_conditions": [
                 "Do not create selected_live_target.json until the operator chooses a run, job, sink, operator, and scope.",
@@ -4799,6 +4800,7 @@ class BusinessCardService:
                     + (f" --run-id {run_id}" if run_id else "")
                     + (f" --sink {selected_sink}" if selected_sink else "")
                 ),
+                "live_pilot_handoff": f"runs live-pilot-handoff {run_id}" if run_id else "runs list --json",
             },
             "explicit_stop_conditions": [
                 "Do not create selected_live_target.json from this audit alone.",
@@ -5033,6 +5035,7 @@ class BusinessCardService:
                     + (f" --run-id {run_id}" if run_id else "")
                     + (f" --sink {selected_sink}" if selected_sink else "")
                 ),
+                "live_pilot_handoff": f"runs live-pilot-handoff {run_id}" if run_id else "runs list --json",
             },
             "explicit_stop_conditions": [
                 "This report does not create selected_live_target.json.",

@@ -143,6 +143,7 @@ def test_service_live_readiness_audit_writes_run_level_artifact(tmp_path: Path) 
     assert audit["candidate_count"] == 1
     assert audit["writes_attempted"] == 0
     assert audit["network_calls_made"] == 0
+    assert audit["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id}"
     assert "audit_path" in audit
     assert Path(audit["audit_path"]).exists()
     artifacts = BusinessCardService(config).list_artifacts(run_id)
@@ -215,6 +216,7 @@ def test_service_live_selection_requirements_report_writes_run_level_artifact(tm
     assert report["commands"]["live_selection_requirements"] == (
         f"live-selection-requirements --run-id {run_id} --sink google_contacts"
     )
+    assert report["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id}"
     assert Path(report["requirements_path"]).exists()
     artifacts = BusinessCardService(config).list_artifacts(run_id)
     assert any(artifact["kind"] == "live_selection_requirements" for artifact in artifacts)

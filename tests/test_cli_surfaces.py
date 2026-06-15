@@ -102,6 +102,7 @@ def test_cli_live_target_candidates_reports_text_and_json(tmp_path: Path, capsys
     )
     assert payload["commands"]["live_readiness_audit"] == f"live-readiness-audit --run-id {run_id}"
     assert payload["commands"]["live_selection_requirements"] == f"live-selection-requirements --run-id {run_id}"
+    assert payload["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id}"
 
     assert main(["--config", str(config_path), "live-target-candidates", "--run-id", run_id]) == 0
     text = capsys.readouterr().out
@@ -115,6 +116,7 @@ def test_cli_live_target_candidates_reports_text_and_json(tmp_path: Path, capsys
     ) in text
     assert f"Live readiness audit: live-readiness-audit --run-id {run_id}" in text
     assert f"Selection requirements: live-selection-requirements --run-id {run_id}" in text
+    assert f"Live pilot handoff: runs live-pilot-handoff {run_id}" in text
     assert "{" not in text
 
 
@@ -142,6 +144,7 @@ def test_cli_live_readiness_audit_reports_text_and_json(tmp_path: Path, capsys) 
     assert payload["writes_attempted"] == 0
     assert payload["commands"]["target_candidates"] == f"live-target-candidates --run-id {run_id}"
     assert payload["commands"]["selection_requirements"] == f"live-selection-requirements --run-id {run_id}"
+    assert payload["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id}"
 
     assert main(["--config", str(config_path), "live-readiness-audit", "--run-id", run_id, "--no-write"]) == 0
     text = capsys.readouterr().out
@@ -149,6 +152,7 @@ def test_cli_live_readiness_audit_reports_text_and_json(tmp_path: Path, capsys) 
     assert f"Run: {run_id}" in text
     assert f"Target candidates: live-target-candidates --run-id {run_id}" in text
     assert f"Selection requirements: live-selection-requirements --run-id {run_id}" in text
+    assert f"Live pilot handoff: runs live-pilot-handoff {run_id}" in text
     assert "Runtime readiness: runtime-readiness --json" in text
     assert "{" not in text
 
@@ -195,6 +199,7 @@ def test_cli_live_selection_requirements_reports_text_and_json(tmp_path: Path, c
     assert payload["commands"]["live_target_candidates"] == f"live-target-candidates --run-id {run_id}"
     assert payload["commands"]["live_readiness_audit"] == f"live-readiness-audit --run-id {run_id}"
     assert payload["commands"]["live_selection_requirements"] == f"live-selection-requirements --run-id {run_id}"
+    assert payload["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id}"
 
     assert main(["--config", str(config_path), "live-selection-requirements", "--run-id", run_id, "--no-write"]) == 0
     text = capsys.readouterr().out
@@ -218,6 +223,7 @@ def test_cli_live_selection_requirements_reports_text_and_json(tmp_path: Path, c
     assert f"Live target candidates: live-target-candidates --run-id {run_id}" in text
     assert f"Live readiness audit: live-readiness-audit --run-id {run_id}" in text
     assert f"Selection requirements: live-selection-requirements --run-id {run_id}" in text
+    assert f"Live pilot handoff: runs live-pilot-handoff {run_id}" in text
     assert "{" not in text
 
 

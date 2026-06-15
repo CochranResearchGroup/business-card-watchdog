@@ -959,6 +959,23 @@ Validation:
 - `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
 - `git diff --check` passed.
 
+### Slice 0009-A55 | 2026-06-14 | Link Handoff Prompt From Selection Surfaces
+
+Implemented:
+
+- Live target candidates, live readiness audits, and live selection requirements now expose `live_pilot_handoff` commands when a run is selected.
+- Text renderers for those same surfaces now show the handoff command.
+- Service and CLI tests now protect the handoff prompt link from no-call selection surfaces.
+
+Safety:
+
+- This slice adds command links only.
+- It does not create `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_live_readiness_audit_writes_run_level_artifact tests/test_service.py::test_service_live_selection_requirements_report_writes_run_level_artifact tests/test_cli_surfaces.py::test_cli_live_target_candidates_reports_text_and_json tests/test_cli_surfaces.py::test_cli_live_readiness_audit_reports_text_and_json tests/test_cli_surfaces.py::test_cli_live_selection_requirements_reports_text_and_json -q` passed with 5 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:
