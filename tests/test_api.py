@@ -233,8 +233,10 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
         json={"response": response},
     ).json()
     assert validation["schema"] == "business-card-watchdog.live-pilot-operator-response-validation.v1"
-    assert validation["state"] == "ready_to_select_live_target"
+    assert validation["state"] == "ready_for_live_lookup_request"
     assert validation["matching_template"]["job_id"] == job_id
+    assert validation["select_target_command"] is None
+    assert validation["commands"]["select_target"] is None
     assert validation["selected_target_audit_command"] == (
         f"sinks selected-target-audit {job_id} --run-id {run_id} --scope lookup --no-write --json"
     )
@@ -242,11 +244,10 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
         f"sinks lookup-smoke-handoff {job_id} --run-id {run_id} --sink google_contacts --approved-by api-test --json"
     )
     assert [item["step"] for item in validation["post_selection_sequence"]] == [
-        "select_target",
         "selected_target_audit",
         "lookup_smoke_handoff",
     ]
-    assert validation["post_selection_sequence"][1]["command"] == validation["selected_target_audit_command"]
+    assert validation["post_selection_sequence"][0]["command"] == validation["selected_target_audit_command"]
     assert validation["creates_selected_live_target"] is False
     assert validation["writes_attempted"] == 0
     assert validation["network_calls_made"] == 0

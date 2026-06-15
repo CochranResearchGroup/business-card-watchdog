@@ -5910,20 +5910,20 @@ class BusinessCardService:
             if safety_confirmation_blocker:
                 mismatches.append(safety_confirmation_blocker)
 
-        state = "ready_to_select_live_target" if not missing_fields and not mismatches else "blocked"
+        matching_next_action = str((matching_template or {}).get("next_action") or "")
+        if missing_fields or mismatches:
+            state = "blocked"
+        elif matching_next_action == "request_live_lookup_smoke":
+            state = "ready_for_live_lookup_request"
+        elif matching_next_action == "review_selected_target_audit":
+            state = "ready_to_review_selected_target_audit"
+        else:
+            state = "ready_to_select_live_target"
         select_target_command = None
         selected_target_audit_command = None
         lookup_smoke_handoff_command = None
         post_selection_sequence: list[dict[str, Any]] = []
-        if state == "ready_to_select_live_target":
-            select_target_command = (
-                f"sinks select-live-target {shlex.quote(str(parsed_response['job_id']))} "
-                f"--run-id {shlex.quote(str(parsed_response['run_id']))} "
-                f"--sink {shlex.quote(str(parsed_response['sink']))} "
-                f"--operator {shlex.quote(str(parsed_response['operator']))} "
-                f"--scope {shlex.quote(str(parsed_response['scope']))} "
-                f"--safety-confirmation {shlex.quote(str(parsed_response['safety_confirmation']))} --json"
-            )
+        if state != "blocked":
             selected_target_audit_command = (
                 f"sinks selected-target-audit {shlex.quote(str(parsed_response['job_id']))} "
                 f"--run-id {shlex.quote(str(parsed_response['run_id']))} "
@@ -5935,16 +5935,27 @@ class BusinessCardService:
                 f"--sink {shlex.quote(str(parsed_response['sink']))} "
                 f"--approved-by {shlex.quote(str(parsed_response['operator']))} --json"
             )
-            post_selection_sequence = [
-                {
-                    "step": "select_target",
-                    "command": select_target_command,
-                    "requires_explicit_operator_action": True,
-                    "writes_runtime_artifact": True,
-                    "writes_sink": False,
-                    "network_calls_made": 0,
-                    "stop_condition": "Run only after confirming tenant/profile safety.",
-                },
+            if state == "ready_to_select_live_target":
+                select_target_command = (
+                    f"sinks select-live-target {shlex.quote(str(parsed_response['job_id']))} "
+                    f"--run-id {shlex.quote(str(parsed_response['run_id']))} "
+                    f"--sink {shlex.quote(str(parsed_response['sink']))} "
+                    f"--operator {shlex.quote(str(parsed_response['operator']))} "
+                    f"--scope {shlex.quote(str(parsed_response['scope']))} "
+                    f"--safety-confirmation {shlex.quote(str(parsed_response['safety_confirmation']))} --json"
+                )
+                post_selection_sequence.append(
+                    {
+                        "step": "select_target",
+                        "command": select_target_command,
+                        "requires_explicit_operator_action": True,
+                        "writes_runtime_artifact": True,
+                        "writes_sink": False,
+                        "network_calls_made": 0,
+                        "stop_condition": "Run only after confirming tenant/profile safety.",
+                    }
+                )
+            post_selection_sequence.append(
                 {
                     "step": "selected_target_audit",
                     "command": selected_target_audit_command,
@@ -5952,18 +5963,21 @@ class BusinessCardService:
                     "writes_runtime_artifact": False,
                     "writes_sink": False,
                     "network_calls_made": 0,
-                    "stop_condition": "Run after select_target; keep --no-write for this validation sequence.",
-                },
-                {
-                    "step": "lookup_smoke_handoff",
-                    "command": lookup_smoke_handoff_command,
-                    "requires_explicit_operator_action": False,
-                    "writes_runtime_artifact": True,
-                    "writes_sink": False,
-                    "network_calls_made": 0,
-                    "stop_condition": "Creates a handoff artifact only; does not execute live lookup.",
-                },
-            ]
+                    "stop_condition": "Run after selected target approval; keep --no-write for this validation sequence.",
+                }
+            )
+            if state != "ready_to_review_selected_target_audit":
+                post_selection_sequence.append(
+                    {
+                        "step": "lookup_smoke_handoff",
+                        "command": lookup_smoke_handoff_command,
+                        "requires_explicit_operator_action": False,
+                        "writes_runtime_artifact": True,
+                        "writes_sink": False,
+                        "network_calls_made": 0,
+                        "stop_condition": "Creates a handoff artifact only; does not execute live lookup.",
+                    }
+                )
 
         return {
             "schema": "business-card-watchdog.live-pilot-operator-response-validation.v1",

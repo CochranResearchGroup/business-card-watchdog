@@ -62,6 +62,7 @@ Prepare selected-target approval evidence:
 ```
 
 Use `--sink odoo` when the read-only smoke target is Odollo/Odoo. Start with `live-selection-requirements` when you need candidate-specific packet and approval commands. Use the selection packet's `Validate prefilled response:` command for the first read-only check, then validate the filled response after replacing the confirmation placeholder. Use `runs live-pilot-handoff --no-write` when an agent loop needs the current concrete operator response template; it does not create `selected_live_target.json`. Validation is read-only and only returns blockers or the exact select-target command. The packet must show `existing_selected_target.can_select_replacement_now = true` before selecting a replacement; if it shows `replacement_requires_abandonment = true`, run `abandon-live-pilot` for the old target first and then prepare a new packet.
+If validation is run after the selected target already exists, it reports the active-target state and omits the select-target command. In that case, follow the returned `post_selection_sequence`, which begins with selected-target audit and lookup-smoke handoff.
 Add `--json` to review commands when you need to archive the full structured artifact.
 
 Prepare lookup artifacts:
@@ -181,6 +182,7 @@ Prepare or refresh selected-target approval evidence:
 ```
 
 Start with `live-selection-requirements` when you need candidate-specific packet and approval commands. Use the selection packet's `Validate prefilled response:` command for the first read-only check, then validate the filled response after replacing the confirmation placeholder. Use `runs live-pilot-handoff --no-write` when an agent loop needs the current concrete operator response template; it does not create `selected_live_target.json`. Validation is read-only and only returns blockers or the exact select-target command. If a lookup-only selected target already exists, record `abandon-live-pilot` with the reason for replacement before selecting the broader `all` scope target. Do not hand-edit selected-target artifacts.
+If validation is run after the selected target already exists, it reports the active-target state and omits the select-target command. In that case, follow the returned `post_selection_sequence`, which begins with selected-target audit and lookup-smoke handoff.
 Add `--json` to review commands when you need to archive the full structured artifact.
 
 Prepare apply artifacts:

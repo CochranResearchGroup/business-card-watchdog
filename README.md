@@ -131,6 +131,7 @@ Review the selected target gates before any non-simulated sink call:
 ```
 
 Use `--sink odoo` for Odollo/Odoo targets. Start with `live-selection-requirements` when you need the exact candidate-specific packet and approval commands. Use the selection packet's `Validate prefilled response:` command for the first read-only check, then validate the filled response after replacing the confirmation placeholder. Use `runs live-pilot-handoff --no-write` when an agent loop needs the current concrete operator response template; it does not create `selected_live_target.json`. Validation is read-only and only returns blockers or the exact select-target command. If the selection packet reports that replacement requires abandonment, run `sinks abandon-live-pilot` for the current target before selecting a replacement. Use `docs/operations/live-pilot-checklists.md` for the full lookup, write, readback, and closeout procedure.
+After a selected target already exists, validation no longer returns a second select-target command. It reports the active-target state and starts the ordered post-selection sequence at selected-target audit and lookup-smoke handoff.
 
 Install a user-scope systemd unit file without enabling or starting it:
 

@@ -717,12 +717,13 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     )
     validation = json.loads(capsys.readouterr().out)
     assert validation["schema"] == "business-card-watchdog.live-pilot-operator-response-validation.v1"
-    assert validation["state"] == "ready_to_select_live_target"
+    assert validation["state"] == "ready_for_live_lookup_request"
     assert validation["creates_selected_live_target"] is False
     assert validation["writes_attempted"] == 0
     assert validation["network_calls_made"] == 0
     assert validation["matching_template"]["job_id"] == job_id
-    assert validation["select_target_command"].startswith(f"sinks select-live-target {job_id}")
+    assert validation["select_target_command"] is None
+    assert validation["commands"]["select_target"] is None
     assert validation["selected_target_audit_command"] == (
         f"sinks selected-target-audit {job_id} --run-id {run_id} --scope lookup --no-write --json"
     )
@@ -730,11 +731,10 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
         f"sinks lookup-smoke-handoff {job_id} --run-id {run_id} --sink google_contacts --approved-by tester --json"
     )
     assert [item["step"] for item in validation["post_selection_sequence"]] == [
-        "select_target",
         "selected_target_audit",
         "lookup_smoke_handoff",
     ]
-    assert validation["post_selection_sequence"][2]["command"] == validation["lookup_smoke_handoff_command"]
+    assert validation["post_selection_sequence"][1]["command"] == validation["lookup_smoke_handoff_command"]
 
     assert (
         main(
@@ -751,9 +751,9 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
         == 0
     )
     validation_text = capsys.readouterr().out
-    assert "State: ready_to_select_live_target" in validation_text
+    assert "State: ready_for_live_lookup_request" in validation_text
     assert "Creates selected target: False" in validation_text
-    assert f"Select target: sinks select-live-target {job_id}" in validation_text
+    assert f"Select target: sinks select-live-target {job_id}" not in validation_text
     assert (
         f"Selected target audit: sinks selected-target-audit {job_id} "
         f"--run-id {run_id} --scope lookup --no-write --json"
@@ -763,7 +763,7 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
         f"--run-id {run_id} --sink google_contacts --approved-by tester --json"
     ) in validation_text
     assert "Post-selection sequence:" in validation_text
-    assert f" - select_target: sinks select-live-target {job_id}" in validation_text
+    assert f" - select_target: sinks select-live-target {job_id}" not in validation_text
     assert (
         f" - selected_target_audit: sinks selected-target-audit {job_id} "
         f"--run-id {run_id} --scope lookup --no-write --json"

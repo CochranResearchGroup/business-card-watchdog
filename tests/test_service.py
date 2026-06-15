@@ -2355,6 +2355,22 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     else:
         raise AssertionError("expected selected target gate")
 
+    preselection_response = (
+        f"run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=tester scope=lookup safety_confirmation=fixture contact is safe for google contacts test profile"
+    )
+    preselection_validation = service.validate_live_pilot_operator_response(
+        run_id=run_id,
+        response=preselection_response,
+    )
+    assert preselection_validation["state"] == "ready_to_select_live_target"
+    assert preselection_validation["select_target_command"].startswith(f"sinks select-live-target {job_id}")
+    assert [item["step"] for item in preselection_validation["post_selection_sequence"]] == [
+        "select_target",
+        "selected_target_audit",
+        "lookup_smoke_handoff",
+    ]
+
     target = service.select_live_target_for_job(
         job_id=job_id,
         run_id=run_id,
@@ -2489,17 +2505,15 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     )
     validation = service.validate_live_pilot_operator_response(run_id=run_id, response=response)
     assert validation["schema"] == "business-card-watchdog.live-pilot-operator-response-validation.v1"
-    assert validation["state"] == "ready_to_select_live_target"
+    assert validation["state"] == "ready_for_live_lookup_request"
     assert validation["missing_fields"] == []
     assert validation["mismatches"] == []
     assert validation["parsed_response"]["safety_confirmation"] == (
         "fixture contact is safe for google contacts test profile"
     )
     assert validation["matching_template"]["job_id"] == job_id
-    assert validation["select_target_command"].startswith(f"sinks select-live-target {job_id}")
-    assert "--safety-confirmation 'fixture contact is safe for google contacts test profile'" in validation[
-        "select_target_command"
-    ]
+    assert validation["select_target_command"] is None
+    assert validation["commands"]["select_target"] is None
     assert validation["selected_target_audit_command"] == (
         f"sinks selected-target-audit {job_id} --run-id {run_id} --scope lookup --no-write --json"
     )
@@ -2509,16 +2523,13 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     )
     assert validation["commands"]["lookup_smoke_handoff"] == validation["lookup_smoke_handoff_command"]
     assert [item["step"] for item in validation["post_selection_sequence"]] == [
-        "select_target",
         "selected_target_audit",
         "lookup_smoke_handoff",
     ]
-    assert validation["post_selection_sequence"][0]["command"] == validation["select_target_command"]
-    assert validation["post_selection_sequence"][0]["writes_runtime_artifact"] is True
-    assert validation["post_selection_sequence"][1]["command"] == validation["selected_target_audit_command"]
-    assert validation["post_selection_sequence"][1]["writes_runtime_artifact"] is False
-    assert validation["post_selection_sequence"][2]["command"] == validation["lookup_smoke_handoff_command"]
-    assert validation["post_selection_sequence"][2]["network_calls_made"] == 0
+    assert validation["post_selection_sequence"][0]["command"] == validation["selected_target_audit_command"]
+    assert validation["post_selection_sequence"][0]["writes_runtime_artifact"] is False
+    assert validation["post_selection_sequence"][1]["command"] == validation["lookup_smoke_handoff_command"]
+    assert validation["post_selection_sequence"][1]["network_calls_made"] == 0
     assert validation["creates_selected_live_target"] is False
     assert validation["writes_attempted"] == 0
     assert validation["network_calls_made"] == 0

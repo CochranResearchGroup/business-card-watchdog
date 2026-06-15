@@ -638,11 +638,10 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert operator_response_validation["schema"] == (
         "business-card-watchdog.live-pilot-operator-response-validation.v1"
     )
-    assert operator_response_validation["state"] == "ready_to_select_live_target"
+    assert operator_response_validation["state"] == "ready_for_live_lookup_request"
     assert operator_response_validation["matching_template"]["job_id"] == job_id
-    assert operator_response_validation["select_target_command"].startswith(
-        f"sinks select-live-target {job_id}"
-    )
+    assert operator_response_validation["select_target_command"] is None
+    assert operator_response_validation["commands"]["select_target"] is None
     assert operator_response_validation["creates_selected_live_target"] is False
     assert operator_response_validation["writes_attempted"] == 0
     assert operator_response_validation["network_calls_made"] == 0
@@ -1020,8 +1019,10 @@ def test_mcp_jsonl_server_lists_and_calls_tools(tmp_path: Path) -> None:
     assert operator_response_validation["schema"] == (
         "business-card-watchdog.live-pilot-operator-response-validation.v1"
     )
-    assert operator_response_validation["state"] == "ready_to_select_live_target"
+    assert operator_response_validation["state"] == "ready_for_live_lookup_request"
     assert operator_response_validation["matching_template"]["job_id"] == job_id
+    assert operator_response_validation["select_target_command"] is None
+    assert operator_response_validation["commands"]["select_target"] is None
     assert operator_response_validation["selected_target_audit_command"] == (
         f"sinks selected-target-audit {job_id} --run-id {run_id} --scope lookup --no-write --json"
     )
@@ -1029,12 +1030,11 @@ def test_mcp_jsonl_server_lists_and_calls_tools(tmp_path: Path) -> None:
         f"sinks lookup-smoke-handoff {job_id} --run-id {run_id} --sink google_contacts --approved-by mcp-jsonl --json"
     )
     assert [item["step"] for item in operator_response_validation["post_selection_sequence"]] == [
-        "select_target",
         "selected_target_audit",
         "lookup_smoke_handoff",
     ]
     assert (
-        operator_response_validation["post_selection_sequence"][2]["command"]
+        operator_response_validation["post_selection_sequence"][1]["command"]
         == operator_response_validation["lookup_smoke_handoff_command"]
     )
     assert operator_response_validation["creates_selected_live_target"] is False

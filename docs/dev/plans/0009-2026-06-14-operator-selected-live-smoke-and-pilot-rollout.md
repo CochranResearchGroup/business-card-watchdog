@@ -1856,6 +1856,32 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed; index is up to date.
 
+### Slice 0009-A96 | 2026-06-15 | Active Target Validation State
+
+Implemented:
+
+- Operator-response validation now detects handoff templates whose next action is `request_live_lookup_smoke`.
+- Active selected-target validation now reports `ready_for_live_lookup_request` instead of `ready_to_select_live_target`.
+- Active selected-target validation no longer returns a second `select_target_command`.
+- The active-target `post_selection_sequence` starts at selected-target audit and lookup-smoke handoff.
+- Preselection validation still returns the select-target sequence.
+- README and live-pilot checklist text now describe the state-aware validation behavior.
+
+Safety:
+
+- This was no-live validation handoff hardening only.
+- It did not validate a real operator response, execute any returned select-target command, execute selected-target audit, build lookup-smoke handoff, create or modify `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service tests/test_mcp.py::test_mcp_jsonl_server_lists_and_calls_tools -q` passed with 5 tests.
+- `.venv/bin/python -m pytest -q` passed with 226 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:
