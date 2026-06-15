@@ -5554,6 +5554,9 @@ class BusinessCardService:
                         "lookup_smoke": f"sinks execute-lookup-smoke {job_id} --run-id {run_id} --json",
                         "abandon": f"sinks abandon-live-pilot {job_id} --run-id {run_id} --operator <operator> --reason <reason> --json",
                         "closeout": f"sinks live-pilot-closeout {job_id} --run-id {run_id}",
+                        "validate_operator_response": (
+                            f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+                        ),
                     },
                 }
             )
@@ -5739,6 +5742,7 @@ class BusinessCardService:
                 "prompt": entry.get("operator_prompt"),
                 "copyable_approval_fields": entry.get("copyable_approval_fields"),
                 "command": entry.get("command"),
+                "validation_command": (entry.get("commands") or {}).get("validate_operator_response"),
             }
             for entry in handoff_entries
             if entry.get("operator_required") and entry.get("operator_response_template")

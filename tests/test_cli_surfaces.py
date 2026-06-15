@@ -546,6 +546,9 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
         f"run_id={run_id} job_id={job_id} sink=google_contacts "
         "operator=tester scope=lookup safety_confirmation=<confirmation>"
     )
+    assert status["entries"][0]["commands"]["validate_operator_response"] == (
+        f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+    )
     assert status["entries"][0]["commands"]["selected_target_audit"] == (
         f"sinks selected-target-audit {job_id} --run-id {run_id}"
     )
@@ -587,6 +590,9 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     )
     assert handoff["operator_response_templates"][0]["command"] == (
         f"sinks execute-lookup-smoke {job_id} --run-id {run_id} --json"
+    )
+    assert handoff["operator_response_templates"][0]["validation_command"] == (
+        f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
     assert handoff["entries"][0]["command"] == f"sinks execute-lookup-smoke {job_id} --run-id {run_id} --json"
 

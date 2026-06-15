@@ -2349,6 +2349,9 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
         f"run_id={run_id} job_id={job_id} sink=google_contacts "
         "operator=tester scope=lookup safety_confirmation=<confirmation>"
     )
+    assert live_status["entries"][0]["commands"]["validate_operator_response"] == (
+        f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+    )
     assert live_status["entries"][0]["copyable_approval_fields"] == {
         "run_id": run_id,
         "job_id": job_id,
@@ -2389,6 +2392,9 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
         "scope": "lookup",
         "safety_confirmation": "<confirmation>",
     }
+    assert handoff["operator_response_templates"][0]["validation_command"] == (
+        f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+    )
     assert handoff["writes_attempted"] == 0
     assert handoff["network_calls_made"] == 0
     assert Path(handoff["handoff_path"]).exists()
