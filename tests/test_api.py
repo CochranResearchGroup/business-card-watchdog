@@ -234,6 +234,7 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     ).json()
     assert validation["schema"] == "business-card-watchdog.live-pilot-operator-response-validation.v1"
     assert validation["state"] == "ready_for_live_lookup_request"
+    assert validation["next_validation_step"] == "selected_target_audit"
     assert validation["matching_template"]["job_id"] == job_id
     assert validation["select_target_command"] is None
     assert validation["commands"]["select_target"] is None

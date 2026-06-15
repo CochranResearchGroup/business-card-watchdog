@@ -5913,12 +5913,16 @@ class BusinessCardService:
         matching_next_action = str((matching_template or {}).get("next_action") or "")
         if missing_fields or mismatches:
             state = "blocked"
+            next_validation_step = "fix_response"
         elif matching_next_action == "request_live_lookup_smoke":
             state = "ready_for_live_lookup_request"
+            next_validation_step = "selected_target_audit"
         elif matching_next_action == "review_selected_target_audit":
             state = "ready_to_review_selected_target_audit"
+            next_validation_step = "selected_target_audit"
         else:
             state = "ready_to_select_live_target"
+            next_validation_step = "select_target"
         select_target_command = None
         selected_target_audit_command = None
         lookup_smoke_handoff_command = None
@@ -5979,10 +5983,40 @@ class BusinessCardService:
                     }
                 )
 
+        explicit_stop_conditions = [
+            "This validation does not create selected_live_target.json.",
+            "Do not run live lookup, live write, or live readback from this validation report.",
+        ]
+        if state == "ready_to_select_live_target":
+            explicit_stop_conditions.insert(
+                1,
+                "Run the select_target command only after confirming the card/contact is safe for the target tenant/profile.",
+            )
+        elif state == "ready_for_live_lookup_request":
+            explicit_stop_conditions.insert(
+                1,
+                "A selected target already exists; do not run select_target again from this validation report.",
+            )
+            explicit_stop_conditions.insert(
+                2,
+                "Review the selected-target audit and lookup-smoke handoff before any explicit live lookup request.",
+            )
+        elif state == "ready_to_review_selected_target_audit":
+            explicit_stop_conditions.insert(
+                1,
+                "Review or refresh the selected-target audit before any lookup-smoke handoff or live command.",
+            )
+        else:
+            explicit_stop_conditions.insert(
+                1,
+                "Fix missing fields or mismatches before selecting a target or preparing post-selection handoff artifacts.",
+            )
+
         return {
             "schema": "business-card-watchdog.live-pilot-operator-response-validation.v1",
             "generated_at": utc_now(),
             "state": state,
+            "next_validation_step": next_validation_step,
             "run_id": run_id,
             "response": response,
             "parsed_response": parsed_response,
@@ -6007,11 +6041,7 @@ class BusinessCardService:
                 "selected_target_audit": selected_target_audit_command,
                 "lookup_smoke_handoff": lookup_smoke_handoff_command,
             },
-            "explicit_stop_conditions": [
-                "This validation does not create selected_live_target.json.",
-                "Run the select_target command only after confirming the card/contact is safe for the target tenant/profile.",
-                "Do not run live lookup, live write, or live readback from this validation report.",
-            ],
+            "explicit_stop_conditions": explicit_stop_conditions,
         }
 
     def live_selection_packet(

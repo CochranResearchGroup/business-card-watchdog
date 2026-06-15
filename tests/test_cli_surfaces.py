@@ -718,6 +718,7 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     validation = json.loads(capsys.readouterr().out)
     assert validation["schema"] == "business-card-watchdog.live-pilot-operator-response-validation.v1"
     assert validation["state"] == "ready_for_live_lookup_request"
+    assert validation["next_validation_step"] == "selected_target_audit"
     assert validation["creates_selected_live_target"] is False
     assert validation["writes_attempted"] == 0
     assert validation["network_calls_made"] == 0
@@ -752,6 +753,7 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     )
     validation_text = capsys.readouterr().out
     assert "State: ready_for_live_lookup_request" in validation_text
+    assert "Next validation step: selected_target_audit" in validation_text
     assert "Creates selected target: False" in validation_text
     assert f"Select target: sinks select-live-target {job_id}" not in validation_text
     assert (

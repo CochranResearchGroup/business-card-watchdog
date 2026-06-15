@@ -639,6 +639,7 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
         "business-card-watchdog.live-pilot-operator-response-validation.v1"
     )
     assert operator_response_validation["state"] == "ready_for_live_lookup_request"
+    assert operator_response_validation["next_validation_step"] == "selected_target_audit"
     assert operator_response_validation["matching_template"]["job_id"] == job_id
     assert operator_response_validation["select_target_command"] is None
     assert operator_response_validation["commands"]["select_target"] is None
@@ -1020,6 +1021,7 @@ def test_mcp_jsonl_server_lists_and_calls_tools(tmp_path: Path) -> None:
         "business-card-watchdog.live-pilot-operator-response-validation.v1"
     )
     assert operator_response_validation["state"] == "ready_for_live_lookup_request"
+    assert operator_response_validation["next_validation_step"] == "selected_target_audit"
     assert operator_response_validation["matching_template"]["job_id"] == job_id
     assert operator_response_validation["select_target_command"] is None
     assert operator_response_validation["commands"]["select_target"] is None

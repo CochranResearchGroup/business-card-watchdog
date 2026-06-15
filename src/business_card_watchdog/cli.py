@@ -314,6 +314,7 @@ def _render_live_pilot_operator_response_validation_text(payload: dict[str, obje
     lines = [
         f"Run: {payload.get('run_id')}",
         f"State: {payload.get('state')}",
+        f"Next validation step: {payload.get('next_validation_step') or 'none'}",
         f"Missing fields: {', '.join(str(item) for item in missing) if isinstance(missing, list) and missing else 'none'}",
         f"Mismatches: {', '.join(str(item) for item in mismatches) if isinstance(mismatches, list) and mismatches else 'none'}",
         f"Creates selected target: {payload.get('creates_selected_live_target', False)}",

@@ -2364,12 +2364,14 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
         response=preselection_response,
     )
     assert preselection_validation["state"] == "ready_to_select_live_target"
+    assert preselection_validation["next_validation_step"] == "select_target"
     assert preselection_validation["select_target_command"].startswith(f"sinks select-live-target {job_id}")
     assert [item["step"] for item in preselection_validation["post_selection_sequence"]] == [
         "select_target",
         "selected_target_audit",
         "lookup_smoke_handoff",
     ]
+    assert any("Run the select_target command" in item for item in preselection_validation["explicit_stop_conditions"])
 
     target = service.select_live_target_for_job(
         job_id=job_id,
@@ -2506,6 +2508,7 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     validation = service.validate_live_pilot_operator_response(run_id=run_id, response=response)
     assert validation["schema"] == "business-card-watchdog.live-pilot-operator-response-validation.v1"
     assert validation["state"] == "ready_for_live_lookup_request"
+    assert validation["next_validation_step"] == "selected_target_audit"
     assert validation["missing_fields"] == []
     assert validation["mismatches"] == []
     assert validation["parsed_response"]["safety_confirmation"] == (
@@ -2530,6 +2533,8 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert validation["post_selection_sequence"][0]["writes_runtime_artifact"] is False
     assert validation["post_selection_sequence"][1]["command"] == validation["lookup_smoke_handoff_command"]
     assert validation["post_selection_sequence"][1]["network_calls_made"] == 0
+    assert any("do not run select_target again" in item for item in validation["explicit_stop_conditions"])
+    assert any("lookup-smoke handoff" in item for item in validation["explicit_stop_conditions"])
     assert validation["creates_selected_live_target"] is False
     assert validation["writes_attempted"] == 0
     assert validation["network_calls_made"] == 0
@@ -2540,6 +2545,7 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
         response=f"run_id={run_id} job_id={job_id} sink=google_contacts operator=<operator> scope=lookup",
     )
     assert blocked_validation["state"] == "blocked"
+    assert blocked_validation["next_validation_step"] == "fix_response"
     assert blocked_validation["select_target_command"] is None
     assert blocked_validation["selected_target_audit_command"] is None
     assert blocked_validation["lookup_smoke_handoff_command"] is None
