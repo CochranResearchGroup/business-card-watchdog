@@ -729,6 +729,12 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert validation["lookup_smoke_handoff_command"] == (
         f"sinks lookup-smoke-handoff {job_id} --run-id {run_id} --sink google_contacts --approved-by tester --json"
     )
+    assert [item["step"] for item in validation["post_selection_sequence"]] == [
+        "select_target",
+        "selected_target_audit",
+        "lookup_smoke_handoff",
+    ]
+    assert validation["post_selection_sequence"][2]["command"] == validation["lookup_smoke_handoff_command"]
 
     assert (
         main(
@@ -754,6 +760,16 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     ) in validation_text
     assert (
         f"Lookup smoke handoff: sinks lookup-smoke-handoff {job_id} "
+        f"--run-id {run_id} --sink google_contacts --approved-by tester --json"
+    ) in validation_text
+    assert "Post-selection sequence:" in validation_text
+    assert f" - select_target: sinks select-live-target {job_id}" in validation_text
+    assert (
+        f" - selected_target_audit: sinks selected-target-audit {job_id} "
+        f"--run-id {run_id} --scope lookup --no-write --json"
+    ) in validation_text
+    assert (
+        f" - lookup_smoke_handoff: sinks lookup-smoke-handoff {job_id} "
         f"--run-id {run_id} --sink google_contacts --approved-by tester --json"
     ) in validation_text
     assert "{" not in validation_text

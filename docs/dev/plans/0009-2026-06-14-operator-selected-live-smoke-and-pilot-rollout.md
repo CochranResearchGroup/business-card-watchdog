@@ -1831,6 +1831,31 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed; index is up to date.
 
+### Slice 0009-A95 | 2026-06-15 | Validation Post-Selection Sequence
+
+Implemented:
+
+- Ready operator-response validation reports now include `post_selection_sequence`.
+- The sequence orders `select_target`, `selected_target_audit`, and `lookup_smoke_handoff`.
+- Each sequence step reports the command plus no-live metadata for runtime-artifact writes, sink writes, network calls, and stop conditions.
+- Plain-text validation output now renders the post-selection sequence after the individual handoff commands.
+- Blocked validations keep the post-selection sequence empty.
+
+Safety:
+
+- This was no-live validation handoff hardening only.
+- It did not validate a real operator response, execute any returned select-target command, execute selected-target audit, build lookup-smoke handoff, create or modify `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_jsonl_server_lists_and_calls_tools -q` passed with 4 tests.
+- `.venv/bin/python -m pytest -q` passed with 226 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

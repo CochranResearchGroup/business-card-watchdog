@@ -2508,6 +2508,17 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
         f"sinks lookup-smoke-handoff {job_id} --run-id {run_id} --sink google_contacts --approved-by tester --json"
     )
     assert validation["commands"]["lookup_smoke_handoff"] == validation["lookup_smoke_handoff_command"]
+    assert [item["step"] for item in validation["post_selection_sequence"]] == [
+        "select_target",
+        "selected_target_audit",
+        "lookup_smoke_handoff",
+    ]
+    assert validation["post_selection_sequence"][0]["command"] == validation["select_target_command"]
+    assert validation["post_selection_sequence"][0]["writes_runtime_artifact"] is True
+    assert validation["post_selection_sequence"][1]["command"] == validation["selected_target_audit_command"]
+    assert validation["post_selection_sequence"][1]["writes_runtime_artifact"] is False
+    assert validation["post_selection_sequence"][2]["command"] == validation["lookup_smoke_handoff_command"]
+    assert validation["post_selection_sequence"][2]["network_calls_made"] == 0
     assert validation["creates_selected_live_target"] is False
     assert validation["writes_attempted"] == 0
     assert validation["network_calls_made"] == 0
@@ -2521,6 +2532,7 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert blocked_validation["select_target_command"] is None
     assert blocked_validation["selected_target_audit_command"] is None
     assert blocked_validation["lookup_smoke_handoff_command"] is None
+    assert blocked_validation["post_selection_sequence"] == []
     assert set(blocked_validation["missing_fields"]) == {"operator", "safety_confirmation"}
 
     weak_safety_validation = service.validate_live_pilot_operator_response(

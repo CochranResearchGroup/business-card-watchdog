@@ -241,6 +241,12 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert validation["lookup_smoke_handoff_command"] == (
         f"sinks lookup-smoke-handoff {job_id} --run-id {run_id} --sink google_contacts --approved-by api-test --json"
     )
+    assert [item["step"] for item in validation["post_selection_sequence"]] == [
+        "select_target",
+        "selected_target_audit",
+        "lookup_smoke_handoff",
+    ]
+    assert validation["post_selection_sequence"][1]["command"] == validation["selected_target_audit_command"]
     assert validation["creates_selected_live_target"] is False
     assert validation["writes_attempted"] == 0
     assert validation["network_calls_made"] == 0

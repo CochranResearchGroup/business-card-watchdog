@@ -325,6 +325,12 @@ def _render_live_pilot_operator_response_validation_text(payload: dict[str, obje
         lines.append(f"Selected target audit: {payload.get('selected_target_audit_command')}")
     if payload.get("lookup_smoke_handoff_command"):
         lines.append(f"Lookup smoke handoff: {payload.get('lookup_smoke_handoff_command')}")
+    sequence = payload.get("post_selection_sequence") or []
+    if isinstance(sequence, list) and sequence:
+        lines.append("Post-selection sequence:")
+        for item in sequence:
+            if isinstance(item, dict):
+                lines.append(f" - {item.get('step')}: {item.get('command')}")
     return "\n".join(lines) + "\n"
 
 

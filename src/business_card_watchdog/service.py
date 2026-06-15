@@ -5914,6 +5914,7 @@ class BusinessCardService:
         select_target_command = None
         selected_target_audit_command = None
         lookup_smoke_handoff_command = None
+        post_selection_sequence: list[dict[str, Any]] = []
         if state == "ready_to_select_live_target":
             select_target_command = (
                 f"sinks select-live-target {shlex.quote(str(parsed_response['job_id']))} "
@@ -5934,6 +5935,35 @@ class BusinessCardService:
                 f"--sink {shlex.quote(str(parsed_response['sink']))} "
                 f"--approved-by {shlex.quote(str(parsed_response['operator']))} --json"
             )
+            post_selection_sequence = [
+                {
+                    "step": "select_target",
+                    "command": select_target_command,
+                    "requires_explicit_operator_action": True,
+                    "writes_runtime_artifact": True,
+                    "writes_sink": False,
+                    "network_calls_made": 0,
+                    "stop_condition": "Run only after confirming tenant/profile safety.",
+                },
+                {
+                    "step": "selected_target_audit",
+                    "command": selected_target_audit_command,
+                    "requires_explicit_operator_action": False,
+                    "writes_runtime_artifact": False,
+                    "writes_sink": False,
+                    "network_calls_made": 0,
+                    "stop_condition": "Run after select_target; keep --no-write for this validation sequence.",
+                },
+                {
+                    "step": "lookup_smoke_handoff",
+                    "command": lookup_smoke_handoff_command,
+                    "requires_explicit_operator_action": False,
+                    "writes_runtime_artifact": True,
+                    "writes_sink": False,
+                    "network_calls_made": 0,
+                    "stop_condition": "Creates a handoff artifact only; does not execute live lookup.",
+                },
+            ]
 
         return {
             "schema": "business-card-watchdog.live-pilot-operator-response-validation.v1",
@@ -5948,6 +5978,7 @@ class BusinessCardService:
             "select_target_command": select_target_command,
             "selected_target_audit_command": selected_target_audit_command,
             "lookup_smoke_handoff_command": lookup_smoke_handoff_command,
+            "post_selection_sequence": post_selection_sequence,
             "operator_response_contract": contract,
             "writes_attempted": 0,
             "network_calls_made": 0,

@@ -1028,6 +1028,15 @@ def test_mcp_jsonl_server_lists_and_calls_tools(tmp_path: Path) -> None:
     assert operator_response_validation["lookup_smoke_handoff_command"] == (
         f"sinks lookup-smoke-handoff {job_id} --run-id {run_id} --sink google_contacts --approved-by mcp-jsonl --json"
     )
+    assert [item["step"] for item in operator_response_validation["post_selection_sequence"]] == [
+        "select_target",
+        "selected_target_audit",
+        "lookup_smoke_handoff",
+    ]
+    assert (
+        operator_response_validation["post_selection_sequence"][2]["command"]
+        == operator_response_validation["lookup_smoke_handoff_command"]
+    )
     assert operator_response_validation["creates_selected_live_target"] is False
     assert operator_response_validation["writes_attempted"] == 0
     assert operator_response_validation["network_calls_made"] == 0
