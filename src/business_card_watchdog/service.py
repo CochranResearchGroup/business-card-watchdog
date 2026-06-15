@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import shlex
 from dataclasses import replace
@@ -687,6 +688,12 @@ class BusinessCardService:
                     if selected_run_id
                     else "runs list --json"
                 ),
+                "live_pilot_readiness_export_from_response": (
+                    f"runs live-pilot-readiness-export-from-response {selected_run_id} "
+                    "--response <operator-response> --json"
+                    if selected_run_id
+                    else "runs list --json"
+                ),
                 "mcp_manifest": "mcp-manifest",
             },
             "api_routes": {
@@ -776,6 +783,11 @@ class BusinessCardService:
                     f"POST /runs/{selected_run_id}/live-pilot-operator-rehearsal-from-response"
                     if selected_run_id
                     else "POST /runs/{run_id}/live-pilot-operator-rehearsal-from-response"
+                ),
+                "live_pilot_readiness_export_from_response": (
+                    f"POST /runs/{selected_run_id}/live-pilot-readiness-export-from-response"
+                    if selected_run_id
+                    else "POST /runs/{run_id}/live-pilot-readiness-export-from-response"
                 ),
             },
             "mcp_tools": {
@@ -922,6 +934,12 @@ class BusinessCardService:
                     "arguments": {"run_id": selected_run_id, "response": "<operator-response>"}
                     if selected_run_id
                     else {"run_id": "<run-id>", "response": "<operator-response>"},
+                },
+                "live_pilot_readiness_export_from_response": {
+                    "tool": "business_card_watchdog_live_pilot_readiness_export_from_response",
+                    "arguments": {"run_id": selected_run_id, "response": "<operator-response>", "write": True}
+                    if selected_run_id
+                    else {"run_id": "<run-id>", "response": "<operator-response>", "write": True},
                 },
             },
             "safe_next_actions": [
@@ -7877,6 +7895,136 @@ class BusinessCardService:
             "writes_attempted": int(workflow_packet.get("writes_attempted") or 0),
             "network_calls_made": int(workflow_packet.get("network_calls_made") or 0),
         }
+
+    def live_pilot_readiness_export_from_response(
+        self,
+        *,
+        run_id: str,
+        response: str,
+        write: bool = True,
+    ) -> dict[str, Any]:
+        rehearsal = self.live_pilot_operator_rehearsal_from_response(
+            run_id=run_id,
+            response=response,
+        )
+        workflow_packet = dict(rehearsal.get("workflow_packet") or {})
+        response_fields = _parse_operator_response_fields(response)
+        redacted_response_fields = {
+            key: value
+            for key, value in response_fields.items()
+            if key in {"run_id", "job_id", "sink", "operator", "scope"}
+        }
+        response_digest = hashlib.sha256(response.encode("utf-8")).hexdigest()
+        redaction_token = "<operator-response-redacted>"
+        safety_confirmation = str(response_fields.get("safety_confirmation") or "")
+
+        def redact_export_value(value: Any) -> Any:
+            if isinstance(value, str):
+                redacted = value.replace(response, redaction_token)
+                if safety_confirmation:
+                    redacted = redacted.replace(safety_confirmation, "<safety-confirmation-redacted>")
+                return redacted
+            if isinstance(value, list):
+                return [redact_export_value(item) for item in value]
+            if isinstance(value, dict):
+                return {key: redact_export_value(item) for key, item in value.items()}
+            return value
+
+        redacted_rehearsal = redact_export_value(rehearsal)
+        redacted_workflow_packet = redact_export_value(workflow_packet)
+        export_path = self.config.runs_dir / run_id / "live_pilot_readiness_export.json"
+        payload = {
+            "schema": "business-card-watchdog.live-pilot-readiness-export-from-response.v1",
+            "generated_at": utc_now(),
+            "state": rehearsal.get("state"),
+            "run_id": run_id,
+            "job_id": rehearsal.get("job_id"),
+            "sink": rehearsal.get("sink"),
+            "operator": rehearsal.get("operator"),
+            "write": write,
+            "export_written": False,
+            "export_path": None,
+            "operator_response_redacted": {
+                "fields": redacted_response_fields,
+                "sha256": response_digest,
+                "raw_response_stored": False,
+                "redacted_fields": ["safety_confirmation"],
+            },
+            "review_packet": {
+                "workflow_state": workflow_packet.get("state"),
+                "workflow_blocked_steps": list(workflow_packet.get("blocked_steps") or []),
+                "workflow_step_summary": redact_export_value(workflow_packet.get("step_summary") or []),
+                "rehearsal_steps": redact_export_value(rehearsal.get("rehearsal_steps") or []),
+                "next_safe_command": redact_export_value(rehearsal.get("next_safe_command")),
+                "next_explicit_operator_command": redact_export_value(
+                    rehearsal.get("next_explicit_operator_command")
+                ),
+            },
+            "artifact_packet_schemas": {
+                "rehearsal": rehearsal.get("schema"),
+                "workflow": workflow_packet.get("schema"),
+                "selected_target_handoff": (
+                    dict(dict(workflow_packet.get("packets") or {}).get("selected_target_handoff") or {}).get("schema")
+                ),
+                "lookup_smoke_handoff": (
+                    dict(dict(workflow_packet.get("packets") or {}).get("lookup_smoke_handoff") or {}).get("schema")
+                ),
+                "live_pilot_closeout": (
+                    dict(dict(workflow_packet.get("packets") or {}).get("live_pilot_closeout") or {}).get("schema")
+                ),
+            },
+            "commands": {
+                "operator_dashboard": f"operator-dashboard --run-id {run_id} --json",
+                "inspect_rehearsal": (
+                    f"runs live-pilot-operator-rehearsal-from-response {shlex.quote(run_id)} "
+                    "--response <operator-response> --json"
+                ),
+                "inspect_workflow_packet": (
+                    f"runs live-pilot-operator-workflow-packet-from-response {shlex.quote(run_id)} "
+                    "--response <operator-response> --json"
+                ),
+                "preview_export": (
+                    f"runs live-pilot-readiness-export-from-response {shlex.quote(run_id)} "
+                    "--response <operator-response> --no-write --json"
+                ),
+                "write_export": (
+                    f"runs live-pilot-readiness-export-from-response {shlex.quote(run_id)} "
+                    "--response <operator-response> --json"
+                ),
+                "live_pilot_status": f"runs live-pilot-status {run_id} --no-write --json",
+                "live_pilot_handoff": f"runs live-pilot-handoff {run_id} --no-write --json",
+            },
+            "explicit_stop_conditions": [
+                "This export is review-only and does not execute lookup, write, readback, or closeout commands.",
+                "The raw operator response and safety confirmation are not stored in this export.",
+                "Run the explicit operator command only after reviewing the rehearsal, workflow packet, and tenant/profile safety.",
+                "Do not process private SyncThing images, run public-web search, or call paid enrichment from this export.",
+            ],
+            "rehearsal": redacted_rehearsal,
+            "workflow_packet": redacted_workflow_packet,
+            "writes_attempted": int(rehearsal.get("writes_attempted") or 0),
+            "network_calls_made": int(rehearsal.get("network_calls_made") or 0),
+        }
+        if write:
+            export_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            ledger = RunLedger(self.config.runs_dir / run_id)
+            ledger.record_artifact(job_id="__run__", kind="live_pilot_readiness_export", path=export_path)
+            ledger.record_event(
+                "live_pilot_readiness_export_created",
+                {
+                    "run_id": run_id,
+                    "job_id": payload.get("job_id"),
+                    "sink": payload.get("sink"),
+                    "operator": payload.get("operator"),
+                    "export_path": str(export_path),
+                    "state": payload.get("state"),
+                    "writes_attempted": payload["writes_attempted"],
+                    "network_calls_made": payload["network_calls_made"],
+                },
+            )
+            payload["export_written"] = True
+            payload["export_path"] = str(export_path)
+        return payload
 
     def validate_live_pilot_operator_response(self, *, run_id: str, response: str) -> dict[str, Any]:
         parsed_response = _parse_operator_response_fields(response)

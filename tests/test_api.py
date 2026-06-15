@@ -114,6 +114,9 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert operator_dashboard["commands"]["live_pilot_operator_rehearsal_from_response"] == (
         f"runs live-pilot-operator-rehearsal-from-response {run_id} --response <operator-response> --json"
     )
+    assert operator_dashboard["commands"]["live_pilot_readiness_export_from_response"] == (
+        f"runs live-pilot-readiness-export-from-response {run_id} --response <operator-response> --json"
+    )
     assert operator_dashboard["api_routes"]["live_pilot_validate_response"] == (
         f"POST /runs/{run_id}/live-pilot-operator-response-validation"
     )
@@ -149,6 +152,9 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     )
     assert operator_dashboard["api_routes"]["live_pilot_operator_rehearsal_from_response"] == (
         f"POST /runs/{run_id}/live-pilot-operator-rehearsal-from-response"
+    )
+    assert operator_dashboard["api_routes"]["live_pilot_readiness_export_from_response"] == (
+        f"POST /runs/{run_id}/live-pilot-readiness-export-from-response"
     )
     assert operator_dashboard["api_routes"]["live_pilot_approval_packet"] == (
         f"GET /runs/{run_id}/live-pilot-approval-packet"
@@ -208,6 +214,10 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert operator_dashboard["mcp_tools"]["live_pilot_operator_rehearsal_from_response"] == {
         "tool": "business_card_watchdog_live_pilot_operator_rehearsal_from_response",
         "arguments": {"run_id": run_id, "response": "<operator-response>"},
+    }
+    assert operator_dashboard["mcp_tools"]["live_pilot_readiness_export_from_response"] == {
+        "tool": "business_card_watchdog_live_pilot_readiness_export_from_response",
+        "arguments": {"run_id": run_id, "response": "<operator-response>", "write": True},
     }
     assert operator_dashboard["writes_attempted"] == 0
     assert operator_dashboard["network_calls_made"] == 0
@@ -610,6 +620,20 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert rehearsal["rehearsal_steps"][1]["requires_explicit_operator_action"] is True
     assert rehearsal["writes_attempted"] == 0
     assert rehearsal["network_calls_made"] == 0
+    readiness_export = client.post(
+        f"/runs/{run_id}/live-pilot-readiness-export-from-response",
+        json={"response": response, "write": False},
+    ).json()
+    assert readiness_export["schema"] == "business-card-watchdog.live-pilot-readiness-export-from-response.v1"
+    assert readiness_export["state"] == "ready_for_explicit_operator_step"
+    assert readiness_export["write"] is False
+    assert readiness_export["export_written"] is False
+    assert readiness_export["export_path"] is None
+    assert readiness_export["operator_response_redacted"]["raw_response_stored"] is False
+    assert "safety_confirmation" not in readiness_export["operator_response_redacted"]["fields"]
+    assert response not in json.dumps(readiness_export, sort_keys=True)
+    assert readiness_export["writes_attempted"] == 0
+    assert readiness_export["network_calls_made"] == 0
     validation = client.post(
         f"/runs/{run_id}/live-pilot-operator-response-validation",
         json={"response": response},

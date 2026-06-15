@@ -153,6 +153,10 @@ def create_app(config_path: Path | None = None):
     class LivePilotOperatorRehearsalFromResponseRequest(BaseModel):
         response: str
 
+    class LivePilotReadinessExportFromResponseRequest(BaseModel):
+        response: str
+        write: bool = True
+
     class SelectedLiveTargetAuditRequest(BaseModel):
         run_id: str
         scope: str | None = None
@@ -407,6 +411,17 @@ def create_app(config_path: Path | None = None):
         return service().live_pilot_operator_rehearsal_from_response(
             run_id=run_id,
             response=request.response,
+        )
+
+    @app.post("/runs/{run_id}/live-pilot-readiness-export-from-response")
+    def create_run_live_pilot_readiness_export_from_response(
+        run_id: str,
+        request: LivePilotReadinessExportFromResponseRequest,
+    ) -> dict[str, object]:
+        return service().live_pilot_readiness_export_from_response(
+            run_id=run_id,
+            response=request.response,
+            write=request.write,
         )
 
     @app.get("/runs/{run_id}/jobs")

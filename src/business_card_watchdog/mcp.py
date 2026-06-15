@@ -317,6 +317,19 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_live_pilot_readiness_export_from_response",
+                "description": "Create or preview a redacted live-pilot readiness export from a validated operator response without running live calls.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "response": {"type": "string"},
+                        "write": {"type": "boolean", "default": True},
+                    },
+                    "required": ["run_id", "response"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_next_actions",
                 "description": "Return deterministic next actions for agent-loop batch orchestration.",
                 "input_schema": {
@@ -1048,6 +1061,12 @@ def call_tool(
         return service.live_pilot_operator_rehearsal_from_response(
             run_id=str(args["run_id"]),
             response=str(args["response"]),
+        )
+    if tool_name == "business_card_watchdog_live_pilot_readiness_export_from_response":
+        return service.live_pilot_readiness_export_from_response(
+            run_id=str(args["run_id"]),
+            response=str(args["response"]),
+            write=bool(args.get("write", True)),
         )
     if tool_name == "business_card_watchdog_next_actions":
         return service.next_actions(

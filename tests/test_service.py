@@ -878,6 +878,9 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     assert dashboard["commands"]["live_pilot_operator_rehearsal_from_response"] == (
         f"runs live-pilot-operator-rehearsal-from-response {run_id} --response <operator-response> --json"
     )
+    assert dashboard["commands"]["live_pilot_readiness_export_from_response"] == (
+        f"runs live-pilot-readiness-export-from-response {run_id} --response <operator-response> --json"
+    )
     assert dashboard["commands"]["live_pilot_validate_response"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
@@ -908,6 +911,9 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     )
     assert dashboard["api_routes"]["live_pilot_operator_rehearsal_from_response"] == (
         f"POST /runs/{run_id}/live-pilot-operator-rehearsal-from-response"
+    )
+    assert dashboard["api_routes"]["live_pilot_readiness_export_from_response"] == (
+        f"POST /runs/{run_id}/live-pilot-readiness-export-from-response"
     )
     assert dashboard["mcp_tools"]["next_actions"] == {
         "tool": "business_card_watchdog_next_actions",
@@ -956,6 +962,10 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     assert dashboard["mcp_tools"]["live_pilot_operator_rehearsal_from_response"] == {
         "tool": "business_card_watchdog_live_pilot_operator_rehearsal_from_response",
         "arguments": {"run_id": run_id, "response": "<operator-response>"},
+    }
+    assert dashboard["mcp_tools"]["live_pilot_readiness_export_from_response"] == {
+        "tool": "business_card_watchdog_live_pilot_readiness_export_from_response",
+        "arguments": {"run_id": run_id, "response": "<operator-response>", "write": True},
     }
     assert dashboard["mcp_tools"]["review_routing_drill"] == {
         "tool": "business_card_watchdog_review_routing_drill",
@@ -3017,6 +3027,38 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert rehearsal["rehearsal_steps"][1]["requires_explicit_operator_action"] is True
     assert rehearsal["writes_attempted"] == 0
     assert rehearsal["network_calls_made"] == 0
+
+    preview_export = service.live_pilot_readiness_export_from_response(
+        run_id=run_id,
+        response=preselection_response,
+        write=False,
+    )
+    assert preview_export["schema"] == "business-card-watchdog.live-pilot-readiness-export-from-response.v1"
+    assert preview_export["state"] == "ready_for_explicit_operator_step"
+    assert preview_export["write"] is False
+    assert preview_export["export_written"] is False
+    assert preview_export["export_path"] is None
+    assert preview_export["operator_response_redacted"]["raw_response_stored"] is False
+    assert "safety_confirmation" not in preview_export["operator_response_redacted"]["fields"]
+    assert preselection_response not in json.dumps(preview_export, sort_keys=True)
+
+    readiness_export = service.live_pilot_readiness_export_from_response(
+        run_id=run_id,
+        response=preselection_response,
+    )
+    assert readiness_export["schema"] == "business-card-watchdog.live-pilot-readiness-export-from-response.v1"
+    assert readiness_export["write"] is True
+    assert readiness_export["export_written"] is True
+    assert readiness_export["export_path"]
+    export_path = Path(readiness_export["export_path"])
+    assert export_path.exists()
+    export_text = export_path.read_text(encoding="utf-8")
+    assert preselection_response not in export_text
+    assert "fixture contact is safe for google contacts test profile" not in export_text
+    assert "<operator-response-redacted>" in export_text
+    assert any(artifact["kind"] == "live_pilot_readiness_export" for artifact in service.list_artifacts(run_id))
+    assert readiness_export["writes_attempted"] == 0
+    assert readiness_export["network_calls_made"] == 0
 
     blocked_closeout_write = service.live_pilot_closeout_packet_from_response(
         run_id=run_id,

@@ -1376,6 +1376,33 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
                 "--config",
                 str(config_path),
                 "runs",
+                "live-pilot-readiness-export-from-response",
+                run_id,
+                "--response",
+                response,
+                "--no-write",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    readiness_export = json.loads(capsys.readouterr().out)
+    assert readiness_export["schema"] == "business-card-watchdog.live-pilot-readiness-export-from-response.v1"
+    assert readiness_export["state"] == "ready_for_explicit_operator_step"
+    assert readiness_export["write"] is False
+    assert readiness_export["export_written"] is False
+    assert readiness_export["export_path"] is None
+    assert readiness_export["operator_response_redacted"]["raw_response_stored"] is False
+    assert response not in json.dumps(readiness_export, sort_keys=True)
+    assert readiness_export["writes_attempted"] == 0
+    assert readiness_export["network_calls_made"] == 0
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
                 "live-pilot-closeout-packet-from-response",
                 run_id,
                 "--response",
@@ -1431,6 +1458,30 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert "Rehearsal steps: 2" in rehearsal_text
     assert "Observed: writes=0 network=0" in rehearsal_text
     assert "{" not in rehearsal_text
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "live-pilot-readiness-export-from-response",
+                run_id,
+                "--response",
+                response,
+                "--no-write",
+            ]
+        )
+        == 0
+    )
+    readiness_export_text = capsys.readouterr().out
+    assert "State: ready_for_explicit_operator_step" in readiness_export_text
+    assert "Write export: False" in readiness_export_text
+    assert "Export written: False" in readiness_export_text
+    assert "Raw response stored: False" in readiness_export_text
+    assert "Rehearsal steps: 2" in readiness_export_text
+    assert "Observed: writes=0 network=0" in readiness_export_text
+    assert "{" not in readiness_export_text
 
     assert (
         main(

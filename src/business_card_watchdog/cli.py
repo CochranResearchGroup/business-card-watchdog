@@ -258,6 +258,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
         ("Live pilot closeout packet", "live_pilot_closeout_packet_from_response"),
         ("Live pilot workflow packet", "live_pilot_operator_workflow_packet_from_response"),
         ("Live pilot rehearsal", "live_pilot_operator_rehearsal_from_response"),
+        ("Live pilot readiness export", "live_pilot_readiness_export_from_response"),
     ]:
         command = commands.get(key)
         if command:
@@ -284,6 +285,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
             ("Live pilot closeout packet", "live_pilot_closeout_packet_from_response"),
             ("Live pilot workflow packet", "live_pilot_operator_workflow_packet_from_response"),
             ("Live pilot rehearsal", "live_pilot_operator_rehearsal_from_response"),
+            ("Live pilot readiness export", "live_pilot_readiness_export_from_response"),
         ]:
             route = api_routes.get(key)
             if route:
@@ -310,6 +312,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
             ("Live pilot closeout packet", "live_pilot_closeout_packet_from_response"),
             ("Live pilot workflow packet", "live_pilot_operator_workflow_packet_from_response"),
             ("Live pilot rehearsal", "live_pilot_operator_rehearsal_from_response"),
+            ("Live pilot readiness export", "live_pilot_readiness_export_from_response"),
         ]:
             tool_entry = mcp_tools.get(key)
             if isinstance(tool_entry, dict):
@@ -890,6 +893,48 @@ def _render_live_pilot_operator_rehearsal_from_response_text(payload: dict[str, 
                 f"command={step.get('command') or 'none'}"
             )
     blocked_steps = payload.get("workflow_blocked_steps") or []
+    blocked_rows = blocked_steps if isinstance(blocked_steps, list) else []
+    lines.append(f"Workflow blocked steps: {len(blocked_rows)}")
+    for step in blocked_rows:
+        lines.append(f" - {step}")
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    stops = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stops)}")
+    for condition in stops:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
+def _render_live_pilot_readiness_export_from_response_text(payload: dict[str, object]) -> str:
+    response = dict(payload.get("operator_response_redacted") or {})
+    review_packet = dict(payload.get("review_packet") or {})
+    lines = [
+        f"Run: {payload.get('run_id')}",
+        f"Job: {payload.get('job_id') or 'none'}",
+        f"State: {payload.get('state')}",
+        f"Sink: {payload.get('sink') or 'none'}",
+        f"Operator: {payload.get('operator') or 'none'}",
+        f"Write export: {payload.get('write', False)}",
+        f"Export written: {payload.get('export_written', False)}",
+        f"Export path: {payload.get('export_path') or 'none'}",
+        f"Raw response stored: {response.get('raw_response_stored', False)}",
+        f"Next safe command: {review_packet.get('next_safe_command') or 'none'}",
+        f"Next explicit command: {review_packet.get('next_explicit_operator_command') or 'none'}",
+        f"Observed: writes={payload.get('writes_attempted', 0)} network={payload.get('network_calls_made', 0)}",
+    ]
+    steps = review_packet.get("rehearsal_steps") or []
+    step_rows = steps if isinstance(steps, list) else []
+    lines.append(f"Rehearsal steps: {len(step_rows)}")
+    for step in step_rows:
+        if isinstance(step, dict):
+            lines.append(
+                " - "
+                f"{step.get('step')}: "
+                f"safe={step.get('safe_to_auto_continue')} "
+                f"explicit={step.get('requires_explicit_operator_action')} "
+                f"command={step.get('command') or 'none'}"
+            )
+    blocked_steps = review_packet.get("workflow_blocked_steps") or []
     blocked_rows = blocked_steps if isinstance(blocked_steps, list) else []
     lines.append(f"Workflow blocked steps: {len(blocked_rows)}")
     for step in blocked_rows:
@@ -1724,6 +1769,13 @@ def build_parser() -> argparse.ArgumentParser:
     runs_live_pilot_operator_rehearsal_from_response.add_argument("run_id")
     runs_live_pilot_operator_rehearsal_from_response.add_argument("--response", required=True)
     runs_live_pilot_operator_rehearsal_from_response.add_argument("--json", action="store_true")
+    runs_live_pilot_readiness_export_from_response = runs_sub.add_parser(
+        "live-pilot-readiness-export-from-response"
+    )
+    runs_live_pilot_readiness_export_from_response.add_argument("run_id")
+    runs_live_pilot_readiness_export_from_response.add_argument("--response", required=True)
+    runs_live_pilot_readiness_export_from_response.add_argument("--no-write", action="store_true")
+    runs_live_pilot_readiness_export_from_response.add_argument("--json", action="store_true")
     runs_live_pilot_validate_response = runs_sub.add_parser("live-pilot-validate-response")
     runs_live_pilot_validate_response.add_argument("run_id")
     runs_live_pilot_validate_response.add_argument("--response", required=True)
@@ -2162,10 +2214,19 @@ def main(argv: list[str] | None = None) -> int:
                 run_id=args.run_id,
                 response=args.response,
             )
+        elif args.runs_command == "live-pilot-readiness-export-from-response":
+            payload = service.live_pilot_readiness_export_from_response(
+                run_id=args.run_id,
+                response=args.response,
+                write=not args.no_write,
+            )
         elif args.runs_command == "live-pilot-validate-response":
             payload = service.validate_live_pilot_operator_response(run_id=args.run_id, response=args.response)
         else:
             payload = service.get_run(args.run_id)
+        if args.runs_command == "live-pilot-readiness-export-from-response" and not args.json:
+            print(_render_live_pilot_readiness_export_from_response_text(payload), end="")
+            return 0
         if args.runs_command == "live-pilot-operator-rehearsal-from-response" and not args.json:
             print(_render_live_pilot_operator_rehearsal_from_response_text(payload), end="")
             return 0
