@@ -97,6 +97,9 @@ def test_service_recovery_report_composes_status_and_recovery_commands(tmp_path:
     assert report["commands"]["install"].startswith(f"bcw --config {config.config_path} service install")
     assert report["commands"]["restart"] == "systemctl --user restart business-card-watchdog.service"
     assert f"actions run-next --run-id {run_id}" in report["commands"]["resume"]
+    assert report["commands"]["live_pilot_handoff"] == (
+        f"bcw --config {config.config_path} runs live-pilot-handoff {run_id}"
+    )
     assert report["recovery_sequence"][0]["step"] == "status"
     assert any(action["action"] == "inspect_watch_status" for action in report["safe_next_actions"])
     assert "Do not scan or process private SyncThing images from generic recovery." in report["explicit_stop_conditions"]

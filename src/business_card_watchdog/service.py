@@ -4533,6 +4533,9 @@ class BusinessCardService:
             "recover": f"{command_prefix}service recovery --run-id {selected_run_id} --json"
             if selected_run_id
             else f"{command_prefix}service recovery --json",
+            "live_pilot_handoff": f"{command_prefix}runs live-pilot-handoff {selected_run_id}"
+            if selected_run_id
+            else f"{command_prefix}runs list --json",
         }
         blocked_reasons: list[dict[str, Any]] = []
         if readiness["state"] == "blocked":

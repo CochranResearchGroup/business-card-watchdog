@@ -62,6 +62,9 @@ def test_cli_service_recovery_reports_status_shape(tmp_path: Path, capsys) -> No
     assert payload["schema"] == "business-card-watchdog.service-recovery.v1"
     assert payload["run_id"] == run_id
     assert payload["commands"]["status"].startswith(f"bcw --config {config_path} service status")
+    assert payload["commands"]["live_pilot_handoff"] == (
+        f"bcw --config {config_path} runs live-pilot-handoff {run_id}"
+    )
     assert payload["network_calls_made"] == 0
     assert payload["writes_attempted"] == 0
 
@@ -71,6 +74,7 @@ def test_cli_service_recovery_reports_status_shape(tmp_path: Path, capsys) -> No
     assert f"Run: {run_id}" in text
     assert "Restart: systemctl --user restart business-card-watchdog.service" in text
     assert "Resume: bcw --config" in text
+    assert f"Live pilot handoff: bcw --config {config_path} runs live-pilot-handoff {run_id}" in text
     assert "{" not in text
 
 

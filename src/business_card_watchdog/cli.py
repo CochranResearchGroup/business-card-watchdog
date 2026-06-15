@@ -189,6 +189,7 @@ def _render_service_recovery_text(payload: dict[str, object]) -> str:
         f"Status: {commands.get('status')}",
         f"Restart: {commands.get('restart')}",
         f"Resume: {commands.get('resume')}",
+        f"Live pilot handoff: {commands.get('live_pilot_handoff')}",
         f"Recover: {commands.get('recover')}",
     ]
     return "\n".join(lines) + "\n"

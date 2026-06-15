@@ -993,6 +993,23 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 2 tests.
 
+### Slice 0009-A57 | 2026-06-14 | Service Recovery Handoff Link
+
+Implemented:
+
+- Service recovery reports now include a `live_pilot_handoff` command when a run is selected.
+- CLI service recovery text now renders the live handoff command.
+- Service, CLI, API, and MCP tests now protect recovery-to-handoff discoverability.
+
+Safety:
+
+- This slice adds a command link only.
+- It does not create `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_recovery_report_composes_status_and_recovery_commands tests/test_cli_surfaces.py::test_cli_service_recovery_reports_status_shape tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 4 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:
