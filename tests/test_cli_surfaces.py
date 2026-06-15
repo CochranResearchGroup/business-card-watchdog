@@ -168,8 +168,19 @@ def test_cli_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: Path
     assert payload["writes_attempted"] == 0
     assert payload["network_calls_made"] == 0
     sample_output_path = Path(payload["sample_outputs"]["live_pilot_rehearsal_markdown_path"])
+    preflight_sample_output_path = Path(
+        payload["sample_outputs"]["operator_selected_live_smoke_preflight_markdown_path"]
+    )
     assert sample_output_path.exists()
+    assert preflight_sample_output_path.exists()
     assert "Live Pilot Rehearsal Sample Output" in sample_output_path.read_text(encoding="utf-8")
+    assert "Operator-Selected Live Smoke Preflight Sample Output" in preflight_sample_output_path.read_text(
+        encoding="utf-8"
+    )
+    assert payload["packets"]["operator_selected_preflight"]["state"] in {
+        "awaiting_operator_selection",
+        "awaiting_run_selection",
+    }
     assert Path(payload["drill_path"]).exists()
 
     assert main(["--config", str(config_path), "drills", "live-pilot-rehearsal"]) == 0

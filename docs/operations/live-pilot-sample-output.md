@@ -12,7 +12,9 @@ handoff inspection only. It does not approve or execute live sink work.
 
 The response includes:
 
+- `sample_outputs.operator_selected_live_smoke_preflight_markdown_path`
 - `sample_outputs.live_pilot_rehearsal_markdown_path`
+- `packets.operator_selected_preflight`
 - `packets.selection_packet`
 - `packets.validation`
 - `packets.selected_target_handoff`
@@ -27,10 +29,16 @@ The markdown artifact is written under the synthetic run directory as
 `live_pilot_rehearsal_sample_output.md` and is also recorded in the run ledger
 as artifact kind `live_pilot_rehearsal_sample_output`.
 
+The drill also writes `operator_selected_live_smoke_preflight_sample_output.md`
+and records it as artifact kind
+`operator_selected_live_smoke_preflight_sample_output`; see
+`docs/operations/operator-selected-live-smoke-preflight-sample-output.md`.
+
 ## Expected Packet States
 
 For a passing fixture drill, the sample output should show:
 
+- Operator-selected preflight: `awaiting_operator_selection` or `awaiting_run_selection`
 - Selection packet: `ready_for_operator_approval`
 - Operator response validation: `ready_to_select_live_target`
 - Selected target: `created`

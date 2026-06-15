@@ -196,9 +196,10 @@ apply preflight without configured watch inputs, private images, enrichment call
 live sink operations.
 
 `drills live-pilot-rehearsal` builds on that synthetic fixture and rehearses the
-operator-selected live-pilot gate through selected target creation, selected-target
-audit, lookup handoff, redacted readiness export, execution checklist, and command
-copy packet. It does not execute the copied command or call live sinks.
+operator-selected live-pilot gate through preflight, selected target creation,
+selected-target audit, lookup handoff, redacted readiness export, execution
+checklist, and command copy packet. It writes preflight and rehearsal markdown
+sample outputs, but does not execute the copied command or call live sinks.
 
 `drills child-replacement-readiness` creates a synthetic child replacement run and
 exports review bundle, review HTML, review workbook, and operator dashboard sample
@@ -265,6 +266,7 @@ Operational details live in:
 - `docs/operations/review-workflow-sample-output.md`
 - `docs/operations/public-upstream-validation.md`
 - `docs/operations/live-pilot-checklists.md`
+- `docs/operations/operator-selected-live-smoke-preflight-sample-output.md`
 - `docs/operations/live-pilot-sample-output.md`
 - `docs/operations/child-replacement-sample-output.md`
 - `docs/operations/release-readiness.md`

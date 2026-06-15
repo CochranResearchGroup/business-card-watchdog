@@ -2465,6 +2465,11 @@ class BusinessCardService:
             run_id=run_id,
             response=operator_response,
         )
+        operator_selected_preflight = drill_service.operator_selected_live_smoke_preflight(
+            run_id=run_id,
+            sink=sink,
+            write=True,
+        )
         selected_target = drill_service.selected_live_target_from_response(
             run_id=run_id,
             response=operator_response,
@@ -2507,6 +2512,9 @@ class BusinessCardService:
             "selection_packet_generated": selection_packet.get("schema")
             == "business-card-watchdog.live-selection-packet.v1",
             "validation_ready": validation.get("state") == "ready_to_select_live_target",
+            "operator_selected_preflight_ready": operator_selected_preflight.get("state")
+            in {"awaiting_operator_selection", "awaiting_run_selection"}
+            and operator_selected_preflight.get("ready_entry_count") == 1,
             "selected_target_created": selected_target.get("state") == "created",
             "selected_target_handoff_generated": selected_target_handoff.get("schema")
             == "business-card-watchdog.selected-live-target-handoff-from-response.v1",
@@ -2562,6 +2570,7 @@ class BusinessCardService:
                 "route_artifact_kinds": routing_drill.get("route_artifact_kinds"),
             },
             "packets": {
+                "operator_selected_preflight": operator_selected_preflight,
                 "selection_packet": selection_packet,
                 "validation": validation,
                 "selected_target": selected_target,
@@ -2602,9 +2611,14 @@ class BusinessCardService:
             ],
         }
         sample_output_path = self.config.runs_dir / run_id / "live_pilot_rehearsal_sample_output.md"
+        preflight_sample_output_path = (
+            self.config.runs_dir / run_id / "operator_selected_live_smoke_preflight_sample_output.md"
+        )
         payload["sample_outputs"] = {
             "live_pilot_rehearsal_markdown_path": str(sample_output_path),
+            "operator_selected_live_smoke_preflight_markdown_path": str(preflight_sample_output_path),
             "documents_packets": [
+                "operator_selected_preflight",
                 "selection_packet",
                 "validation",
                 "selected_target_handoff",
@@ -2622,10 +2636,19 @@ class BusinessCardService:
             self._render_live_pilot_rehearsal_sample_output(payload),
             encoding="utf-8",
         )
+        preflight_sample_output_path.write_text(
+            self._render_operator_selected_live_smoke_preflight_sample_output(payload),
+            encoding="utf-8",
+        )
         drill_path = self.config.runs_dir / run_id / "live_pilot_rehearsal_drill.json"
         drill_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         ledger = RunLedger(self.config.runs_dir / run_id)
         ledger.record_artifact(job_id="__run__", kind="live_pilot_rehearsal_sample_output", path=sample_output_path)
+        ledger.record_artifact(
+            job_id="__run__",
+            kind="operator_selected_live_smoke_preflight_sample_output",
+            path=preflight_sample_output_path,
+        )
         ledger.record_artifact(job_id="__run__", kind="live_pilot_rehearsal_drill", path=drill_path)
         ledger.record_event(
             "live_pilot_rehearsal_drill_completed",
@@ -2679,6 +2702,7 @@ class BusinessCardService:
                 "",
                 "## Packet States",
                 "",
+                f"- Operator-selected preflight: `{dict(packets.get('operator_selected_preflight') or {}).get('state')}`",
                 f"- Selection packet: `{dict(packets.get('selection_packet') or {}).get('state')}`",
                 f"- Operator response validation: `{dict(packets.get('validation') or {}).get('state')}`",
                 f"- Selected target: `{dict(packets.get('selected_target') or {}).get('state')}`",
@@ -2709,6 +2733,74 @@ class BusinessCardService:
                 "",
             ]
         )
+        for condition in stop_conditions:
+            lines.append(f"- {condition}")
+        lines.append("")
+        return "\n".join(lines)
+
+    def _render_operator_selected_live_smoke_preflight_sample_output(self, payload: dict[str, Any]) -> str:
+        packets = dict(payload.get("packets") or {})
+        preflight = dict(packets.get("operator_selected_preflight") or {})
+        commands = dict(preflight.get("commands") or {})
+        checklist = list(preflight.get("operator_selection_checklist") or [])
+        ready_entries = list(preflight.get("ready_entries") or [])
+        blocked_reasons = list(preflight.get("blocked_reasons") or [])
+        stop_conditions = list(preflight.get("explicit_stop_conditions") or [])
+        lines = [
+            "# Operator-Selected Live Smoke Preflight Sample Output",
+            "",
+            "Synthetic fixture only. Do not use this sample as live sink approval.",
+            "",
+            "## Preflight State",
+            "",
+            f"- Run: `{preflight.get('run_id')}`",
+            f"- Sink: `{preflight.get('sink')}`",
+            f"- State: `{preflight.get('state')}`",
+            f"- Recommended next step: `{preflight.get('recommended_next_step')}`",
+            f"- Candidate count: `{preflight.get('candidate_count', 0)}`",
+            f"- Ready entry count: `{preflight.get('ready_entry_count', 0)}`",
+            f"- Active selected target count: `{preflight.get('active_selected_target_count', 0)}`",
+            f"- Writes attempted: `{preflight.get('writes_attempted', 0)}`",
+            f"- Network calls made: `{preflight.get('network_calls_made', 0)}`",
+            f"- Preflight written: `{preflight.get('preflight_written')}`",
+            "",
+            "## Ready Entries",
+            "",
+        ]
+        if ready_entries:
+            for entry in ready_entries:
+                if isinstance(entry, dict):
+                    missing_fields = ",".join(str(item) for item in list(entry.get("missing_operator_fields") or []))
+                    lines.append(
+                        f"- `{entry.get('run_id')}` / `{entry.get('job_id')}` "
+                        f"sink `{entry.get('sink')}` missing `{missing_fields or 'none'}`"
+                    )
+        else:
+            lines.append("- none")
+        lines.extend(["", "## Checklist", ""])
+        for item in checklist:
+            if isinstance(item, dict):
+                lines.append(
+                    f"- `{item.get('step')}`: `{item.get('command')}` "
+                    f"(operator action: `{item.get('requires_explicit_operator_action')}`)"
+                )
+        lines.extend(["", "## Commands", ""])
+        for key in [
+            "operator_selected_live_smoke_preflight",
+            "offline_pilot_gap_audit",
+            "live_readiness_audit",
+            "live_selection_requirements",
+            "live_pilot_handoff",
+            "validate_operator_response",
+        ]:
+            lines.append(f"- {key}: `{commands.get(key)}`")
+        lines.extend(["", "## Blocked Reasons", ""])
+        if blocked_reasons:
+            for reason in blocked_reasons:
+                lines.append(f"- {reason}")
+        else:
+            lines.append("- none")
+        lines.extend(["", "## Stop Conditions", ""])
         for condition in stop_conditions:
             lines.append(f"- {condition}")
         lines.append("")

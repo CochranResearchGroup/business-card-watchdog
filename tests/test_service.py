@@ -1366,15 +1366,31 @@ def test_service_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: 
     assert payload["acknowledgement_redacted"]["raw_acknowledgement_stored"] is False
     sample_output_path = Path(payload["sample_outputs"]["live_pilot_rehearsal_markdown_path"])
     sample_output = sample_output_path.read_text(encoding="utf-8")
+    preflight_sample_output_path = Path(
+        payload["sample_outputs"]["operator_selected_live_smoke_preflight_markdown_path"]
+    )
+    preflight_sample_output = preflight_sample_output_path.read_text(encoding="utf-8")
     assert sample_output_path.exists()
+    assert preflight_sample_output_path.exists()
     assert "# Live Pilot Rehearsal Sample Output" in sample_output
+    assert "# Operator-Selected Live Smoke Preflight Sample Output" in preflight_sample_output
+    assert payload["packets"]["operator_selected_preflight"]["state"] in {
+        "awaiting_operator_selection",
+        "awaiting_run_selection",
+    }
+    assert f"State: `{payload['packets']['operator_selected_preflight']['state']}`" in preflight_sample_output
+    assert "Ready entry count: `1`" in preflight_sample_output
+    assert "Preflight written: `True`" in preflight_sample_output
     assert "Command copy packet: `ready_for_operator_copy`" in sample_output
+    assert f"Operator-selected preflight: `{payload['packets']['operator_selected_preflight']['state']}`" in sample_output
     assert "fixture contact is safe for google contacts test profile" not in sample_output
+    assert "fixture contact is safe for google contacts test profile" not in preflight_sample_output
     assert Path(payload["drill_path"]).exists()
     assert (artifact_dir / "selected_live_target.json").exists()
     assert (artifact_dir / "selected_live_target_audit.json").exists()
     assert (artifact_dir / "sink_lookup_smoke_handoff.json").exists()
     assert (config.runs_dir / run_id / "live_pilot_readiness_export.json").exists()
+    assert (config.runs_dir / run_id / "operator_selected_live_smoke_preflight_sample_output.md").exists()
     assert (config.runs_dir / run_id / "live_pilot_rehearsal_sample_output.md").exists()
     assert (config.runs_dir / run_id / "live_pilot_rehearsal_drill.json").exists()
     artifacts = [
@@ -1382,6 +1398,10 @@ def test_service_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: 
         for line in (config.runs_dir / run_id / "artifacts.jsonl").read_text(encoding="utf-8").splitlines()
     ]
     assert any(artifact["kind"] == "live_pilot_rehearsal_sample_output" for artifact in artifacts)
+    assert any(
+        artifact["kind"] == "operator_selected_live_smoke_preflight_sample_output"
+        for artifact in artifacts
+    )
 
 
 def test_service_doctor_checks_user_scope_paths(tmp_path: Path) -> None:

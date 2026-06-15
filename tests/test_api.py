@@ -1566,8 +1566,19 @@ def test_api_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: Path
     assert drill["writes_attempted"] == 0
     assert drill["network_calls_made"] == 0
     sample_output_path = Path(drill["sample_outputs"]["live_pilot_rehearsal_markdown_path"])
+    preflight_sample_output_path = Path(
+        drill["sample_outputs"]["operator_selected_live_smoke_preflight_markdown_path"]
+    )
     assert sample_output_path.exists()
+    assert preflight_sample_output_path.exists()
     assert "Command copy packet: `ready_for_operator_copy`" in sample_output_path.read_text(encoding="utf-8")
+    assert drill["packets"]["operator_selected_preflight"]["state"] in {
+        "awaiting_operator_selection",
+        "awaiting_run_selection",
+    }
+    assert f"State: `{drill['packets']['operator_selected_preflight']['state']}`" in (
+        preflight_sample_output_path.read_text(encoding="utf-8")
+    )
     assert Path(drill["drill_path"]).exists()
 
 

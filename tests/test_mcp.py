@@ -1402,8 +1402,19 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert live_pilot_rehearsal_drill["writes_attempted"] == 0
     assert live_pilot_rehearsal_drill["network_calls_made"] == 0
     sample_output_path = Path(live_pilot_rehearsal_drill["sample_outputs"]["live_pilot_rehearsal_markdown_path"])
+    preflight_sample_output_path = Path(
+        live_pilot_rehearsal_drill["sample_outputs"]["operator_selected_live_smoke_preflight_markdown_path"]
+    )
     assert sample_output_path.exists()
+    assert preflight_sample_output_path.exists()
     assert "Live Pilot Rehearsal Sample Output" in sample_output_path.read_text(encoding="utf-8")
+    assert "Operator-Selected Live Smoke Preflight Sample Output" in preflight_sample_output_path.read_text(
+        encoding="utf-8"
+    )
+    assert live_pilot_rehearsal_drill["packets"]["operator_selected_preflight"]["state"] in {
+        "awaiting_operator_selection",
+        "awaiting_run_selection",
+    }
     assert service_recovery["schema"] == "business-card-watchdog.service-recovery.v1"
     assert service_recovery["run_id"] == run_id
     assert service_recovery["commands"]["restart"] == "systemctl --user restart business-card-watchdog.service"
