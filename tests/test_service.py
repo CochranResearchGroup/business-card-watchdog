@@ -223,6 +223,11 @@ def test_service_live_selection_requirements_report_writes_run_level_artifact(tm
     assert entry["commands"]["validate_operator_response"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
+    assert entry["commands"]["validate_operator_response_prefilled"] == (
+        f"runs live-pilot-validate-response {run_id} "
+        f"--response 'run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=<operator> scope=lookup safety_confirmation=<confirmation>' --json"
+    )
     assert report["commands"]["live_target_candidates"] == f"live-target-candidates --run-id {run_id} --sink google_contacts"
     assert report["commands"]["live_readiness_audit"] == f"live-readiness-audit --run-id {run_id} --sink google_contacts"
     assert report["commands"]["live_selection_requirements"] == (

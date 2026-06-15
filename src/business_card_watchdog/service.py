@@ -5331,6 +5331,10 @@ class BusinessCardService:
                             f"runs live-pilot-validate-response {candidate_run_id} "
                             "--response <operator-response> --json"
                         ),
+                        "validate_operator_response_prefilled": _operator_response_validation_command(
+                            candidate_run_id,
+                            operator_response_template,
+                        ),
                     },
                 }
             )

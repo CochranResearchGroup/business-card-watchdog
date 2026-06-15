@@ -1638,6 +1638,29 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed; index is up to date.
 
+### Slice 0009-A87 | 2026-06-15 | Selection Requirements Prefilled Validation Command
+
+Implemented:
+
+- Live selection requirement entries now include `commands.validate_operator_response_prefilled`.
+- CLI text for `live-selection-requirements` now renders the entry-level prefilled validation command next to the operator response template.
+- Service, CLI, and MCP tests protect the prefilled command on populated selection-requirements entries.
+
+Safety:
+
+- This was no-live selection-requirements command-surface hardening only.
+- It did not validate an operator response, execute any returned select-target command, create or modify `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_live_selection_requirements_report_writes_run_level_artifact tests/test_cli_surfaces.py::test_cli_live_selection_requirements_reports_text_and_json tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 3 tests.
+- `.venv/bin/python -m pytest -q` passed with 226 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

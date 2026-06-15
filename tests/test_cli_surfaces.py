@@ -310,6 +310,11 @@ def test_cli_live_selection_requirements_reports_text_and_json(tmp_path: Path, c
     assert entry["commands"]["validate_operator_response"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
+    assert entry["commands"]["validate_operator_response_prefilled"] == (
+        f"runs live-pilot-validate-response {run_id} "
+        f"--response 'run_id={run_id} job_id={entry['job_id']} sink=google_contacts "
+        "operator=<operator> scope=lookup safety_confirmation=<confirmation>' --json"
+    )
     assert payload["commands"]["live_target_candidates"] == f"live-target-candidates --run-id {run_id}"
     assert payload["commands"]["live_readiness_audit"] == f"live-readiness-audit --run-id {run_id}"
     assert payload["commands"]["live_selection_requirements"] == f"live-selection-requirements --run-id {run_id}"
@@ -323,6 +328,7 @@ def test_cli_live_selection_requirements_reports_text_and_json(tmp_path: Path, c
     assert "Live selection requirements:" in text
     assert f"Run: {run_id}" in text
     assert "target=none" in text
+    assert "Validate prefilled response: runs live-pilot-validate-response" in text
     assert "abandonment=none" in text
     assert "missing=operator,scope,safety_confirmation" in text
     assert (

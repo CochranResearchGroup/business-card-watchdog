@@ -459,6 +459,11 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert live_requirements["entries"][0]["commands"]["validate_operator_response"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
+    assert live_requirements["entries"][0]["commands"]["validate_operator_response_prefilled"] == (
+        f"runs live-pilot-validate-response {run_id} "
+        f"--response 'run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=<operator> scope=lookup safety_confirmation=<confirmation>' --json"
+    )
     assert live_requirements["entries"][0]["copyable_approval_fields"]["job_id"] == job_id
     assert live_packet["schema"] == "business-card-watchdog.live-selection-packet.v1"
     assert live_packet["approval_state"] == "pending_operator_approval"
