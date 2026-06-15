@@ -695,6 +695,24 @@ def test_cli_child_selected_target_response_validation_and_checklist(
     ) == 0
     reset = json.loads(capsys.readouterr().out)
 
+    assert main(
+        [
+            "--config",
+            str(config_path),
+            "reviews",
+            "child-replacement-handoff-refresh",
+            candidate_id,
+            "--run-id",
+            run_dir.name,
+            "--sink",
+            "google_contacts",
+            "--operator",
+            "replacement-operator",
+            "--json",
+        ]
+    ) == 0
+    refresh = json.loads(capsys.readouterr().out)
+
     assert validation["state"] == "ready_for_no_live_child_checklist"
     assert validation["writes_attempted"] == 0
     assert validation["network_calls_made"] == 0
@@ -726,6 +744,12 @@ def test_cli_child_selected_target_response_validation_and_checklist(
     assert reset["replacement_requires_abandonment"] is False
     assert reset["writes_attempted"] == 0
     assert reset["network_calls_made"] == 0
+    assert refresh["schema"] == "business-card-watchdog.child-replacement-handoff-refresh.v1"
+    assert refresh["state"] == "ready_for_replacement_handoff"
+    assert refresh["refreshed_handoff"]["operator"] == "replacement-operator"
+    assert refresh["staleness"]["state"] == "stale"
+    assert refresh["writes_attempted"] == 0
+    assert refresh["network_calls_made"] == 0
 
 
 def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) -> None:

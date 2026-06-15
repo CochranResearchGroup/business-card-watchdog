@@ -642,6 +642,22 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_child_replacement_handoff_refresh",
+                "description": "Refresh a no-live child selected-target handoff after a ready replacement reset and mark prior child target artifacts stale.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "candidate_id": {"type": "string"},
+                        "sink": {"type": "string"},
+                        "operator": {"type": "string"},
+                        "scope": {"type": "string", "default": "write"},
+                        "reason": {"type": "string", "default": ""},
+                    },
+                    "required": ["run_id", "candidate_id", "sink", "operator"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_review_bundle",
                 "description": "Create a run-level batch review bundle with inline review-relevant artifact payloads.",
                 "input_schema": {
@@ -1473,6 +1489,15 @@ def call_tool(
             operator=str(args["operator"]),
             scope=str(args.get("scope") or "write"),
             reset_by=str(args.get("reset_by") or "operator"),
+            reason=str(args.get("reason") or ""),
+        )
+    if tool_name == "business_card_watchdog_child_replacement_handoff_refresh":
+        return service.refresh_child_replacement_handoff(
+            run_id=str(args["run_id"]),
+            candidate_id=str(args["candidate_id"]),
+            sink=str(args["sink"]),
+            operator=str(args["operator"]),
+            scope=str(args.get("scope") or "write"),
             reason=str(args.get("reason") or ""),
         )
     if tool_name == "business_card_watchdog_review_bundle":

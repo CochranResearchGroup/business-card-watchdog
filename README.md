@@ -172,7 +172,10 @@ selected target. Use
 `reviews child-abandon-selected-target <candidate-id> --run-id <run-id> --operator <operator> --reason <reason> --json`
 to record a no-live child abandonment artifact, then
 `reviews child-selected-target-replacement-reset <candidate-id> --run-id <run-id> --sink google_contacts --operator <operator> --json`
-to verify that a replacement handoff preview is unblocked.
+to verify that a replacement handoff preview is unblocked. Use
+`reviews child-replacement-handoff-refresh <candidate-id> --run-id <run-id> --sink google_contacts --operator <operator> --json`
+to refresh the no-live handoff and mark prior child selected-target response,
+checklist, command-copy, and audit artifacts stale.
 
 `drills review-routing` creates a synthetic fixture run and proves review approval,
 review bundle/workbook export, duplicate lookup planning, dry-run sink routing, and

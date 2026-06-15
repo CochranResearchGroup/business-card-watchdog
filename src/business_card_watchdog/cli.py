@@ -2121,6 +2121,14 @@ def build_parser() -> argparse.ArgumentParser:
     reviews_child_selected_target_replacement_reset.add_argument("--reset-by", default="operator")
     reviews_child_selected_target_replacement_reset.add_argument("--reason", default="")
     reviews_child_selected_target_replacement_reset.add_argument("--json", action="store_true")
+    reviews_child_replacement_handoff_refresh = reviews_sub.add_parser("child-replacement-handoff-refresh")
+    reviews_child_replacement_handoff_refresh.add_argument("candidate_id")
+    reviews_child_replacement_handoff_refresh.add_argument("--run-id", required=True)
+    reviews_child_replacement_handoff_refresh.add_argument("--sink", required=True)
+    reviews_child_replacement_handoff_refresh.add_argument("--operator", required=True)
+    reviews_child_replacement_handoff_refresh.add_argument("--scope", default="write")
+    reviews_child_replacement_handoff_refresh.add_argument("--reason", default="")
+    reviews_child_replacement_handoff_refresh.add_argument("--json", action="store_true")
     reviews_bundle = reviews_sub.add_parser("bundle")
     reviews_bundle.add_argument("--run-id", required=True)
     reviews_bundle.add_argument("--state", default="all")
@@ -2765,6 +2773,15 @@ def main(argv: list[str] | None = None) -> int:
                 operator=args.operator,
                 scope=args.scope,
                 reset_by=args.reset_by,
+                reason=args.reason,
+            )
+        elif args.reviews_command == "child-replacement-handoff-refresh":
+            payload = service.refresh_child_replacement_handoff(
+                run_id=args.run_id,
+                candidate_id=args.candidate_id,
+                sink=args.sink,
+                operator=args.operator,
+                scope=args.scope,
                 reason=args.reason,
             )
         else:

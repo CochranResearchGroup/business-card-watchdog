@@ -88,6 +88,13 @@ def create_app(config_path: Path | None = None):
         reset_by: str = "operator"
         reason: str = ""
 
+    class ChildReplacementHandoffRefreshRequest(BaseModel):
+        run_id: str
+        sink: str
+        operator: str
+        scope: str = "write"
+        reason: str = ""
+
     class ReviewDecisionsRequest(BaseModel):
         reviewer: str = "operator"
         decisions: list[dict[str, object]] = Field(default_factory=list)
@@ -707,6 +714,20 @@ def create_app(config_path: Path | None = None):
             operator=request.operator,
             scope=request.scope,
             reset_by=request.reset_by,
+            reason=request.reason,
+        )
+
+    @app.post("/reviews/children/{candidate_id}/replacement-handoff-refresh")
+    def create_child_replacement_handoff_refresh(
+        candidate_id: str,
+        request: ChildReplacementHandoffRefreshRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().refresh_child_replacement_handoff(
+            run_id=request.run_id,
+            candidate_id=candidate_id,
+            sink=request.sink,
+            operator=request.operator,
+            scope=request.scope,
             reason=request.reason,
         )
 

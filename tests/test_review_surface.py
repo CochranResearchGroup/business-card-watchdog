@@ -432,6 +432,14 @@ def test_child_selected_target_response_validation_and_checklist(tmp_path: Path,
         reset_by="operator",
         reason="replacement preview requested",
     )
+    refresh = service.refresh_child_replacement_handoff(
+        run_id=run_dir.name,
+        candidate_id=candidate_id,
+        sink="google_contacts",
+        operator="replacement-operator",
+        scope="write",
+        reason="replacement handoff refresh",
+    )
     artifacts = read_jsonl(run_dir / "artifacts.jsonl")
     events = read_jsonl(run_dir / "events.jsonl")
 
@@ -487,15 +495,26 @@ def test_child_selected_target_response_validation_and_checklist(tmp_path: Path,
     assert reset["requested_target"]["operator"] == "replacement-operator"
     assert reset["writes_attempted"] == 0
     assert reset["network_calls_made"] == 0
+    assert refresh["schema"] == "business-card-watchdog.child-replacement-handoff-refresh.v1"
+    assert refresh["state"] == "ready_for_replacement_handoff"
+    assert refresh["refreshed_handoff"]["state"] == "ready_for_operator_selection"
+    assert refresh["refreshed_handoff"]["operator"] == "replacement-operator"
+    assert refresh["staleness"]["state"] == "stale"
+    assert any(item["kind"] == "child_selected_target_command_copy_packet" for item in refresh["staleness"]["stale_artifacts"])
+    assert refresh["writes_attempted"] == 0
+    assert refresh["network_calls_made"] == 0
     assert any(artifact["kind"] == "child_selected_target_response_validation" for artifact in artifacts)
     assert any(artifact["kind"] == "child_selected_target_execution_checklist" for artifact in artifacts)
     assert any(artifact["kind"] == "child_selected_target_command_copy_packet" for artifact in artifacts)
     assert any(artifact["kind"] == "child_selected_target_audit" for artifact in artifacts)
     assert any(artifact["kind"] == "child_selected_target_abandonment" for artifact in artifacts)
     assert any(artifact["kind"] == "child_selected_target_replacement_reset" for artifact in artifacts)
+    assert any(artifact["kind"] == "child_selected_target_staleness" for artifact in artifacts)
+    assert any(artifact["kind"] == "child_replacement_handoff_refresh" for artifact in artifacts)
     assert any(event["event_type"] == "child_selected_target_response_validated" for event in events)
     assert any(event["event_type"] == "child_selected_target_execution_checklist_created" for event in events)
     assert any(event["event_type"] == "child_selected_target_command_copy_packet_created" for event in events)
     assert any(event["event_type"] == "child_selected_target_audit_created" for event in events)
     assert any(event["event_type"] == "child_selected_target_abandoned" for event in events)
     assert any(event["event_type"] == "child_selected_target_replacement_reset_created" for event in events)
+    assert any(event["event_type"] == "child_replacement_handoff_refreshed" for event in events)

@@ -1354,6 +1354,15 @@ def test_api_child_selected_target_response_validation_and_checklist(tmp_path: P
             "scope": "write",
         },
     ).json()
+    refresh = client.post(
+        f"/reviews/children/{candidate_id}/replacement-handoff-refresh",
+        json={
+            "run_id": run_dir.name,
+            "sink": "google_contacts",
+            "operator": "replacement-operator",
+            "scope": "write",
+        },
+    ).json()
 
     assert validation["schema"] == "business-card-watchdog.child-selected-target-response-validation.v1"
     assert validation["state"] == "ready_for_no_live_child_checklist"
@@ -1388,6 +1397,12 @@ def test_api_child_selected_target_response_validation_and_checklist(tmp_path: P
     assert reset["replacement_requires_abandonment"] is False
     assert reset["writes_attempted"] == 0
     assert reset["network_calls_made"] == 0
+    assert refresh["schema"] == "business-card-watchdog.child-replacement-handoff-refresh.v1"
+    assert refresh["state"] == "ready_for_replacement_handoff"
+    assert refresh["refreshed_handoff"]["operator"] == "replacement-operator"
+    assert refresh["staleness"]["state"] == "stale"
+    assert refresh["writes_attempted"] == 0
+    assert refresh["network_calls_made"] == 0
 
 
 def test_api_multi_card_preclassification_drill_records_candidate_boxes(tmp_path: Path) -> None:

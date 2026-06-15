@@ -3951,6 +3951,139 @@ class BusinessCardService:
         payload["reset_path"] = str(reset_path)
         return payload
 
+    def refresh_child_replacement_handoff(
+        self,
+        *,
+        run_id: str,
+        candidate_id: str,
+        sink: str,
+        operator: str,
+        scope: str = "write",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        entry = self._child_route_prep_entry(run_id=run_id, candidate_id=candidate_id)
+        prep_dir = self._child_route_prep_dir(entry)
+        reset_path = prep_dir / "child_selected_target_replacement_reset.json"
+        reset = _read_json_file(reset_path)
+        blocked_reasons: list[str] = []
+        if not reset:
+            blocked_reasons.append("child selected-target replacement reset packet is missing")
+        elif reset.get("state") != "ready_for_replacement_preview":
+            blocked_reasons.append(f"child replacement reset state is {reset.get('state') or 'missing'}")
+        requested = dict((reset or {}).get("requested_target") or {})
+        for key, expected in [("sink", sink), ("operator", operator), ("scope", scope)]:
+            actual = str(requested.get(key) or "")
+            if actual and actual != expected:
+                blocked_reasons.append(f"{key} does not match ready replacement reset packet")
+        stale_candidates = [
+            ("child_selected_target_response_validation", prep_dir / "child_selected_target_response_validation.json"),
+            ("child_selected_target_execution_checklist", prep_dir / "child_selected_target_execution_checklist.json"),
+            ("child_selected_target_command_copy_packet", prep_dir / "child_selected_target_command_copy_packet.json"),
+            ("child_selected_target_audit", prep_dir / "child_selected_target_audit.json"),
+        ]
+        stale_artifacts = [
+            {"kind": kind, "path": str(path), "exists": path.exists()}
+            for kind, path in stale_candidates
+            if path.exists()
+        ]
+        state = "ready_for_replacement_handoff" if not blocked_reasons else "blocked"
+        staleness = {
+            "schema": "business-card-watchdog.child-selected-target-staleness.v1",
+            "generated_at": utc_now(),
+            "state": "stale" if state == "ready_for_replacement_handoff" else "blocked",
+            "run_id": run_id,
+            "job_id": entry.get("job_id"),
+            "candidate_id": candidate_id,
+            "work_item_id": entry.get("work_item_id"),
+            "reason": reason or "child selected-target replacement reset requested",
+            "source_reset_path": str(reset_path),
+            "source_reset_state": (reset or {}).get("state"),
+            "stale_artifacts": stale_artifacts,
+            "replacement_target": {"sink": sink, "operator": operator, "scope": scope},
+            "blocked_reasons": blocked_reasons,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "explicit_stop_conditions": [
+                "This staleness marker does not delete prior child artifacts.",
+                "Do not use stale child selected-target response/checklist/command-copy/audit artifacts for a replacement target.",
+                "Do not run live GWS/Odollo/Odoo lookup, write, or readback from this marker.",
+            ],
+        }
+        staleness_path = prep_dir / "child_selected_target_staleness.json"
+        staleness_path.write_text(json.dumps(staleness, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        refreshed: dict[str, Any] | None = None
+        if state == "ready_for_replacement_handoff":
+            refreshed = self.child_selected_target_handoff(
+                run_id=run_id,
+                candidate_id=candidate_id,
+                sink=sink,
+                operator=operator,
+                scope=scope,
+                reason=reason or "replacement handoff refreshed after child selected-target reset",
+            )
+        payload = {
+            "schema": "business-card-watchdog.child-replacement-handoff-refresh.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_id,
+            "job_id": entry.get("job_id"),
+            "candidate_id": candidate_id,
+            "work_item_id": entry.get("work_item_id"),
+            "sink": sink,
+            "operator": operator,
+            "scope": scope,
+            "reason": reason,
+            "reset_path": str(reset_path),
+            "reset": reset,
+            "staleness_path": str(staleness_path),
+            "staleness": staleness,
+            "refreshed_handoff_path": (refreshed or {}).get("handoff_path"),
+            "refreshed_handoff": (refreshed or {}).get("handoff"),
+            "blocked_reasons": blocked_reasons,
+            "commands": {
+                "inspect_reset": (
+                    f"reviews child-selected-target-replacement-reset {shlex.quote(candidate_id)} "
+                    f"--run-id {run_id} --sink {shlex.quote(sink)} --operator {shlex.quote(operator)} "
+                    f"--scope {shlex.quote(scope)} --json"
+                ),
+                "validate_replacement_response": (
+                    f"reviews child-validate-selected-target-response {shlex.quote(candidate_id)} "
+                    f"--run-id {run_id} --response <operator-response> --json"
+                ),
+            },
+            "explicit_stop_conditions": [
+                "This refresh only creates no-live local artifacts.",
+                "This refresh does not create selected_live_target.json.",
+                "Do not use stale child selected-target artifacts after this refresh.",
+                "Do not run live GWS/Odollo/Odoo lookup, write, or readback from this refresh packet.",
+                "Do not process private SyncThing images, run public-web search, or call paid enrichment from this packet.",
+            ],
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+        refresh_path = prep_dir / "child_replacement_handoff_refresh.json"
+        refresh_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        parent_job_id = str(entry.get("job_id") or "__run__")
+        ledger.record_artifact(job_id=parent_job_id, kind="child_selected_target_staleness", path=staleness_path)
+        ledger.record_artifact(job_id=parent_job_id, kind="child_replacement_handoff_refresh", path=refresh_path)
+        ledger.record_event(
+            "child_replacement_handoff_refreshed",
+            {
+                "run_id": run_id,
+                "job_id": entry.get("job_id"),
+                "candidate_id": candidate_id,
+                "state": state,
+                "refresh_path": str(refresh_path),
+                "staleness_path": str(staleness_path),
+                "refreshed_handoff_path": payload["refreshed_handoff_path"],
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        payload["refresh_path"] = str(refresh_path)
+        return payload
+
     def _child_route_prep_entry(self, *, run_id: str, candidate_id: str) -> dict[str, Any]:
         entry = next(
             (

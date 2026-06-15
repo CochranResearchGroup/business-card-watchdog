@@ -70,6 +70,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_child_selected_target_audit" in names
     assert "business_card_watchdog_child_selected_target_abandonment" in names
     assert "business_card_watchdog_child_selected_target_replacement_reset" in names
+    assert "business_card_watchdog_child_replacement_handoff_refresh" in names
     assert "business_card_watchdog_review_bundle" in names
     assert "business_card_watchdog_review_html" in names
     assert "business_card_watchdog_review_workbook" in names
@@ -463,6 +464,17 @@ def test_mcp_child_selected_target_response_validation_and_checklist(tmp_path: P
         },
         config=config,
     )
+    refresh = call_tool(
+        "business_card_watchdog_child_replacement_handoff_refresh",
+        {
+            "run_id": run_dir.name,
+            "candidate_id": candidate_id,
+            "sink": "google_contacts",
+            "operator": "replacement-operator",
+            "scope": "write",
+        },
+        config=config,
+    )
 
     assert validation["schema"] == "business-card-watchdog.child-selected-target-response-validation.v1"
     assert validation["state"] == "ready_for_no_live_child_checklist"
@@ -497,6 +509,12 @@ def test_mcp_child_selected_target_response_validation_and_checklist(tmp_path: P
     assert reset["replacement_requires_abandonment"] is False
     assert reset["writes_attempted"] == 0
     assert reset["network_calls_made"] == 0
+    assert refresh["schema"] == "business-card-watchdog.child-replacement-handoff-refresh.v1"
+    assert refresh["state"] == "ready_for_replacement_handoff"
+    assert refresh["refreshed_handoff"]["operator"] == "replacement-operator"
+    assert refresh["staleness"]["state"] == "stale"
+    assert refresh["writes_attempted"] == 0
+    assert refresh["network_calls_made"] == 0
 
 
 def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
