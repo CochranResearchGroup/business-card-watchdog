@@ -123,7 +123,7 @@ Review the selected target gates before any non-simulated sink call:
 .venv/bin/bcw sinks live-selection-packet <job-id> --run-id <run-id> --sink google_contacts --operator <operator> --scope lookup
 .venv/bin/bcw runs live-pilot-handoff <run-id> --no-write
 # Run the packet's printed "Validate prefilled response:" command first, then replace
-# safety_confirmation=<confirmation> with the operator's tenant/profile confirmation.
+# safety_confirmation=<tenant-profile-account-confirmation> with the operator's tenant/profile confirmation.
 .venv/bin/bcw runs live-pilot-validate-response <run-id> --response "run_id=<run-id> job_id=<job-id> sink=google_contacts operator=<operator> scope=lookup safety_confirmation=<operator confirms intended tenant/profile>"
 .venv/bin/bcw sinks select-live-target <job-id> --run-id <run-id> --sink google_contacts --operator <operator> --scope lookup --safety-confirmation "<operator confirms intended tenant/profile>" --json
 .venv/bin/bcw sinks selected-target-audit <job-id> --run-id <run-id> --scope lookup --no-write

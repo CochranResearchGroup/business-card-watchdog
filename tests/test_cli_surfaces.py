@@ -192,7 +192,7 @@ def test_cli_live_target_candidates_reports_text_and_json(tmp_path: Path, capsys
     candidate = payload["candidates"][0]
     assert candidate["commands"]["select_lookup_target"] == (
         f"sinks select-live-target {candidate['job_id']} --run-id {run_id} --sink google_contacts "
-        "--operator <operator> --scope lookup --safety-confirmation <confirmation> --json"
+        "--operator <operator> --scope lookup --safety-confirmation <tenant-profile-account-confirmation> --json"
     )
     assert candidate["commands"]["validate_operator_response"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
@@ -212,7 +212,7 @@ def test_cli_live_target_candidates_reports_text_and_json(tmp_path: Path, capsys
     assert f"Lookup readiness: sinks lookup-readiness {candidate['job_id']} --run-id {run_id} --sink google_contacts" in text
     assert (
         f"Select lookup target: sinks select-live-target {candidate['job_id']} --run-id {run_id} "
-        "--sink google_contacts --operator <operator> --scope lookup --safety-confirmation <confirmation> --json"
+        "--sink google_contacts --operator <operator> --scope lookup --safety-confirmation <tenant-profile-account-confirmation> --json"
     ) in text
     assert (
         f"Validate response: runs live-pilot-validate-response {run_id} "
@@ -302,7 +302,7 @@ def test_cli_live_selection_requirements_reports_text_and_json(tmp_path: Path, c
     entry = payload["entries"][0]
     assert entry["operator_response_template"] == (
         f"run_id={run_id} job_id={entry['job_id']} sink=google_contacts "
-        "operator=<operator> scope=lookup safety_confirmation=<confirmation>"
+        "operator=<operator> scope=lookup safety_confirmation=<tenant-profile-account-confirmation>"
     )
     assert entry["commands"]["selection_packet"] == (
         f"sinks live-selection-packet {entry['job_id']} --run-id {run_id} --sink google_contacts --operator <operator>"
@@ -313,7 +313,7 @@ def test_cli_live_selection_requirements_reports_text_and_json(tmp_path: Path, c
     assert entry["commands"]["validate_operator_response_prefilled"] == (
         f"runs live-pilot-validate-response {run_id} "
         f"--response 'run_id={run_id} job_id={entry['job_id']} sink=google_contacts "
-        "operator=<operator> scope=lookup safety_confirmation=<confirmation>' --json"
+        "operator=<operator> scope=lookup safety_confirmation=<tenant-profile-account-confirmation>' --json"
     )
     assert payload["commands"]["live_target_candidates"] == f"live-target-candidates --run-id {run_id}"
     assert payload["commands"]["live_readiness_audit"] == f"live-readiness-audit --run-id {run_id}"
@@ -337,11 +337,11 @@ def test_cli_live_selection_requirements_reports_text_and_json(tmp_path: Path, c
     ) in text
     assert (
         f"Select target: sinks select-live-target {entry['job_id']} --run-id {run_id} "
-        "--sink google_contacts --operator <operator> --scope lookup --safety-confirmation <confirmation> --json"
+        "--sink google_contacts --operator <operator> --scope lookup --safety-confirmation <tenant-profile-account-confirmation> --json"
     ) in text
     assert (
         f"Operator response: run_id={run_id} job_id={entry['job_id']} sink=google_contacts "
-        "operator=<operator> scope=lookup safety_confirmation=<confirmation>"
+        "operator=<operator> scope=lookup safety_confirmation=<tenant-profile-account-confirmation>"
     ) in text
     assert f"Live target candidates: live-target-candidates --run-id {run_id}" in text
     assert f"Live readiness audit: live-readiness-audit --run-id {run_id}" in text
@@ -397,7 +397,7 @@ def test_cli_live_selection_packet_writes_no_selected_target(tmp_path: Path, cap
     assert payload["existing_selected_target"]["abandon_command"] is None
     assert payload["operator_response_template"] == (
         f"run_id={run_id} job_id={job_id} sink=google_contacts "
-        "operator=tester scope=lookup safety_confirmation=<confirmation>"
+        "operator=tester scope=lookup safety_confirmation=<tenant-profile-account-confirmation>"
     )
     assert payload["copyable_approval_fields"]["operator"] == "tester"
     assert payload["commands"]["validate_operator_response"] == (
@@ -406,7 +406,7 @@ def test_cli_live_selection_packet_writes_no_selected_target(tmp_path: Path, cap
     assert payload["commands"]["validate_operator_response_prefilled"] == (
         f"runs live-pilot-validate-response {run_id} "
         f"--response 'run_id={run_id} job_id={job_id} sink=google_contacts "
-        "operator=tester scope=lookup safety_confirmation=<confirmation>' --json"
+        "operator=tester scope=lookup safety_confirmation=<tenant-profile-account-confirmation>' --json"
     )
 
     assert (
@@ -436,7 +436,7 @@ def test_cli_live_selection_packet_writes_no_selected_target(tmp_path: Path, cap
     assert "Replacement: requires_abandonment=False can_select_now=True" in text
     assert (
         f"Operator response: run_id={run_id} job_id={job_id} sink=google_contacts "
-        "operator=tester scope=lookup safety_confirmation=<confirmation>"
+        "operator=tester scope=lookup safety_confirmation=<tenant-profile-account-confirmation>"
     ) in text
     assert (
         f"Validate response: runs live-pilot-validate-response {run_id} "
@@ -445,7 +445,7 @@ def test_cli_live_selection_packet_writes_no_selected_target(tmp_path: Path, cap
     assert (
         f"Validate prefilled response: runs live-pilot-validate-response {run_id} "
         f"--response 'run_id={run_id} job_id={job_id} sink=google_contacts "
-        "operator=tester scope=lookup safety_confirmation=<confirmation>' --json"
+        "operator=tester scope=lookup safety_confirmation=<tenant-profile-account-confirmation>' --json"
     ) in text
     assert "Create selected target: sinks select-live-target" in text
     assert "{" not in text
@@ -599,7 +599,7 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert status["operator_response_contract"]["creates_selected_live_target"] is False
     assert status["entries"][0]["operator_response_template"] == (
         f"run_id={run_id} job_id={job_id} sink=google_contacts "
-        "operator=tester scope=lookup safety_confirmation=<confirmation>"
+        "operator=tester scope=lookup safety_confirmation=<tenant-profile-account-confirmation>"
     )
     assert status["entries"][0]["commands"]["validate_operator_response"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
@@ -636,12 +636,12 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert handoff["operator_response_contract"]["creates_selected_live_target"] is False
     assert handoff["entries"][0]["operator_response_template"] == (
         f"run_id={run_id} job_id={job_id} sink=google_contacts "
-        "operator=tester scope=lookup safety_confirmation=<confirmation>"
+        "operator=tester scope=lookup safety_confirmation=<tenant-profile-account-confirmation>"
     )
     assert handoff["operator_response_template_count"] == 1
     assert handoff["operator_response_templates"][0]["template"] == (
         f"run_id={run_id} job_id={job_id} sink=google_contacts "
-        "operator=tester scope=lookup safety_confirmation=<confirmation>"
+        "operator=tester scope=lookup safety_confirmation=<tenant-profile-account-confirmation>"
     )
     assert handoff["operator_response_templates"][0]["command"] == (
         f"sinks execute-lookup-smoke {job_id} --run-id {run_id} --json"
@@ -652,7 +652,7 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert handoff["operator_response_templates"][0]["validation_command_prefilled"] == (
         f"runs live-pilot-validate-response {run_id} "
         f"--response 'run_id={run_id} job_id={job_id} sink=google_contacts "
-        "operator=tester scope=lookup safety_confirmation=<confirmation>' --json"
+        "operator=tester scope=lookup safety_confirmation=<tenant-profile-account-confirmation>' --json"
     )
     assert handoff["entries"][0]["command"] == f"sinks execute-lookup-smoke {job_id} --run-id {run_id} --json"
 
@@ -667,7 +667,7 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert "Response templates: 1" in text_handoff
     assert (
         f"Operator response: run_id={run_id} job_id={job_id} sink=google_contacts "
-        "operator=tester scope=lookup safety_confirmation=<confirmation>"
+        "operator=tester scope=lookup safety_confirmation=<tenant-profile-account-confirmation>"
     ) in text_handoff
     assert "{" not in text_handoff
 

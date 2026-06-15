@@ -183,7 +183,7 @@ def test_service_live_selection_requirements_report_writes_run_level_artifact(tm
         "allowed_scopes": ["lookup", "write", "readback", "all"],
         "format": (
             "run_id=<run_id> job_id=<job_id> sink=<google_contacts|odoo> "
-            "operator=<operator> scope=<lookup|write|readback|all> safety_confirmation=<confirmation>"
+            "operator=<operator> scope=<lookup|write|readback|all> safety_confirmation=<tenant-profile-account-confirmation>"
         ),
         "default_scope": "lookup",
         "requires_human_safety_confirmation": True,
@@ -205,7 +205,7 @@ def test_service_live_selection_requirements_report_writes_run_level_artifact(tm
     assert entry["missing_operator_fields"] == ["operator", "scope", "safety_confirmation"]
     assert entry["operator_response_template"] == (
         f"run_id={run_id} job_id={job_id} sink=google_contacts "
-        "operator=<operator> scope=lookup safety_confirmation=<confirmation>"
+        "operator=<operator> scope=lookup safety_confirmation=<tenant-profile-account-confirmation>"
     )
     assert "Reply with an explicit live target selection" in entry["operator_prompt"]
     assert entry["copyable_approval_fields"] == {
@@ -214,7 +214,7 @@ def test_service_live_selection_requirements_report_writes_run_level_artifact(tm
         "sink": "google_contacts",
         "operator": "<operator>",
         "scope": "lookup",
-        "safety_confirmation": "<confirmation>",
+        "safety_confirmation": "<tenant-profile-account-confirmation>",
     }
     assert entry["commands"]["selection_packet"] == (
         f"sinks live-selection-packet {job_id} --run-id {run_id} --sink google_contacts --operator <operator>"
@@ -226,7 +226,7 @@ def test_service_live_selection_requirements_report_writes_run_level_artifact(tm
     assert entry["commands"]["validate_operator_response_prefilled"] == (
         f"runs live-pilot-validate-response {run_id} "
         f"--response 'run_id={run_id} job_id={job_id} sink=google_contacts "
-        "operator=<operator> scope=lookup safety_confirmation=<confirmation>' --json"
+        "operator=<operator> scope=lookup safety_confirmation=<tenant-profile-account-confirmation>' --json"
     )
     assert report["commands"]["live_target_candidates"] == f"live-target-candidates --run-id {run_id} --sink google_contacts"
     assert report["commands"]["live_readiness_audit"] == f"live-readiness-audit --run-id {run_id} --sink google_contacts"
@@ -269,7 +269,7 @@ def test_service_live_selection_packet_does_not_select_target(tmp_path: Path) ->
     assert "job state is needs_review" in packet["blocked_reasons"]
     assert packet["operator_response_template"] == (
         f"run_id={run_id} job_id={job_id} sink=google_contacts "
-        "operator=tester scope=lookup safety_confirmation=<confirmation>"
+        "operator=tester scope=lookup safety_confirmation=<tenant-profile-account-confirmation>"
     )
     assert packet["copyable_approval_fields"] == {
         "run_id": run_id,
@@ -277,7 +277,7 @@ def test_service_live_selection_packet_does_not_select_target(tmp_path: Path) ->
         "sink": "google_contacts",
         "operator": "tester",
         "scope": "lookup",
-        "safety_confirmation": "<confirmation>",
+        "safety_confirmation": "<tenant-profile-account-confirmation>",
     }
     assert Path(packet["packet_path"]).exists()
     assert not Path(packet["existing_selected_target"]["path"]).exists()
@@ -291,7 +291,7 @@ def test_service_live_selection_packet_does_not_select_target(tmp_path: Path) ->
     assert packet["commands"]["validate_operator_response_prefilled"] == (
         f"runs live-pilot-validate-response {run_id} "
         f"--response 'run_id={run_id} job_id={job_id} sink=google_contacts "
-        "operator=tester scope=lookup safety_confirmation=<confirmation>' --json"
+        "operator=tester scope=lookup safety_confirmation=<tenant-profile-account-confirmation>' --json"
     )
     assert "select-live-target" in packet["commands"]["create_selected_target"]
     artifacts = BusinessCardService(config).list_artifacts(run_id)
@@ -2329,6 +2329,20 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
         raise AssertionError("expected meaningful safety confirmation gate")
 
     try:
+        service.select_live_target_for_job(
+            job_id=job_id,
+            run_id=run_id,
+            sink="google_contacts",
+            operator="tester",
+            scope="lookup",
+            safety_confirmation="<tenant-profile-account-confirmation>",
+        )
+    except ValueError as exc:
+        assert "replace the tenant/profile/account placeholder" in str(exc)
+    else:
+        raise AssertionError("expected placeholder safety confirmation gate")
+
+    try:
         service.execute_sink_lookup_pilot_for_job(
             job_id=job_id,
             run_id=run_id,
@@ -2407,7 +2421,7 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert live_status["operator_response_contract"]["creates_selected_live_target"] is False
     assert live_status["entries"][0]["operator_response_template"] == (
         f"run_id={run_id} job_id={job_id} sink=google_contacts "
-        "operator=tester scope=lookup safety_confirmation=<confirmation>"
+        "operator=tester scope=lookup safety_confirmation=<tenant-profile-account-confirmation>"
     )
     assert live_status["entries"][0]["commands"]["validate_operator_response"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
@@ -2415,7 +2429,7 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert live_status["entries"][0]["commands"]["validate_operator_response_prefilled"] == (
         f"runs live-pilot-validate-response {run_id} "
         f"--response 'run_id={run_id} job_id={job_id} sink=google_contacts "
-        "operator=tester scope=lookup safety_confirmation=<confirmation>' --json"
+        "operator=tester scope=lookup safety_confirmation=<tenant-profile-account-confirmation>' --json"
     )
     assert live_status["entries"][0]["copyable_approval_fields"] == {
         "run_id": run_id,
@@ -2423,7 +2437,7 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
         "sink": "google_contacts",
         "operator": "tester",
         "scope": "lookup",
-        "safety_confirmation": "<confirmation>",
+        "safety_confirmation": "<tenant-profile-account-confirmation>",
     }
     assert Path(live_status["status_path"]).exists()
 
@@ -2439,7 +2453,7 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert handoff["operator_response_contract"]["creates_selected_live_target"] is False
     assert handoff["entries"][0]["operator_response_template"] == (
         f"run_id={run_id} job_id={job_id} sink=google_contacts "
-        "operator=tester scope=lookup safety_confirmation=<confirmation>"
+        "operator=tester scope=lookup safety_confirmation=<tenant-profile-account-confirmation>"
     )
     assert handoff["operator_response_template_count"] == 1
     assert handoff["operator_response_templates"][0]["schema"] == (
@@ -2447,7 +2461,7 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     )
     assert handoff["operator_response_templates"][0]["template"] == (
         f"run_id={run_id} job_id={job_id} sink=google_contacts "
-        "operator=tester scope=lookup safety_confirmation=<confirmation>"
+        "operator=tester scope=lookup safety_confirmation=<tenant-profile-account-confirmation>"
     )
     assert handoff["operator_response_templates"][0]["copyable_approval_fields"] == {
         "run_id": run_id,
@@ -2455,7 +2469,7 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
         "sink": "google_contacts",
         "operator": "tester",
         "scope": "lookup",
-        "safety_confirmation": "<confirmation>",
+        "safety_confirmation": "<tenant-profile-account-confirmation>",
     }
     assert handoff["operator_response_templates"][0]["validation_command"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
@@ -2463,7 +2477,7 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert handoff["operator_response_templates"][0]["validation_command_prefilled"] == (
         f"runs live-pilot-validate-response {run_id} "
         f"--response 'run_id={run_id} job_id={job_id} sink=google_contacts "
-        "operator=tester scope=lookup safety_confirmation=<confirmation>' --json"
+        "operator=tester scope=lookup safety_confirmation=<tenant-profile-account-confirmation>' --json"
     )
     assert handoff["writes_attempted"] == 0
     assert handoff["network_calls_made"] == 0
@@ -2511,6 +2525,17 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert weak_safety_validation["mismatches"] == [
         "safety_confirmation must describe the intended tenant/profile/account context"
     ]
+
+    placeholder_safety_validation = service.validate_live_pilot_operator_response(
+        run_id=run_id,
+        response=(
+            f"run_id={run_id} job_id={job_id} sink=google_contacts operator=tester "
+            "scope=lookup safety_confirmation=<tenant-profile-account-confirmation>"
+        ),
+    )
+    assert placeholder_safety_validation["state"] == "blocked"
+    assert placeholder_safety_validation["select_target_command"] is None
+    assert placeholder_safety_validation["missing_fields"] == ["safety_confirmation"]
 
     wrong_scope_validation = service.validate_live_pilot_operator_response(
         run_id=run_id,

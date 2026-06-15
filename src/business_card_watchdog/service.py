@@ -2622,7 +2622,7 @@ class BusinessCardService:
                 "select_new_target": (
                     f"sinks select-live-target {job_id} --run-id {run_id} "
                     "--sink <sink> --operator <operator> --scope <scope> "
-                    "--safety-confirmation <confirmation> --json"
+                    "--safety-confirmation <tenant-profile-account-confirmation> --json"
                 ),
             },
             "explicit_stop_conditions": [
@@ -5045,7 +5045,7 @@ class BusinessCardService:
                                 "select_lookup_target": (
                                     f"sinks select-live-target {entry['job_id']} --run-id {current_run_id} "
                                     f"--sink {candidate_sink} --operator <operator> --scope lookup "
-                                    "--safety-confirmation <confirmation> --json"
+                                    "--safety-confirmation <tenant-profile-account-confirmation> --json"
                                 ),
                                 "validate_operator_response": (
                                     f"runs live-pilot-validate-response {current_run_id} "
@@ -5267,7 +5267,7 @@ class BusinessCardService:
             )
             operator_response_template = (
                 f"run_id={candidate_run_id} job_id={candidate_job_id} sink={candidate_sink} "
-                "operator=<operator> scope=lookup safety_confirmation=<confirmation>"
+                "operator=<operator> scope=lookup safety_confirmation=<tenant-profile-account-confirmation>"
             )
             copyable_approval_fields = {
                 "run_id": candidate_run_id,
@@ -5275,7 +5275,7 @@ class BusinessCardService:
                 "sink": candidate_sink,
                 "operator": "<operator>",
                 "scope": "lookup",
-                "safety_confirmation": "<confirmation>",
+                "safety_confirmation": "<tenant-profile-account-confirmation>",
             }
             missing_operator_fields: list[str] = []
             if not selected_target_exists or target_abandoned:
@@ -5328,7 +5328,7 @@ class BusinessCardService:
                         "select_target": (
                             f"sinks select-live-target {candidate_job_id} --run-id {candidate_run_id} "
                             f"--sink {candidate_sink} --operator <operator> --scope lookup "
-                            "--safety-confirmation <confirmation> --json"
+                            "--safety-confirmation <tenant-profile-account-confirmation> --json"
                         ),
                         "validate_operator_response": (
                             f"runs live-pilot-validate-response {candidate_run_id} "
@@ -5375,7 +5375,7 @@ class BusinessCardService:
                 "format": (
                     "run_id=<run_id> job_id=<job_id> sink=<google_contacts|odoo> "
                     "operator=<operator> scope=<lookup|write|readback|all> "
-                    "safety_confirmation=<confirmation>"
+                    "safety_confirmation=<tenant-profile-account-confirmation>"
                 ),
                 "default_scope": "lookup",
                 "requires_human_safety_confirmation": True,
@@ -5512,7 +5512,7 @@ class BusinessCardService:
             operator_response_template = (
                 f"run_id={run_id} job_id={job_id} sink={selection_prompt_sink} "
                 f"operator={selection_operator} scope={selection_scope} "
-                "safety_confirmation=<confirmation>"
+                "safety_confirmation=<tenant-profile-account-confirmation>"
             )
             copyable_approval_fields = {
                 "run_id": run_id,
@@ -5520,7 +5520,7 @@ class BusinessCardService:
                 "sink": selection_prompt_sink,
                 "operator": selection_operator,
                 "scope": selection_scope,
-                "safety_confirmation": "<confirmation>",
+                "safety_confirmation": "<tenant-profile-account-confirmation>",
             }
             if target_abandoned:
                 state = "abandoned"
@@ -5584,7 +5584,7 @@ class BusinessCardService:
                         "select_target": (
                             f"sinks select-live-target {job_id} --run-id {run_id} --sink {selection_prompt_sink} "
                             f"--operator {selection_operator} --scope {selection_scope} "
-                            "--safety-confirmation <confirmation> --json"
+                            "--safety-confirmation <tenant-profile-account-confirmation> --json"
                         ),
                         "selected_target_audit": f"sinks selected-target-audit {job_id} --run-id {run_id}",
                         "lookup_smoke": f"sinks execute-lookup-smoke {job_id} --run-id {run_id} --json",
@@ -5637,7 +5637,7 @@ class BusinessCardService:
                 "format": (
                     "run_id=<run_id> job_id=<job_id> sink=<google_contacts|odoo> "
                     "operator=<operator> scope=<lookup|write|readback|all> "
-                    "safety_confirmation=<confirmation>"
+                    "safety_confirmation=<tenant-profile-account-confirmation>"
                 ),
                 "default_scope": "lookup",
                 "requires_human_safety_confirmation": True,
@@ -6028,7 +6028,7 @@ class BusinessCardService:
         state = "ready_for_operator_approval" if not blocked_reasons else "blocked"
         operator_response_template = (
             f"run_id={run_id} job_id={job_id} sink={sink} operator={operator} "
-            f"scope={scope} safety_confirmation=<confirmation>"
+            f"scope={scope} safety_confirmation=<tenant-profile-account-confirmation>"
         )
         copyable_approval_fields = {
             "run_id": run_id,
@@ -6036,7 +6036,7 @@ class BusinessCardService:
             "sink": sink,
             "operator": operator,
             "scope": scope,
-            "safety_confirmation": "<confirmation>",
+            "safety_confirmation": "<tenant-profile-account-confirmation>",
         }
         payload = {
             "schema": "business-card-watchdog.live-selection-packet.v1",
@@ -6103,7 +6103,7 @@ class BusinessCardService:
                 ),
                 "create_selected_target": (
                     f"sinks select-live-target {job_id} --run-id {run_id} --sink {sink} "
-                    f"--operator {operator} --scope {scope} --safety-confirmation <confirmation>"
+                    f"--operator {operator} --scope {scope} --safety-confirmation <tenant-profile-account-confirmation>"
                     + (f" --reason {json.dumps(reason)}" if reason else "")
                 ),
                 "lookup_pilot": (
@@ -7683,6 +7683,8 @@ def _operator_response_validation_command(run_id: str, response: str) -> str:
 
 def _safety_confirmation_blocker(value: str) -> str:
     normalized = " ".join(value.strip().lower().split())
+    if normalized.startswith("<") or normalized.endswith(">"):
+        return "safety_confirmation must replace the tenant/profile/account placeholder"
     context_terms = {
         "account",
         "contacts",

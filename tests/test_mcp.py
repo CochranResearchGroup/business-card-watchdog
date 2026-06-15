@@ -454,7 +454,7 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert live_requirements["operator_response_contract"]["creates_selected_live_target"] is False
     assert live_requirements["entries"][0]["operator_response_template"] == (
         f"run_id={run_id} job_id={job_id} sink=google_contacts "
-        "operator=<operator> scope=lookup safety_confirmation=<confirmation>"
+        "operator=<operator> scope=lookup safety_confirmation=<tenant-profile-account-confirmation>"
     )
     assert live_requirements["entries"][0]["commands"]["validate_operator_response"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
@@ -462,7 +462,7 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert live_requirements["entries"][0]["commands"]["validate_operator_response_prefilled"] == (
         f"runs live-pilot-validate-response {run_id} "
         f"--response 'run_id={run_id} job_id={job_id} sink=google_contacts "
-        "operator=<operator> scope=lookup safety_confirmation=<confirmation>' --json"
+        "operator=<operator> scope=lookup safety_confirmation=<tenant-profile-account-confirmation>' --json"
     )
     assert live_requirements["entries"][0]["copyable_approval_fields"]["job_id"] == job_id
     assert live_packet["schema"] == "business-card-watchdog.live-selection-packet.v1"
@@ -473,7 +473,7 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert live_packet["existing_selected_target"]["abandoned"] is False
     assert live_packet["operator_response_template"] == (
         f"run_id={run_id} job_id={job_id} sink=google_contacts "
-        "operator=mcp-test scope=lookup safety_confirmation=<confirmation>"
+        "operator=mcp-test scope=lookup safety_confirmation=<tenant-profile-account-confirmation>"
     )
     assert live_packet["copyable_approval_fields"]["operator"] == "mcp-test"
     assert live_packet["commands"]["validate_operator_response"] == (
@@ -482,7 +482,7 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert live_packet["commands"]["validate_operator_response_prefilled"] == (
         f"runs live-pilot-validate-response {run_id} "
         f"--response 'run_id={run_id} job_id={job_id} sink=google_contacts "
-        "operator=mcp-test scope=lookup safety_confirmation=<confirmation>' --json"
+        "operator=mcp-test scope=lookup safety_confirmation=<tenant-profile-account-confirmation>' --json"
     )
     assert active_live_packet["state"] == "blocked"
     assert active_live_packet["existing_selected_target"]["exists"] is True
@@ -596,7 +596,7 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert live_status["operator_response_contract"]["creates_selected_live_target"] is False
     assert live_status["entries"][0]["operator_response_template"] == (
         f"run_id={run_id} job_id={job_id} sink=google_contacts "
-        "operator=mcp-test scope=all safety_confirmation=<confirmation>"
+        "operator=mcp-test scope=all safety_confirmation=<tenant-profile-account-confirmation>"
     )
     assert live_status["entries"][0]["commands"]["validate_operator_response"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
@@ -612,7 +612,7 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert live_handoff["operator_response_contract"]["creates_selected_live_target"] is False
     assert live_handoff["entries"][0]["operator_response_template"] == (
         f"run_id={run_id} job_id={job_id} sink=google_contacts "
-        "operator=mcp-test scope=all safety_confirmation=<confirmation>"
+        "operator=mcp-test scope=all safety_confirmation=<tenant-profile-account-confirmation>"
     )
     assert live_handoff["entries"][0]["copyable_approval_fields"]["scope"] == "all"
     assert live_handoff["operator_response_template_count"] == 1
@@ -621,7 +621,7 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     )
     assert live_handoff["operator_response_templates"][0]["template"] == (
         f"run_id={run_id} job_id={job_id} sink=google_contacts "
-        "operator=mcp-test scope=all safety_confirmation=<confirmation>"
+        "operator=mcp-test scope=all safety_confirmation=<tenant-profile-account-confirmation>"
     )
     assert live_handoff["operator_response_templates"][0]["copyable_approval_fields"]["scope"] == "all"
     assert live_handoff["operator_response_templates"][0]["validation_command"] == (
@@ -630,7 +630,7 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert live_handoff["operator_response_templates"][0]["validation_command_prefilled"] == (
         f"runs live-pilot-validate-response {run_id} "
         f"--response 'run_id={run_id} job_id={job_id} sink=google_contacts "
-        "operator=mcp-test scope=all safety_confirmation=<confirmation>' --json"
+        "operator=mcp-test scope=all safety_confirmation=<tenant-profile-account-confirmation>' --json"
     )
     assert operator_response_validation["schema"] == (
         "business-card-watchdog.live-pilot-operator-response-validation.v1"

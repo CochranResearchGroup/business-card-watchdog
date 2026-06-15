@@ -41,7 +41,7 @@ Prepare selected-target approval evidence:
   --scope lookup
 .venv/bin/bcw runs live-pilot-handoff <run-id> --no-write
 # Run the packet's printed "Validate prefilled response:" command first, then replace
-# safety_confirmation=<confirmation> with the operator's tenant/profile confirmation.
+# safety_confirmation=<tenant-profile-account-confirmation> with the operator's tenant/profile confirmation.
 .venv/bin/bcw runs live-pilot-validate-response \
   <run-id> \
   --response "run_id=<run-id> job_id=<job-id> sink=google_contacts operator=<operator> scope=lookup safety_confirmation=<operator confirms this run/job/sink uses the intended tenant/profile>"
@@ -160,7 +160,7 @@ Prepare or refresh selected-target approval evidence:
   --scope all
 .venv/bin/bcw runs live-pilot-handoff <run-id> --no-write
 # Run the packet's printed "Validate prefilled response:" command first, then replace
-# safety_confirmation=<confirmation> with the operator's tenant/profile confirmation.
+# safety_confirmation=<tenant-profile-account-confirmation> with the operator's tenant/profile confirmation.
 .venv/bin/bcw runs live-pilot-validate-response \
   <run-id> \
   --response "run_id=<run-id> job_id=<job-id> sink=google_contacts operator=<operator> scope=all safety_confirmation=<operator confirms this run/job/sink uses the intended tenant/profile>"
