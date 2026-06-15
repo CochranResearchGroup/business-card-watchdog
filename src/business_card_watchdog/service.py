@@ -6516,6 +6516,44 @@ class BusinessCardService:
             f"run_id={run_id} job_id={job_id} sink={sink} operator={operator} "
             f"scope={scope} safety_confirmation=<tenant-profile-account-confirmation>"
         )
+        commands = {
+            "validate_operator_response": (
+                f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+            ),
+            "validate_operator_response_prefilled": (
+                _operator_response_validation_command(run_id, operator_response_template)
+            ),
+            "create_selected_target": (
+                f"sinks select-live-target {job_id} --run-id {run_id} --sink {sink} "
+                f"--operator {operator} --scope {scope} --safety-confirmation <tenant-profile-account-confirmation>"
+                + (f" --reason {json.dumps(reason)}" if reason else "")
+            ),
+            "selected_target_audit": (
+                f"sinks selected-target-audit {job_id} --run-id {run_id} --scope {scope} --no-write --json"
+            ),
+            "lookup_smoke_handoff": (
+                f"sinks lookup-smoke-handoff {job_id} --run-id {run_id} --sink {sink} "
+                f"--approved-by {operator} --json"
+            ),
+            "lookup_pilot": (
+                f"sinks lookup-pilot {job_id} --run-id {run_id} --sink {sink} "
+                f"--approved-by {operator} --no-simulate"
+            ),
+            "write_pilot": (
+                f"sinks write-pilot {job_id} --run-id {run_id} --sink {sink} "
+                f"--approved-by {operator} --no-simulate"
+            ),
+            "readback_request": f"sinks adapter-request {job_id} --run-id {run_id} --phase readback --json",
+            "readback_pilot": (
+                f"sinks readback-pilot {job_id} --run-id {run_id} --sink {sink} "
+                f"--approved-by {operator} --no-simulate"
+            ),
+        }
+        pilot_command_checklist = _live_selection_packet_checklist(
+            commands=commands,
+            scope=scope,
+            state=state,
+        )
         copyable_approval_fields = {
             "run_id": run_id,
             "job_id": job_id,
@@ -6580,31 +6618,8 @@ class BusinessCardService:
             },
             "writes_attempted": 0,
             "network_calls_made": 0,
-            "commands": {
-                "validate_operator_response": (
-                    f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
-                ),
-                "validate_operator_response_prefilled": (
-                    _operator_response_validation_command(run_id, operator_response_template)
-                ),
-                "create_selected_target": (
-                    f"sinks select-live-target {job_id} --run-id {run_id} --sink {sink} "
-                    f"--operator {operator} --scope {scope} --safety-confirmation <tenant-profile-account-confirmation>"
-                    + (f" --reason {json.dumps(reason)}" if reason else "")
-                ),
-                "lookup_pilot": (
-                    f"sinks lookup-pilot {job_id} --run-id {run_id} --sink {sink} "
-                    f"--approved-by {operator} --no-simulate"
-                ),
-                "write_pilot": (
-                    f"sinks write-pilot {job_id} --run-id {run_id} --sink {sink} "
-                    f"--approved-by {operator} --no-simulate"
-                ),
-                "readback_pilot": (
-                    f"sinks readback-pilot {job_id} --run-id {run_id} --sink {sink} "
-                    f"--approved-by {operator} --no-simulate"
-                ),
-            },
+            "commands": commands,
+            "pilot_command_checklist": pilot_command_checklist,
             "explicit_stop_conditions": [
                 "This packet is not selected-target approval.",
                 "Do not create selected_live_target.json unless the operator explicitly runs create_selected_target.",
@@ -8190,6 +8205,114 @@ def _operator_response_validation_command(run_id: str, response: str) -> str:
         f"runs live-pilot-validate-response {shlex.quote(run_id)} "
         f"--response {shlex.quote(response)} --json"
     )
+
+
+def _live_selection_packet_checklist(
+    *,
+    commands: dict[str, str],
+    scope: str,
+    state: str,
+) -> list[dict[str, Any]]:
+    checklist = [
+        {
+            "step": "validate_operator_response",
+            "command": commands["validate_operator_response_prefilled"],
+            "requires_explicit_operator_action": False,
+            "writes_runtime_artifact": False,
+            "live_call": False,
+            "writes_sink": False,
+            "enabled_for_scope": True,
+            "stop_condition": "Fix missing fields, mismatches, or safety confirmation blockers before continuing.",
+        },
+        {
+            "step": "create_selected_target",
+            "command": commands["create_selected_target"],
+            "requires_explicit_operator_action": True,
+            "writes_runtime_artifact": True,
+            "live_call": False,
+            "writes_sink": False,
+            "enabled_for_scope": state == "ready_for_operator_approval",
+            "stop_condition": (
+                "Run only after the operator confirms the selected card/contact is safe for the target tenant/profile."
+            ),
+        },
+        {
+            "step": "selected_target_audit",
+            "command": commands["selected_target_audit"],
+            "requires_explicit_operator_action": False,
+            "writes_runtime_artifact": False,
+            "live_call": False,
+            "writes_sink": False,
+            "enabled_for_scope": True,
+            "stop_condition": (
+                "Keep --no-write for packet validation; audit must match run/job/sink/operator/scope before live commands."
+            ),
+        },
+        {
+            "step": "lookup_smoke_handoff",
+            "command": commands["lookup_smoke_handoff"],
+            "requires_explicit_operator_action": False,
+            "writes_runtime_artifact": True,
+            "live_call": False,
+            "writes_sink": False,
+            "enabled_for_scope": scope in {"lookup", "write", "readback", "all"},
+            "stop_condition": "Creates a runtime handoff artifact only; inspect it before any explicit live lookup.",
+        },
+    ]
+    if scope in {"lookup", "all"}:
+        checklist.append(
+            {
+                "step": "live_lookup_pilot",
+                "command": commands["lookup_pilot"],
+                "requires_explicit_operator_action": True,
+                "writes_runtime_artifact": True,
+                "live_call": True,
+                "writes_sink": False,
+                "enabled_for_scope": True,
+                "stop_condition": "Explicit read-only live lookup; persist only redacted downstream duplicate evidence.",
+            }
+        )
+    if scope in {"write", "all"}:
+        checklist.append(
+            {
+                "step": "live_write_pilot",
+                "command": commands["write_pilot"],
+                "requires_explicit_operator_action": True,
+                "writes_runtime_artifact": True,
+                "live_call": True,
+                "writes_sink": True,
+                "enabled_for_scope": True,
+                "stop_condition": (
+                    "Explicit one-job write; requires selected-target audit, duplicate clearance, and apply approval."
+                ),
+            }
+        )
+    if scope in {"readback", "all"}:
+        checklist.extend(
+            [
+                {
+                    "step": "readback_adapter_request",
+                    "command": commands["readback_request"],
+                    "requires_explicit_operator_action": False,
+                    "writes_runtime_artifact": True,
+                    "live_call": False,
+                    "writes_sink": False,
+                    "enabled_for_scope": True,
+                    "stop_condition": "Prepare readback request only after write-pilot evidence exists.",
+                },
+                {
+                    "step": "live_readback_pilot",
+                    "command": commands["readback_pilot"],
+                    "requires_explicit_operator_action": True,
+                    "writes_runtime_artifact": True,
+                    "live_call": True,
+                    "writes_sink": False,
+                    "enabled_for_scope": True,
+                    "stop_condition": "Explicit read-only readback; abort if the adapter reports any write attempt.",
+                },
+            ]
+        )
+    return checklist
 
 
 def _safety_confirmation_blocker(value: str) -> str:

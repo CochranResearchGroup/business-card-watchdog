@@ -502,6 +502,16 @@ def test_cli_live_selection_packet_writes_no_selected_target(tmp_path: Path, cap
         f"--response 'run_id={run_id} job_id={job_id} sink=google_contacts "
         "operator=tester scope=lookup safety_confirmation=<tenant-profile-account-confirmation>' --json"
     )
+    assert [row["step"] for row in payload["pilot_command_checklist"]] == [
+        "validate_operator_response",
+        "create_selected_target",
+        "selected_target_audit",
+        "lookup_smoke_handoff",
+        "live_lookup_pilot",
+    ]
+    assert payload["pilot_command_checklist"][3]["live_call"] is False
+    assert payload["pilot_command_checklist"][4]["live_call"] is True
+    assert payload["pilot_command_checklist"][4]["writes_sink"] is False
 
     assert (
         main(
@@ -542,6 +552,10 @@ def test_cli_live_selection_packet_writes_no_selected_target(tmp_path: Path, cap
         "operator=tester scope=lookup safety_confirmation=<tenant-profile-account-confirmation>' --json"
     ) in text
     assert "Create selected target: sinks select-live-target" in text
+    assert "Pilot checklist: 5" in text
+    assert "validate_operator_response: live=False writes_sink=False" in text
+    assert "lookup_smoke_handoff: live=False writes_sink=False" in text
+    assert "live_lookup_pilot: live=True writes_sink=False" in text
     assert "{" not in text
 
 

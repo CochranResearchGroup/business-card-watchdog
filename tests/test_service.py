@@ -319,10 +319,71 @@ def test_service_live_selection_packet_does_not_select_target(tmp_path: Path) ->
         f"--response 'run_id={run_id} job_id={job_id} sink=google_contacts "
         "operator=tester scope=lookup safety_confirmation=<tenant-profile-account-confirmation>' --json"
     )
+    assert packet["commands"]["selected_target_audit"] == (
+        f"sinks selected-target-audit {job_id} --run-id {run_id} --scope lookup --no-write --json"
+    )
+    assert packet["commands"]["lookup_smoke_handoff"] == (
+        f"sinks lookup-smoke-handoff {job_id} --run-id {run_id} --sink google_contacts --approved-by tester --json"
+    )
+    checklist = packet["pilot_command_checklist"]
+    assert [row["step"] for row in checklist] == [
+        "validate_operator_response",
+        "create_selected_target",
+        "selected_target_audit",
+        "lookup_smoke_handoff",
+        "live_lookup_pilot",
+    ]
+    assert checklist[0]["live_call"] is False
+    assert checklist[1]["writes_runtime_artifact"] is True
+    assert checklist[2]["command"] == packet["commands"]["selected_target_audit"]
+    assert checklist[3]["writes_runtime_artifact"] is True
+    assert checklist[4]["live_call"] is True
+    assert checklist[4]["writes_sink"] is False
     assert "select-live-target" in packet["commands"]["create_selected_target"]
     artifacts = BusinessCardService(config).list_artifacts(run_id)
     assert any(artifact["kind"] == "live_selection_packet" for artifact in artifacts)
     assert not any(artifact["kind"] == "selected_live_target" for artifact in artifacts)
+
+
+def test_service_live_selection_packet_all_scope_lists_write_and_readback_checklist(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    run_id, job_id = make_recorded_run(config)
+
+    packet = BusinessCardService(config).live_selection_packet(
+        job_id=job_id,
+        run_id=run_id,
+        sink="google_contacts",
+        operator="tester",
+        scope="all",
+        write=False,
+    )
+
+    checklist = packet["pilot_command_checklist"]
+    assert [row["step"] for row in checklist] == [
+        "validate_operator_response",
+        "create_selected_target",
+        "selected_target_audit",
+        "lookup_smoke_handoff",
+        "live_lookup_pilot",
+        "live_write_pilot",
+        "readback_adapter_request",
+        "live_readback_pilot",
+    ]
+    by_step = {row["step"]: row for row in checklist}
+    assert by_step["live_write_pilot"]["live_call"] is True
+    assert by_step["live_write_pilot"]["writes_sink"] is True
+    assert by_step["readback_adapter_request"]["live_call"] is False
+    assert by_step["live_readback_pilot"]["live_call"] is True
+    assert by_step["live_readback_pilot"]["writes_sink"] is False
+    assert packet["commands"]["readback_request"] == (
+        f"sinks adapter-request {job_id} --run-id {run_id} --phase readback --json"
+    )
+    assert packet["writes_attempted"] == 0
+    assert packet["network_calls_made"] == 0
 
 
 def test_service_live_selection_packet_reports_existing_selected_target_context(tmp_path: Path) -> None:

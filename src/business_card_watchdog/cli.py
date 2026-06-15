@@ -731,6 +731,7 @@ def _render_live_selection_packet_text(payload: dict[str, object]) -> str:
     blocked_reasons = payload.get("blocked_reasons") or []
     stop_conditions = payload.get("explicit_stop_conditions") or []
     commands = dict(payload.get("commands") or {})
+    checklist = payload.get("pilot_command_checklist") or []
     lines = [
         f"Live selection packet: {payload.get('state')}",
         f"Run: {payload.get('run_id')}",
@@ -774,6 +775,15 @@ def _render_live_selection_packet_text(payload: dict[str, object]) -> str:
     create_command = commands.get("create_selected_target")
     if create_command:
         lines.append(f"Create selected target: {create_command}")
+    checklist_rows = checklist if isinstance(checklist, list) else []
+    lines.append(f"Pilot checklist: {len(checklist_rows)}")
+    for row in checklist_rows:
+        if not isinstance(row, dict):
+            continue
+        lines.append(
+            f" - {row.get('step')}: live={row.get('live_call', False)} "
+            f"writes_sink={row.get('writes_sink', False)} command={row.get('command')}"
+        )
     stops = stop_conditions if isinstance(stop_conditions, list) else []
     lines.append(f"Stop conditions: {len(stops)}")
     for condition in stops:

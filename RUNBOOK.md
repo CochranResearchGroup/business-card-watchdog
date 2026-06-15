@@ -3945,3 +3945,30 @@ Validation:
 Safety:
 
 - This was messaging and readiness-boundary hardening only. It did not process configured/private SyncThing inputs, run public-web search, call paid enrichment, validate a real operator response, create or modify `selected_live_target.json`, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+## Turn 190 | 2026-06-15
+
+Continued Plan 0009 with Slice 0009-A114.
+
+Implemented:
+
+- Live selection packets now include `pilot_command_checklist`, an ordered operator/subagent checklist for validation, selected-target creation, selected-target audit, lookup-smoke handoff, and scope-specific live lookup/write/readback pilot commands.
+- Each checklist step records whether it requires explicit operator action, writes a runtime artifact, makes a live call, writes a sink, is enabled for the selected scope, and where to stop.
+- Live selection packet commands now include selected-target audit, lookup-smoke handoff, and readback adapter request commands alongside the existing validation and pilot commands.
+- CLI live-selection-packet text output now renders the pilot checklist without raw dict output.
+- Service and CLI coverage now assert lookup and all-scope checklist ordering, live-call flags, sink-write flags, and zero write/network counters.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_live_selection_packet_does_not_select_target tests/test_service.py::test_service_live_selection_packet_all_scope_lists_write_and_readback_checklist tests/test_service.py::test_service_live_selection_packet_reports_existing_selected_target_context tests/test_cli_surfaces.py::test_cli_live_selection_packet_writes_no_selected_target tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_service.py tests/test_cli_surfaces.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 231 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was no-live command sequencing and packet presentation only. It did not process configured/private SyncThing inputs, run public-web search, call paid enrichment, validate a real operator response, create or modify `selected_live_target.json`, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
