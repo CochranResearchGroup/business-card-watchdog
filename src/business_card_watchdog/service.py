@@ -2328,6 +2328,9 @@ class BusinessCardService:
             raise ValueError("selected live target requires an operator")
         if not safety_confirmation.strip():
             raise ValueError("selected live target requires tenant/profile safety confirmation")
+        safety_confirmation_blocker = _safety_confirmation_blocker(safety_confirmation)
+        if safety_confirmation_blocker:
+            raise ValueError(safety_confirmation_blocker)
         job = self.get_job(job_id, run_id=run_id)
         artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
         existing_target = _read_json_file(artifact_dir / "selected_live_target.json")
@@ -5896,6 +5899,12 @@ class BusinessCardService:
                 actual = str(parsed_response.get(field) or "").strip()
                 if expected and not expected.startswith("<") and actual and expected != actual:
                     mismatches.append(f"{field} does not match current operator response template")
+        if "safety_confirmation" not in missing_fields:
+            safety_confirmation_blocker = _safety_confirmation_blocker(
+                str(parsed_response.get("safety_confirmation") or "")
+            )
+            if safety_confirmation_blocker:
+                mismatches.append(safety_confirmation_blocker)
 
         state = "ready_to_select_live_target" if not missing_fields and not mismatches else "blocked"
         select_target_command = None
@@ -7670,6 +7679,25 @@ def _operator_response_validation_command(run_id: str, response: str) -> str:
         f"runs live-pilot-validate-response {shlex.quote(run_id)} "
         f"--response {shlex.quote(response)} --json"
     )
+
+
+def _safety_confirmation_blocker(value: str) -> str:
+    normalized = " ".join(value.strip().lower().split())
+    context_terms = {
+        "account",
+        "contacts",
+        "google",
+        "gws",
+        "odollo",
+        "odoo",
+        "profile",
+        "target",
+        "tenant",
+        "workspace",
+    }
+    if len(normalized) < 16 or not any(term in normalized for term in context_terms):
+        return "safety_confirmation must describe the intended tenant/profile/account context"
+    return ""
 
 
 def _runtime_safe_next_actions(

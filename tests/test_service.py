@@ -2315,6 +2315,20 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
         raise AssertionError("expected safety confirmation gate")
 
     try:
+        service.select_live_target_for_job(
+            job_id=job_id,
+            run_id=run_id,
+            sink="google_contacts",
+            operator="tester",
+            scope="lookup",
+            safety_confirmation="yes",
+        )
+    except ValueError as exc:
+        assert "tenant/profile/account" in str(exc)
+    else:
+        raise AssertionError("expected meaningful safety confirmation gate")
+
+    try:
         service.execute_sink_lookup_pilot_for_job(
             job_id=job_id,
             run_id=run_id,
@@ -2484,6 +2498,19 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert blocked_validation["state"] == "blocked"
     assert blocked_validation["select_target_command"] is None
     assert set(blocked_validation["missing_fields"]) == {"operator", "safety_confirmation"}
+
+    weak_safety_validation = service.validate_live_pilot_operator_response(
+        run_id=run_id,
+        response=(
+            f"run_id={run_id} job_id={job_id} sink=google_contacts operator=tester "
+            "scope=lookup safety_confirmation=yes"
+        ),
+    )
+    assert weak_safety_validation["state"] == "blocked"
+    assert weak_safety_validation["select_target_command"] is None
+    assert weak_safety_validation["mismatches"] == [
+        "safety_confirmation must describe the intended tenant/profile/account context"
+    ]
 
     wrong_scope_validation = service.validate_live_pilot_operator_response(
         run_id=run_id,
