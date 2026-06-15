@@ -247,6 +247,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
         ("Live pilot handoff", "live_pilot_handoff"),
         ("Live pilot approval packet", "live_pilot_approval_packet"),
         ("Live pilot validate response", "live_pilot_validate_response"),
+        ("Selected target preflight", "selected_live_target_preflight"),
     ]:
         command = commands.get(key)
         if command:
@@ -262,6 +263,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
             ("Live pilot handoff", "live_pilot_handoff"),
             ("Live pilot approval packet", "live_pilot_approval_packet"),
             ("Live pilot validate response", "live_pilot_validate_response"),
+            ("Selected target preflight", "selected_live_target_preflight"),
         ]:
             route = api_routes.get(key)
             if route:
@@ -277,6 +279,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
             ("Live pilot handoff", "live_pilot_handoff"),
             ("Live pilot approval packet", "live_pilot_approval_packet"),
             ("Live pilot validate response", "live_pilot_validate_response"),
+            ("Selected target preflight", "selected_live_target_preflight"),
         ]:
             tool_entry = mcp_tools.get(key)
             if isinstance(tool_entry, dict):
@@ -537,6 +540,31 @@ def _render_live_pilot_operator_response_validation_text(payload: dict[str, obje
             f"live={grouped_sequence.get('live_call_step_count', 0)} "
             f"sink_writes={grouped_sequence.get('sink_write_step_count', 0)}"
         )
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    stops = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stops)}")
+    for condition in stops:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
+def _render_selected_live_target_preflight_text(payload: dict[str, object]) -> str:
+    lines = [
+        f"Run: {payload.get('run_id')}",
+        f"Job: {payload.get('job_id') or 'none'}",
+        f"State: {payload.get('state')}",
+        f"Validation state: {payload.get('validation_state')}",
+        f"Would create selected target: {payload.get('would_create_selected_live_target', False)}",
+        f"Creates selected target: {payload.get('creates_selected_live_target', False)}",
+        f"Observed: writes={payload.get('writes_attempted', 0)} network={payload.get('network_calls_made', 0)}",
+    ]
+    if payload.get("select_target_command"):
+        lines.append(f"Select target: {payload.get('select_target_command')}")
+    blockers = payload.get("blocked_reasons") or []
+    rows = blockers if isinstance(blockers, list) else []
+    lines.append(f"Blocked reasons: {len(rows)}")
+    for reason in rows:
+        lines.append(f" - {reason}")
     stop_conditions = payload.get("explicit_stop_conditions") or []
     stops = stop_conditions if isinstance(stop_conditions, list) else []
     lines.append(f"Stop conditions: {len(stops)}")
@@ -1292,6 +1320,10 @@ def build_parser() -> argparse.ArgumentParser:
     runs_live_pilot_approval_packet.add_argument("run_id")
     runs_live_pilot_approval_packet.add_argument("--job-id", default=None)
     runs_live_pilot_approval_packet.add_argument("--json", action="store_true")
+    runs_selected_live_target_preflight = runs_sub.add_parser("selected-live-target-preflight")
+    runs_selected_live_target_preflight.add_argument("run_id")
+    runs_selected_live_target_preflight.add_argument("--response", required=True)
+    runs_selected_live_target_preflight.add_argument("--json", action="store_true")
     runs_live_pilot_validate_response = runs_sub.add_parser("live-pilot-validate-response")
     runs_live_pilot_validate_response.add_argument("run_id")
     runs_live_pilot_validate_response.add_argument("--response", required=True)
@@ -1673,10 +1705,15 @@ def main(argv: list[str] | None = None) -> int:
             payload = service.live_pilot_handoff(run_id=args.run_id, write=not args.no_write)
         elif args.runs_command == "live-pilot-approval-packet":
             payload = service.live_pilot_approval_packet(run_id=args.run_id, job_id=args.job_id)
+        elif args.runs_command == "selected-live-target-preflight":
+            payload = service.selected_live_target_preflight(run_id=args.run_id, response=args.response)
         elif args.runs_command == "live-pilot-validate-response":
             payload = service.validate_live_pilot_operator_response(run_id=args.run_id, response=args.response)
         else:
             payload = service.get_run(args.run_id)
+        if args.runs_command == "selected-live-target-preflight" and not args.json:
+            print(_render_selected_live_target_preflight_text(payload), end="")
+            return 0
         if args.runs_command == "live-pilot-approval-packet" and not args.json:
             print(_render_live_pilot_approval_packet_text(payload), end="")
             return 0

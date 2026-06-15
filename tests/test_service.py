@@ -2617,6 +2617,16 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
         "lookup_smoke_handoff",
     ]
     assert any("Run the select_target command" in item for item in preselection_validation["explicit_stop_conditions"])
+    preselection_preflight = service.selected_live_target_preflight(run_id=run_id, response=preselection_response)
+    assert preselection_preflight["schema"] == "business-card-watchdog.selected-live-target-preflight.v1"
+    assert preselection_preflight["state"] == "ready_to_create_selected_target"
+    assert preselection_preflight["would_create_selected_live_target"] is True
+    assert preselection_preflight["creates_selected_live_target"] is False
+    assert preselection_preflight["select_target_command"] == preselection_validation["select_target_command"]
+    assert preselection_preflight["blocked_reasons"] == []
+    assert preselection_preflight["approval_readback"]["response_matches_template"] is True
+    assert preselection_preflight["writes_attempted"] == 0
+    assert preselection_preflight["network_calls_made"] == 0
 
     target = service.select_live_target_for_job(
         job_id=job_id,
@@ -2883,6 +2893,14 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert validation["creates_selected_live_target"] is False
     assert validation["writes_attempted"] == 0
     assert validation["network_calls_made"] == 0
+    selected_preflight = service.selected_live_target_preflight(run_id=run_id, response=response)
+    assert selected_preflight["state"] == "blocked"
+    assert selected_preflight["would_create_selected_live_target"] is False
+    assert selected_preflight["creates_selected_live_target"] is False
+    assert selected_preflight["select_target_command"] is None
+    assert "selected_live_target already exists" in selected_preflight["blocked_reasons"][0]
+    assert selected_preflight["writes_attempted"] == 0
+    assert selected_preflight["network_calls_made"] == 0
     assert not (Path(target["target_path"]).parent / "selected_live_target_validation.json").exists()
 
     blocked_validation = service.validate_live_pilot_operator_response(

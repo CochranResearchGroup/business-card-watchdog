@@ -918,6 +918,53 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
                 "--config",
                 str(config_path),
                 "runs",
+                "selected-live-target-preflight",
+                run_id,
+                "--response",
+                response,
+                "--json",
+            ]
+        )
+        == 0
+    )
+    preflight = json.loads(capsys.readouterr().out)
+    assert preflight["schema"] == "business-card-watchdog.selected-live-target-preflight.v1"
+    assert preflight["state"] == "blocked"
+    assert preflight["would_create_selected_live_target"] is False
+    assert preflight["creates_selected_live_target"] is False
+    assert preflight["select_target_command"] is None
+    assert "selected_live_target already exists" in preflight["blocked_reasons"][0]
+    assert preflight["writes_attempted"] == 0
+    assert preflight["network_calls_made"] == 0
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "selected-live-target-preflight",
+                run_id,
+                "--response",
+                response,
+            ]
+        )
+        == 0
+    )
+    preflight_text = capsys.readouterr().out
+    assert "State: blocked" in preflight_text
+    assert "Would create selected target: False" in preflight_text
+    assert "Creates selected target: False" in preflight_text
+    assert "selected_live_target already exists" in preflight_text
+    assert "Stop conditions: 3" in preflight_text
+    assert "{" not in preflight_text
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
                 "live-pilot-validate-response",
                 run_id,
                 "--response",

@@ -623,6 +623,11 @@ class BusinessCardService:
                     if selected_run_id
                     else "runs list --json"
                 ),
+                "selected_live_target_preflight": (
+                    f"runs selected-live-target-preflight {selected_run_id} --response <operator-response> --json"
+                    if selected_run_id
+                    else "runs list --json"
+                ),
                 "mcp_manifest": "mcp-manifest",
             },
             "api_routes": {
@@ -657,6 +662,11 @@ class BusinessCardService:
                     f"POST /runs/{selected_run_id}/live-pilot-operator-response-validation"
                     if selected_run_id
                     else "POST /runs/{run_id}/live-pilot-operator-response-validation"
+                ),
+                "selected_live_target_preflight": (
+                    f"POST /runs/{selected_run_id}/selected-live-target-preflight"
+                    if selected_run_id
+                    else "POST /runs/{run_id}/selected-live-target-preflight"
                 ),
             },
             "mcp_tools": {
@@ -698,6 +708,12 @@ class BusinessCardService:
                 },
                 "live_pilot_validate_response": {
                     "tool": "business_card_watchdog_live_pilot_operator_response_validation",
+                    "arguments": {"run_id": selected_run_id, "response": "<operator-response>"}
+                    if selected_run_id
+                    else {"run_id": "<run-id>", "response": "<operator-response>"},
+                },
+                "selected_live_target_preflight": {
+                    "tool": "business_card_watchdog_selected_live_target_preflight",
                     "arguments": {"run_id": selected_run_id, "response": "<operator-response>"}
                     if selected_run_id
                     else {"run_id": "<run-id>", "response": "<operator-response>"},
@@ -6350,6 +6366,55 @@ class BusinessCardService:
             "writes_attempted": 0,
             "network_calls_made": 0,
             "creates_selected_live_target": False,
+        }
+
+    def selected_live_target_preflight(self, *, run_id: str, response: str) -> dict[str, Any]:
+        validation = self.validate_live_pilot_operator_response(run_id=run_id, response=response)
+        parsed = dict(validation.get("parsed_response") or {})
+        select_target_command = validation.get("select_target_command")
+        ready = validation.get("state") == "ready_to_select_live_target" and bool(select_target_command)
+        blocker_reasons = []
+        if not ready:
+            blocker_reasons.extend(str(item) for item in list(validation.get("missing_fields") or []))
+            blocker_reasons.extend(str(item) for item in list(validation.get("mismatches") or []))
+            if validation.get("state") == "ready_for_live_lookup_request":
+                blocker_reasons.append("selected_live_target already exists; do not create another target")
+            elif validation.get("state") == "ready_to_review_selected_target_audit":
+                blocker_reasons.append("selected target audit must be reviewed before further live-pilot setup")
+            elif not blocker_reasons:
+                blocker_reasons.append(f"validation state {validation.get('state')} is not ready_to_select_live_target")
+        return {
+            "schema": "business-card-watchdog.selected-live-target-preflight.v1",
+            "generated_at": utc_now(),
+            "state": "ready_to_create_selected_target" if ready else "blocked",
+            "run_id": run_id,
+            "job_id": parsed.get("job_id"),
+            "sink": parsed.get("sink"),
+            "operator": parsed.get("operator"),
+            "scope": parsed.get("scope"),
+            "safety_confirmation_present": bool(str(parsed.get("safety_confirmation") or "").strip()),
+            "validation_state": validation.get("state"),
+            "validation_next_step": validation.get("next_validation_step"),
+            "approval_readback": validation.get("approval_readback"),
+            "select_target_command": select_target_command,
+            "would_create_selected_live_target": ready,
+            "creates_selected_live_target": False,
+            "blocked_reasons": blocker_reasons,
+            "commands": {
+                "approval_packet": f"runs live-pilot-approval-packet {run_id} --json",
+                "validate_response": (
+                    f"runs live-pilot-validate-response {shlex.quote(run_id)} "
+                    f"--response {shlex.quote(response)} --json"
+                ),
+                "select_target": select_target_command,
+            },
+            "explicit_stop_conditions": [
+                "This preflight does not create selected_live_target.json.",
+                "Run the select_target command only after confirming tenant/profile/account safety.",
+                "Do not run live lookup, live write, or live readback from this preflight.",
+            ],
+            "writes_attempted": 0,
+            "network_calls_made": 0,
         }
 
     def validate_live_pilot_operator_response(self, *, run_id: str, response: str) -> dict[str, Any]:

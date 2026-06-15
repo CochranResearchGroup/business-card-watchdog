@@ -115,6 +115,9 @@ def create_app(config_path: Path | None = None):
         reason: str = ""
         safety_confirmation: str
 
+    class SelectedLiveTargetPreflightRequest(BaseModel):
+        response: str
+
     class SelectedLiveTargetAuditRequest(BaseModel):
         run_id: str
         scope: str | None = None
@@ -258,6 +261,13 @@ def create_app(config_path: Path | None = None):
         request: LivePilotOperatorResponseValidationRequest,
     ) -> dict[str, object]:
         return service().validate_live_pilot_operator_response(run_id=run_id, response=request.response)
+
+    @app.post("/runs/{run_id}/selected-live-target-preflight")
+    def preflight_run_selected_live_target(
+        run_id: str,
+        request: SelectedLiveTargetPreflightRequest,
+    ) -> dict[str, object]:
+        return service().selected_live_target_preflight(run_id=run_id, response=request.response)
 
     @app.get("/runs/{run_id}/jobs")
     def list_run_jobs(run_id: str) -> list[dict[str, object]]:

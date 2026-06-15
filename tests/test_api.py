@@ -76,8 +76,14 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert operator_dashboard["commands"]["live_pilot_validate_response"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
+    assert operator_dashboard["commands"]["selected_live_target_preflight"] == (
+        f"runs selected-live-target-preflight {run_id} --response <operator-response> --json"
+    )
     assert operator_dashboard["api_routes"]["live_pilot_validate_response"] == (
         f"POST /runs/{run_id}/live-pilot-operator-response-validation"
+    )
+    assert operator_dashboard["api_routes"]["selected_live_target_preflight"] == (
+        f"POST /runs/{run_id}/selected-live-target-preflight"
     )
     assert operator_dashboard["api_routes"]["live_pilot_approval_packet"] == (
         f"GET /runs/{run_id}/live-pilot-approval-packet"
@@ -93,6 +99,10 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert operator_dashboard["mcp_tools"]["live_pilot_approval_packet"] == {
         "tool": "business_card_watchdog_live_pilot_approval_packet",
         "arguments": {"run_id": run_id},
+    }
+    assert operator_dashboard["mcp_tools"]["selected_live_target_preflight"] == {
+        "tool": "business_card_watchdog_selected_live_target_preflight",
+        "arguments": {"run_id": run_id, "response": "<operator-response>"},
     }
     assert operator_dashboard["writes_attempted"] == 0
     assert operator_dashboard["network_calls_made"] == 0
@@ -318,6 +328,18 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
         f"run_id={run_id} job_id={job_id} sink=google_contacts "
         "operator=api-test scope=lookup safety_confirmation=fixture contact is safe for google contacts test profile"
     )
+    selected_target_preflight = client.post(
+        f"/runs/{run_id}/selected-live-target-preflight",
+        json={"response": response},
+    ).json()
+    assert selected_target_preflight["schema"] == "business-card-watchdog.selected-live-target-preflight.v1"
+    assert selected_target_preflight["state"] == "blocked"
+    assert selected_target_preflight["would_create_selected_live_target"] is False
+    assert selected_target_preflight["creates_selected_live_target"] is False
+    assert selected_target_preflight["select_target_command"] is None
+    assert "selected_live_target already exists" in selected_target_preflight["blocked_reasons"][0]
+    assert selected_target_preflight["writes_attempted"] == 0
+    assert selected_target_preflight["network_calls_made"] == 0
     validation = client.post(
         f"/runs/{run_id}/live-pilot-operator-response-validation",
         json={"response": response},
