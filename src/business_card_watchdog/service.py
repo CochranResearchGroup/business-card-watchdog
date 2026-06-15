@@ -5136,7 +5136,7 @@ class BusinessCardService:
                 or selected_target.get("approved_by")
                 or "<operator>"
             )
-            selection_scope = str(packet.get("scope") or "lookup")
+            selection_scope = str(packet.get("scope") or selected_target.get("scope") or "lookup")
             operator_response_template = (
                 f"run_id={run_id} job_id={job_id} sink={selection_prompt_sink} "
                 f"operator={selection_operator} scope={selection_scope} "
