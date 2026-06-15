@@ -37,6 +37,10 @@ def create_app(config_path: Path | None = None):
         run_id: str
         dry_run: bool = True
 
+    class ChildLookupResultRequest(BaseModel):
+        run_id: str
+        matches_by_sink: dict[str, list[dict[str, object]]] = Field(default_factory=dict)
+
     class ReviewDecisionsRequest(BaseModel):
         reviewer: str = "operator"
         decisions: list[dict[str, object]] = Field(default_factory=list)
@@ -512,6 +516,27 @@ def create_app(config_path: Path | None = None):
             run_id=request.run_id,
             candidate_id=candidate_id,
             dry_run=request.dry_run,
+        )
+
+    @app.post("/reviews/children/{candidate_id}/sink-lookup-result")
+    def create_child_sink_lookup_result(
+        candidate_id: str,
+        request: ChildLookupResultRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().record_child_sink_lookup_result(
+            run_id=request.run_id,
+            candidate_id=candidate_id,
+            matches_by_sink={sink: [dict(match) for match in matches] for sink, matches in request.matches_by_sink.items()},
+        )
+
+    @app.post("/reviews/children/{candidate_id}/downstream-duplicate-assessment")
+    def create_child_downstream_duplicate_assessment(
+        candidate_id: str,
+        request: ChildRoutePrepRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().assess_child_downstream_duplicates(
+            run_id=request.run_id,
+            candidate_id=candidate_id,
         )
 
     @app.post("/runs/{run_id}/review-bundle")

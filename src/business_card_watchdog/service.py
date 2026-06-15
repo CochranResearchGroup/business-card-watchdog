@@ -2878,6 +2878,140 @@ class BusinessCardService:
             "network_calls_made": 0,
         }
 
+    def record_child_sink_lookup_result(
+        self,
+        *,
+        run_id: str,
+        candidate_id: str,
+        matches_by_sink: dict[str, list[dict[str, Any]]] | None = None,
+    ) -> dict[str, Any]:
+        entry = self._child_route_prep_entry(run_id=run_id, candidate_id=candidate_id)
+        prep_result = dict(entry.get("child_route_prep_result") or {})
+        lookup_plan_path = Path(str(prep_result.get("child_sink_lookup_plan_path") or ""))
+        lookup_plan = _read_json_file(lookup_plan_path) or {}
+        if not lookup_plan:
+            raise FileNotFoundError(f"child sink lookup plan not found: {lookup_plan_path}")
+        prep_dir = lookup_plan_path.parent
+        adapter_request = build_sink_adapter_request(
+            phase="lookup",
+            lookup_plan=lookup_plan,
+            sink_context=self._sink_context(),
+        )
+        adapter_request["candidate_id"] = candidate_id
+        adapter_request["work_item_id"] = entry.get("work_item_id")
+        adapter_request_path = prep_dir / "child_sink_adapter_request_lookup.json"
+        adapter_request_path.write_text(
+            json.dumps(adapter_request, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        result = build_sink_lookup_result(
+            adapter_request=adapter_request,
+            matches_by_sink=matches_by_sink or {},
+        )
+        result["candidate_id"] = candidate_id
+        result["work_item_id"] = entry.get("work_item_id")
+        result["child_sink_lookup_plan_path"] = str(lookup_plan_path)
+        result_path = prep_dir / "child_sink_lookup_result.json"
+        result_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        parent_job_id = str(entry.get("job_id") or "__run__")
+        ledger.record_artifact(job_id=parent_job_id, kind="child_sink_adapter_request_lookup", path=adapter_request_path)
+        ledger.record_artifact(job_id=parent_job_id, kind="child_sink_lookup_result", path=result_path)
+        ledger.record_event(
+            "child_sink_lookup_result_recorded",
+            {
+                "run_id": run_id,
+                "job_id": entry.get("job_id"),
+                "candidate_id": candidate_id,
+                "result_path": str(result_path),
+                "state": result["state"],
+                "match_count": result["match_count"],
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        return {
+            "schema": "business-card-watchdog.child-sink-lookup-result-submission.v1",
+            "run_id": run_id,
+            "job_id": entry.get("job_id"),
+            "candidate_id": candidate_id,
+            "adapter_request_path": str(adapter_request_path),
+            "result_path": str(result_path),
+            "adapter_request": adapter_request,
+            "result": result,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+
+    def assess_child_downstream_duplicates(
+        self,
+        *,
+        run_id: str,
+        candidate_id: str,
+    ) -> dict[str, Any]:
+        entry = self._child_route_prep_entry(run_id=run_id, candidate_id=candidate_id)
+        prep_result = dict(entry.get("child_route_prep_result") or {})
+        lookup_plan_path = Path(str(prep_result.get("child_sink_lookup_plan_path") or ""))
+        prep_dir = lookup_plan_path.parent
+        result_path = prep_dir / "child_sink_lookup_result.json"
+        if result_path.exists():
+            lookup_result = json.loads(result_path.read_text(encoding="utf-8"))
+        else:
+            lookup_result = self.record_child_sink_lookup_result(
+                run_id=run_id,
+                candidate_id=candidate_id,
+            )["result"]
+        assessment = assess_downstream_lookup_result(lookup_result).to_dict()
+        assessment["candidate_id"] = candidate_id
+        assessment["work_item_id"] = entry.get("work_item_id")
+        assessment["reviewed"] = assessment["state"] == "no_match"
+        assessment_path = prep_dir / "child_downstream_duplicate_assessment.json"
+        assessment_path.write_text(json.dumps(assessment, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        parent_job_id = str(entry.get("job_id") or "__run__")
+        ledger.record_artifact(job_id=parent_job_id, kind="child_downstream_duplicate_assessment", path=assessment_path)
+        ledger.record_event(
+            "child_downstream_duplicate_assessed",
+            {
+                "run_id": run_id,
+                "job_id": entry.get("job_id"),
+                "candidate_id": candidate_id,
+                "assessment_path": str(assessment_path),
+                "state": assessment["state"],
+                "match_count": len(assessment["matches"]),
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        return {
+            "schema": "business-card-watchdog.child-downstream-duplicate-assessment-result.v1",
+            "run_id": run_id,
+            "job_id": entry.get("job_id"),
+            "candidate_id": candidate_id,
+            "assessment_path": str(assessment_path),
+            "assessment": assessment,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+
+    def _child_route_prep_entry(self, *, run_id: str, candidate_id: str) -> dict[str, Any]:
+        entry = next(
+            (
+                row
+                for row in self.child_route_prep_queue(run_id=run_id, state="all")
+                if str(row.get("candidate_id") or "") == candidate_id
+            ),
+            None,
+        )
+        if entry is None:
+            raise FileNotFoundError(f"prepared child contact candidate not found: {candidate_id}")
+        prep_result = dict(entry.get("child_route_prep_result") or {})
+        if not prep_result:
+            raise FileNotFoundError(f"child route prep result not found: {candidate_id}")
+        return entry
+
     def review_bundle(self, *, run_id: str, state: str = "all", write: bool = True) -> dict[str, Any]:
         run = self.get_run(run_id)
         artifacts = self.list_artifacts(run_id)

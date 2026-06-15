@@ -473,6 +473,31 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_child_sink_lookup_result",
+                "description": "Record supplied child downstream lookup matches as a zero-network local result artifact.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "candidate_id": {"type": "string"},
+                        "matches_by_sink": {"type": "object"},
+                    },
+                    "required": ["run_id", "candidate_id"],
+                },
+            },
+            {
+                "name": "business_card_watchdog_child_downstream_duplicate_assessment",
+                "description": "Assess a child sink lookup result for downstream duplicate state without live sink calls.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "candidate_id": {"type": "string"},
+                    },
+                    "required": ["run_id", "candidate_id"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_review_bundle",
                 "description": "Create a run-level batch review bundle with inline review-relevant artifact payloads.",
                 "input_schema": {
@@ -1220,6 +1245,17 @@ def call_tool(
             run_id=str(args["run_id"]),
             candidate_id=str(args["candidate_id"]),
             dry_run=bool(args.get("dry_run", True)),
+        )
+    if tool_name == "business_card_watchdog_child_sink_lookup_result":
+        return service.record_child_sink_lookup_result(
+            run_id=str(args["run_id"]),
+            candidate_id=str(args["candidate_id"]),
+            matches_by_sink=dict(args.get("matches_by_sink") or {}),
+        )
+    if tool_name == "business_card_watchdog_child_downstream_duplicate_assessment":
+        return service.assess_child_downstream_duplicates(
+            run_id=str(args["run_id"]),
+            candidate_id=str(args["candidate_id"]),
         )
     if tool_name == "business_card_watchdog_review_bundle":
         return service.review_bundle(

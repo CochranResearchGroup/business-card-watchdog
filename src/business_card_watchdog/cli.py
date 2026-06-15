@@ -2036,6 +2036,15 @@ def build_parser() -> argparse.ArgumentParser:
     reviews_child_route_prep.add_argument("--run-id", required=True)
     reviews_child_route_prep.add_argument("--live", action="store_true")
     reviews_child_route_prep.add_argument("--json", action="store_true")
+    reviews_child_lookup_result = reviews_sub.add_parser("child-lookup-result")
+    reviews_child_lookup_result.add_argument("candidate_id")
+    reviews_child_lookup_result.add_argument("--run-id", required=True)
+    reviews_child_lookup_result.add_argument("--matches-by-sink-json", default="{}")
+    reviews_child_lookup_result.add_argument("--json", action="store_true")
+    reviews_child_assess_duplicates = reviews_sub.add_parser("child-assess-duplicates")
+    reviews_child_assess_duplicates.add_argument("candidate_id")
+    reviews_child_assess_duplicates.add_argument("--run-id", required=True)
+    reviews_child_assess_duplicates.add_argument("--json", action="store_true")
     reviews_bundle = reviews_sub.add_parser("bundle")
     reviews_bundle.add_argument("--run-id", required=True)
     reviews_bundle.add_argument("--state", default="all")
@@ -2596,6 +2605,17 @@ def main(argv: list[str] | None = None) -> int:
                 run_id=args.run_id,
                 candidate_id=args.candidate_id,
                 dry_run=not args.live,
+            )
+        elif args.reviews_command == "child-lookup-result":
+            payload = service.record_child_sink_lookup_result(
+                run_id=args.run_id,
+                candidate_id=args.candidate_id,
+                matches_by_sink=json.loads(args.matches_by_sink_json),
+            )
+        elif args.reviews_command == "child-assess-duplicates":
+            payload = service.assess_child_downstream_duplicates(
+                run_id=args.run_id,
+                candidate_id=args.candidate_id,
             )
         else:
             payload = service.review_queue(

@@ -1119,6 +1119,58 @@ def test_api_child_route_prep_writes_dry_run_plans(tmp_path: Path, monkeypatch) 
     assert payload["network_calls_made"] == 0
 
 
+def test_api_child_lookup_result_and_duplicate_assessment(tmp_path: Path, monkeypatch) -> None:
+    pytest.importorskip("cv2")
+    from business_card_watchdog.api import create_app
+
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+    source_dir = tmp_path / "images"
+    write_multi_card_image(source_dir / "multi.jpg")
+    config = AppConfig(
+        config_path=config_path,
+        data_dir=data_dir,
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+    service = BusinessCardService(config)
+    candidate_id = str(service.child_review_queue(run_id=run_dir.name)[0]["candidate_id"])
+    service.submit_child_review(
+        run_id=run_dir.name,
+        candidate_id=candidate_id,
+        reviewer="operator",
+        action="approve_child_for_routing",
+    )
+    service.prepare_child_route(run_id=run_dir.name, candidate_id=candidate_id)
+    client = TestClient(create_app(config_path))
+
+    lookup = client.post(
+        f"/reviews/children/{candidate_id}/sink-lookup-result",
+        json={
+            "run_id": run_dir.name,
+            "matches_by_sink": {
+                "google_contacts": [
+                    {"resource_id": "people/api-child", "confidence": 0.9, "basis": ["email"]}
+                ]
+            },
+        },
+    ).json()
+    assessment = client.post(
+        f"/reviews/children/{candidate_id}/downstream-duplicate-assessment",
+        json={"run_id": run_dir.name},
+    ).json()
+
+    assert lookup["result"]["match_count"] == 1
+    assert lookup["writes_attempted"] == 0
+    assert lookup["network_calls_made"] == 0
+    assert assessment["assessment"]["state"] == "strong_duplicate"
+    assert assessment["writes_attempted"] == 0
+    assert assessment["network_calls_made"] == 0
+
+
 def test_api_multi_card_preclassification_drill_records_candidate_boxes(tmp_path: Path) -> None:
     pytest.importorskip("cv2")
     from business_card_watchdog.api import create_app

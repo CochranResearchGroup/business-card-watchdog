@@ -143,7 +143,11 @@ After approval, `reviews child-route-prep-queue --run-id <run-id> --json` lists
 child contacts ready for dry-run route preparation, and
 `reviews child-route-prep <candidate-id> --run-id <run-id> --json` writes local
 child lookup and sink plan artifacts with parent/child lineage. This prep still
-does not run live lookup, resolve duplicates, enrich, or write sinks.
+does not run live lookup, resolve duplicates, enrich, or write sinks. Use
+`reviews child-lookup-result <candidate-id> --run-id <run-id> --matches-by-sink-json '{}' --json`
+to import supplied child lookup evidence, then
+`reviews child-assess-duplicates <candidate-id> --run-id <run-id> --json` to
+classify downstream duplicate state without live sink calls.
 
 `drills review-routing` creates a synthetic fixture run and proves review approval,
 review bundle/workbook export, duplicate lookup planning, dry-run sink routing, and

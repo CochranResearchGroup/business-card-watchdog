@@ -170,3 +170,67 @@ def test_child_route_prep_writes_dry_run_lookup_and_sink_plans(tmp_path: Path, m
     assert any(artifact["kind"] == "child_sink_plan" for artifact in artifacts)
     assert any(artifact["kind"] == "child_route_prep_result" for artifact in artifacts)
     assert any(event["event_type"] == "child_route_prepared" for event in events)
+
+
+def test_child_lookup_result_and_duplicate_assessment_use_fixture_matches(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pytest = __import__("pytest")
+    pytest.importorskip("cv2")
+    source_dir = tmp_path / "images"
+    write_multi_card_image(source_dir / "multi.jpg")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+    service = BusinessCardService(config)
+    candidate_id = str(service.child_review_queue(run_id=run_dir.name)[0]["candidate_id"])
+    service.submit_child_review(
+        run_id=run_dir.name,
+        candidate_id=candidate_id,
+        reviewer="operator",
+        action="approve_child_for_routing",
+    )
+    service.prepare_child_route(run_id=run_dir.name, candidate_id=candidate_id)
+
+    lookup = service.record_child_sink_lookup_result(
+        run_id=run_dir.name,
+        candidate_id=candidate_id,
+        matches_by_sink={
+            "google_contacts": [
+                {
+                    "resource_id": "people/fixture-child-1",
+                    "confidence": 0.98,
+                    "basis": ["email"],
+                    "display": "Fixture Existing Contact",
+                }
+            ]
+        },
+    )
+    assessment = service.assess_child_downstream_duplicates(
+        run_id=run_dir.name,
+        candidate_id=candidate_id,
+    )
+    artifacts = read_jsonl(run_dir / "artifacts.jsonl")
+    events = read_jsonl(run_dir / "events.jsonl")
+
+    assert lookup["result"]["state"] == "possible_duplicate"
+    assert lookup["result"]["match_count"] == 1
+    assert lookup["result"]["candidate_id"] == candidate_id
+    assert lookup["writes_attempted"] == 0
+    assert lookup["network_calls_made"] == 0
+    assert assessment["assessment"]["state"] == "strong_duplicate"
+    assert assessment["assessment"]["candidate_id"] == candidate_id
+    assert assessment["assessment"]["reviewed"] is False
+    assert assessment["writes_attempted"] == 0
+    assert assessment["network_calls_made"] == 0
+    assert any(artifact["kind"] == "child_sink_adapter_request_lookup" for artifact in artifacts)
+    assert any(artifact["kind"] == "child_sink_lookup_result" for artifact in artifacts)
+    assert any(artifact["kind"] == "child_downstream_duplicate_assessment" for artifact in artifacts)
+    assert any(event["event_type"] == "child_sink_lookup_result_recorded" for event in events)
+    assert any(event["event_type"] == "child_downstream_duplicate_assessed" for event in events)

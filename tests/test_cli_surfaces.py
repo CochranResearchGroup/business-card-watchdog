@@ -329,6 +329,77 @@ def test_cli_child_route_prep_writes_dry_run_plans(
     assert payload["network_calls_made"] == 0
 
 
+def test_cli_child_lookup_result_and_duplicate_assessment(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    pytest = __import__("pytest")
+    pytest.importorskip("cv2")
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+    source_dir = tmp_path / "images"
+    write_multi_card_image(source_dir / "multi.jpg")
+    config = AppConfig(
+        config_path=config_path,
+        data_dir=data_dir,
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+    service = BusinessCardService(config)
+    candidate_id = str(service.child_review_queue(run_id=run_dir.name)[0]["candidate_id"])
+    service.submit_child_review(
+        run_id=run_dir.name,
+        candidate_id=candidate_id,
+        reviewer="operator",
+        action="approve_child_for_routing",
+    )
+    service.prepare_child_route(run_id=run_dir.name, candidate_id=candidate_id)
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "reviews",
+                "child-lookup-result",
+                candidate_id,
+                "--run-id",
+                run_dir.name,
+                "--matches-by-sink-json",
+                '{"google_contacts":[{"resource_id":"people/cli-child","confidence":0.9,"basis":["email"]}]}',
+                "--json",
+            ]
+        )
+        == 0
+    )
+    lookup = json.loads(capsys.readouterr().out)
+
+    assert main(
+        [
+            "--config",
+            str(config_path),
+            "reviews",
+            "child-assess-duplicates",
+            candidate_id,
+            "--run-id",
+            run_dir.name,
+            "--json",
+        ]
+    ) == 0
+    assessment = json.loads(capsys.readouterr().out)
+
+    assert lookup["result"]["match_count"] == 1
+    assert lookup["writes_attempted"] == 0
+    assert lookup["network_calls_made"] == 0
+    assert assessment["assessment"]["state"] == "strong_duplicate"
+    assert assessment["writes_attempted"] == 0
+    assert assessment["network_calls_made"] == 0
+
+
 def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.toml"
     data_dir = tmp_path / "data"

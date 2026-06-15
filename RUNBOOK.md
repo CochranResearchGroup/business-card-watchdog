@@ -4907,3 +4907,32 @@ Validation:
 Safety:
 
 - This created local dry-run child lookup and sink plan artifacts only. It did not process private SyncThing images, execute live lookup, dedupe, route to sinks, enrich, write contacts, execute command-copy text, run public-web search, call paid APIs, or call GWS/Odollo/Odoo.
+
+## Turn 226 | 2026-06-15
+
+Executed Plan 0020 with Slice 0020-A.
+
+Implemented:
+
+- Added `BusinessCardService.record_child_sink_lookup_result`.
+- Added `BusinessCardService.assess_child_downstream_duplicates`.
+- Added CLI commands `reviews child-lookup-result` and `reviews child-assess-duplicates`.
+- Added API routes `POST /reviews/children/{candidate_id}/sink-lookup-result` and `POST /reviews/children/{candidate_id}/downstream-duplicate-assessment`.
+- Added MCP tools `business_card_watchdog_child_sink_lookup_result` and `business_card_watchdog_child_downstream_duplicate_assessment`.
+- Added synthetic multi-card coverage for service, CLI, API, and MCP child lookup evidence import plus duplicate assessment.
+- Updated README and roadmap documentation for child lookup evidence and duplicate assessment.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_review_surface.py::test_child_lookup_result_and_duplicate_assessment_use_fixture_matches tests/test_cli_surfaces.py::test_cli_child_lookup_result_and_duplicate_assessment tests/test_api.py::test_api_child_lookup_result_and_duplicate_assessment tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_child_lookup_result_and_duplicate_assessment -q` passed with 5 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/api.py src/business_card_watchdog/mcp.py tests/test_review_surface.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 255 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This created local child lookup evidence and duplicate assessment artifacts only. It did not process private SyncThing images, execute live lookup, resolve duplicates, route to sinks, enrich, write contacts, execute command-copy text, run public-web search, call paid APIs, or call GWS/Odollo/Odoo.
