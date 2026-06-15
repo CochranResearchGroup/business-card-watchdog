@@ -228,6 +228,19 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_lookup_smoke_handoff_from_response",
+                "description": "Preview or write the lookup-smoke handoff for an active selected target from a validated operator response without live calls.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "response": {"type": "string"},
+                        "write_handoff": {"type": "boolean", "default": False},
+                    },
+                    "required": ["run_id", "response"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_next_actions",
                 "description": "Return deterministic next actions for agent-loop batch orchestration.",
                 "input_schema": {
@@ -919,6 +932,12 @@ def call_tool(
             run_id=str(args["run_id"]),
             response=str(args["response"]),
             write_audit=bool(args.get("write_audit", False)),
+        )
+    if tool_name == "business_card_watchdog_lookup_smoke_handoff_from_response":
+        return service.lookup_smoke_handoff_from_response(
+            run_id=str(args["run_id"]),
+            response=str(args["response"]),
+            write_handoff=bool(args.get("write_handoff", False)),
         )
     if tool_name == "business_card_watchdog_next_actions":
         return service.next_actions(

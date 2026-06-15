@@ -645,6 +645,12 @@ class BusinessCardService:
                     if selected_run_id
                     else "runs list --json"
                 ),
+                "lookup_smoke_handoff_from_response": (
+                    f"runs lookup-smoke-handoff-from-response {selected_run_id} "
+                    "--response <operator-response> --json"
+                    if selected_run_id
+                    else "runs list --json"
+                ),
                 "mcp_manifest": "mcp-manifest",
             },
             "api_routes": {
@@ -699,6 +705,11 @@ class BusinessCardService:
                     f"POST /runs/{selected_run_id}/selected-live-target-handoff-from-response"
                     if selected_run_id
                     else "POST /runs/{run_id}/selected-live-target-handoff-from-response"
+                ),
+                "lookup_smoke_handoff_from_response": (
+                    f"POST /runs/{selected_run_id}/lookup-smoke-handoff-from-response"
+                    if selected_run_id
+                    else "POST /runs/{run_id}/lookup-smoke-handoff-from-response"
                 ),
             },
             "mcp_tools": {
@@ -767,6 +778,16 @@ class BusinessCardService:
                     "arguments": {"run_id": selected_run_id, "response": "<operator-response>", "write_audit": False}
                     if selected_run_id
                     else {"run_id": "<run-id>", "response": "<operator-response>", "write_audit": False},
+                },
+                "lookup_smoke_handoff_from_response": {
+                    "tool": "business_card_watchdog_lookup_smoke_handoff_from_response",
+                    "arguments": {
+                        "run_id": selected_run_id,
+                        "response": "<operator-response>",
+                        "write_handoff": False,
+                    }
+                    if selected_run_id
+                    else {"run_id": "<run-id>", "response": "<operator-response>", "write_handoff": False},
                 },
             },
             "safe_next_actions": [
@@ -2648,6 +2669,7 @@ class BusinessCardService:
         run_id: str,
         sink: str,
         approved_by: str = "operator",
+        write: bool = True,
     ) -> dict[str, Any]:
         if sink not in {"google_contacts", "odoo"}:
             raise ValueError("lookup smoke handoff requires sink google_contacts or odoo")
@@ -2737,28 +2759,30 @@ class BusinessCardService:
             ),
         }
         handoff_path = artifact_dir / "sink_lookup_smoke_handoff.json"
-        handoff_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        ledger = RunLedger(self.config.runs_dir / run_id)
-        ledger.record_artifact(job_id=job_id, kind="sink_lookup_smoke_handoff", path=handoff_path)
-        ledger.record_event(
-            "sink_lookup_smoke_handoff_created",
-            {
-                "job_id": job_id,
-                "run_id": run_id,
-                "sink": sink,
-                "approved_by": approved_by,
-                "handoff_path": str(handoff_path),
-                "state": state,
-                "writes_attempted": 0,
-                "network_calls_made": 0,
-            },
-        )
-        self._mark_route_artifact_refreshed(
-            artifact_dir,
-            job_id=job_id,
-            run_id=run_id,
-            kind="sink_lookup_smoke_handoff",
-        )
+        if write:
+            handoff_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            ledger = RunLedger(self.config.runs_dir / run_id)
+            ledger.record_artifact(job_id=job_id, kind="sink_lookup_smoke_handoff", path=handoff_path)
+            ledger.record_event(
+                "sink_lookup_smoke_handoff_created",
+                {
+                    "job_id": job_id,
+                    "run_id": run_id,
+                    "sink": sink,
+                    "approved_by": approved_by,
+                    "handoff_path": str(handoff_path),
+                    "state": state,
+                    "writes_attempted": 0,
+                    "network_calls_made": 0,
+                },
+            )
+            self._mark_route_artifact_refreshed(
+                artifact_dir,
+                job_id=job_id,
+                run_id=run_id,
+                kind="sink_lookup_smoke_handoff",
+            )
+            return {"handoff_path": str(handoff_path), "handoff": payload}
         return {"handoff_path": str(handoff_path), "handoff": payload}
 
     def select_live_target_for_job(
@@ -6778,6 +6802,148 @@ class BusinessCardService:
                 "Only run the next explicit operator command after confirming the selected target is still safe.",
             ],
             "creates_selected_live_target": False,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+
+    def lookup_smoke_handoff_from_response(
+        self,
+        *,
+        run_id: str,
+        response: str,
+        write_handoff: bool = False,
+    ) -> dict[str, Any]:
+        selected_target_handoff = self.selected_live_target_handoff_from_response(
+            run_id=run_id,
+            response=response,
+            write_audit=False,
+        )
+        if selected_target_handoff.get("state") == "blocked":
+            return {
+                "schema": "business-card-watchdog.lookup-smoke-handoff-from-response.v1",
+                "generated_at": utc_now(),
+                "state": "blocked",
+                "run_id": run_id,
+                "job_id": selected_target_handoff.get("job_id"),
+                "sink": None,
+                "operator": None,
+                "validation_state": selected_target_handoff.get("validation_state"),
+                "selected_target_handoff": selected_target_handoff,
+                "lookup_smoke_handoff": None,
+                "handoff_path": None,
+                "write_handoff": write_handoff,
+                "handoff_written": False,
+                "blocked_reasons": list(selected_target_handoff.get("blocked_reasons") or []),
+                "next_safe_command": selected_target_handoff.get("next_safe_command"),
+                "next_explicit_operator_command": None,
+                "commands": {
+                    "validate_response": (
+                        f"runs live-pilot-validate-response {shlex.quote(run_id)} "
+                        f"--response {shlex.quote(response)} --json"
+                    ),
+                    "selected_target_handoff": (
+                        f"runs selected-live-target-handoff-from-response {shlex.quote(run_id)} "
+                        f"--response {shlex.quote(response)} --json"
+                    ),
+                },
+                "explicit_stop_conditions": [
+                    "This handoff did not run live lookup, live write, or live readback.",
+                    "Create or repair the selected target before preparing lookup-smoke handoff.",
+                    "Do not process private SyncThing images, run public-web search, or call paid enrichment.",
+                ],
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            }
+        selected_target = dict(selected_target_handoff.get("selected_target") or {})
+        job_id = str(selected_target_handoff.get("job_id") or selected_target.get("job_id") or "")
+        sink = str(selected_target.get("sink") or "")
+        operator = str(selected_target.get("operator") or selected_target.get("approved_by") or "")
+        if not job_id or sink not in {"google_contacts", "odoo"} or not operator:
+            blocked_reasons = ["active selected target is missing job_id, sink, or operator"]
+            return {
+                "schema": "business-card-watchdog.lookup-smoke-handoff-from-response.v1",
+                "generated_at": utc_now(),
+                "state": "blocked",
+                "run_id": run_id,
+                "job_id": job_id or None,
+                "sink": sink or None,
+                "operator": operator or None,
+                "validation_state": selected_target_handoff.get("validation_state"),
+                "selected_target_handoff": selected_target_handoff,
+                "lookup_smoke_handoff": None,
+                "handoff_path": None,
+                "write_handoff": write_handoff,
+                "handoff_written": False,
+                "blocked_reasons": blocked_reasons,
+                "next_safe_command": selected_target_handoff.get("next_safe_command"),
+                "next_explicit_operator_command": None,
+                "commands": {
+                    "selected_target_handoff": (
+                        f"runs selected-live-target-handoff-from-response {shlex.quote(run_id)} "
+                        f"--response {shlex.quote(response)} --json"
+                    ),
+                },
+                "explicit_stop_conditions": [
+                    "This handoff did not run live lookup, live write, or live readback.",
+                    "Repair selected-target evidence before preparing lookup-smoke handoff.",
+                ],
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            }
+        handoff_result = self.build_sink_lookup_smoke_handoff_for_job(
+            job_id=job_id,
+            run_id=run_id,
+            sink=sink,
+            approved_by=operator,
+            write=write_handoff,
+        )
+        handoff = dict(handoff_result.get("handoff") or {})
+        handoff_path = str(handoff_result.get("handoff_path") or "")
+        handoff_written = bool(write_handoff and handoff_path and Path(handoff_path).exists())
+        ready = handoff.get("state") == "ready_for_live_lookup"
+        blocked_reasons = list(handoff.get("missing_requirements") or [])
+        return {
+            "schema": "business-card-watchdog.lookup-smoke-handoff-from-response.v1",
+            "generated_at": utc_now(),
+            "state": "ready_for_live_lookup_request" if ready else "handoff_blocked",
+            "run_id": run_id,
+            "job_id": job_id,
+            "sink": sink,
+            "operator": operator,
+            "validation_state": selected_target_handoff.get("validation_state"),
+            "selected_target_identity": selected_target_handoff.get("selected_target_identity"),
+            "selected_target_handoff": selected_target_handoff,
+            "lookup_smoke_handoff": handoff,
+            "handoff_path": handoff_path,
+            "write_handoff": write_handoff,
+            "handoff_written": handoff_written,
+            "blocked_reasons": blocked_reasons,
+            "next_safe_command": (
+                f"sinks lookup-smoke-handoff {job_id} --run-id {run_id} "
+                f"--sink {sink} --approved-by {operator} --json"
+            ),
+            "next_explicit_operator_command": dict(handoff.get("commands") or {}).get("live_lookup_pilot")
+            if ready
+            else None,
+            "commands": {
+                "selected_target_handoff": (
+                    f"runs selected-live-target-handoff-from-response {shlex.quote(run_id)} "
+                    f"--response {shlex.quote(response)} --json"
+                ),
+                "lookup_smoke_handoff": (
+                    f"sinks lookup-smoke-handoff {job_id} --run-id {run_id} "
+                    f"--sink {sink} --approved-by {operator} --json"
+                ),
+                "execute_lookup_smoke": f"sinks execute-lookup-smoke {job_id} --run-id {run_id} --json",
+                "live_pilot_status": f"runs live-pilot-status {run_id} --no-write --json",
+                "live_pilot_handoff": f"runs live-pilot-handoff {run_id} --no-write --json",
+            },
+            "explicit_stop_conditions": [
+                "This handoff does not run live lookup, live write, or live readback.",
+                "Only run the explicit live lookup command after the handoff state is ready_for_live_lookup_request.",
+                "Persist and inspect redacted lookup evidence before any duplicate resolution or write pilot.",
+                "Do not process private SyncThing images, run public-web search, or call paid enrichment from this handoff.",
+            ],
             "writes_attempted": 0,
             "network_calls_made": 0,
         }

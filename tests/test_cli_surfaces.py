@@ -1108,6 +1108,55 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
                 "--config",
                 str(config_path),
                 "runs",
+                "lookup-smoke-handoff-from-response",
+                run_id,
+                "--response",
+                response,
+                "--json",
+            ]
+        )
+        == 0
+    )
+    lookup_handoff = json.loads(capsys.readouterr().out)
+    assert lookup_handoff["schema"] == "business-card-watchdog.lookup-smoke-handoff-from-response.v1"
+    assert lookup_handoff["state"] == "handoff_blocked"
+    assert lookup_handoff["job_id"] == job_id
+    assert lookup_handoff["sink"] == "google_contacts"
+    assert lookup_handoff["operator"] == "tester"
+    assert lookup_handoff["lookup_smoke_handoff"]["state"] == "blocked"
+    assert lookup_handoff["write_handoff"] is False
+    assert lookup_handoff["handoff_written"] is False
+    assert lookup_handoff["writes_attempted"] == 0
+    assert lookup_handoff["network_calls_made"] == 0
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "lookup-smoke-handoff-from-response",
+                run_id,
+                "--response",
+                response,
+            ]
+        )
+        == 0
+    )
+    lookup_handoff_text = capsys.readouterr().out
+    assert "State: handoff_blocked" in lookup_handoff_text
+    assert "Write handoff: False" in lookup_handoff_text
+    assert "Handoff written: False" in lookup_handoff_text
+    assert "Lookup handoff state: blocked" in lookup_handoff_text
+    assert "Stop conditions: 4" in lookup_handoff_text
+    assert "{" not in lookup_handoff_text
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
                 "live-pilot-validate-response",
                 run_id,
                 "--response",

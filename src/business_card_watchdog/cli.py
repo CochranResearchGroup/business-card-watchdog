@@ -251,6 +251,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
         ("Selected target preview", "selected_live_target_preview"),
         ("Selected target from response", "selected_live_target_from_response"),
         ("Selected target handoff", "selected_live_target_handoff_from_response"),
+        ("Lookup smoke handoff", "lookup_smoke_handoff_from_response"),
     ]:
         command = commands.get(key)
         if command:
@@ -270,6 +271,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
             ("Selected target preview", "selected_live_target_preview"),
             ("Selected target from response", "selected_live_target_from_response"),
             ("Selected target handoff", "selected_live_target_handoff_from_response"),
+            ("Lookup smoke handoff", "lookup_smoke_handoff_from_response"),
         ]:
             route = api_routes.get(key)
             if route:
@@ -289,6 +291,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
             ("Selected target preview", "selected_live_target_preview"),
             ("Selected target from response", "selected_live_target_from_response"),
             ("Selected target handoff", "selected_live_target_handoff_from_response"),
+            ("Lookup smoke handoff", "lookup_smoke_handoff_from_response"),
         ]:
             tool_entry = mcp_tools.get(key)
             if isinstance(tool_entry, dict):
@@ -656,6 +659,35 @@ def _render_selected_live_target_handoff_from_response_text(payload: dict[str, o
         f"Next safe command: {payload.get('next_safe_command') or 'none'}",
         f"Next explicit command: {payload.get('next_explicit_operator_command') or 'none'}",
         f"Creates selected target: {payload.get('creates_selected_live_target', False)}",
+        f"Observed: writes={payload.get('writes_attempted', 0)} network={payload.get('network_calls_made', 0)}",
+    ]
+    blockers = payload.get("blocked_reasons") or []
+    rows = blockers if isinstance(blockers, list) else []
+    lines.append(f"Blocked reasons: {len(rows)}")
+    for reason in rows:
+        lines.append(f" - {reason}")
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    stops = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stops)}")
+    for condition in stops:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
+def _render_lookup_smoke_handoff_from_response_text(payload: dict[str, object]) -> str:
+    handoff = dict(payload.get("lookup_smoke_handoff") or {})
+    lines = [
+        f"Run: {payload.get('run_id')}",
+        f"Job: {payload.get('job_id') or 'none'}",
+        f"State: {payload.get('state')}",
+        f"Sink: {payload.get('sink') or 'none'}",
+        f"Operator: {payload.get('operator') or 'none'}",
+        f"Validation state: {payload.get('validation_state')}",
+        f"Write handoff: {payload.get('write_handoff', False)}",
+        f"Handoff written: {payload.get('handoff_written', False)}",
+        f"Lookup handoff state: {handoff.get('state') or 'none'}",
+        f"Next safe command: {payload.get('next_safe_command') or 'none'}",
+        f"Next explicit command: {payload.get('next_explicit_operator_command') or 'none'}",
         f"Observed: writes={payload.get('writes_attempted', 0)} network={payload.get('network_calls_made', 0)}",
     ]
     blockers = payload.get("blocked_reasons") or []
@@ -1439,6 +1471,11 @@ def build_parser() -> argparse.ArgumentParser:
     runs_selected_live_target_handoff_from_response.add_argument("--response", required=True)
     runs_selected_live_target_handoff_from_response.add_argument("--write-audit", action="store_true")
     runs_selected_live_target_handoff_from_response.add_argument("--json", action="store_true")
+    runs_lookup_smoke_handoff_from_response = runs_sub.add_parser("lookup-smoke-handoff-from-response")
+    runs_lookup_smoke_handoff_from_response.add_argument("run_id")
+    runs_lookup_smoke_handoff_from_response.add_argument("--response", required=True)
+    runs_lookup_smoke_handoff_from_response.add_argument("--write-handoff", action="store_true")
+    runs_lookup_smoke_handoff_from_response.add_argument("--json", action="store_true")
     runs_live_pilot_validate_response = runs_sub.add_parser("live-pilot-validate-response")
     runs_live_pilot_validate_response.add_argument("run_id")
     runs_live_pilot_validate_response.add_argument("--response", required=True)
@@ -1837,10 +1874,19 @@ def main(argv: list[str] | None = None) -> int:
                 response=args.response,
                 write_audit=args.write_audit,
             )
+        elif args.runs_command == "lookup-smoke-handoff-from-response":
+            payload = service.lookup_smoke_handoff_from_response(
+                run_id=args.run_id,
+                response=args.response,
+                write_handoff=args.write_handoff,
+            )
         elif args.runs_command == "live-pilot-validate-response":
             payload = service.validate_live_pilot_operator_response(run_id=args.run_id, response=args.response)
         else:
             payload = service.get_run(args.run_id)
+        if args.runs_command == "lookup-smoke-handoff-from-response" and not args.json:
+            print(_render_lookup_smoke_handoff_from_response_text(payload), end="")
+            return 0
         if args.runs_command == "selected-live-target-handoff-from-response" and not args.json:
             print(_render_selected_live_target_handoff_from_response_text(payload), end="")
             return 0

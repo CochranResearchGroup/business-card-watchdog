@@ -127,6 +127,10 @@ def create_app(config_path: Path | None = None):
         response: str
         write_audit: bool = False
 
+    class LookupSmokeHandoffFromResponseRequest(BaseModel):
+        response: str
+        write_handoff: bool = False
+
     class SelectedLiveTargetAuditRequest(BaseModel):
         run_id: str
         scope: str | None = None
@@ -306,6 +310,17 @@ def create_app(config_path: Path | None = None):
             run_id=run_id,
             response=request.response,
             write_audit=request.write_audit,
+        )
+
+    @app.post("/runs/{run_id}/lookup-smoke-handoff-from-response")
+    def create_run_lookup_smoke_handoff_from_response(
+        run_id: str,
+        request: LookupSmokeHandoffFromResponseRequest,
+    ) -> dict[str, object]:
+        return service().lookup_smoke_handoff_from_response(
+            run_id=run_id,
+            response=request.response,
+            write_handoff=request.write_handoff,
         )
 
     @app.get("/runs/{run_id}/jobs")
