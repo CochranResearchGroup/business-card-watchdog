@@ -3146,6 +3146,161 @@ class BusinessCardService:
             "network_calls_made": 0,
         }
 
+    def child_sink_apply_preflight(
+        self,
+        *,
+        run_id: str,
+        candidate_id: str,
+        apply: bool = False,
+    ) -> dict[str, Any]:
+        entry = self._child_route_prep_entry(run_id=run_id, candidate_id=candidate_id)
+        prep_dir = self._child_route_prep_dir(entry)
+        gate = _read_json_file(prep_dir / "child_sink_plan_gate.json") or {}
+        if gate.get("state") != "ready_for_sink_plan":
+            raise ValueError(f"child sink plan gate is not ready for preflight: {candidate_id}")
+        sink_plan = _read_json_file(prep_dir / "child_sink_plan.json") or {}
+        if not sink_plan:
+            raise FileNotFoundError(f"child sink plan not found: {prep_dir / 'child_sink_plan.json'}")
+        preflight = build_sink_apply_preflight(plan=sink_plan, apply=apply)
+        preflight["schema"] = "business-card-watchdog.child-sink-apply-preflight.v1"
+        preflight["job_id"] = entry.get("job_id")
+        preflight["candidate_id"] = candidate_id
+        preflight["work_item_id"] = entry.get("work_item_id")
+        preflight["child_sink_plan_gate_path"] = str(prep_dir / "child_sink_plan_gate.json")
+        preflight["can_apply"] = False
+        preflight["state"] = "preview" if not apply and preflight.get("state") == "preview" else "blocked"
+        preflight["reason"] = (
+            preflight.get("reason")
+            if not apply
+            else "child live apply is disabled; create an operator-selected child target handoff first"
+        )
+        preflight["sink_write_allowed"] = False
+        preflight["writes_attempted"] = 0
+        preflight["network_calls_made"] = 0
+        preflight_path = prep_dir / "child_sink_apply_preflight.json"
+        preflight_path.write_text(json.dumps(preflight, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        parent_job_id = str(entry.get("job_id") or "__run__")
+        ledger.record_artifact(job_id=parent_job_id, kind="child_sink_apply_preflight", path=preflight_path)
+        ledger.record_event(
+            "child_sink_apply_preflight_created",
+            {
+                "run_id": run_id,
+                "job_id": entry.get("job_id"),
+                "candidate_id": candidate_id,
+                "state": preflight["state"],
+                "preflight_path": str(preflight_path),
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        return {
+            "schema": "business-card-watchdog.child-sink-apply-preflight-result.v1",
+            "run_id": run_id,
+            "job_id": entry.get("job_id"),
+            "candidate_id": candidate_id,
+            "preflight_path": str(preflight_path),
+            "preflight": preflight,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+
+    def child_selected_target_handoff(
+        self,
+        *,
+        run_id: str,
+        candidate_id: str,
+        sink: str,
+        operator: str = "operator",
+        scope: str = "write",
+        reason: str = "",
+    ) -> dict[str, Any]:
+        entry = self._child_route_prep_entry(run_id=run_id, candidate_id=candidate_id)
+        prep_dir = self._child_route_prep_dir(entry)
+        preflight = _read_json_file(prep_dir / "child_sink_apply_preflight.json") or {}
+        if not preflight:
+            preflight = self.child_sink_apply_preflight(
+                run_id=run_id,
+                candidate_id=candidate_id,
+                apply=False,
+            )["preflight"]
+        actions = [action for action in list(preflight.get("actions") or []) if action.get("sink") == sink]
+        blockers: list[str] = []
+        if preflight.get("state") != "preview":
+            blockers.append(f"child_preflight_state:{preflight.get('state') or 'missing'}")
+        if not actions:
+            blockers.append(f"sink_not_in_child_preflight:{sink}")
+        state = "ready_for_operator_selection" if not blockers else "blocked"
+        payload = {
+            "schema": "business-card-watchdog.child-selected-target-handoff.v1",
+            "state": state,
+            "run_id": run_id,
+            "job_id": entry.get("job_id"),
+            "candidate_id": candidate_id,
+            "work_item_id": entry.get("work_item_id"),
+            "sink": sink,
+            "operator": operator,
+            "scope": scope,
+            "reason": reason,
+            "blocked_reasons": blockers,
+            "preflight_path": str(prep_dir / "child_sink_apply_preflight.json"),
+            "selected_target_created": False,
+            "target_safety_confirmation_required": True,
+            "operator_response_template": {
+                "candidate_id": candidate_id,
+                "sink": sink,
+                "operator": operator,
+                "scope": scope,
+                "reason": reason,
+                "safety_confirmation": "I approve this child contact sink target for a future selected-target pilot.",
+            },
+            "commands": {
+                "refresh_preflight": (
+                    f"reviews child-sink-apply-preflight {shlex.quote(candidate_id)} "
+                    f"--run-id {run_id} --json"
+                ),
+                "refresh_handoff": (
+                    f"reviews child-selected-target-handoff {shlex.quote(candidate_id)} "
+                    f"--run-id {run_id} --sink {shlex.quote(sink)} --operator {shlex.quote(operator)} --json"
+                ),
+            },
+            "explicit_stop_conditions": [
+                "Do not create a live selected target from this handoff artifact.",
+                "Do not run live lookup, live write, or live readback from this child handoff.",
+                "Do not write Google Contacts, Odoo, or Odollo records from this child handoff.",
+            ],
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+        handoff_path = prep_dir / "child_selected_target_handoff.json"
+        handoff_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        parent_job_id = str(entry.get("job_id") or "__run__")
+        ledger.record_artifact(job_id=parent_job_id, kind="child_selected_target_handoff", path=handoff_path)
+        ledger.record_event(
+            "child_selected_target_handoff_created",
+            {
+                "run_id": run_id,
+                "job_id": entry.get("job_id"),
+                "candidate_id": candidate_id,
+                "sink": sink,
+                "state": state,
+                "handoff_path": str(handoff_path),
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        return {
+            "schema": "business-card-watchdog.child-selected-target-handoff-result.v1",
+            "run_id": run_id,
+            "job_id": entry.get("job_id"),
+            "candidate_id": candidate_id,
+            "handoff_path": str(handoff_path),
+            "handoff": payload,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+
     def _child_route_prep_entry(self, *, run_id: str, candidate_id: str) -> dict[str, Any]:
         entry = next(
             (

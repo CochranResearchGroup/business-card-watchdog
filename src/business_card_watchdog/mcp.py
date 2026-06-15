@@ -526,6 +526,35 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_child_sink_apply_preflight",
+                "description": "Create a child sink apply preflight preview from a cleared child sink-plan gate.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "candidate_id": {"type": "string"},
+                        "apply": {"type": "boolean", "default": False},
+                    },
+                    "required": ["run_id", "candidate_id"],
+                },
+            },
+            {
+                "name": "business_card_watchdog_child_selected_target_handoff",
+                "description": "Create a no-live child selected-target handoff packet for operator review.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "candidate_id": {"type": "string"},
+                        "sink": {"type": "string"},
+                        "operator": {"type": "string", "default": "operator"},
+                        "scope": {"type": "string", "default": "write"},
+                        "reason": {"type": "string"},
+                    },
+                    "required": ["run_id", "candidate_id", "sink"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_review_bundle",
                 "description": "Create a run-level batch review bundle with inline review-relevant artifact payloads.",
                 "input_schema": {
@@ -1298,6 +1327,21 @@ def call_tool(
         return service.child_sink_plan_gate(
             run_id=str(args["run_id"]),
             candidate_id=str(args["candidate_id"]),
+        )
+    if tool_name == "business_card_watchdog_child_sink_apply_preflight":
+        return service.child_sink_apply_preflight(
+            run_id=str(args["run_id"]),
+            candidate_id=str(args["candidate_id"]),
+            apply=bool(args.get("apply", False)),
+        )
+    if tool_name == "business_card_watchdog_child_selected_target_handoff":
+        return service.child_selected_target_handoff(
+            run_id=str(args["run_id"]),
+            candidate_id=str(args["candidate_id"]),
+            sink=str(args["sink"]),
+            operator=str(args.get("operator") or "operator"),
+            scope=str(args.get("scope") or "write"),
+            reason=str(args.get("reason") or ""),
         )
     if tool_name == "business_card_watchdog_review_bundle":
         return service.review_bundle(

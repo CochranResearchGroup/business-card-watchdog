@@ -62,6 +62,8 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_child_downstream_duplicate_assessment" in names
     assert "business_card_watchdog_child_duplicate_resolution" in names
     assert "business_card_watchdog_child_sink_plan_gate" in names
+    assert "business_card_watchdog_child_sink_apply_preflight" in names
+    assert "business_card_watchdog_child_selected_target_handoff" in names
     assert "business_card_watchdog_review_bundle" in names
     assert "business_card_watchdog_review_html" in names
     assert "business_card_watchdog_review_workbook" in names
@@ -321,6 +323,51 @@ def test_mcp_child_duplicate_resolution_clears_gate(tmp_path: Path, monkeypatch)
     assert resolution["network_calls_made"] == 0
     assert gate["gate"]["state"] == "ready_for_sink_plan"
     assert gate["gate"]["sink_write_allowed"] is False
+
+
+def test_mcp_child_sink_apply_preflight_and_handoff(tmp_path: Path, monkeypatch) -> None:
+    pytest = __import__("pytest")
+    pytest.importorskip("cv2")
+    source_dir = tmp_path / "images"
+    write_multi_card_image(source_dir / "multi.jpg")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+    service = BusinessCardService(config)
+    candidate_id = str(service.child_review_queue(run_id=run_dir.name)[0]["candidate_id"])
+    service.submit_child_review(
+        run_id=run_dir.name,
+        candidate_id=candidate_id,
+        reviewer="operator",
+        action="approve_child_for_routing",
+    )
+    service.prepare_child_route(run_id=run_dir.name, candidate_id=candidate_id)
+    service.record_child_sink_lookup_result(run_id=run_dir.name, candidate_id=candidate_id)
+    service.assess_child_downstream_duplicates(run_id=run_dir.name, candidate_id=candidate_id)
+    service.child_sink_plan_gate(run_id=run_dir.name, candidate_id=candidate_id)
+
+    preflight = call_tool(
+        "business_card_watchdog_child_sink_apply_preflight",
+        {"run_id": run_dir.name, "candidate_id": candidate_id},
+        config=config,
+    )
+    handoff = call_tool(
+        "business_card_watchdog_child_selected_target_handoff",
+        {"run_id": run_dir.name, "candidate_id": candidate_id, "sink": "google_contacts"},
+        config=config,
+    )
+
+    assert preflight["preflight"]["state"] == "preview"
+    assert preflight["preflight"]["sink_write_allowed"] is False
+    assert handoff["handoff"]["state"] == "ready_for_operator_selection"
+    assert handoff["handoff"]["selected_target_created"] is False
+    assert handoff["writes_attempted"] == 0
+    assert handoff["network_calls_made"] == 0
 
 
 def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:

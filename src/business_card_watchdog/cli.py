@@ -2061,6 +2061,19 @@ def build_parser() -> argparse.ArgumentParser:
     reviews_child_sink_plan_gate.add_argument("candidate_id")
     reviews_child_sink_plan_gate.add_argument("--run-id", required=True)
     reviews_child_sink_plan_gate.add_argument("--json", action="store_true")
+    reviews_child_sink_apply_preflight = reviews_sub.add_parser("child-sink-apply-preflight")
+    reviews_child_sink_apply_preflight.add_argument("candidate_id")
+    reviews_child_sink_apply_preflight.add_argument("--run-id", required=True)
+    reviews_child_sink_apply_preflight.add_argument("--apply", action="store_true")
+    reviews_child_sink_apply_preflight.add_argument("--json", action="store_true")
+    reviews_child_selected_target_handoff = reviews_sub.add_parser("child-selected-target-handoff")
+    reviews_child_selected_target_handoff.add_argument("candidate_id")
+    reviews_child_selected_target_handoff.add_argument("--run-id", required=True)
+    reviews_child_selected_target_handoff.add_argument("--sink", required=True)
+    reviews_child_selected_target_handoff.add_argument("--operator", default="operator")
+    reviews_child_selected_target_handoff.add_argument("--scope", default="write")
+    reviews_child_selected_target_handoff.add_argument("--reason", default="")
+    reviews_child_selected_target_handoff.add_argument("--json", action="store_true")
     reviews_bundle = reviews_sub.add_parser("bundle")
     reviews_bundle.add_argument("--run-id", required=True)
     reviews_bundle.add_argument("--state", default="all")
@@ -2646,6 +2659,21 @@ def main(argv: list[str] | None = None) -> int:
             payload = service.child_sink_plan_gate(
                 run_id=args.run_id,
                 candidate_id=args.candidate_id,
+            )
+        elif args.reviews_command == "child-sink-apply-preflight":
+            payload = service.child_sink_apply_preflight(
+                run_id=args.run_id,
+                candidate_id=args.candidate_id,
+                apply=args.apply,
+            )
+        elif args.reviews_command == "child-selected-target-handoff":
+            payload = service.child_selected_target_handoff(
+                run_id=args.run_id,
+                candidate_id=args.candidate_id,
+                sink=args.sink,
+                operator=args.operator,
+                scope=args.scope,
+                reason=args.reason,
             )
         else:
             payload = service.review_queue(

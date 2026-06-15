@@ -48,6 +48,17 @@ def create_app(config_path: Path | None = None):
         target_identity: str = ""
         reason: str = ""
 
+    class ChildSinkApplyPreflightRequest(BaseModel):
+        run_id: str
+        apply: bool = False
+
+    class ChildSelectedTargetHandoffRequest(BaseModel):
+        run_id: str
+        sink: str
+        operator: str = "operator"
+        scope: str = "write"
+        reason: str = ""
+
     class ReviewDecisionsRequest(BaseModel):
         reviewer: str = "operator"
         decisions: list[dict[str, object]] = Field(default_factory=list)
@@ -568,6 +579,31 @@ def create_app(config_path: Path | None = None):
         return service().child_sink_plan_gate(
             run_id=request.run_id,
             candidate_id=candidate_id,
+        )
+
+    @app.post("/reviews/children/{candidate_id}/sink-apply-preflight")
+    def create_child_sink_apply_preflight(
+        candidate_id: str,
+        request: ChildSinkApplyPreflightRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().child_sink_apply_preflight(
+            run_id=request.run_id,
+            candidate_id=candidate_id,
+            apply=request.apply,
+        )
+
+    @app.post("/reviews/children/{candidate_id}/selected-target-handoff")
+    def create_child_selected_target_handoff(
+        candidate_id: str,
+        request: ChildSelectedTargetHandoffRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().child_selected_target_handoff(
+            run_id=request.run_id,
+            candidate_id=candidate_id,
+            sink=request.sink,
+            operator=request.operator,
+            scope=request.scope,
+            reason=request.reason,
         )
 
     @app.post("/runs/{run_id}/review-bundle")

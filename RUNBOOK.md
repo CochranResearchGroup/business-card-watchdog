@@ -4965,3 +4965,31 @@ Validation:
 Safety:
 
 - This created local child duplicate resolution and gate artifacts only. It did not process private SyncThing images, execute live lookup, route to live sinks, enrich, write contacts, execute command-copy text, run public-web search, call paid APIs, or call GWS/Odollo/Odoo.
+
+## Turn 228 | 2026-06-15
+
+Executed Plan 0022 with Slice 0022-A.
+
+Implemented:
+
+- Added `BusinessCardService.child_sink_apply_preflight`.
+- Added `BusinessCardService.child_selected_target_handoff`.
+- Added CLI commands `reviews child-sink-apply-preflight` and `reviews child-selected-target-handoff`.
+- Added API routes `POST /reviews/children/{candidate_id}/sink-apply-preflight` and `POST /reviews/children/{candidate_id}/selected-target-handoff`.
+- Added MCP tools `business_card_watchdog_child_sink_apply_preflight` and `business_card_watchdog_child_selected_target_handoff`.
+- Added synthetic multi-card coverage for service, CLI, API, and MCP child preflight plus selected-target handoff.
+- Updated README and roadmap documentation for child preflight handoff packets.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_review_surface.py::test_child_sink_apply_preflight_and_selected_target_handoff tests/test_cli_surfaces.py::test_cli_child_sink_apply_preflight_and_handoff tests/test_api.py::test_api_child_sink_apply_preflight_and_handoff tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_child_sink_apply_preflight_and_handoff -q` passed with 5 tests.
+- `.venv/bin/python -m pytest -q -x -vv` passed with 263 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `uv build --out-dir dist` built source and wheel distributions.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This created local child apply preflight and selected-target handoff artifacts only. It did not create live selected targets, process private SyncThing images, execute live lookup, route to live sinks, enrich, write contacts, execute command-copy text, run public-web search, call paid APIs, or call GWS/Odollo/Odoo.

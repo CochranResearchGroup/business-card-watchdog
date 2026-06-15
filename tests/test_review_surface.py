@@ -290,3 +290,58 @@ def test_child_duplicate_resolution_clears_sink_plan_gate(tmp_path: Path, monkey
     assert any(artifact["kind"] == "child_sink_plan_gate" for artifact in artifacts)
     assert any(event["event_type"] == "child_duplicate_resolved" for event in events)
     assert any(event["event_type"] == "child_sink_plan_gate_created" for event in events)
+
+
+def test_child_sink_apply_preflight_and_selected_target_handoff(tmp_path: Path, monkeypatch) -> None:
+    pytest = __import__("pytest")
+    pytest.importorskip("cv2")
+    source_dir = tmp_path / "images"
+    write_multi_card_image(source_dir / "multi.jpg")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+    service = BusinessCardService(config)
+    candidate_id = str(service.child_review_queue(run_id=run_dir.name)[0]["candidate_id"])
+    service.submit_child_review(
+        run_id=run_dir.name,
+        candidate_id=candidate_id,
+        reviewer="operator",
+        action="approve_child_for_routing",
+    )
+    service.prepare_child_route(run_id=run_dir.name, candidate_id=candidate_id)
+    service.record_child_sink_lookup_result(run_id=run_dir.name, candidate_id=candidate_id)
+    service.assess_child_downstream_duplicates(run_id=run_dir.name, candidate_id=candidate_id)
+    service.child_sink_plan_gate(run_id=run_dir.name, candidate_id=candidate_id)
+
+    preflight = service.child_sink_apply_preflight(run_id=run_dir.name, candidate_id=candidate_id)
+    handoff = service.child_selected_target_handoff(
+        run_id=run_dir.name,
+        candidate_id=candidate_id,
+        sink="google_contacts",
+        operator="operator",
+        reason="synthetic child target review",
+    )
+    artifacts = read_jsonl(run_dir / "artifacts.jsonl")
+    events = read_jsonl(run_dir / "events.jsonl")
+
+    assert preflight["preflight"]["schema"] == "business-card-watchdog.child-sink-apply-preflight.v1"
+    assert preflight["preflight"]["state"] == "preview"
+    assert preflight["preflight"]["can_apply"] is False
+    assert preflight["preflight"]["sink_write_allowed"] is False
+    assert handoff["handoff"]["schema"] == "business-card-watchdog.child-selected-target-handoff.v1"
+    assert handoff["handoff"]["state"] == "ready_for_operator_selection"
+    assert handoff["handoff"]["selected_target_created"] is False
+    assert handoff["handoff"]["writes_attempted"] == 0
+    assert handoff["handoff"]["network_calls_made"] == 0
+    assert "Do not run live lookup, live write, or live readback from this child handoff." in handoff["handoff"][
+        "explicit_stop_conditions"
+    ]
+    assert any(artifact["kind"] == "child_sink_apply_preflight" for artifact in artifacts)
+    assert any(artifact["kind"] == "child_selected_target_handoff" for artifact in artifacts)
+    assert any(event["event_type"] == "child_sink_apply_preflight_created" for event in events)
+    assert any(event["event_type"] == "child_selected_target_handoff_created" for event in events)

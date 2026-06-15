@@ -152,6 +152,10 @@ classify downstream duplicate state without live sink calls. Use
 to record an explicit child duplicate decision, then
 `reviews child-sink-plan-gate <candidate-id> --run-id <run-id> --json` to verify
 whether the child sink plan is still blocked or cleared for future preflight.
+Once clear, `reviews child-sink-apply-preflight <candidate-id> --run-id <run-id> --json`
+previews child sink apply readiness, and
+`reviews child-selected-target-handoff <candidate-id> --run-id <run-id> --sink google_contacts --json`
+writes a no-live operator handoff packet without creating a selected target.
 
 `drills review-routing` creates a synthetic fixture run and proves review approval,
 review bundle/workbook export, duplicate lookup planning, dry-run sink routing, and
