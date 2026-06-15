@@ -4269,3 +4269,24 @@ Validation:
 Safety:
 
 - This created `selected_live_target.json` only in focused synthetic tests when the explicit write flag was set. Default CLI/API/MCP behavior remains no-write preview. It did not process configured/private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+## Turn 202 | 2026-06-15
+
+Continued Plan 0009 with Slice 0009-A126.
+
+Implemented:
+
+- Added `business-card-watchdog.selected-live-target-handoff-from-response.v1`.
+- Added no-live selected-target handoff/readback from a validated operator response across service, CLI, API, and MCP surfaces.
+- Handoff output composes validation state, selected target identity, selected-target audit preview, next safe audit command, and next explicit command when audit evidence is ready.
+- Default mode does not write `selected_live_target_audit.json`; explicit write-audit mode persists only the audit artifact.
+- Operator dashboard command/API/MCP maps now advertise the handoff surface.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_operator_dashboard_composes_no_live_readiness tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/api.py src/business_card_watchdog/mcp.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+
+Safety:
+
+- This was selected-target readback and audit handoff only. It did not create or modify `selected_live_target.json`, process configured/private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.

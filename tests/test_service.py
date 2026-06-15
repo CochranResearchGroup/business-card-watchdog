@@ -849,12 +849,18 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     assert dashboard["commands"]["selected_live_target_from_response"] == (
         f"runs selected-live-target-from-response {run_id} --response <operator-response> --json"
     )
+    assert dashboard["commands"]["selected_live_target_handoff_from_response"] == (
+        f"runs selected-live-target-handoff-from-response {run_id} --response <operator-response> --json"
+    )
     assert dashboard["commands"]["live_pilot_validate_response"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
     assert dashboard["api_routes"]["next_actions"] == f"GET /actions/next?run_id={run_id}&limit=20"
     assert dashboard["api_routes"]["live_pilot_validate_response"] == (
         f"POST /runs/{run_id}/live-pilot-operator-response-validation"
+    )
+    assert dashboard["api_routes"]["selected_live_target_handoff_from_response"] == (
+        f"POST /runs/{run_id}/selected-live-target-handoff-from-response"
     )
     assert dashboard["mcp_tools"]["next_actions"] == {
         "tool": "business_card_watchdog_next_actions",
@@ -871,6 +877,10 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     assert dashboard["mcp_tools"]["selected_live_target_from_response"] == {
         "tool": "business_card_watchdog_selected_live_target_from_response",
         "arguments": {"run_id": run_id, "response": "<operator-response>"},
+    }
+    assert dashboard["mcp_tools"]["selected_live_target_handoff_from_response"] == {
+        "tool": "business_card_watchdog_selected_live_target_handoff_from_response",
+        "arguments": {"run_id": run_id, "response": "<operator-response>", "write_audit": False},
     }
     assert dashboard["mcp_tools"]["review_routing_drill"] == {
         "tool": "business_card_watchdog_review_routing_drill",
@@ -2697,6 +2707,38 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert Path(target["target_path"]).exists()
     assert any(artifact["kind"] == "selected_live_target" for artifact in job["artifacts"])
     assert "selected_live_target" in review_bundle["entries"][0]["artifact_kinds"]
+
+    preview_handoff = service.selected_live_target_handoff_from_response(
+        run_id=run_id,
+        response=preselection_response,
+    )
+    assert preview_handoff["schema"] == "business-card-watchdog.selected-live-target-handoff-from-response.v1"
+    assert preview_handoff["state"] == "audit_blocked"
+    assert preview_handoff["job_id"] == job_id
+    assert preview_handoff["validation_state"] == "ready_for_live_lookup_request"
+    assert preview_handoff["selected_target_identity"] == payload["selection_id"]
+    assert preview_handoff["selected_target_audit"]["state"] == "blocked"
+    assert "lookup:reviewed_contact_exists" in preview_handoff["blocked_reasons"]
+    assert preview_handoff["write_audit"] is False
+    assert preview_handoff["audit_written"] is False
+    assert "selected-target-audit" in preview_handoff["next_safe_command"]
+    assert preview_handoff["next_explicit_operator_command"] is None
+    assert preview_handoff["creates_selected_live_target"] is False
+    assert preview_handoff["writes_attempted"] == 0
+    assert preview_handoff["network_calls_made"] == 0
+    assert not (config.runs_dir / run_id / "artifacts" / job_id / "selected_live_target_audit.json").exists()
+
+    written_handoff = service.selected_live_target_handoff_from_response(
+        run_id=run_id,
+        response=preselection_response,
+        write_audit=True,
+    )
+    assert written_handoff["state"] == "audit_blocked"
+    assert written_handoff["write_audit"] is True
+    assert written_handoff["audit_written"] is True
+    assert written_handoff["writes_attempted"] == 0
+    assert written_handoff["network_calls_made"] == 0
+    assert Path(written_handoff["selected_target_audit"]["audit_path"]).exists()
 
     audit = service.selected_live_target_audit(job_id=job_id, run_id=run_id, scope="lookup")
     assert audit["schema"] == "business-card-watchdog.selected-live-target-audit.v1"

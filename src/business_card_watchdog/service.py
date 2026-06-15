@@ -639,6 +639,12 @@ class BusinessCardService:
                     if selected_run_id
                     else "runs list --json"
                 ),
+                "selected_live_target_handoff_from_response": (
+                    f"runs selected-live-target-handoff-from-response {selected_run_id} "
+                    "--response <operator-response> --json"
+                    if selected_run_id
+                    else "runs list --json"
+                ),
                 "mcp_manifest": "mcp-manifest",
             },
             "api_routes": {
@@ -688,6 +694,11 @@ class BusinessCardService:
                     f"POST /runs/{selected_run_id}/selected-live-target-from-response"
                     if selected_run_id
                     else "POST /runs/{run_id}/selected-live-target-from-response"
+                ),
+                "selected_live_target_handoff_from_response": (
+                    f"POST /runs/{selected_run_id}/selected-live-target-handoff-from-response"
+                    if selected_run_id
+                    else "POST /runs/{run_id}/selected-live-target-handoff-from-response"
                 ),
             },
             "mcp_tools": {
@@ -750,6 +761,12 @@ class BusinessCardService:
                     "arguments": {"run_id": selected_run_id, "response": "<operator-response>"}
                     if selected_run_id
                     else {"run_id": "<run-id>", "response": "<operator-response>"},
+                },
+                "selected_live_target_handoff_from_response": {
+                    "tool": "business_card_watchdog_selected_live_target_handoff_from_response",
+                    "arguments": {"run_id": selected_run_id, "response": "<operator-response>", "write_audit": False}
+                    if selected_run_id
+                    else {"run_id": "<run-id>", "response": "<operator-response>", "write_audit": False},
                 },
             },
             "safe_next_actions": [
@@ -6651,6 +6668,118 @@ class BusinessCardService:
                 "This command did not run live lookup, live write, or live readback.",
                 "Run selected-target audit before any explicit live pilot command.",
             ],
+        }
+
+    def selected_live_target_handoff_from_response(
+        self,
+        *,
+        run_id: str,
+        response: str,
+        write_audit: bool = False,
+    ) -> dict[str, Any]:
+        validation = self.validate_live_pilot_operator_response(run_id=run_id, response=response)
+        parsed = dict(validation.get("parsed_response") or {})
+        job_id = str(parsed.get("job_id") or "")
+        scope = str(parsed.get("scope") or "lookup")
+        if validation.get("state") not in {
+            "ready_for_live_lookup_request",
+            "ready_to_review_selected_target_audit",
+        }:
+            return {
+                "schema": "business-card-watchdog.selected-live-target-handoff-from-response.v1",
+                "generated_at": utc_now(),
+                "state": "blocked",
+                "run_id": run_id,
+                "job_id": job_id or None,
+                "scope": scope,
+                "validation_state": validation.get("state"),
+                "validation": validation,
+                "selected_target_audit": None,
+                "selected_target": None,
+                "selected_target_path": None,
+                "write_audit": write_audit,
+                "audit_written": False,
+                "next_safe_command": f"runs live-pilot-validate-response {run_id} --response <operator-response> --json",
+                "next_explicit_operator_command": None,
+                "blocked_reasons": [
+                    f"validation state {validation.get('state')} does not have an active selected_live_target.json"
+                ],
+                "commands": {
+                    "validate_response": (
+                        f"runs live-pilot-validate-response {shlex.quote(run_id)} "
+                        f"--response {shlex.quote(response)} --json"
+                    ),
+                    "create_selected_target": (
+                        f"runs selected-live-target-from-response {shlex.quote(run_id)} "
+                        f"--response {shlex.quote(response)} --write-selected-target --json"
+                    ),
+                    "live_pilot_handoff": f"runs live-pilot-handoff {run_id} --no-write --json",
+                },
+                "explicit_stop_conditions": [
+                    "This handoff did not create selected_live_target.json.",
+                    "Create a selected target only after explicit operator approval.",
+                    "This handoff never runs live lookup, live write, or live readback.",
+                ],
+                "creates_selected_live_target": False,
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            }
+        if not job_id:
+            raise ValueError("validated operator response did not include job_id")
+        audit = self.selected_live_target_audit(
+            job_id=job_id,
+            run_id=run_id,
+            scope=scope,
+            write=write_audit,
+        )
+        selected_target = audit.get("selected_target")
+        audit_written = bool(write_audit and audit.get("audit_path"))
+        next_explicit_operator_command = None
+        if audit.get("state") == "ready":
+            next_explicit_operator_command = dict(audit.get("commands") or {}).get("lookup_smoke")
+        blocked_reasons = list(audit.get("blocked_reasons") or [])
+        state = "ready_for_live_lookup_request" if audit.get("state") == "ready" else "audit_blocked"
+        return {
+            "schema": "business-card-watchdog.selected-live-target-handoff-from-response.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_id,
+            "job_id": job_id,
+            "scope": scope,
+            "validation_state": validation.get("state"),
+            "validation_next_step": validation.get("next_validation_step"),
+            "approval_readback": validation.get("approval_readback"),
+            "selected_target_audit": audit,
+            "selected_target": selected_target,
+            "selected_target_path": audit.get("selected_target_path"),
+            "selected_target_identity": _selected_target_identity(dict(selected_target or {})) or None,
+            "write_audit": write_audit,
+            "audit_written": audit_written,
+            "next_safe_command": (
+                f"sinks selected-target-audit {job_id} --run-id {run_id} --scope {scope} --no-write --json"
+            ),
+            "next_explicit_operator_command": next_explicit_operator_command,
+            "blocked_reasons": blocked_reasons,
+            "commands": {
+                "validate_response": (
+                    f"runs live-pilot-validate-response {shlex.quote(run_id)} "
+                    f"--response {shlex.quote(response)} --json"
+                ),
+                "selected_target_audit": (
+                    f"sinks selected-target-audit {job_id} --run-id {run_id} --scope {scope} --no-write --json"
+                ),
+                "live_pilot_status": f"runs live-pilot-status {run_id} --no-write --json",
+                "live_pilot_handoff": f"runs live-pilot-handoff {run_id} --no-write --json",
+                "lookup_smoke": dict(audit.get("commands") or {}).get("lookup_smoke"),
+            },
+            "explicit_stop_conditions": [
+                "This handoff does not run live lookup, live write, or live readback.",
+                "A blocked selected-target audit must be resolved before any explicit live pilot command.",
+                "Only run the next explicit operator command after confirming the selected target is still safe.",
+            ],
+            "creates_selected_live_target": False,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
         }
 
     def validate_live_pilot_operator_response(self, *, run_id: str, response: str) -> dict[str, Any]:

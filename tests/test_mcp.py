@@ -35,6 +35,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_selected_live_target_preflight" in names
     assert "business_card_watchdog_selected_live_target_artifact_preview" in names
     assert "business_card_watchdog_selected_live_target_from_response" in names
+    assert "business_card_watchdog_selected_live_target_handoff_from_response" in names
     assert "business_card_watchdog_next_actions" in names
     assert "business_card_watchdog_run_next_actions" in names
     assert "business_card_watchdog_review_routing_drill" in names
@@ -306,6 +307,19 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
         },
         config=config,
     )
+    selected_target_handoff_from_response = call_tool(
+        "business_card_watchdog_selected_live_target_handoff_from_response",
+        {
+            "run_id": run_id,
+            "response": (
+                f"run_id={run_id} job_id={job_id} sink=google_contacts "
+                "operator=mcp-test scope=all "
+                "safety_confirmation=fixture contact is safe for google contacts test profile"
+            ),
+            "write_audit": False,
+        },
+        config=config,
+    )
     abandonment = call_tool(
         "business_card_watchdog_live_pilot_abandonment",
         {
@@ -459,6 +473,9 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert operator_dashboard["commands"]["selected_live_target_from_response"] == (
         f"runs selected-live-target-from-response {run_id} --response <operator-response> --json"
     )
+    assert operator_dashboard["commands"]["selected_live_target_handoff_from_response"] == (
+        f"runs selected-live-target-handoff-from-response {run_id} --response <operator-response> --json"
+    )
     assert operator_dashboard["safe_next_actions"][3]["action"] == "inspect_live_pilot_status"
     assert operator_dashboard["safe_next_actions"][3]["command"] == (
         f"runs live-pilot-status {run_id} --no-write --json"
@@ -492,6 +509,10 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert operator_dashboard["mcp_tools"]["selected_live_target_from_response"] == {
         "tool": "business_card_watchdog_selected_live_target_from_response",
         "arguments": {"run_id": run_id, "response": "<operator-response>"},
+    }
+    assert operator_dashboard["mcp_tools"]["selected_live_target_handoff_from_response"] == {
+        "tool": "business_card_watchdog_selected_live_target_handoff_from_response",
+        "arguments": {"run_id": run_id, "response": "<operator-response>", "write_audit": False},
     }
     assert operator_dashboard["next_action_summary"]["by_action"] == {"review_contact": 1}
     assert operator_dashboard["live_pilot_handoff_summary"]["operator_required_count"] == 1
@@ -824,6 +845,18 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert selected_target_from_response["creates_selected_live_target"] is False
     assert selected_target_from_response["writes_attempted"] == 0
     assert selected_target_from_response["network_calls_made"] == 0
+    assert selected_target_handoff_from_response["schema"] == (
+        "business-card-watchdog.selected-live-target-handoff-from-response.v1"
+    )
+    assert selected_target_handoff_from_response["state"] == "audit_blocked"
+    assert selected_target_handoff_from_response["job_id"] == job_id
+    assert selected_target_handoff_from_response["validation_state"] == "ready_for_live_lookup_request"
+    assert selected_target_handoff_from_response["selected_target_audit"]["state"] == "blocked"
+    assert selected_target_handoff_from_response["write_audit"] is False
+    assert selected_target_handoff_from_response["audit_written"] is False
+    assert selected_target_handoff_from_response["creates_selected_live_target"] is False
+    assert selected_target_handoff_from_response["writes_attempted"] == 0
+    assert selected_target_handoff_from_response["network_calls_made"] == 0
     assert operator_response_validation["schema"] == (
         "business-card-watchdog.live-pilot-operator-response-validation.v1"
     )

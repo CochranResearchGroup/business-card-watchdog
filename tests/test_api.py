@@ -85,6 +85,9 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert operator_dashboard["commands"]["selected_live_target_from_response"] == (
         f"runs selected-live-target-from-response {run_id} --response <operator-response> --json"
     )
+    assert operator_dashboard["commands"]["selected_live_target_handoff_from_response"] == (
+        f"runs selected-live-target-handoff-from-response {run_id} --response <operator-response> --json"
+    )
     assert operator_dashboard["api_routes"]["live_pilot_validate_response"] == (
         f"POST /runs/{run_id}/live-pilot-operator-response-validation"
     )
@@ -96,6 +99,9 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     )
     assert operator_dashboard["api_routes"]["selected_live_target_from_response"] == (
         f"POST /runs/{run_id}/selected-live-target-from-response"
+    )
+    assert operator_dashboard["api_routes"]["selected_live_target_handoff_from_response"] == (
+        f"POST /runs/{run_id}/selected-live-target-handoff-from-response"
     )
     assert operator_dashboard["api_routes"]["live_pilot_approval_packet"] == (
         f"GET /runs/{run_id}/live-pilot-approval-packet"
@@ -123,6 +129,10 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert operator_dashboard["mcp_tools"]["selected_live_target_from_response"] == {
         "tool": "business_card_watchdog_selected_live_target_from_response",
         "arguments": {"run_id": run_id, "response": "<operator-response>"},
+    }
+    assert operator_dashboard["mcp_tools"]["selected_live_target_handoff_from_response"] == {
+        "tool": "business_card_watchdog_selected_live_target_handoff_from_response",
+        "arguments": {"run_id": run_id, "response": "<operator-response>", "write_audit": False},
     }
     assert operator_dashboard["writes_attempted"] == 0
     assert operator_dashboard["network_calls_made"] == 0
@@ -385,6 +395,22 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert selected_target_from_response["creates_selected_live_target"] is False
     assert selected_target_from_response["writes_attempted"] == 0
     assert selected_target_from_response["network_calls_made"] == 0
+    selected_target_handoff = client.post(
+        f"/runs/{run_id}/selected-live-target-handoff-from-response",
+        json={"response": response},
+    ).json()
+    assert selected_target_handoff["schema"] == (
+        "business-card-watchdog.selected-live-target-handoff-from-response.v1"
+    )
+    assert selected_target_handoff["state"] == "audit_blocked"
+    assert selected_target_handoff["job_id"] == job_id
+    assert selected_target_handoff["validation_state"] == "ready_for_live_lookup_request"
+    assert selected_target_handoff["selected_target_audit"]["state"] == "blocked"
+    assert selected_target_handoff["write_audit"] is False
+    assert selected_target_handoff["audit_written"] is False
+    assert selected_target_handoff["creates_selected_live_target"] is False
+    assert selected_target_handoff["writes_attempted"] == 0
+    assert selected_target_handoff["network_calls_made"] == 0
     validation = client.post(
         f"/runs/{run_id}/live-pilot-operator-response-validation",
         json={"response": response},

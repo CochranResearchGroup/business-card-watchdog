@@ -123,6 +123,10 @@ def create_app(config_path: Path | None = None):
         write_selected_target: bool = False
         reason: str = ""
 
+    class SelectedLiveTargetHandoffFromResponseRequest(BaseModel):
+        response: str
+        write_audit: bool = False
+
     class SelectedLiveTargetAuditRequest(BaseModel):
         run_id: str
         scope: str | None = None
@@ -291,6 +295,17 @@ def create_app(config_path: Path | None = None):
             response=request.response,
             write_selected_target=request.write_selected_target,
             reason=request.reason,
+        )
+
+    @app.post("/runs/{run_id}/selected-live-target-handoff-from-response")
+    def create_run_selected_live_target_handoff_from_response(
+        run_id: str,
+        request: SelectedLiveTargetHandoffFromResponseRequest,
+    ) -> dict[str, object]:
+        return service().selected_live_target_handoff_from_response(
+            run_id=run_id,
+            response=request.response,
+            write_audit=request.write_audit,
         )
 
     @app.get("/runs/{run_id}/jobs")

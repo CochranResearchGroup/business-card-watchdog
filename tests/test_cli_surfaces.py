@@ -1060,6 +1060,54 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
                 "--config",
                 str(config_path),
                 "runs",
+                "selected-live-target-handoff-from-response",
+                run_id,
+                "--response",
+                response,
+                "--json",
+            ]
+        )
+        == 0
+    )
+    handoff = json.loads(capsys.readouterr().out)
+    assert handoff["schema"] == "business-card-watchdog.selected-live-target-handoff-from-response.v1"
+    assert handoff["state"] == "audit_blocked"
+    assert handoff["validation_state"] == "ready_for_live_lookup_request"
+    assert handoff["selected_target_audit"]["state"] == "blocked"
+    assert handoff["write_audit"] is False
+    assert handoff["audit_written"] is False
+    assert handoff["creates_selected_live_target"] is False
+    assert handoff["writes_attempted"] == 0
+    assert handoff["network_calls_made"] == 0
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "selected-live-target-handoff-from-response",
+                run_id,
+                "--response",
+                response,
+            ]
+        )
+        == 0
+    )
+    handoff_text = capsys.readouterr().out
+    assert "State: audit_blocked" in handoff_text
+    assert "Write audit: False" in handoff_text
+    assert "Audit written: False" in handoff_text
+    assert "Creates selected target: False" in handoff_text
+    assert "Stop conditions: 3" in handoff_text
+    assert "{" not in handoff_text
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
                 "live-pilot-validate-response",
                 run_id,
                 "--response",

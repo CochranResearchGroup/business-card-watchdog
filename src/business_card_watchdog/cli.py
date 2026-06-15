@@ -250,6 +250,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
         ("Selected target preflight", "selected_live_target_preflight"),
         ("Selected target preview", "selected_live_target_preview"),
         ("Selected target from response", "selected_live_target_from_response"),
+        ("Selected target handoff", "selected_live_target_handoff_from_response"),
     ]:
         command = commands.get(key)
         if command:
@@ -268,6 +269,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
             ("Selected target preflight", "selected_live_target_preflight"),
             ("Selected target preview", "selected_live_target_preview"),
             ("Selected target from response", "selected_live_target_from_response"),
+            ("Selected target handoff", "selected_live_target_handoff_from_response"),
         ]:
             route = api_routes.get(key)
             if route:
@@ -286,6 +288,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
             ("Selected target preflight", "selected_live_target_preflight"),
             ("Selected target preview", "selected_live_target_preview"),
             ("Selected target from response", "selected_live_target_from_response"),
+            ("Selected target handoff", "selected_live_target_handoff_from_response"),
         ]:
             tool_entry = mcp_tools.get(key)
             if isinstance(tool_entry, dict):
@@ -626,6 +629,35 @@ def _render_selected_live_target_from_response_text(payload: dict[str, object]) 
     preview = dict(payload.get("preview") or {})
     if preview:
         lines.append(f"Preview state: {preview.get('state')}")
+    blockers = payload.get("blocked_reasons") or []
+    rows = blockers if isinstance(blockers, list) else []
+    lines.append(f"Blocked reasons: {len(rows)}")
+    for reason in rows:
+        lines.append(f" - {reason}")
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    stops = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stops)}")
+    for condition in stops:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
+def _render_selected_live_target_handoff_from_response_text(payload: dict[str, object]) -> str:
+    audit = dict(payload.get("selected_target_audit") or {})
+    lines = [
+        f"Run: {payload.get('run_id')}",
+        f"Job: {payload.get('job_id') or 'none'}",
+        f"State: {payload.get('state')}",
+        f"Validation state: {payload.get('validation_state')}",
+        f"Write audit: {payload.get('write_audit', False)}",
+        f"Audit written: {payload.get('audit_written', False)}",
+        f"Audit state: {audit.get('state') or 'none'}",
+        f"Selected target: {payload.get('selected_target_identity') or 'none'}",
+        f"Next safe command: {payload.get('next_safe_command') or 'none'}",
+        f"Next explicit command: {payload.get('next_explicit_operator_command') or 'none'}",
+        f"Creates selected target: {payload.get('creates_selected_live_target', False)}",
+        f"Observed: writes={payload.get('writes_attempted', 0)} network={payload.get('network_calls_made', 0)}",
+    ]
     blockers = payload.get("blocked_reasons") or []
     rows = blockers if isinstance(blockers, list) else []
     lines.append(f"Blocked reasons: {len(rows)}")
@@ -1400,6 +1432,13 @@ def build_parser() -> argparse.ArgumentParser:
     runs_selected_live_target_from_response.add_argument("--write-selected-target", action="store_true")
     runs_selected_live_target_from_response.add_argument("--reason", default="")
     runs_selected_live_target_from_response.add_argument("--json", action="store_true")
+    runs_selected_live_target_handoff_from_response = runs_sub.add_parser(
+        "selected-live-target-handoff-from-response"
+    )
+    runs_selected_live_target_handoff_from_response.add_argument("run_id")
+    runs_selected_live_target_handoff_from_response.add_argument("--response", required=True)
+    runs_selected_live_target_handoff_from_response.add_argument("--write-audit", action="store_true")
+    runs_selected_live_target_handoff_from_response.add_argument("--json", action="store_true")
     runs_live_pilot_validate_response = runs_sub.add_parser("live-pilot-validate-response")
     runs_live_pilot_validate_response.add_argument("run_id")
     runs_live_pilot_validate_response.add_argument("--response", required=True)
@@ -1792,10 +1831,19 @@ def main(argv: list[str] | None = None) -> int:
                 write_selected_target=args.write_selected_target,
                 reason=args.reason,
             )
+        elif args.runs_command == "selected-live-target-handoff-from-response":
+            payload = service.selected_live_target_handoff_from_response(
+                run_id=args.run_id,
+                response=args.response,
+                write_audit=args.write_audit,
+            )
         elif args.runs_command == "live-pilot-validate-response":
             payload = service.validate_live_pilot_operator_response(run_id=args.run_id, response=args.response)
         else:
             payload = service.get_run(args.run_id)
+        if args.runs_command == "selected-live-target-handoff-from-response" and not args.json:
+            print(_render_selected_live_target_handoff_from_response_text(payload), end="")
+            return 0
         if args.runs_command == "selected-live-target-from-response" and not args.json:
             print(_render_selected_live_target_from_response_text(payload), end="")
             return 0
