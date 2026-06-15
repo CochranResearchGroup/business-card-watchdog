@@ -385,6 +385,14 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_live_pilot_rehearsal_drill",
+                "description": "Run a synthetic no-live live-pilot rehearsal through selected target, readiness export, checklist, and command-copy gates.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {},
+                },
+            },
+            {
                 "name": "business_card_watchdog_jobs_list",
                 "description": "List latest job states, optionally for one run.",
                 "input_schema": {
@@ -1116,6 +1124,8 @@ def call_tool(
         )
     if tool_name == "business_card_watchdog_review_routing_drill":
         return service.review_routing_drill()
+    if tool_name == "business_card_watchdog_live_pilot_rehearsal_drill":
+        return service.live_pilot_rehearsal_drill()
     if tool_name == "business_card_watchdog_jobs_list":
         return service.list_jobs(str(args["run_id"]) if args.get("run_id") else None)
     if tool_name == "business_card_watchdog_reviews_list":

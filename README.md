@@ -118,6 +118,11 @@ review bundle/workbook export, duplicate lookup planning, dry-run sink routing, 
 apply preflight without configured watch inputs, private images, enrichment calls, or
 live sink operations.
 
+`drills live-pilot-rehearsal` builds on that synthetic fixture and rehearses the
+operator-selected live-pilot gate through selected target creation, selected-target
+audit, lookup handoff, redacted readiness export, execution checklist, and command
+copy packet. It does not execute the copied command or call live sinks.
+
 ## Operator-Selected Live Pilots
 
 Live lookup, write, and readback are not part of generic continuation or broad batch automation. Use one explicit `run_id`, `job_id`, `sink`, `operator`, and scope at a time, starting with non-sensitive test card data.

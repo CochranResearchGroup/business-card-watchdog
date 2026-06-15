@@ -4,6 +4,14 @@ These checklists are for explicit operator-approved live smoke work. Do not run 
 
 Use only non-sensitive test card data for first pilots.
 
+Before selecting a real target, use the synthetic rehearsal drill to prove the local no-live control path:
+
+```bash
+.venv/bin/bcw drills live-pilot-rehearsal --json
+```
+
+The drill creates a synthetic fixture run and rehearses selected-target creation, selected-target audit, lookup handoff, redacted readiness export, execution checklist, and command-copy packet without executing the copied command or calling GWS/Odollo/Odoo. It is not approval for a real target.
+
 ## Read-Only Lookup Smoke
 
 Purpose: prove Google Workspace Contacts and/or Odollo/Odoo lookup adapters can read matching contacts without writing.

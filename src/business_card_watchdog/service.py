@@ -604,6 +604,7 @@ class BusinessCardService:
                     else "runs list --json"
                 ),
                 "review_routing_drill": "drills review-routing --json",
+                "live_pilot_rehearsal_drill": "drills live-pilot-rehearsal --json",
                 "live_pilot_status": (
                     f"runs live-pilot-status {selected_run_id} --no-write --json"
                     if selected_run_id
@@ -721,6 +722,7 @@ class BusinessCardService:
                 ),
                 "run_next_safe": "POST /actions/run-next",
                 "review_routing_drill": "POST /drills/review-routing",
+                "live_pilot_rehearsal_drill": "POST /drills/live-pilot-rehearsal",
                 "live_pilot_status": (
                     f"GET /runs/{selected_run_id}/live-pilot-status?write=false"
                     if selected_run_id
@@ -831,6 +833,10 @@ class BusinessCardService:
                 },
                 "review_routing_drill": {
                     "tool": "business_card_watchdog_review_routing_drill",
+                    "arguments": {},
+                },
+                "live_pilot_rehearsal_drill": {
+                    "tool": "business_card_watchdog_live_pilot_rehearsal_drill",
                     "arguments": {},
                 },
                 "live_pilot_status": {
@@ -2054,6 +2060,208 @@ class BusinessCardService:
                 "job_id": job.job_id,
                 "drill_path": str(drill_path),
                 "executed_count": run_next["executed_count"],
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        payload["drill_path"] = str(drill_path)
+        return payload
+
+    def live_pilot_rehearsal_drill(self) -> dict[str, Any]:
+        routing_drill = self.review_routing_drill()
+        run_id = str(routing_drill["run_id"])
+        job_id = str(routing_drill["job_id"])
+        sink = "google_contacts"
+        operator = "fixture-operator"
+        scope = "lookup"
+        safety_confirmation = "fixture contact is safe for google contacts test profile"
+        operator_response = (
+            f"run_id={run_id} job_id={job_id} sink={sink} operator={operator} "
+            f"scope={scope} safety_confirmation={safety_confirmation}"
+        )
+        acknowledgement = (
+            f"acknowledge run_id={run_id} job_id={job_id} sink={sink} operator={operator} copy command"
+        )
+        drill_config = replace(
+            self.config,
+            sink=SinkConfig(
+                google_contacts=True,
+                google_contacts_profile="fixture-gws-profile",
+                odoo=True,
+                odollo_tenant="fixture-odollo-tenant",
+                dry_run=True,
+                google_contacts_apply_enabled=False,
+                odoo_apply_enabled=False,
+            ),
+            routing_rules=[
+                {
+                    "match": "email_domain",
+                    "value": "*",
+                    "sinks": ["google_contacts", "odoo"],
+                }
+            ],
+        )
+        drill_service = BusinessCardService(
+            drill_config,
+            sink_lookup_executor=self.sink_lookup_executor,
+            sink_write_executor=self.sink_write_executor,
+            sink_readback_executor=self.sink_readback_executor,
+        )
+        selection_packet = drill_service.live_selection_packet(
+            job_id=job_id,
+            run_id=run_id,
+            sink=sink,
+            operator=operator,
+            scope=scope,
+        )
+        validation = drill_service.validate_live_pilot_operator_response(
+            run_id=run_id,
+            response=operator_response,
+        )
+        selected_target = drill_service.selected_live_target_from_response(
+            run_id=run_id,
+            response=operator_response,
+            write_selected_target=True,
+            reason="synthetic live pilot rehearsal drill",
+        )
+        selected_target_handoff = drill_service.selected_live_target_handoff_from_response(
+            run_id=run_id,
+            response=operator_response,
+            write_audit=True,
+        )
+        lookup_handoff = drill_service.lookup_smoke_handoff_from_response(
+            run_id=run_id,
+            response=operator_response,
+            write_handoff=True,
+        )
+        workflow_packet = drill_service.live_pilot_operator_workflow_packet_from_response(
+            run_id=run_id,
+            response=operator_response,
+        )
+        rehearsal = drill_service.live_pilot_operator_rehearsal_from_response(
+            run_id=run_id,
+            response=operator_response,
+        )
+        readiness_export = drill_service.live_pilot_readiness_export_from_response(
+            run_id=run_id,
+            response=operator_response,
+        )
+        execution_checklist = drill_service.live_pilot_execution_checklist_from_response(
+            run_id=run_id,
+            response=operator_response,
+        )
+        command_copy_packet = drill_service.live_pilot_command_copy_packet_from_response(
+            run_id=run_id,
+            response=operator_response,
+            acknowledgement=acknowledgement,
+        )
+        assertions = {
+            "routing_drill_passed": routing_drill.get("agent_loop_readback", {}).get("state") == "passed",
+            "selection_packet_ready": selection_packet.get("state") == "ready_for_operator_approval",
+            "validation_ready": validation.get("state") == "ready_to_select_live_target",
+            "selected_target_created": selected_target.get("state") == "created",
+            "selected_target_audit_ready": selected_target_handoff.get("state") == "ready_for_live_lookup_request",
+            "lookup_handoff_ready": lookup_handoff.get("state") == "ready_for_live_lookup_request",
+            "rehearsal_ready": rehearsal.get("state") == "ready_for_explicit_operator_step",
+            "readiness_export_written": readiness_export.get("export_written") is True,
+            "execution_checklist_ready": execution_checklist.get("state") == "ready_for_explicit_operator_command",
+            "command_copy_ready": command_copy_packet.get("state") == "ready_for_operator_copy",
+            "no_private_sources": routing_drill.get("private_sources_used") is False,
+            "no_public_web_search": routing_drill.get("public_web_search_used") is False,
+            "no_paid_enrichment": routing_drill.get("paid_enrichment_used") is False,
+            "no_live_sink_calls": routing_drill.get("live_sink_calls_made") is False,
+        }
+        state = "passed" if all(assertions.values()) else "needs_attention"
+        command_copy_text = command_copy_packet.get("command_copy_text")
+        payload = {
+            "schema": "business-card-watchdog.live-pilot-rehearsal-drill.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_id,
+            "job_id": job_id,
+            "sink": sink,
+            "operator": operator,
+            "scope": scope,
+            "fixture_source": "review_routing_drill",
+            "private_sources_used": False,
+            "public_web_search_used": False,
+            "paid_enrichment_used": False,
+            "live_sink_calls_made": False,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "operator_response_redacted": {
+                "fields": {
+                    "run_id": run_id,
+                    "job_id": job_id,
+                    "sink": sink,
+                    "operator": operator,
+                    "scope": scope,
+                },
+                "raw_response_stored": False,
+            },
+            "acknowledgement_redacted": {
+                "required": True,
+                "ok": command_copy_packet.get("acknowledgement_ok") is True,
+                "raw_acknowledgement_stored": False,
+            },
+            "assertions": assertions,
+            "routing_drill": {
+                "schema": routing_drill.get("schema"),
+                "state": routing_drill.get("agent_loop_readback", {}).get("state"),
+                "drill_path": routing_drill.get("drill_path"),
+                "route_artifact_kinds": routing_drill.get("route_artifact_kinds"),
+            },
+            "packets": {
+                "selection_packet": selection_packet,
+                "validation": validation,
+                "selected_target": selected_target,
+                "selected_target_handoff": selected_target_handoff,
+                "lookup_handoff": lookup_handoff,
+                "workflow_packet": workflow_packet,
+                "rehearsal": rehearsal,
+                "readiness_export": readiness_export,
+                "execution_checklist": execution_checklist,
+                "command_copy_packet": command_copy_packet,
+            },
+            "command_copy_ready": command_copy_packet.get("state") == "ready_for_operator_copy",
+            "command_copy_text": command_copy_text,
+            "commands": {
+                "review_routing_drill": "drills review-routing --json",
+                "live_pilot_rehearsal_drill": "drills live-pilot-rehearsal --json",
+                "operator_dashboard": f"operator-dashboard --run-id {run_id} --json",
+                "live_pilot_status": f"runs live-pilot-status {run_id} --no-write --json",
+                "live_pilot_handoff": f"runs live-pilot-handoff {run_id} --no-write --json",
+                "readiness_export": (
+                    f"runs live-pilot-readiness-export-from-response {shlex.quote(run_id)} "
+                    "--response <operator-response> --json"
+                ),
+                "execution_checklist": (
+                    f"runs live-pilot-execution-checklist-from-response {shlex.quote(run_id)} "
+                    "--response <operator-response> --json"
+                ),
+                "command_copy_packet": (
+                    f"runs live-pilot-command-copy-packet-from-response {shlex.quote(run_id)} "
+                    "--response <operator-response> --acknowledgement <operator-acknowledgement> --json"
+                ),
+            },
+            "explicit_stop_conditions": [
+                "This drill uses only synthetic fixture data and fixture sink context.",
+                "Do not run command_copy_text against a real sink; this drill is not live approval.",
+                "Do not process private SyncThing images, run public-web search, call paid enrichment, or call GWS/Odollo/Odoo from this drill.",
+                "Use the documented operator-selected live pilot procedure with a real operator-selected target before any non-simulated sink call.",
+            ],
+        }
+        drill_path = self.config.runs_dir / run_id / "live_pilot_rehearsal_drill.json"
+        drill_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        ledger.record_artifact(job_id="__run__", kind="live_pilot_rehearsal_drill", path=drill_path)
+        ledger.record_event(
+            "live_pilot_rehearsal_drill_completed",
+            {
+                "run_id": run_id,
+                "job_id": job_id,
+                "drill_path": str(drill_path),
+                "state": state,
                 "writes_attempted": 0,
                 "network_calls_made": 0,
             },

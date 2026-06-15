@@ -180,6 +180,45 @@ def _render_review_routing_drill_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_live_pilot_rehearsal_drill_text(payload: dict[str, object]) -> str:
+    assertions = dict(payload.get("assertions") or {})
+    commands = dict(payload.get("commands") or {})
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    failed = [key for key, value in assertions.items() if value is not True]
+    lines = [
+        "Live pilot rehearsal drill:",
+        f"Run: {payload.get('run_id')}",
+        f"Job: {payload.get('job_id')}",
+        f"State: {payload.get('state')}",
+        f"Sink: {payload.get('sink')}",
+        f"Operator: {payload.get('operator')}",
+        f"Scope: {payload.get('scope')}",
+        f"Command copy ready: {payload.get('command_copy_ready', False)}",
+        "Observed: "
+        f"writes={payload.get('writes_attempted', 0)} "
+        f"network={payload.get('network_calls_made', 0)} "
+        f"private_sources={payload.get('private_sources_used', False)} "
+        f"live_sinks={payload.get('live_sink_calls_made', False)}",
+        f"Assertions: {len(assertions)}",
+    ]
+    if failed:
+        lines.append("Failed assertions: " + ", ".join(sorted(failed)))
+    for label, key in [
+        ("Operator dashboard", "operator_dashboard"),
+        ("Live pilot status", "live_pilot_status"),
+        ("Live pilot handoff", "live_pilot_handoff"),
+        ("Command copy packet", "command_copy_packet"),
+    ]:
+        command = commands.get(key)
+        if command:
+            lines.append(f"{label}: {command}")
+    stop_rows = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stop_rows)}")
+    for condition in stop_rows:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
     runtime = dict(payload.get("runtime_readiness") or {})
     recovery = dict(payload.get("service_recovery") or {})
@@ -243,6 +282,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
         ("Next actions", "next_actions"),
         ("Run next safe", "run_next_safe"),
         ("Review routing drill", "review_routing_drill"),
+        ("Live pilot rehearsal drill", "live_pilot_rehearsal_drill"),
         ("Live pilot status", "live_pilot_status"),
         ("Live pilot handoff", "live_pilot_handoff"),
         ("Live pilot approval packet", "live_pilot_approval_packet"),
@@ -272,6 +312,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
             ("Next actions", "next_actions"),
             ("Run next safe", "run_next_safe"),
             ("Review routing drill", "review_routing_drill"),
+            ("Live pilot rehearsal drill", "live_pilot_rehearsal_drill"),
             ("Live pilot status", "live_pilot_status"),
             ("Live pilot handoff", "live_pilot_handoff"),
             ("Live pilot approval packet", "live_pilot_approval_packet"),
@@ -301,6 +342,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
             ("Next actions", "next_actions"),
             ("Run next safe", "run_next_safe"),
             ("Review routing drill", "review_routing_drill"),
+            ("Live pilot rehearsal drill", "live_pilot_rehearsal_drill"),
             ("Live pilot status", "live_pilot_status"),
             ("Live pilot handoff", "live_pilot_handoff"),
             ("Live pilot approval packet", "live_pilot_approval_packet"),
@@ -1944,6 +1986,8 @@ def build_parser() -> argparse.ArgumentParser:
     drills_sub = drills.add_subparsers(dest="drills_command", required=True)
     drills_review_routing = drills_sub.add_parser("review-routing")
     drills_review_routing.add_argument("--json", action="store_true")
+    drills_live_pilot_rehearsal = drills_sub.add_parser("live-pilot-rehearsal")
+    drills_live_pilot_rehearsal.add_argument("--json", action="store_true")
 
     sinks = sub.add_parser("sinks")
     sinks_sub = sinks.add_subparsers(dest="sinks_command", required=True)
@@ -2456,6 +2500,11 @@ def main(argv: list[str] | None = None) -> int:
             payload = service.review_routing_drill()
             if not args.json:
                 print(_render_review_routing_drill_text(payload), end="")
+                return 0
+        elif args.drills_command == "live-pilot-rehearsal":
+            payload = service.live_pilot_rehearsal_drill()
+            if not args.json:
+                print(_render_live_pilot_rehearsal_drill_text(payload), end="")
                 return 0
         print(json.dumps(payload, indent=2) if args.json else payload)
         return 0

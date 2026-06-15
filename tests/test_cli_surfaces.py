@@ -116,6 +116,35 @@ def test_cli_review_routing_drill_outputs_fixture_artifact(tmp_path: Path, capsy
     assert "{" not in text
 
 
+def test_cli_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: Path, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+
+    assert main(["--config", str(config_path), "drills", "live-pilot-rehearsal", "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["schema"] == "business-card-watchdog.live-pilot-rehearsal-drill.v1"
+    assert payload["state"] == "passed"
+    assert payload["private_sources_used"] is False
+    assert payload["live_sink_calls_made"] is False
+    assert payload["command_copy_ready"] is True
+    assert payload["packets"]["command_copy_packet"]["state"] == "ready_for_operator_copy"
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert Path(payload["drill_path"]).exists()
+
+    assert main(["--config", str(config_path), "drills", "live-pilot-rehearsal"]) == 0
+    text = capsys.readouterr().out
+    assert "Live pilot rehearsal drill:" in text
+    assert "State: passed" in text
+    assert "Command copy ready: True" in text
+    assert "Observed: writes=0 network=0 private_sources=False live_sinks=False" in text
+    assert "Command copy packet: runs live-pilot-command-copy-packet-from-response" in text
+    assert "Stop conditions: 4" in text
+    assert "{" not in text
+
+
 def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.toml"
     data_dir = tmp_path / "data"
@@ -165,15 +194,18 @@ def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) 
     assert f"Review queue: reviews list --run-id {run_id} --state all --json" in text
     assert f"Next actions: actions next --run-id {run_id} --json" in text
     assert "Review routing drill: drills review-routing --json" in text
+    assert "Live pilot rehearsal drill: drills live-pilot-rehearsal --json" in text
     assert "API routes:" in text
     assert f"Next actions: GET /actions/next?run_id={run_id}&limit=20" in text
     assert "Review routing drill: POST /drills/review-routing" in text
+    assert "Live pilot rehearsal drill: POST /drills/live-pilot-rehearsal" in text
     assert f"Live pilot handoff: GET /runs/{run_id}/live-pilot-handoff?write=false" in text
     assert f"Live pilot validate response: POST /runs/{run_id}/live-pilot-operator-response-validation" in text
     assert "MCP tools:" in text
     assert f"Operator dashboard: business_card_watchdog_operator_dashboard args=run_id={run_id}" in text
     assert f"Next actions: business_card_watchdog_next_actions args=limit=20, run_id={run_id}" in text
     assert "Review routing drill: business_card_watchdog_review_routing_drill" in text
+    assert "Live pilot rehearsal drill: business_card_watchdog_live_pilot_rehearsal_drill" in text
     assert "Latest review routing drill: not_run run=none readback=none manual=none" in text
     assert f"Live pilot status: business_card_watchdog_live_pilot_status args=run_id={run_id}, write=False" in text
     assert "Safe next actions: 6" in text

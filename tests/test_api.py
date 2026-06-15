@@ -68,9 +68,15 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert operator_dashboard["commands"]["next_actions"] == f"actions next --run-id {run_id} --json"
     assert operator_dashboard["api_routes"]["next_actions"] == f"GET /actions/next?run_id={run_id}&limit=20"
     assert operator_dashboard["commands"]["review_routing_drill"] == "drills review-routing --json"
+    assert operator_dashboard["commands"]["live_pilot_rehearsal_drill"] == "drills live-pilot-rehearsal --json"
     assert operator_dashboard["api_routes"]["review_routing_drill"] == "POST /drills/review-routing"
+    assert operator_dashboard["api_routes"]["live_pilot_rehearsal_drill"] == "POST /drills/live-pilot-rehearsal"
     assert operator_dashboard["mcp_tools"]["review_routing_drill"] == {
         "tool": "business_card_watchdog_review_routing_drill",
+        "arguments": {},
+    }
+    assert operator_dashboard["mcp_tools"]["live_pilot_rehearsal_drill"] == {
+        "tool": "business_card_watchdog_live_pilot_rehearsal_drill",
         "arguments": {},
     }
     assert operator_dashboard["commands"]["live_pilot_validate_response"] == (
@@ -997,6 +1003,29 @@ def test_api_review_routing_drill_outputs_fixture_artifact(tmp_path: Path) -> No
     assert drill["safe_actions"]["skipped_actions"] == ["decide_sink_apply"]
     assert drill["network_calls_made"] == 0
     assert drill["writes_attempted"] == 0
+    assert Path(drill["drill_path"]).exists()
+
+
+def test_api_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: Path) -> None:
+    from business_card_watchdog.api import create_app
+
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+    client = TestClient(create_app(config_path))
+
+    drill = client.post("/drills/live-pilot-rehearsal").json()
+
+    assert drill["schema"] == "business-card-watchdog.live-pilot-rehearsal-drill.v1"
+    assert drill["state"] == "passed"
+    assert drill["private_sources_used"] is False
+    assert drill["public_web_search_used"] is False
+    assert drill["paid_enrichment_used"] is False
+    assert drill["live_sink_calls_made"] is False
+    assert drill["command_copy_ready"] is True
+    assert drill["packets"]["command_copy_packet"]["state"] == "ready_for_operator_copy"
+    assert drill["writes_attempted"] == 0
+    assert drill["network_calls_made"] == 0
     assert Path(drill["drill_path"]).exists()
 
 

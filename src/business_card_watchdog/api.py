@@ -531,6 +531,10 @@ def create_app(config_path: Path | None = None):
     def review_routing_drill() -> dict[str, object]:
         return service().review_routing_drill()
 
+    @app.post("/drills/live-pilot-rehearsal")
+    def live_pilot_rehearsal_drill() -> dict[str, object]:
+        return service().live_pilot_rehearsal_drill()
+
     @app.get("/jobs/{job_id}")
     def get_job(job_id: str, run_id: str | None = None) -> dict[str, object]:
         return service().get_job(job_id, run_id=run_id)

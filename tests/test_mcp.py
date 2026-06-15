@@ -49,6 +49,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_next_actions" in names
     assert "business_card_watchdog_run_next_actions" in names
     assert "business_card_watchdog_review_routing_drill" in names
+    assert "business_card_watchdog_live_pilot_rehearsal_drill" in names
     assert "business_card_watchdog_reviews_list" in names
     assert "business_card_watchdog_review_bundle" in names
     assert "business_card_watchdog_review_html" in names
@@ -157,6 +158,11 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     )
     watch_dry_run = call_tool("business_card_watchdog_watch_dry_run", {}, config=config)
     review_routing_drill = call_tool("business_card_watchdog_review_routing_drill", {}, config=config)
+    live_pilot_rehearsal_drill = call_tool(
+        "business_card_watchdog_live_pilot_rehearsal_drill",
+        {},
+        config=config,
+    )
     reviews = call_tool(
         "business_card_watchdog_reviews_list",
         {
@@ -593,7 +599,9 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert operator_dashboard["commands"]["review_queue"] == f"reviews list --run-id {run_id} --state all --json"
     assert operator_dashboard["commands"]["next_actions"] == f"actions next --run-id {run_id} --json"
     assert operator_dashboard["commands"]["review_routing_drill"] == "drills review-routing --json"
+    assert operator_dashboard["commands"]["live_pilot_rehearsal_drill"] == "drills live-pilot-rehearsal --json"
     assert operator_dashboard["api_routes"]["review_routing_drill"] == "POST /drills/review-routing"
+    assert operator_dashboard["api_routes"]["live_pilot_rehearsal_drill"] == "POST /drills/live-pilot-rehearsal"
     assert operator_dashboard["commands"]["live_pilot_validate_response"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
@@ -660,6 +668,10 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert operator_dashboard["mcp_tools"]["next_actions"]["arguments"] == {"run_id": run_id, "limit": 20}
     assert operator_dashboard["mcp_tools"]["review_routing_drill"] == {
         "tool": "business_card_watchdog_review_routing_drill",
+        "arguments": {},
+    }
+    assert operator_dashboard["mcp_tools"]["live_pilot_rehearsal_drill"] == {
+        "tool": "business_card_watchdog_live_pilot_rehearsal_drill",
         "arguments": {},
     }
     assert operator_dashboard["mcp_tools"]["live_pilot_validate_response"] == {
@@ -788,6 +800,14 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert review_routing_drill["safe_actions"]["skipped_actions"] == ["decide_sink_apply"]
     assert review_routing_drill["writes_attempted"] == 0
     assert review_routing_drill["network_calls_made"] == 0
+    assert live_pilot_rehearsal_drill["schema"] == "business-card-watchdog.live-pilot-rehearsal-drill.v1"
+    assert live_pilot_rehearsal_drill["state"] == "passed"
+    assert live_pilot_rehearsal_drill["private_sources_used"] is False
+    assert live_pilot_rehearsal_drill["live_sink_calls_made"] is False
+    assert live_pilot_rehearsal_drill["command_copy_ready"] is True
+    assert live_pilot_rehearsal_drill["packets"]["command_copy_packet"]["state"] == "ready_for_operator_copy"
+    assert live_pilot_rehearsal_drill["writes_attempted"] == 0
+    assert live_pilot_rehearsal_drill["network_calls_made"] == 0
     assert service_recovery["schema"] == "business-card-watchdog.service-recovery.v1"
     assert service_recovery["run_id"] == run_id
     assert service_recovery["commands"]["restart"] == "systemctl --user restart business-card-watchdog.service"

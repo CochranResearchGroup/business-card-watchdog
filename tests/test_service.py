@@ -996,12 +996,18 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
         "tool": "business_card_watchdog_review_routing_drill",
         "arguments": {},
     }
+    assert dashboard["mcp_tools"]["live_pilot_rehearsal_drill"] == {
+        "tool": "business_card_watchdog_live_pilot_rehearsal_drill",
+        "arguments": {},
+    }
     assert dashboard["mcp_tools"]["live_pilot_validate_response"] == {
         "tool": "business_card_watchdog_live_pilot_operator_response_validation",
         "arguments": {"run_id": run_id, "response": "<operator-response>"},
     }
     assert dashboard["commands"]["review_routing_drill"] == "drills review-routing --json"
+    assert dashboard["commands"]["live_pilot_rehearsal_drill"] == "drills live-pilot-rehearsal --json"
     assert dashboard["api_routes"]["review_routing_drill"] == "POST /drills/review-routing"
+    assert dashboard["api_routes"]["live_pilot_rehearsal_drill"] == "POST /drills/live-pilot-rehearsal"
     assert dashboard["commands"]["live_pilot_status"] == f"runs live-pilot-status {run_id} --no-write --json"
     assert dashboard["safe_next_actions"][0]["action"] == "inspect_runtime_readiness"
     assert dashboard["safe_next_actions"][3] == {
@@ -1182,6 +1188,52 @@ def test_service_review_routing_drill_exercises_safe_fixture_route(tmp_path: Pat
     assert (artifact_dir / "reviewed_contact.json").exists()
     assert not (artifact_dir / "selected_live_target.json").exists()
     assert "Do not run public-web search, paid enrichment, live lookup" in payload["explicit_stop_conditions"][2]
+
+
+def test_service_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        cache_dir=tmp_path / "cache",
+    )
+
+    payload = BusinessCardService(config).live_pilot_rehearsal_drill()
+    run_id = payload["run_id"]
+    job_id = payload["job_id"]
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+
+    assert payload["schema"] == "business-card-watchdog.live-pilot-rehearsal-drill.v1"
+    assert payload["state"] == "passed"
+    assert payload["sink"] == "google_contacts"
+    assert payload["operator"] == "fixture-operator"
+    assert payload["scope"] == "lookup"
+    assert payload["private_sources_used"] is False
+    assert payload["public_web_search_used"] is False
+    assert payload["paid_enrichment_used"] is False
+    assert payload["live_sink_calls_made"] is False
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert all(payload["assertions"].values())
+    assert payload["routing_drill"]["state"] == "passed"
+    assert payload["packets"]["selection_packet"]["state"] == "ready_for_operator_approval"
+    assert payload["packets"]["validation"]["state"] == "ready_to_select_live_target"
+    assert payload["packets"]["selected_target"]["state"] == "created"
+    assert payload["packets"]["selected_target_handoff"]["state"] == "ready_for_live_lookup_request"
+    assert payload["packets"]["lookup_handoff"]["state"] == "ready_for_live_lookup_request"
+    assert payload["packets"]["readiness_export"]["export_written"] is True
+    assert payload["packets"]["execution_checklist"]["state"] == "ready_for_explicit_operator_command"
+    assert payload["packets"]["command_copy_packet"]["state"] == "ready_for_operator_copy"
+    assert payload["packets"]["command_copy_packet"]["acknowledgement_ok"] is True
+    assert payload["command_copy_ready"] is True
+    assert payload["command_copy_text"].startswith(f"sinks execute-lookup-smoke {job_id} --run-id {run_id}")
+    assert payload["operator_response_redacted"]["raw_response_stored"] is False
+    assert payload["acknowledgement_redacted"]["raw_acknowledgement_stored"] is False
+    assert Path(payload["drill_path"]).exists()
+    assert (artifact_dir / "selected_live_target.json").exists()
+    assert (artifact_dir / "selected_live_target_audit.json").exists()
+    assert (artifact_dir / "sink_lookup_smoke_handoff.json").exists()
+    assert (config.runs_dir / run_id / "live_pilot_readiness_export.json").exists()
+    assert (config.runs_dir / run_id / "live_pilot_rehearsal_drill.json").exists()
 
 
 def test_service_doctor_checks_user_scope_paths(tmp_path: Path) -> None:
