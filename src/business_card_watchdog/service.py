@@ -5772,6 +5772,9 @@ class BusinessCardService:
             "commands": {
                 "live_pilot_status": f"runs live-pilot-status {run_id}",
                 "live_pilot_handoff": f"runs live-pilot-handoff {run_id}",
+                "validate_operator_response": (
+                    f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+                ),
                 "live_readiness_audit": f"live-readiness-audit --run-id {run_id}",
                 "live_selection_requirements": f"live-selection-requirements --run-id {run_id}",
                 "live_target_candidates": f"live-target-candidates --run-id {run_id}",

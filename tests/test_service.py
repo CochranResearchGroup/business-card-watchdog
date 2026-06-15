@@ -2362,6 +2362,9 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert handoff["action_counts"]["request_live_lookup_smoke"] == 1
     assert handoff["entries"][0]["operator_required"] is True
     assert handoff["entries"][0]["command"].startswith("sinks execute-lookup-smoke")
+    assert handoff["commands"]["validate_operator_response"] == (
+        f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+    )
     assert handoff["operator_response_contract"]["creates_selected_live_target"] is False
     assert handoff["entries"][0]["operator_response_template"] == (
         f"run_id={run_id} job_id={job_id} sink=google_contacts "

@@ -564,6 +564,9 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert handoff["writes_attempted"] == 0
     assert Path(handoff["handoff_path"]).exists()
     assert handoff["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id}"
+    assert handoff["commands"]["validate_operator_response"] == (
+        f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+    )
     assert handoff["commands"]["live_readiness_audit"] == f"live-readiness-audit --run-id {run_id}"
     assert handoff["operator_response_contract"]["creates_selected_live_target"] is False
     assert handoff["entries"][0]["operator_response_template"] == (
@@ -583,6 +586,10 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert main(["--config", str(config_path), "runs", "live-pilot-handoff", run_id, "--no-write"]) == 0
     text_handoff = capsys.readouterr().out
     assert f"target={target_identity}" in text_handoff
+    assert (
+        f"Validate response: runs live-pilot-validate-response {run_id} "
+        "--response <operator-response> --json"
+    ) in text_handoff
     assert "abandonment=none" in text_handoff
     assert "Response templates: 1" in text_handoff
     assert (

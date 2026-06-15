@@ -257,6 +257,7 @@ def _render_live_pilot_status_text(payload: dict[str, object]) -> str:
 
 def _render_live_pilot_handoff_text(payload: dict[str, object]) -> str:
     action_counts = dict(payload.get("action_counts") or {})
+    commands = dict(payload.get("commands") or {})
     response_templates = payload.get("operator_response_templates") or []
     entries = payload.get("entries") or []
     lines = [
@@ -268,6 +269,7 @@ def _render_live_pilot_handoff_text(payload: dict[str, object]) -> str:
         if action_counts
         else "Actions: none",
         f"Response templates: {len(response_templates) if isinstance(response_templates, list) else 0}",
+        f"Validate response: {commands.get('validate_operator_response')}",
     ]
     for entry in entries if isinstance(entries, list) else []:
         if isinstance(entry, dict):

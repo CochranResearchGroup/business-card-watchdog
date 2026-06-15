@@ -179,6 +179,9 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert live_handoff["writes_attempted"] == 0
     assert live_handoff["entries"][0]["selected_target_identity"] == selected["target"]["selection_id"]
     assert live_handoff["entries"][0]["abandonment_identity"] is None
+    assert live_handoff["commands"]["validate_operator_response"] == (
+        f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+    )
     assert live_handoff["operator_response_contract"]["creates_selected_live_target"] is False
     assert live_handoff["entries"][0]["operator_response_template"] == (
         f"run_id={run_id} job_id={job_id} sink=google_contacts "
