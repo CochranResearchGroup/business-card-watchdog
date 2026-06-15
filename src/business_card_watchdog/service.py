@@ -2684,6 +2684,200 @@ class BusinessCardService:
             "network_calls_made": 0,
         }
 
+    def child_route_prep_queue(
+        self,
+        *,
+        run_id: str | None = None,
+        state: str = "approved_for_dedupe",
+    ) -> list[dict[str, Any]]:
+        run_ids = [run_id] if run_id is not None else [str(run["run_id"]) for run in self.list_runs()]
+        queue: list[dict[str, Any]] = []
+        for current_run_id in run_ids:
+            if current_run_id is None:
+                continue
+            artifacts = self.list_artifacts(str(current_run_id))
+            prep_results: dict[str, dict[str, Any]] = {}
+            for artifact in artifacts:
+                if artifact.get("kind") != "child_route_prep_result":
+                    continue
+                prep_payload = _read_json_file(Path(str(artifact.get("path") or ""))) or {}
+                prep_candidate_id = str(prep_payload.get("candidate_id") or "")
+                if prep_candidate_id:
+                    prep_results[prep_candidate_id] = prep_payload
+            for entry in self.child_review_queue(run_id=str(current_run_id), state="all"):
+                candidate_id = str(entry.get("candidate_id") or "")
+                prep_result = prep_results.get(candidate_id)
+                current_state = str((prep_result or {}).get("state") or entry.get("state") or "")
+                if state != "all" and current_state != state:
+                    continue
+                if current_state not in {"approved_for_dedupe", "routing_prepared"}:
+                    continue
+                queue.append(
+                    {
+                        "schema": "business-card-watchdog.child-route-prep-queue-entry.v1",
+                        "run_id": str(current_run_id),
+                        "job_id": entry.get("job_id"),
+                        "candidate_id": candidate_id,
+                        "work_item_id": entry.get("work_item_id"),
+                        "state": current_state,
+                        "image_path": entry.get("image_path"),
+                        "artifact_dir": entry.get("artifact_dir"),
+                        "child_review_result": entry.get("child_review_result"),
+                        "child_route_prep_result": prep_result,
+                        "reviewed_child_contact_path": (entry.get("child_review_result") or {}).get(
+                            "reviewed_child_contact_path"
+                        ),
+                        "routing_allowed": bool((entry.get("child_review_result") or {}).get("routing_allowed")),
+                        "sink_write_allowed": False,
+                        "next_action": {
+                            "action": "prepare_child_route",
+                            "safe_to_auto_continue": True,
+                            "requires_explicit_operator_action": False,
+                            "reason": "approved child contact is ready for dry-run dedupe/routing preparation",
+                            "command": (
+                                "reviews child-route-prep "
+                                f"{shlex.quote(candidate_id)} --run-id {current_run_id} --json"
+                            ),
+                        },
+                    }
+                )
+        return sorted(
+            queue,
+            key=lambda row: (
+                str(row.get("run_id") or ""),
+                str(row.get("job_id") or ""),
+                str(row.get("candidate_id") or ""),
+            ),
+        )
+
+    def prepare_child_route(
+        self,
+        *,
+        run_id: str,
+        candidate_id: str,
+        dry_run: bool = True,
+    ) -> dict[str, Any]:
+        queue = self.child_route_prep_queue(run_id=run_id, state="all")
+        entry = next((row for row in queue if str(row.get("candidate_id") or "") == candidate_id), None)
+        if entry is None:
+            raise FileNotFoundError(f"approved child contact candidate not found: {candidate_id}")
+        if str(entry.get("state") or "") not in {"approved_for_dedupe", "routing_prepared"}:
+            raise ValueError(f"child contact candidate is not approved for routing prep: {candidate_id}")
+
+        reviewed_child_contact_path = Path(str(entry.get("reviewed_child_contact_path") or ""))
+        reviewed_child_contact = _read_json_file(reviewed_child_contact_path) or {}
+        if not isinstance(reviewed_child_contact, dict) or not reviewed_child_contact:
+            raise FileNotFoundError(f"reviewed child contact not found: {reviewed_child_contact_path}")
+        artifact_dir = Path(str(entry.get("artifact_dir") or "")) if entry.get("artifact_dir") else reviewed_child_contact_path.parent
+        child_prep_dir = artifact_dir / "child_route_prep" / candidate_id
+        child_prep_dir.mkdir(parents=True, exist_ok=True)
+
+        spec = contact_candidate_to_spec(reviewed_child_contact)
+        canonical = reviewed_child_contact.get("canonical") or build_canonical_contact(reviewed_child_contact)
+        spec["_canonical_contact"] = canonical
+        spec["_field_provenance"] = field_provenance_from_canonical(canonical)
+        if isinstance(reviewed_child_contact.get("contact_points"), list):
+            spec["contact_points"] = list(reviewed_child_contact["contact_points"])
+        spec["_image_path"] = str(entry.get("image_path") or "")
+        spec["_review_state"] = "approved_for_dedupe"
+        spec["_child_candidate_id"] = candidate_id
+        spec["_parent_job_id"] = str(entry.get("job_id") or "")
+
+        decision = decide_sinks(self.config, spec)
+        dry_run = dry_run or decision.dry_run
+        lookup_plan = build_sink_lookup_plan(
+            sinks=decision.sinks,
+            spec=spec,
+            dry_run=dry_run,
+            reason=decision.reason,
+        )
+        lookup_plan["run_id"] = run_id
+        lookup_plan["job_id"] = entry.get("job_id")
+        lookup_plan["candidate_id"] = candidate_id
+        lookup_plan["work_item_id"] = entry.get("work_item_id")
+        lookup_plan["decision"] = decision.to_dict()
+        lookup_plan["route_explanation"] = decision.metadata.get("route_explanation")
+        lookup_plan["sink_eligibility"] = decision.metadata.get("sink_eligibility", [])
+        sink_plan = build_sink_plan(
+            sinks=decision.sinks,
+            spec=spec,
+            dry_run=dry_run,
+            reason=decision.reason,
+            apply_enabled={sink: self._sink_apply_enabled(sink) for sink in decision.sinks},
+        )
+        sink_plan["run_id"] = run_id
+        sink_plan["job_id"] = entry.get("job_id")
+        sink_plan["candidate_id"] = candidate_id
+        sink_plan["work_item_id"] = entry.get("work_item_id")
+        sink_plan["decision"] = decision.to_dict()
+        sink_plan["route_explanation"] = decision.metadata.get("route_explanation")
+        sink_plan["sink_eligibility"] = decision.metadata.get("sink_eligibility", [])
+
+        lookup_plan_path = child_prep_dir / "child_sink_lookup_plan.json"
+        sink_plan_path = child_prep_dir / "child_sink_plan.json"
+        lookup_plan_path.write_text(json.dumps(lookup_plan, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        sink_plan_path.write_text(json.dumps(sink_plan, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        result = {
+            "schema": "business-card-watchdog.child-route-prep-result.v1",
+            "run_id": run_id,
+            "job_id": entry.get("job_id"),
+            "candidate_id": candidate_id,
+            "work_item_id": entry.get("work_item_id"),
+            "state": "routing_prepared",
+            "dry_run": dry_run,
+            "reviewed_child_contact_path": str(reviewed_child_contact_path),
+            "child_sink_lookup_plan_path": str(lookup_plan_path),
+            "child_sink_plan_path": str(sink_plan_path),
+            "planned_sinks": decision.sinks,
+            "route_reason": decision.reason,
+            "routing_allowed": True,
+            "sink_write_allowed": False,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "next_action": {
+                "action": "child_sink_lookup_result",
+                "safe_to_auto_continue": False,
+                "requires_explicit_operator_action": True,
+                "reason": "dry-run routing prep is complete; downstream lookup evidence is still required",
+            },
+        }
+        result_path = child_prep_dir / "child_route_prep_result.json"
+        result_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        parent_job_id = str(entry.get("job_id") or "__run__")
+        ledger.record_artifact(job_id=parent_job_id, kind="child_sink_lookup_plan", path=lookup_plan_path)
+        ledger.record_artifact(job_id=parent_job_id, kind="child_sink_plan", path=sink_plan_path)
+        ledger.record_artifact(job_id=parent_job_id, kind="child_route_prep_result", path=result_path)
+        ledger.record_event(
+            "child_route_prepared",
+            {
+                "run_id": run_id,
+                "job_id": entry.get("job_id"),
+                "candidate_id": candidate_id,
+                "state": result["state"],
+                "planned_sinks": decision.sinks,
+                "result_path": str(result_path),
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        return {
+            "schema": "business-card-watchdog.child-route-prep-submission-result.v1",
+            "run_id": run_id,
+            "job_id": entry.get("job_id"),
+            "candidate_id": candidate_id,
+            "state": "routing_prepared",
+            "lookup_plan_path": str(lookup_plan_path),
+            "sink_plan_path": str(sink_plan_path),
+            "result_path": str(result_path),
+            "lookup_plan": lookup_plan,
+            "sink_plan": sink_plan,
+            "result": result,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+
     def review_bundle(self, *, run_id: str, state: str = "all", write: bool = True) -> dict[str, Any]:
         run = self.get_run(run_id)
         artifacts = self.list_artifacts(run_id)

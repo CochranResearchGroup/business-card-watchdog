@@ -1077,6 +1077,48 @@ def test_api_child_review_approves_promoted_child_candidate(tmp_path: Path, monk
     assert payload["network_calls_made"] == 0
 
 
+def test_api_child_route_prep_writes_dry_run_plans(tmp_path: Path, monkeypatch) -> None:
+    pytest.importorskip("cv2")
+    from business_card_watchdog.api import create_app
+
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+    source_dir = tmp_path / "images"
+    write_multi_card_image(source_dir / "multi.jpg")
+    config = AppConfig(
+        config_path=config_path,
+        data_dir=data_dir,
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+    service = BusinessCardService(config)
+    candidate_id = str(service.child_review_queue(run_id=run_dir.name)[0]["candidate_id"])
+    service.submit_child_review(
+        run_id=run_dir.name,
+        candidate_id=candidate_id,
+        reviewer="operator",
+        action="approve_child_for_routing",
+    )
+    client = TestClient(create_app(config_path))
+
+    queue = client.get("/reviews/children/route-prep", params={"run_id": run_dir.name}).json()
+    payload = client.post(
+        f"/reviews/children/{candidate_id}/route-prep",
+        json={"run_id": run_dir.name},
+    ).json()
+
+    assert any(entry["candidate_id"] == candidate_id for entry in queue)
+    assert payload["state"] == "routing_prepared"
+    assert payload["lookup_plan"]["dry_run"] is True
+    assert payload["sink_plan"]["dry_run"] is True
+    assert payload["result"]["sink_write_allowed"] is False
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+
+
 def test_api_multi_card_preclassification_drill_records_candidate_boxes(tmp_path: Path) -> None:
     pytest.importorskip("cv2")
     from business_card_watchdog.api import create_app

@@ -1726,6 +1726,22 @@ def _render_child_review_queue_text(entries: list[dict[str, object]]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_child_route_prep_queue_text(entries: list[dict[str, object]]) -> str:
+    lines = [f"Child route prep queue: {len(entries)} candidates"]
+    if not entries:
+        return "\n".join(lines) + "\n"
+    for entry in entries:
+        next_action = dict(entry.get("next_action") or {})
+        lines.append(
+            " - "
+            f"{entry.get('candidate_id')} "
+            f"job={entry.get('job_id')} "
+            f"state={entry.get('state')} "
+            f"next={next_action.get('action') or 'none'}"
+        )
+    return "\n".join(lines) + "\n"
+
+
 def _render_jobs_list_text(entries: list[dict[str, object]]) -> str:
     lines = [f"Jobs: {len(entries)}"]
     for entry in entries:
@@ -2011,6 +2027,15 @@ def build_parser() -> argparse.ArgumentParser:
     reviews_child_review.add_argument("--field-corrections-json", default="{}")
     reviews_child_review.add_argument("--notes", default="")
     reviews_child_review.add_argument("--json", action="store_true")
+    reviews_child_route_prep_queue = reviews_sub.add_parser("child-route-prep-queue")
+    reviews_child_route_prep_queue.add_argument("--run-id", default=None)
+    reviews_child_route_prep_queue.add_argument("--state", default="approved_for_dedupe")
+    reviews_child_route_prep_queue.add_argument("--json", action="store_true")
+    reviews_child_route_prep = reviews_sub.add_parser("child-route-prep")
+    reviews_child_route_prep.add_argument("candidate_id")
+    reviews_child_route_prep.add_argument("--run-id", required=True)
+    reviews_child_route_prep.add_argument("--live", action="store_true")
+    reviews_child_route_prep.add_argument("--json", action="store_true")
     reviews_bundle = reviews_sub.add_parser("bundle")
     reviews_bundle.add_argument("--run-id", required=True)
     reviews_bundle.add_argument("--state", default="all")
@@ -2560,6 +2585,17 @@ def main(argv: list[str] | None = None) -> int:
                 action=args.action,
                 field_corrections=json.loads(args.field_corrections_json),
                 notes=args.notes,
+            )
+        elif args.reviews_command == "child-route-prep-queue":
+            payload = service.child_route_prep_queue(run_id=args.run_id, state=args.state)
+            if not args.json:
+                print(_render_child_route_prep_queue_text(payload), end="")
+                return 0
+        elif args.reviews_command == "child-route-prep":
+            payload = service.prepare_child_route(
+                run_id=args.run_id,
+                candidate_id=args.candidate_id,
+                dry_run=not args.live,
             )
         else:
             payload = service.review_queue(

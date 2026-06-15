@@ -139,6 +139,11 @@ candidates before review, routing, enrichment, or sink work. Use
 `reviews child-review <candidate-id> --run-id <run-id> --action approve_child_for_routing --json`
 to approve a promoted child candidate into local reviewed-child-contact artifacts;
 that approval still does not call enrichment, dedupe, routing, or live sinks.
+After approval, `reviews child-route-prep-queue --run-id <run-id> --json` lists
+child contacts ready for dry-run route preparation, and
+`reviews child-route-prep <candidate-id> --run-id <run-id> --json` writes local
+child lookup and sink plan artifacts with parent/child lineage. This prep still
+does not run live lookup, resolve duplicates, enrich, or write sinks.
 
 `drills review-routing` creates a synthetic fixture run and proves review approval,
 review bundle/workbook export, duplicate lookup planning, dry-run sink routing, and

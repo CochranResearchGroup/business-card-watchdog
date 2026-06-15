@@ -4878,3 +4878,32 @@ Validation:
 Safety:
 
 - This created local child review artifacts only. It did not process private SyncThing images, dedupe, route, enrich, write sinks, execute command-copy text, run public-web search, call paid APIs, or call GWS/Odollo/Odoo.
+
+## Turn 225 | 2026-06-15
+
+Executed Plan 0019 with Slice 0019-A.
+
+Implemented:
+
+- Added `BusinessCardService.child_route_prep_queue`.
+- Added `BusinessCardService.prepare_child_route`.
+- Added CLI commands `reviews child-route-prep-queue` and `reviews child-route-prep <candidate-id>`.
+- Added API routes `GET /reviews/children/route-prep` and `POST /reviews/children/{candidate_id}/route-prep`.
+- Added MCP tools `business_card_watchdog_child_route_prep_queue` and `business_card_watchdog_child_route_prepare`.
+- Added synthetic multi-card coverage for service, CLI, API, and MCP route prep.
+- Updated README and roadmap documentation for child route-prep decisions.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_review_surface.py::test_child_route_prep_writes_dry_run_lookup_and_sink_plans tests/test_cli_surfaces.py::test_cli_child_route_prep_writes_dry_run_plans tests/test_api.py::test_api_child_route_prep_writes_dry_run_plans tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_child_route_prep_writes_dry_run_plans -q` passed with 5 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/api.py src/business_card_watchdog/mcp.py tests/test_review_surface.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 251 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This created local dry-run child lookup and sink plan artifacts only. It did not process private SyncThing images, execute live lookup, dedupe, route to sinks, enrich, write contacts, execute command-copy text, run public-web search, call paid APIs, or call GWS/Odollo/Odoo.

@@ -122,3 +122,51 @@ def test_child_review_approval_writes_reviewed_child_contact_artifact(tmp_path: 
     assert any(artifact["kind"] == "child_contact_review_result" for artifact in artifacts)
     assert any(event["event_type"] == "child_contact_review_submitted" for event in events)
     assert any(entry["candidate_id"] == candidate_id for entry in approved_queue)
+
+
+def test_child_route_prep_writes_dry_run_lookup_and_sink_plans(tmp_path: Path, monkeypatch) -> None:
+    pytest = __import__("pytest")
+    pytest.importorskip("cv2")
+    source_dir = tmp_path / "images"
+    write_multi_card_image(source_dir / "multi.jpg")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+    service = BusinessCardService(config)
+    candidate_id = str(service.child_review_queue(run_id=run_dir.name)[0]["candidate_id"])
+    service.submit_child_review(
+        run_id=run_dir.name,
+        candidate_id=candidate_id,
+        reviewer="operator",
+        action="approve_child_for_routing",
+    )
+
+    queue = service.child_route_prep_queue(run_id=run_dir.name)
+    result = service.prepare_child_route(run_id=run_dir.name, candidate_id=candidate_id)
+
+    lookup_plan = json.loads(Path(result["lookup_plan_path"]).read_text(encoding="utf-8"))
+    sink_plan = json.loads(Path(result["sink_plan_path"]).read_text(encoding="utf-8"))
+    artifacts = read_jsonl(run_dir / "artifacts.jsonl")
+    events = read_jsonl(run_dir / "events.jsonl")
+
+    assert any(entry["candidate_id"] == candidate_id for entry in queue)
+    assert result["state"] == "routing_prepared"
+    assert result["writes_attempted"] == 0
+    assert result["network_calls_made"] == 0
+    assert lookup_plan["schema"] == "business-card-watchdog.sink-lookup-plan.v1"
+    assert lookup_plan["dry_run"] is True
+    assert lookup_plan["candidate_id"] == candidate_id
+    assert lookup_plan["lookups"][0]["sink"] == "google_contacts"
+    assert sink_plan["schema"] == "business-card-watchdog.sink-plan.v1"
+    assert sink_plan["dry_run"] is True
+    assert sink_plan["candidate_id"] == candidate_id
+    assert result["result"]["sink_write_allowed"] is False
+    assert any(artifact["kind"] == "child_sink_lookup_plan" for artifact in artifacts)
+    assert any(artifact["kind"] == "child_sink_plan" for artifact in artifacts)
+    assert any(artifact["kind"] == "child_route_prep_result" for artifact in artifacts)
+    assert any(event["event_type"] == "child_route_prepared" for event in events)

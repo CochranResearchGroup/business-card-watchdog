@@ -449,6 +449,30 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_child_route_prep_queue",
+                "description": "List approved child contacts ready for dry-run dedupe and routing preparation.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "state": {"type": "string", "default": "approved_for_dedupe"},
+                    },
+                },
+            },
+            {
+                "name": "business_card_watchdog_child_route_prepare",
+                "description": "Write dry-run child lookup and sink planning artifacts for one approved child contact.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "candidate_id": {"type": "string"},
+                        "dry_run": {"type": "boolean", "default": True},
+                    },
+                    "required": ["run_id", "candidate_id"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_review_bundle",
                 "description": "Create a run-level batch review bundle with inline review-relevant artifact payloads.",
                 "input_schema": {
@@ -1185,6 +1209,17 @@ def call_tool(
             action=str(args.get("action") or "keep_needs_review"),
             field_corrections=dict(args.get("field_corrections") or {}),
             notes=str(args.get("notes") or ""),
+        )
+    if tool_name == "business_card_watchdog_child_route_prep_queue":
+        return service.child_route_prep_queue(
+            run_id=str(args["run_id"]) if args.get("run_id") else None,
+            state=str(args.get("state") or "approved_for_dedupe"),
+        )
+    if tool_name == "business_card_watchdog_child_route_prepare":
+        return service.prepare_child_route(
+            run_id=str(args["run_id"]),
+            candidate_id=str(args["candidate_id"]),
+            dry_run=bool(args.get("dry_run", True)),
         )
     if tool_name == "business_card_watchdog_review_bundle":
         return service.review_bundle(

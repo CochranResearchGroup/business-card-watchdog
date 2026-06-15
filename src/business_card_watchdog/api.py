@@ -33,6 +33,10 @@ def create_app(config_path: Path | None = None):
         field_corrections: dict[str, object] = Field(default_factory=dict)
         notes: str = ""
 
+    class ChildRoutePrepRequest(BaseModel):
+        run_id: str
+        dry_run: bool = True
+
     class ReviewDecisionsRequest(BaseModel):
         reviewer: str = "operator"
         decisions: list[dict[str, object]] = Field(default_factory=list)
@@ -493,6 +497,21 @@ def create_app(config_path: Path | None = None):
             action=request.action,
             field_corrections=dict(request.field_corrections),
             notes=request.notes,
+        )
+
+    @app.get("/reviews/children/route-prep")
+    def list_child_route_prep(
+        run_id: str | None = None,
+        state: str = "approved_for_dedupe",
+    ) -> list[dict[str, object]]:
+        return service().child_route_prep_queue(run_id=run_id, state=state)
+
+    @app.post("/reviews/children/{candidate_id}/route-prep")
+    def prepare_child_route(candidate_id: str, request: ChildRoutePrepRequest = Body(...)) -> dict[str, object]:
+        return service().prepare_child_route(
+            run_id=request.run_id,
+            candidate_id=candidate_id,
+            dry_run=request.dry_run,
         )
 
     @app.post("/runs/{run_id}/review-bundle")

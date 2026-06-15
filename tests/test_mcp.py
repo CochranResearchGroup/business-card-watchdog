@@ -56,6 +56,8 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_reviews_list" in names
     assert "business_card_watchdog_child_reviews_list" in names
     assert "business_card_watchdog_child_review_submit" in names
+    assert "business_card_watchdog_child_route_prep_queue" in names
+    assert "business_card_watchdog_child_route_prepare" in names
     assert "business_card_watchdog_review_bundle" in names
     assert "business_card_watchdog_review_html" in names
     assert "business_card_watchdog_review_workbook" in names
@@ -168,6 +170,48 @@ def test_mcp_child_review_approves_promoted_child_candidate(tmp_path: Path, monk
     assert payload["candidate_id"] == candidate_id
     assert payload["state"] == "approved_for_dedupe"
     assert payload["reviewed_contact"]["flat"]["email"] == "mcp-child@example.test"
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+
+
+def test_mcp_child_route_prep_writes_dry_run_plans(tmp_path: Path, monkeypatch) -> None:
+    pytest = __import__("pytest")
+    pytest.importorskip("cv2")
+    source_dir = tmp_path / "images"
+    write_multi_card_image(source_dir / "multi.jpg")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+    service = BusinessCardService(config)
+    candidate_id = str(service.child_review_queue(run_id=run_dir.name)[0]["candidate_id"])
+    service.submit_child_review(
+        run_id=run_dir.name,
+        candidate_id=candidate_id,
+        reviewer="operator",
+        action="approve_child_for_routing",
+    )
+
+    queue = call_tool(
+        "business_card_watchdog_child_route_prep_queue",
+        {"run_id": run_dir.name},
+        config=config,
+    )
+    payload = call_tool(
+        "business_card_watchdog_child_route_prepare",
+        {"run_id": run_dir.name, "candidate_id": candidate_id},
+        config=config,
+    )
+
+    assert any(entry["candidate_id"] == candidate_id for entry in queue)
+    assert payload["state"] == "routing_prepared"
+    assert payload["lookup_plan"]["dry_run"] is True
+    assert payload["sink_plan"]["dry_run"] is True
+    assert payload["result"]["sink_write_allowed"] is False
     assert payload["writes_attempted"] == 0
     assert payload["network_calls_made"] == 0
 
