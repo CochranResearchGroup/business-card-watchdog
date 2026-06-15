@@ -305,6 +305,11 @@ def _render_live_pilot_handoff_text(payload: dict[str, object]) -> str:
             prefilled_validate_command = entry_commands.get("validate_operator_response_prefilled")
             if prefilled_validate_command:
                 lines.append(f"   Validate prefilled response: {prefilled_validate_command}")
+    stop_conditions = payload.get("operator_stop_conditions") or []
+    stops = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Operator stop conditions: {len(stops)}")
+    for condition in stops:
+        lines.append(f" - {condition}")
     return "\n".join(lines) + "\n"
 
 

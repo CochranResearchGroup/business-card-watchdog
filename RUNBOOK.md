@@ -3572,3 +3572,26 @@ Validation:
 Safety:
 
 - This was no-live CLI presentation hardening only. It did not validate a real operator response, execute any returned select-target command, execute selected-target audit, build lookup-smoke handoff, create or modify `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+## Turn 175 | 2026-06-15
+
+Continued Plan 0009 with Slice 0009-A99.
+
+Implemented:
+
+- Plain-text `runs live-pilot-handoff` output now renders operator stop-condition count and stop-condition lines.
+- Active selected-target handoff text now shows tenant/profile, selected-target creation, live command, private input, public-web, and paid-enrichment boundaries without requiring `--json`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval -q` passed with 1 test.
+- `.venv/bin/python -m pytest -q` passed with 226 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was no-live CLI presentation hardening only. It did not validate a real operator response, execute any returned select-target command, execute selected-target audit, build lookup-smoke handoff, create or modify `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.

@@ -694,6 +694,10 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
         f"--response 'run_id={run_id} job_id={job_id} sink=google_contacts "
         "operator=tester scope=lookup safety_confirmation=<tenant-profile-account-confirmation>' --json"
     ) in text_handoff
+    assert "Operator stop conditions: 4" in text_handoff
+    assert "Operator must choose exactly one run_id, job_id, sink, scope" in text_handoff
+    assert "Do not create selected_live_target.json" in text_handoff
+    assert "Do not run live lookup, live write, or live readback" in text_handoff
     assert "{" not in text_handoff
 
     response = (
