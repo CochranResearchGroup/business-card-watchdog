@@ -622,6 +622,11 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert live_handoff["operator_response_templates"][0]["validation_command"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
+    assert live_handoff["operator_response_templates"][0]["validation_command_prefilled"] == (
+        f"runs live-pilot-validate-response {run_id} "
+        f"--response 'run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=mcp-test scope=all safety_confirmation=<confirmation>' --json"
+    )
     assert operator_response_validation["schema"] == (
         "business-card-watchdog.live-pilot-operator-response-validation.v1"
     )

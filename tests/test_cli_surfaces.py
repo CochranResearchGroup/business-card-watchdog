@@ -643,6 +643,11 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert handoff["operator_response_templates"][0]["validation_command"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
+    assert handoff["operator_response_templates"][0]["validation_command_prefilled"] == (
+        f"runs live-pilot-validate-response {run_id} "
+        f"--response 'run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=tester scope=lookup safety_confirmation=<confirmation>' --json"
+    )
     assert handoff["entries"][0]["command"] == f"sinks execute-lookup-smoke {job_id} --run-id {run_id} --json"
 
     assert main(["--config", str(config_path), "runs", "live-pilot-handoff", run_id, "--no-write"]) == 0

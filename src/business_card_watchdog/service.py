@@ -5586,6 +5586,10 @@ class BusinessCardService:
                         "validate_operator_response": (
                             f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
                         ),
+                        "validate_operator_response_prefilled": _operator_response_validation_command(
+                            run_id,
+                            operator_response_template,
+                        ),
                     },
                 }
             )
@@ -5772,6 +5776,9 @@ class BusinessCardService:
                 "copyable_approval_fields": entry.get("copyable_approval_fields"),
                 "command": entry.get("command"),
                 "validation_command": (entry.get("commands") or {}).get("validate_operator_response"),
+                "validation_command_prefilled": (entry.get("commands") or {}).get(
+                    "validate_operator_response_prefilled"
+                ),
             }
             for entry in handoff_entries
             if entry.get("operator_required") and entry.get("operator_response_template")
@@ -6079,8 +6086,7 @@ class BusinessCardService:
                     f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
                 ),
                 "validate_operator_response_prefilled": (
-                    f"runs live-pilot-validate-response {shlex.quote(run_id)} "
-                    f"--response {shlex.quote(operator_response_template)} --json"
+                    _operator_response_validation_command(run_id, operator_response_template)
                 ),
                 "create_selected_target": (
                     f"sinks select-live-target {job_id} --run-id {run_id} --sink {sink} "
@@ -7653,6 +7659,13 @@ def _parse_operator_response_fields(response: str) -> dict[str, str]:
         elif current_key:
             fields[current_key] = f"{fields[current_key]} {token}".strip()
     return fields
+
+
+def _operator_response_validation_command(run_id: str, response: str) -> str:
+    return (
+        f"runs live-pilot-validate-response {shlex.quote(run_id)} "
+        f"--response {shlex.quote(response)} --json"
+    )
 
 
 def _runtime_safe_next_actions(

@@ -218,6 +218,11 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert live_handoff["operator_response_templates"][0]["validation_command"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
+    assert live_handoff["operator_response_templates"][0]["validation_command_prefilled"] == (
+        f"runs live-pilot-validate-response {run_id} "
+        f"--response 'run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=api-test scope=lookup safety_confirmation=<confirmation>' --json"
+    )
     assert live_handoff["entries"][0]["copyable_approval_fields"]["operator"] == "api-test"
     response = (
         f"run_id={run_id} job_id={job_id} sink=google_contacts "
