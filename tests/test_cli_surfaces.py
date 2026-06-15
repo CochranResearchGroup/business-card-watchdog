@@ -639,6 +639,9 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
         f"Validate response: runs live-pilot-validate-response {run_id} "
         "--response <operator-response> --json"
     ) in text_status
+    assert "Stop conditions: 3" in text_status
+    assert "This status report does not create selected_live_target.json" in text_status
+    assert "Do not run live lookup, live write, or live readback" in text_status
     assert "{" not in text_status
 
     assert main(["--config", str(config_path), "runs", "live-pilot-handoff", run_id, "--json"]) == 0

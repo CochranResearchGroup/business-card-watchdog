@@ -269,6 +269,11 @@ def _render_live_pilot_status_text(payload: dict[str, object]) -> str:
                 f"abandonment={entry.get('abandonment_identity') or 'none'} "
                 f"closeout={entry.get('closeout_state') or 'none'}"
             )
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    stops = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stops)}")
+    for condition in stops:
+        lines.append(f" - {condition}")
     return "\n".join(lines) + "\n"
 
 
