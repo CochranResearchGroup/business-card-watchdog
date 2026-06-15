@@ -5372,3 +5372,32 @@ Validation:
 Safety:
 
 - This inspected offline docs and local command surfaces only. It did not process private SyncThing images; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.
+
+## Turn 242 | 2026-06-15
+
+Executed Plan 0036 with Slice 0036-A.
+
+Implemented:
+
+- Added `BusinessCardService.operator_selected_live_smoke_preflight`.
+- Added CLI command `operator-selected-live-smoke-preflight`.
+- Added API route `POST /operator-selected-live-smoke-preflight`.
+- Added MCP tool `business_card_watchdog_operator_selected_live_smoke_preflight`.
+- Added status command and safe next action visibility for the preflight.
+- Updated README and roadmap documentation for the operator-selected live smoke preflight.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_operator_selected_live_smoke_preflight_reports_blocked_boundary tests/test_cli_surfaces.py::test_cli_status_reports_command_map_text_and_json tests/test_cli_surfaces.py::test_cli_operator_selected_live_smoke_preflight_reports_blocked_boundary tests/test_api.py::test_api_operator_selected_live_smoke_preflight_reports_blocked_boundary tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_operator_selected_live_smoke_preflight_reports_blocked_boundary -q` passed with 6 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/api.py src/business_card_watchdog/mcp.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 279 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `rg -n "operator-selected-live-smoke-preflight|operator_selected_live_smoke_preflight|Operator-selected live smoke preflight|business_card_watchdog_operator_selected_live_smoke_preflight" README.md ROADMAP.md RUNBOOK.md docs src tests` passed.
+- `uv build --out-dir dist` built source and wheel distributions.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This composed existing no-live readiness reports only. It did not process private SyncThing images; run public-web search; call paid enrichment; create `selected_live_target.json`; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.

@@ -88,6 +88,18 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_operator_selected_live_smoke_preflight",
+                "description": "Compose offline gap, live readiness, and selection requirements into one no-live operator-selected live smoke preflight.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "sink": {"type": "string", "enum": ["google_contacts", "odoo"]},
+                        "write": {"type": "boolean", "default": True},
+                    },
+                },
+            },
+            {
                 "name": "business_card_watchdog_runs_list",
                 "description": "List known run records from the user-scoped run index.",
                 "input_schema": {"type": "object", "properties": {}},
@@ -1312,6 +1324,12 @@ def call_tool(
         )
     if tool_name == "business_card_watchdog_live_selection_requirements":
         return service.live_selection_requirements(
+            run_id=str(args["run_id"]) if args.get("run_id") else None,
+            sink=str(args["sink"]) if args.get("sink") else None,
+            write=bool(args.get("write", True)),
+        )
+    if tool_name == "business_card_watchdog_operator_selected_live_smoke_preflight":
+        return service.operator_selected_live_smoke_preflight(
             run_id=str(args["run_id"]) if args.get("run_id") else None,
             sink=str(args["sink"]) if args.get("sink") else None,
             write=bool(args.get("write", True)),

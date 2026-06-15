@@ -35,6 +35,7 @@ def _render_status_text(payload: dict[str, object]) -> str:
     for label, key in [
         ("Runtime readiness", "runtime_readiness"),
         ("Offline pilot gap audit", "offline_pilot_gap_audit"),
+        ("Operator-selected live smoke preflight", "operator_selected_live_smoke_preflight"),
         ("Service recovery", "service_recovery"),
         ("Watch status", "watch_status"),
         ("Watch dry run", "watch_dry_run"),
@@ -1476,6 +1477,53 @@ def _render_offline_pilot_gap_audit_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_operator_selected_live_smoke_preflight_text(payload: dict[str, object]) -> str:
+    commands = dict(payload.get("commands") or {})
+    blockers = payload.get("blocked_reasons") or []
+    ready_entries = payload.get("ready_entries") or []
+    checklist = payload.get("operator_selection_checklist") or []
+    lines = [
+        f"Operator-selected live smoke preflight: {payload.get('state')}",
+        f"Recommended next step: {payload.get('recommended_next_step')}",
+        f"Run: {payload.get('run_id') or 'none'}",
+        f"Sink: {payload.get('sink') or 'all'}",
+        f"Candidates: {payload.get('candidate_count', 0)} ready={payload.get('ready_candidate_count', 0)} blocked={payload.get('blocked_candidate_count', 0)}",
+        f"Entries: {payload.get('entry_count', 0)} ready={payload.get('ready_entry_count', 0)} active={payload.get('active_selected_target_count', 0)}",
+        f"Preflight path: {payload.get('preflight_path') or 'not written'}",
+        f"Observed: writes={payload.get('writes_attempted', 0)} network={payload.get('network_calls_made', 0)}",
+    ]
+    blocker_rows = blockers if isinstance(blockers, list) else []
+    lines.append(f"Blocked reasons: {len(blocker_rows)}")
+    for reason in blocker_rows:
+        lines.append(f" - {reason}")
+    entry_rows = ready_entries if isinstance(ready_entries, list) else []
+    lines.append(f"Ready entries: {len(entry_rows)}")
+    for entry in entry_rows:
+        if isinstance(entry, dict):
+            lines.append(
+                " - "
+                f"{entry.get('run_id')}/{entry.get('job_id')} "
+                f"sink={entry.get('sink')} "
+                f"missing={','.join(str(item) for item in entry.get('missing_operator_fields') or []) or 'none'}"
+            )
+    checklist_rows = checklist if isinstance(checklist, list) else []
+    lines.append(f"Checklist: {len(checklist_rows)}")
+    for item in checklist_rows:
+        if isinstance(item, dict):
+            lines.append(f" - {item.get('step')}: {item.get('command')}")
+    for label, key in [
+        ("Preflight", "operator_selected_live_smoke_preflight"),
+        ("Offline gap audit", "offline_pilot_gap_audit"),
+        ("Live readiness audit", "live_readiness_audit"),
+        ("Selection requirements", "live_selection_requirements"),
+        ("Validate response", "validate_operator_response"),
+    ]:
+        command = commands.get(key)
+        if command:
+            lines.append(f"{label}: {command}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_live_selection_packet_text(payload: dict[str, object]) -> str:
     existing = dict(payload.get("existing_selected_target") or {})
     scope_allows = dict(payload.get("scope_allows") or {})
@@ -1937,6 +1985,12 @@ def build_parser() -> argparse.ArgumentParser:
     offline_pilot_gap_audit = sub.add_parser("offline-pilot-gap-audit")
     offline_pilot_gap_audit.add_argument("--no-write", action="store_true")
     offline_pilot_gap_audit.add_argument("--json", action="store_true")
+
+    operator_selected_live_smoke_preflight = sub.add_parser("operator-selected-live-smoke-preflight")
+    operator_selected_live_smoke_preflight.add_argument("--run-id", default=None)
+    operator_selected_live_smoke_preflight.add_argument("--sink", choices=["google_contacts", "odoo"], default=None)
+    operator_selected_live_smoke_preflight.add_argument("--no-write", action="store_true")
+    operator_selected_live_smoke_preflight.add_argument("--json", action="store_true")
 
     live_target_candidates = sub.add_parser("live-target-candidates")
     live_target_candidates.add_argument("--run-id", default=None)
@@ -2570,6 +2624,20 @@ def main(argv: list[str] | None = None) -> int:
         payload = service.offline_pilot_gap_audit(write=not args.no_write)
         print(json.dumps(payload, indent=2) if args.json else _render_offline_pilot_gap_audit_text(payload), end="")
         return 0 if payload["state"] != "needs_offline_attention" else 2
+
+    if args.command == "operator-selected-live-smoke-preflight":
+        payload = service.operator_selected_live_smoke_preflight(
+            run_id=args.run_id,
+            sink=args.sink,
+            write=not args.no_write,
+        )
+        output = (
+            json.dumps(payload, indent=2)
+            if args.json
+            else _render_operator_selected_live_smoke_preflight_text(payload)
+        )
+        print(output, end="")
+        return 0 if payload["state"] != "needs_preparation" else 2
 
     if args.command == "live-target-candidates":
         payload = service.live_target_candidates(run_id=args.run_id, sink=args.sink)

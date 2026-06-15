@@ -23,6 +23,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_live_target_candidates" in names
     assert "business_card_watchdog_live_readiness_audit" in names
     assert "business_card_watchdog_live_selection_requirements" in names
+    assert "business_card_watchdog_operator_selected_live_smoke_preflight" in names
     assert "business_card_watchdog_live_selection_packet" in names
     assert "business_card_watchdog_runs_list" in names
     assert "business_card_watchdog_job_show" in names
@@ -154,6 +155,31 @@ def test_mcp_offline_pilot_gap_audit_reports_remaining_boundaries(tmp_path: Path
     assert payload["writes_attempted"] == 0
     assert payload["network_calls_made"] == 0
     assert Path(payload["audit_path"]).exists()
+
+
+def test_mcp_operator_selected_live_smoke_preflight_reports_blocked_boundary(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    run_id, _job_id = make_recorded_run(config)
+
+    payload = call_tool(
+        "business_card_watchdog_operator_selected_live_smoke_preflight",
+        {"run_id": run_id, "sink": "google_contacts", "write": True},
+        config=config,
+    )
+
+    assert payload["schema"] == "business-card-watchdog.operator-selected-live-smoke-preflight.v1"
+    assert payload["state"] == "needs_preparation"
+    assert payload["run_id"] == run_id
+    assert payload["sink"] == "google_contacts"
+    assert payload["entry_count"] == 1
+    assert payload["blocked_entry_count"] == 1
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert Path(payload["preflight_path"]).exists()
 
 
 def test_mcp_child_replacement_readiness_drill_exports_operator_samples(tmp_path: Path) -> None:

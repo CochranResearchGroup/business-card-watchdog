@@ -1019,6 +1019,40 @@ def test_api_offline_pilot_gap_audit_reports_remaining_boundaries(tmp_path: Path
     assert Path(audit["audit_path"]).exists()
 
 
+def test_api_operator_selected_live_smoke_preflight_reports_blocked_boundary(tmp_path: Path) -> None:
+    from business_card_watchdog.api import create_app
+
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    config_path.write_text(
+        f'data_dir = "{data_dir}"\n[watch]\ninputs = []\n[sink]\ngoogle_contacts = true\n',
+        encoding="utf-8",
+    )
+    run_id, _job_id = make_recorded_run(
+        AppConfig(
+            config_path=config_path,
+            data_dir=data_dir,
+            sink=SinkConfig(google_contacts=True, dry_run=True),
+        )
+    )
+    client = TestClient(create_app(config_path))
+
+    preflight = client.post(
+        "/operator-selected-live-smoke-preflight",
+        json={"run_id": run_id, "sink": "google_contacts"},
+    ).json()
+
+    assert preflight["schema"] == "business-card-watchdog.operator-selected-live-smoke-preflight.v1"
+    assert preflight["state"] == "needs_preparation"
+    assert preflight["run_id"] == run_id
+    assert preflight["sink"] == "google_contacts"
+    assert preflight["entry_count"] == 1
+    assert preflight["blocked_entry_count"] == 1
+    assert preflight["writes_attempted"] == 0
+    assert preflight["network_calls_made"] == 0
+    assert Path(preflight["preflight_path"]).exists()
+
+
 def test_api_review_routing_drill_outputs_fixture_artifact(tmp_path: Path) -> None:
     from business_card_watchdog.api import create_app
 

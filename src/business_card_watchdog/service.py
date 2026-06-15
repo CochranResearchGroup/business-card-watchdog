@@ -356,6 +356,7 @@ class BusinessCardService:
             "commands": {
                 "runtime_readiness": "runtime-readiness --json",
                 "offline_pilot_gap_audit": "offline-pilot-gap-audit --json",
+                "operator_selected_live_smoke_preflight": "operator-selected-live-smoke-preflight --json",
                 "service_recovery": "service recovery --json",
                 "watch_status": "watch-status --json",
                 "watch_dry_run": "watch-dry-run --json",
@@ -381,6 +382,13 @@ class BusinessCardService:
                     "action": "inspect_offline_pilot_gap_audit",
                     "command": "offline-pilot-gap-audit --json",
                     "reason": "review offline pilot drill and documentation coverage before choosing the next slice",
+                    "safe_to_auto_continue": True,
+                    "requires_explicit_operator_action": False,
+                },
+                {
+                    "action": "inspect_operator_selected_live_smoke_preflight",
+                    "command": "operator-selected-live-smoke-preflight --json",
+                    "reason": "review the no-live operator-selection boundary before any live smoke",
                     "safe_to_auto_continue": True,
                     "requires_explicit_operator_action": False,
                 },
@@ -9386,6 +9394,208 @@ class BusinessCardService:
                 },
             )
             payload["requirements_path"] = str(requirements_path)
+        return payload
+
+    def operator_selected_live_smoke_preflight(
+        self,
+        *,
+        run_id: str | None = None,
+        sink: str | None = None,
+        write: bool = True,
+    ) -> dict[str, Any]:
+        selected_sink = str(sink or "").strip()
+        if selected_sink and selected_sink not in {"google_contacts", "odoo"}:
+            raise ValueError("operator-selected live smoke preflight requires sink google_contacts or odoo")
+        ensure_runtime_dirs(self.config)
+        offline_gap = self.offline_pilot_gap_audit(write=False)
+        readiness_audit = self.live_readiness_audit(run_id=run_id, sink=selected_sink or None, write=False)
+        selection_requirements = self.live_selection_requirements(
+            run_id=run_id,
+            sink=selected_sink or None,
+            write=False,
+        )
+        entries = [
+            entry
+            for entry in list(selection_requirements.get("entries") or [])
+            if isinstance(entry, dict)
+        ]
+        ready_entries = [
+            entry
+            for entry in entries
+            if entry.get("state") in {"needs_operator_selection", "abandoned_select_new_target"}
+        ]
+        active_entries = [entry for entry in entries if entry.get("state") == "selected_target_active"]
+        blocked_entries = [entry for entry in entries if entry.get("state") == "blocked"]
+        blocked_reasons: list[str] = []
+        if offline_gap.get("state") != "ready_for_live_operator_boundary":
+            blocked_reasons.append("offline pilot gap audit is not ready for live operator boundary")
+        if readiness_audit.get("state") == "needs_preparation":
+            blocked_reasons.extend(str(reason) for reason in list(readiness_audit.get("blocked_reasons") or []))
+        if run_id is None:
+            blocked_reasons.append("operator must select one run_id before a live smoke can proceed")
+        if not entries:
+            blocked_reasons.append("no live selection requirement entries are available")
+        elif not ready_entries and not active_entries:
+            blocked_reasons.append("no candidate is ready for operator selection")
+
+        if active_entries:
+            state = "selected_target_active"
+            recommended_next_step = "inspect_selected_target_audit"
+        elif ready_entries and not blocked_reasons:
+            state = "awaiting_operator_selection"
+            recommended_next_step = "validate_operator_response"
+        elif ready_entries:
+            state = "awaiting_run_selection"
+            recommended_next_step = "choose_run_job_sink_operator_scope"
+        else:
+            state = "needs_preparation"
+            recommended_next_step = "prepare_ready_candidate"
+
+        example_entry = ready_entries[0] if ready_entries else active_entries[0] if active_entries else {}
+        entry_commands = dict(example_entry.get("commands") or {})
+        operator_selection_checklist = [
+            {
+                "step": "inspect_offline_gap_audit",
+                "command": "offline-pilot-gap-audit --no-write --json",
+                "safe_to_auto_continue": True,
+                "requires_explicit_operator_action": False,
+                "executes_live_call": False,
+                "writes_sink": False,
+            },
+            {
+                "step": "inspect_live_readiness_audit",
+                "command": (
+                    "live-readiness-audit"
+                    + (f" --run-id {run_id}" if run_id else "")
+                    + (f" --sink {selected_sink}" if selected_sink else "")
+                    + " --no-write --json"
+                ),
+                "safe_to_auto_continue": True,
+                "requires_explicit_operator_action": False,
+                "executes_live_call": False,
+                "writes_sink": False,
+            },
+            {
+                "step": "inspect_selection_requirements",
+                "command": (
+                    "live-selection-requirements"
+                    + (f" --run-id {run_id}" if run_id else "")
+                    + (f" --sink {selected_sink}" if selected_sink else "")
+                    + " --no-write --json"
+                ),
+                "safe_to_auto_continue": True,
+                "requires_explicit_operator_action": False,
+                "executes_live_call": False,
+                "writes_sink": False,
+            },
+            {
+                "step": "validate_operator_response",
+                "command": entry_commands.get("validate_operator_response_prefilled")
+                or entry_commands.get("validate_operator_response")
+                or (
+                    f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+                    if run_id
+                    else "runs list --json"
+                ),
+                "safe_to_auto_continue": False,
+                "requires_explicit_operator_action": True,
+                "executes_live_call": False,
+                "writes_sink": False,
+            },
+        ]
+        preflight_path = (
+            self.config.runs_dir / run_id / "operator_selected_live_smoke_preflight.json"
+            if run_id
+            else self.config.data_dir / "operator_selected_live_smoke_preflight.json"
+        )
+        payload = {
+            "schema": "business-card-watchdog.operator-selected-live-smoke-preflight.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "recommended_next_step": recommended_next_step,
+            "run_id": run_id,
+            "sink": selected_sink or None,
+            "candidate_count": selection_requirements.get("candidate_count", 0),
+            "ready_candidate_count": selection_requirements.get("ready_candidate_count", 0),
+            "blocked_candidate_count": selection_requirements.get("blocked_candidate_count", 0),
+            "entry_count": len(entries),
+            "ready_entry_count": len(ready_entries),
+            "active_selected_target_count": len(active_entries),
+            "blocked_entry_count": len(blocked_entries),
+            "blocked_reasons": blocked_reasons,
+            "required_operator_fields": list(selection_requirements.get("required_operator_fields") or []),
+            "operator_response_contract": selection_requirements.get("operator_response_contract"),
+            "ready_entries": ready_entries,
+            "active_selected_targets": active_entries,
+            "blocked_entries": blocked_entries,
+            "offline_pilot_gap_audit": offline_gap,
+            "live_readiness_audit": readiness_audit,
+            "live_selection_requirements": selection_requirements,
+            "operator_selection_checklist": operator_selection_checklist,
+            "preflight_path": str(preflight_path) if write else None,
+            "preflight_written": False,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "commands": {
+                "operator_selected_live_smoke_preflight": (
+                    "operator-selected-live-smoke-preflight"
+                    + (f" --run-id {run_id}" if run_id else "")
+                    + (f" --sink {selected_sink}" if selected_sink else "")
+                    + " --json"
+                ),
+                "offline_pilot_gap_audit": "offline-pilot-gap-audit --no-write --json",
+                "live_readiness_audit": (
+                    "live-readiness-audit"
+                    + (f" --run-id {run_id}" if run_id else "")
+                    + (f" --sink {selected_sink}" if selected_sink else "")
+                    + " --no-write --json"
+                ),
+                "live_selection_requirements": (
+                    "live-selection-requirements"
+                    + (f" --run-id {run_id}" if run_id else "")
+                    + (f" --sink {selected_sink}" if selected_sink else "")
+                    + " --no-write --json"
+                ),
+                "live_pilot_handoff": (
+                    f"runs live-pilot-handoff {run_id} --no-write --json" if run_id else "runs list --json"
+                ),
+                "validate_operator_response": (
+                    f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
+                    if run_id
+                    else "runs list --json"
+                ),
+            },
+            "explicit_stop_conditions": [
+                "This preflight does not create selected_live_target.json.",
+                "Do not run live lookup, live write, or live readback from this preflight.",
+                "Operator must explicitly provide run_id, job_id, sink, operator, scope, and safety_confirmation before any non-simulated live call.",
+                "Do not process private SyncThing images, run public-web search, or call paid enrichment from this preflight.",
+            ],
+        }
+        if write:
+            payload["preflight_written"] = True
+            preflight_path.parent.mkdir(parents=True, exist_ok=True)
+            preflight_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            if run_id:
+                ledger = RunLedger(self.config.runs_dir / run_id)
+                ledger.record_artifact(
+                    job_id="__run__",
+                    kind="operator_selected_live_smoke_preflight",
+                    path=preflight_path,
+                )
+                ledger.record_event(
+                    "operator_selected_live_smoke_preflight_created",
+                    {
+                        "run_id": run_id,
+                        "sink": selected_sink or None,
+                        "preflight_path": str(preflight_path),
+                        "state": state,
+                        "ready_entry_count": len(ready_entries),
+                        "active_selected_target_count": len(active_entries),
+                        "writes_attempted": 0,
+                        "network_calls_made": 0,
+                    },
+                )
         return payload
 
     def live_pilot_status(self, *, run_id: str, write: bool = True) -> dict[str, Any]:

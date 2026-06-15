@@ -299,6 +299,53 @@ def test_service_live_selection_requirements_report_writes_run_level_artifact(tm
     assert any(artifact["kind"] == "live_selection_requirements" for artifact in artifacts)
 
 
+def test_service_operator_selected_live_smoke_preflight_reports_blocked_boundary(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    run_id, _job_id = make_recorded_run(config)
+
+    preflight = BusinessCardService(config).operator_selected_live_smoke_preflight(
+        run_id=run_id,
+        sink="google_contacts",
+    )
+
+    assert preflight["schema"] == "business-card-watchdog.operator-selected-live-smoke-preflight.v1"
+    assert preflight["state"] == "needs_preparation"
+    assert preflight["recommended_next_step"] == "prepare_ready_candidate"
+    assert preflight["run_id"] == run_id
+    assert preflight["sink"] == "google_contacts"
+    assert preflight["offline_pilot_gap_audit"]["state"] == "ready_for_live_operator_boundary"
+    assert preflight["live_readiness_audit"]["state"] == "needs_preparation"
+    assert preflight["live_selection_requirements"]["schema"] == "business-card-watchdog.live-selection-requirements.v1"
+    assert preflight["entry_count"] == 1
+    assert preflight["ready_entry_count"] == 0
+    assert preflight["blocked_entry_count"] == 1
+    assert "no candidate is ready for operator selection" in preflight["blocked_reasons"]
+    assert preflight["operator_response_contract"]["creates_selected_live_target"] is False
+    assert preflight["operator_selection_checklist"][0]["step"] == "inspect_offline_gap_audit"
+    assert preflight["operator_selection_checklist"][-1]["requires_explicit_operator_action"] is True
+    assert preflight["writes_attempted"] == 0
+    assert preflight["network_calls_made"] == 0
+    assert preflight["preflight_written"] is True
+    assert Path(preflight["preflight_path"]).exists()
+    persisted = json.loads(Path(preflight["preflight_path"]).read_text(encoding="utf-8"))
+    assert persisted["preflight_written"] is True
+    artifacts = BusinessCardService(config).list_artifacts(run_id)
+    assert any(artifact["kind"] == "operator_selected_live_smoke_preflight" for artifact in artifacts)
+
+    status = BusinessCardService(config).status()
+    assert status["commands"]["operator_selected_live_smoke_preflight"] == (
+        "operator-selected-live-smoke-preflight --json"
+    )
+    assert any(
+        action["action"] == "inspect_operator_selected_live_smoke_preflight"
+        for action in status["safe_next_actions"]
+    )
+
+
 def test_service_live_selection_packet_does_not_select_target(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",

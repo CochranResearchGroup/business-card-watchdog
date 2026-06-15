@@ -69,6 +69,9 @@ def test_cli_status_reports_command_map_text_and_json(tmp_path: Path, capsys) ->
     assert payload["schema"] == "business-card-watchdog.status.v1"
     assert payload["commands"]["runtime_readiness"] == "runtime-readiness --json"
     assert payload["commands"]["offline_pilot_gap_audit"] == "offline-pilot-gap-audit --json"
+    assert payload["commands"]["operator_selected_live_smoke_preflight"] == (
+        "operator-selected-live-smoke-preflight --json"
+    )
     assert payload["commands"]["service_recovery"] == "service recovery --json"
     assert payload["commands"]["runs_list"] == "runs list --json"
     assert payload["safe_next_actions"][0]["action"] == "inspect_runtime_readiness"
@@ -81,9 +84,10 @@ def test_cli_status_reports_command_map_text_and_json(tmp_path: Path, capsys) ->
     assert "Commands:" in text
     assert "Runtime readiness: runtime-readiness --json" in text
     assert "Offline pilot gap audit: offline-pilot-gap-audit --json" in text
+    assert "Operator-selected live smoke preflight: operator-selected-live-smoke-preflight --json" in text
     assert "Service recovery: service recovery --json" in text
     assert "Runs list: runs list --json" in text
-    assert "Safe next actions: 4" in text
+    assert "Safe next actions: 5" in text
     assert "Stop conditions: 3" in text
     assert "Observed: writes=0 network=0" in text
     assert "{" not in text
@@ -1314,6 +1318,68 @@ def test_cli_live_selection_requirements_reports_text_and_json(tmp_path: Path, c
     assert f"Live readiness audit: live-readiness-audit --run-id {run_id}" in text
     assert f"Selection requirements: live-selection-requirements --run-id {run_id}" in text
     assert f"Live pilot handoff: runs live-pilot-handoff {run_id}" in text
+    assert "{" not in text
+
+
+def test_cli_operator_selected_live_smoke_preflight_reports_blocked_boundary(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    config_path.write_text(
+        f'data_dir = "{data_dir}"\n[watch]\ninputs = []\n[sink]\ngoogle_contacts = true\n',
+        encoding="utf-8",
+    )
+    run_id, _job_id = make_recorded_run(
+        AppConfig(
+            config_path=config_path,
+            data_dir=data_dir,
+            sink=SinkConfig(google_contacts=True, dry_run=True),
+        )
+    )
+
+    assert main(
+        [
+            "--config",
+            str(config_path),
+            "operator-selected-live-smoke-preflight",
+            "--run-id",
+            run_id,
+            "--sink",
+            "google_contacts",
+            "--json",
+        ]
+    ) == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["schema"] == "business-card-watchdog.operator-selected-live-smoke-preflight.v1"
+    assert payload["state"] == "needs_preparation"
+    assert payload["run_id"] == run_id
+    assert payload["sink"] == "google_contacts"
+    assert payload["entry_count"] == 1
+    assert payload["blocked_entry_count"] == 1
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert Path(payload["preflight_path"]).exists()
+
+    assert main(
+        [
+            "--config",
+            str(config_path),
+            "operator-selected-live-smoke-preflight",
+            "--run-id",
+            run_id,
+            "--sink",
+            "google_contacts",
+            "--no-write",
+        ]
+    ) == 2
+    text = capsys.readouterr().out
+    assert "Operator-selected live smoke preflight: needs_preparation" in text
+    assert f"Run: {run_id}" in text
+    assert "Blocked reasons:" in text
+    assert "Checklist:" in text
+    assert "Selection requirements: live-selection-requirements" in text
     assert "{" not in text
 
 
