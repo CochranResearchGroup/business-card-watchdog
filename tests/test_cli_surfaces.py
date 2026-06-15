@@ -156,17 +156,21 @@ def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) 
     assert f"Selected run: {run_id}" in text
     assert f"Review queue: reviews list --run-id {run_id} --state all --json" in text
     assert f"Next actions: actions next --run-id {run_id} --json" in text
+    assert "Review routing drill: drills review-routing --json" in text
     assert "API routes:" in text
     assert f"Next actions: GET /actions/next?run_id={run_id}&limit=20" in text
+    assert "Review routing drill: POST /drills/review-routing" in text
     assert f"Live pilot handoff: GET /runs/{run_id}/live-pilot-handoff?write=false" in text
     assert f"Live pilot validate response: POST /runs/{run_id}/live-pilot-operator-response-validation" in text
     assert "MCP tools:" in text
     assert f"Operator dashboard: business_card_watchdog_operator_dashboard args=run_id={run_id}" in text
     assert f"Next actions: business_card_watchdog_next_actions args=limit=20, run_id={run_id}" in text
+    assert "Review routing drill: business_card_watchdog_review_routing_drill" in text
     assert f"Live pilot status: business_card_watchdog_live_pilot_status args=run_id={run_id}, write=False" in text
-    assert "Safe next actions: 5" in text
+    assert "Safe next actions: 6" in text
     assert f"inspect_live_pilot_status: runs live-pilot-status {run_id} --no-write --json" in text
     assert f"inspect_live_pilot_handoff: runs live-pilot-handoff {run_id} --no-write --json" in text
+    assert "run_fixture_review_routing_drill: drills review-routing --json" in text
     assert "Live pilot stop conditions: 3" in text
     assert "Do not run live lookup, live write, or live readback from this status report." in text
     assert "Live handoff stop conditions: 4" in text
@@ -206,8 +210,12 @@ def test_cli_service_recovery_reports_status_shape(tmp_path: Path, capsys) -> No
     assert payload["commands"]["live_pilot_handoff"] == (
         f"bcw --config {config_path} runs live-pilot-handoff {run_id}"
     )
+    assert payload["commands"]["review_routing_drill"] == (
+        f"bcw --config {config_path} drills review-routing --json"
+    )
     assert any(action["action"] == "inspect_live_pilot_status" for action in payload["safe_next_actions"])
     assert any(action["action"] == "inspect_live_pilot_handoff" for action in payload["safe_next_actions"])
+    assert any(action["action"] == "run_fixture_review_routing_drill" for action in payload["safe_next_actions"])
     assert payload["network_calls_made"] == 0
     assert payload["writes_attempted"] == 0
 
@@ -216,6 +224,7 @@ def test_cli_service_recovery_reports_status_shape(tmp_path: Path, capsys) -> No
     assert "Service recovery:" in text
     assert f"Run: {run_id}" in text
     assert "Restart: systemctl --user restart business-card-watchdog.service" in text
+    assert f"Review routing drill: bcw --config {config_path} drills review-routing --json" in text
     assert "Resume: bcw --config" in text
     assert f"Live pilot status: bcw --config {config_path} runs live-pilot-status {run_id} --no-write --json" in text
     assert f"Live pilot handoff: bcw --config {config_path} runs live-pilot-handoff {run_id}" in text

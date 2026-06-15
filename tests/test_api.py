@@ -64,6 +64,12 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     )
     assert operator_dashboard["commands"]["next_actions"] == f"actions next --run-id {run_id} --json"
     assert operator_dashboard["api_routes"]["next_actions"] == f"GET /actions/next?run_id={run_id}&limit=20"
+    assert operator_dashboard["commands"]["review_routing_drill"] == "drills review-routing --json"
+    assert operator_dashboard["api_routes"]["review_routing_drill"] == "POST /drills/review-routing"
+    assert operator_dashboard["mcp_tools"]["review_routing_drill"] == {
+        "tool": "business_card_watchdog_review_routing_drill",
+        "arguments": {},
+    }
     assert operator_dashboard["commands"]["live_pilot_validate_response"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
@@ -101,8 +107,13 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
         f"runs live-pilot-status {run_id} --no-write --json"
     )
     assert service_recovery["commands"]["live_pilot_handoff"].endswith(f"runs live-pilot-handoff {run_id}")
+    assert service_recovery["commands"]["review_routing_drill"].endswith("drills review-routing --json")
     assert any(action["action"] == "inspect_live_pilot_status" for action in service_recovery["safe_next_actions"])
     assert any(action["action"] == "inspect_live_pilot_handoff" for action in service_recovery["safe_next_actions"])
+    assert any(
+        action["action"] == "run_fixture_review_routing_drill"
+        for action in service_recovery["safe_next_actions"]
+    )
     assert service_recovery["network_calls_made"] == 0
     assert service_recovery["writes_attempted"] == 0
     live_targets = client.get("/live-target-candidates", params={"run_id": run_id}).json()

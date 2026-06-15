@@ -3840,3 +3840,29 @@ Validation:
 Safety:
 
 - This was runtime/readiness handoff and text presentation hardening only. It did not process configured/private SyncThing inputs, run public-web search, call paid enrichment, validate a real operator response, create or modify `selected_live_target.json`, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+## Turn 186 | 2026-06-15
+
+Continued Plan 0009 with Slice 0009-A110.
+
+Implemented:
+
+- Operator dashboard command, API route, MCP tool, and safe-action maps now expose the synthetic review/routing drill.
+- Service recovery command and safe-action maps now expose the same fixture drill as a no-live recovery proof.
+- Text output for operator dashboard and service recovery now renders the review/routing drill command.
+- Service, CLI, API, and MCP coverage now assert the dashboard/recovery drill handoff.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_recovery_report_composes_status_and_recovery_commands tests/test_service.py::test_service_operator_dashboard_composes_no_live_readiness tests/test_cli_surfaces.py::test_cli_operator_dashboard_reports_no_live_summary tests/test_cli_surfaces.py::test_cli_service_recovery_reports_status_shape tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
+- `.venv/bin/python -m pytest -q` passed with 229 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was dashboard/recovery handoff and text presentation hardening only. It did not process configured/private SyncThing inputs, run public-web search, call paid enrichment, validate a real operator response, create or modify `selected_live_target.json`, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.

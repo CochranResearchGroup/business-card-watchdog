@@ -509,6 +509,7 @@ class BusinessCardService:
                     if selected_run_id
                     else "runs list --json"
                 ),
+                "review_routing_drill": "drills review-routing --json",
                 "live_pilot_status": (
                     f"runs live-pilot-status {selected_run_id} --no-write --json"
                     if selected_run_id
@@ -538,6 +539,7 @@ class BusinessCardService:
                     else "GET /actions/next?limit=20"
                 ),
                 "run_next_safe": "POST /actions/run-next",
+                "review_routing_drill": "POST /drills/review-routing",
                 "live_pilot_status": (
                     f"GET /runs/{selected_run_id}/live-pilot-status?write=false"
                     if selected_run_id
@@ -570,6 +572,10 @@ class BusinessCardService:
                     "arguments": {"run_id": selected_run_id, "limit": 10}
                     if selected_run_id
                     else {"limit": 10},
+                },
+                "review_routing_drill": {
+                    "tool": "business_card_watchdog_review_routing_drill",
+                    "arguments": {},
                 },
                 "live_pilot_status": {
                     "tool": "business_card_watchdog_live_pilot_status",
@@ -634,6 +640,12 @@ class BusinessCardService:
                         if selected_run_id
                         else "runs list --json"
                     ),
+                    "safe_to_auto_continue": True,
+                    "requires_explicit_operator_action": False,
+                },
+                {
+                    "action": "run_fixture_review_routing_drill",
+                    "command": "drills review-routing --json",
                     "safe_to_auto_continue": True,
                     "requires_explicit_operator_action": False,
                 },
@@ -5090,6 +5102,7 @@ class BusinessCardService:
             "status": f"{command_prefix}service status --json",
             "runtime_status": f"{command_prefix}runtime-readiness --json",
             "watch_status": f"{command_prefix}watch-status --json",
+            "review_routing_drill": f"{command_prefix}drills review-routing --json",
             "restart": f"systemctl --user restart {service_name}",
             "resume": f"{command_prefix}actions run-next --run-id {selected_run_id} --limit 10 --json"
             if selected_run_id
@@ -5151,6 +5164,13 @@ class BusinessCardService:
                 "action": "inspect_watch_status",
                 "command": commands["watch_status"],
                 "reason": "confirm watched inputs, backlog, unsettled files, and last watcher error",
+                "safe_to_auto_continue": True,
+                "requires_explicit_operator_action": False,
+            },
+            {
+                "action": "run_fixture_review_routing_drill",
+                "command": commands["review_routing_drill"],
+                "reason": "prove review/export/routing readiness with synthetic fixture data before private or live work",
                 "safe_to_auto_continue": True,
                 "requires_explicit_operator_action": False,
             },

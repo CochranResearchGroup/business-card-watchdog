@@ -108,8 +108,16 @@ def test_service_recovery_report_composes_status_and_recovery_commands(tmp_path:
     assert report["commands"]["live_pilot_handoff"] == (
         f"bcw --config {config.config_path} runs live-pilot-handoff {run_id}"
     )
+    assert report["commands"]["review_routing_drill"] == (
+        f"bcw --config {config.config_path} drills review-routing --json"
+    )
     assert report["recovery_sequence"][0]["step"] == "status"
     assert any(action["action"] == "inspect_watch_status" for action in report["safe_next_actions"])
+    assert any(
+        action["action"] == "run_fixture_review_routing_drill"
+        and action["command"] == report["commands"]["review_routing_drill"]
+        for action in report["safe_next_actions"]
+    )
     assert any(
         action["action"] == "inspect_live_pilot_status"
         and action["command"] == report["commands"]["live_pilot_status"]
@@ -764,10 +772,16 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
         "tool": "business_card_watchdog_live_pilot_handoff",
         "arguments": {"run_id": run_id, "write": False},
     }
+    assert dashboard["mcp_tools"]["review_routing_drill"] == {
+        "tool": "business_card_watchdog_review_routing_drill",
+        "arguments": {},
+    }
     assert dashboard["mcp_tools"]["live_pilot_validate_response"] == {
         "tool": "business_card_watchdog_live_pilot_operator_response_validation",
         "arguments": {"run_id": run_id, "response": "<operator-response>"},
     }
+    assert dashboard["commands"]["review_routing_drill"] == "drills review-routing --json"
+    assert dashboard["api_routes"]["review_routing_drill"] == "POST /drills/review-routing"
     assert dashboard["commands"]["live_pilot_status"] == f"runs live-pilot-status {run_id} --no-write --json"
     assert dashboard["safe_next_actions"][0]["action"] == "inspect_runtime_readiness"
     assert dashboard["safe_next_actions"][3] == {
@@ -779,6 +793,12 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     assert dashboard["safe_next_actions"][4] == {
         "action": "inspect_live_pilot_handoff",
         "command": f"runs live-pilot-handoff {run_id} --no-write --json",
+        "safe_to_auto_continue": True,
+        "requires_explicit_operator_action": False,
+    }
+    assert dashboard["safe_next_actions"][5] == {
+        "action": "run_fixture_review_routing_drill",
+        "command": "drills review-routing --json",
         "safe_to_auto_continue": True,
         "requires_explicit_operator_action": False,
     }
