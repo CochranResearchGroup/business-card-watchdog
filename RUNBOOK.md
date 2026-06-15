@@ -3394,3 +3394,28 @@ Validation:
 Safety:
 
 - This was no-live CLI text hardening only. It did not validate an operator response, execute any returned select-target command, create or modify `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+## Turn 168 | 2026-06-15
+
+Continued Plan 0009 with Slice 0009-A92.
+
+Implemented:
+
+- Operator dashboard live handoff entries now include `validation_command` and `validation_command_prefilled`.
+- Plain-text `operator-dashboard --run-id <run-id>` output now renders live handoff operator entries with the prefilled validation command.
+- CLI and MCP tests protect dashboard visibility for the prefilled validation command.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_live_target_candidates_reports_text_and_json tests/test_cli_surfaces.py::test_cli_operator_dashboard_reports_no_live_summary -q` passed with 2 tests.
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_operator_dashboard_composes_no_live_readiness tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 3 tests.
+- `.venv/bin/python -m pytest -q` passed with 226 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was no-live dashboard handoff hardening only. It did not validate an operator response, execute any returned select-target command, create or modify `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.

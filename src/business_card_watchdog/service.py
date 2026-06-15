@@ -391,6 +391,10 @@ class BusinessCardService:
                     "command": entry.get("command"),
                     "operator_response_template": entry.get("operator_response_template"),
                     "operator_prompt": entry.get("operator_prompt"),
+                    "validation_command": (entry.get("commands") or {}).get("validate_operator_response"),
+                    "validation_command_prefilled": (entry.get("commands") or {}).get(
+                        "validate_operator_response_prefilled"
+                    ),
                 }
                 for entry in handoff.get("entries") or []
                 if isinstance(entry, dict) and entry.get("operator_required")

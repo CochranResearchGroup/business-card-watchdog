@@ -400,6 +400,9 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     }
     assert operator_dashboard["next_action_summary"]["by_action"] == {"review_contact": 1}
     assert operator_dashboard["live_pilot_handoff_summary"]["operator_required_count"] == 1
+    assert operator_dashboard["live_pilot_handoff_summary"]["operator_entries"][0][
+        "validation_command_prefilled"
+    ].startswith(f"runs live-pilot-validate-response {run_id} --response 'run_id={run_id}")
     assert operator_dashboard["writes_attempted"] == 0
     assert operator_dashboard["network_calls_made"] == 0
     assert summary["needs_review_count"] == 1

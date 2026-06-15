@@ -223,6 +223,26 @@ def test_cli_live_target_candidates_reports_text_and_json(tmp_path: Path, capsys
     assert f"Live pilot handoff: runs live-pilot-handoff {run_id}" in text
     assert "{" not in text
 
+    assert main(["--config", str(config_path), "operator-dashboard", "--run-id", run_id, "--json"]) == 0
+    dashboard = json.loads(capsys.readouterr().out)
+    dashboard_entry = dashboard["live_pilot_handoff_summary"]["operator_entries"][0]
+    assert dashboard_entry["job_id"] == candidate["job_id"]
+    assert dashboard_entry["validation_command_prefilled"] == (
+        f"runs live-pilot-validate-response {run_id} "
+        f"--response 'run_id={run_id} job_id={candidate['job_id']} sink=google_contacts "
+        "operator=<operator> scope=lookup safety_confirmation=<tenant-profile-account-confirmation>' --json"
+    )
+
+    assert main(["--config", str(config_path), "operator-dashboard", "--run-id", run_id]) == 0
+    dashboard_text = capsys.readouterr().out
+    assert "Live handoff operator entries:" in dashboard_text
+    assert (
+        f"Validate prefilled response: runs live-pilot-validate-response {run_id} "
+        f"--response 'run_id={run_id} job_id={candidate['job_id']} sink=google_contacts "
+        "operator=<operator> scope=lookup safety_confirmation=<tenant-profile-account-confirmation>' --json"
+    ) in dashboard_text
+    assert "{" not in dashboard_text
+
 
 def test_cli_live_readiness_audit_reports_text_and_json(tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.toml"

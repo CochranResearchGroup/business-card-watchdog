@@ -158,6 +158,22 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
                     f"explicit={action.get('requires_explicit_operator_action')} "
                     f"command={action.get('command') or 'none'}"
                 )
+    live_operator_entries = live_handoff.get("operator_entries") or []
+    operator_rows = live_operator_entries if isinstance(live_operator_entries, list) else []
+    if operator_rows:
+        lines.append("Live handoff operator entries:")
+        for entry in operator_rows[:5]:
+            if isinstance(entry, dict):
+                lines.append(
+                    " - "
+                    f"{entry.get('job_id')} "
+                    f"next={entry.get('next_action')} "
+                    f"command={entry.get('command') or 'none'}"
+                )
+                if entry.get("operator_response_template"):
+                    lines.append(f"   Operator response: {entry.get('operator_response_template')}")
+                if entry.get("validation_command_prefilled"):
+                    lines.append(f"   Validate prefilled response: {entry.get('validation_command_prefilled')}")
     blocked_rows = blocked if isinstance(blocked, list) else []
     lines.append(f"Blocked reasons: {len(blocked_rows)}")
     for reason in blocked_rows:
