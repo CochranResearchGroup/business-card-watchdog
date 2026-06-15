@@ -1302,6 +1302,52 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
                 "--config",
                 str(config_path),
                 "runs",
+                "live-pilot-closeout-packet-from-response",
+                run_id,
+                "--response",
+                response,
+                "--json",
+            ]
+        )
+        == 0
+    )
+    closeout_packet = json.loads(capsys.readouterr().out)
+    assert closeout_packet["schema"] == "business-card-watchdog.live-pilot-closeout-packet-from-response.v1"
+    assert closeout_packet["state"] == "closeout_incomplete"
+    assert closeout_packet["write_closeout"] is False
+    assert closeout_packet["closeout_written"] is False
+    assert closeout_packet["closeout_path"] is None
+    assert closeout_packet["closeout_report"]["state"] == "incomplete"
+    assert closeout_packet["writes_attempted"] == 0
+    assert closeout_packet["network_calls_made"] == 0
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "live-pilot-closeout-packet-from-response",
+                run_id,
+                "--response",
+                response,
+            ]
+        )
+        == 0
+    )
+    closeout_packet_text = capsys.readouterr().out
+    assert "State: closeout_incomplete" in closeout_packet_text
+    assert "Closeout state: incomplete" in closeout_packet_text
+    assert "Write closeout: False" in closeout_packet_text
+    assert "Closeout written: False" in closeout_packet_text
+    assert "{" not in closeout_packet_text
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
                 "live-pilot-validate-response",
                 run_id,
                 "--response",

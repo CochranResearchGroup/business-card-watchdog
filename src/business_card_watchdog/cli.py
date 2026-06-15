@@ -255,6 +255,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
         ("Lookup smoke execution packet", "selected_lookup_smoke_execution_packet_from_response"),
         ("Write pilot execution packet", "selected_write_pilot_execution_packet_from_response"),
         ("Readback pilot execution packet", "selected_readback_pilot_execution_packet_from_response"),
+        ("Live pilot closeout packet", "live_pilot_closeout_packet_from_response"),
     ]:
         command = commands.get(key)
         if command:
@@ -278,6 +279,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
             ("Lookup smoke execution packet", "selected_lookup_smoke_execution_packet_from_response"),
             ("Write pilot execution packet", "selected_write_pilot_execution_packet_from_response"),
             ("Readback pilot execution packet", "selected_readback_pilot_execution_packet_from_response"),
+            ("Live pilot closeout packet", "live_pilot_closeout_packet_from_response"),
         ]:
             route = api_routes.get(key)
             if route:
@@ -301,6 +303,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
             ("Lookup smoke execution packet", "selected_lookup_smoke_execution_packet_from_response"),
             ("Write pilot execution packet", "selected_write_pilot_execution_packet_from_response"),
             ("Readback pilot execution packet", "selected_readback_pilot_execution_packet_from_response"),
+            ("Live pilot closeout packet", "live_pilot_closeout_packet_from_response"),
         ]:
             tool_entry = mcp_tools.get(key)
             if isinstance(tool_entry, dict):
@@ -786,6 +789,40 @@ def _render_selected_readback_pilot_execution_packet_from_response_text(payload:
     lines.append(f"Blocked reasons: {len(rows)}")
     for reason in rows:
         lines.append(f" - {reason}")
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    stops = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stops)}")
+    for condition in stops:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
+def _render_live_pilot_closeout_packet_from_response_text(payload: dict[str, object]) -> str:
+    report = dict(payload.get("closeout_report") or {})
+    lines = [
+        f"Run: {payload.get('run_id')}",
+        f"Job: {payload.get('job_id') or 'none'}",
+        f"State: {payload.get('state')}",
+        f"Closeout state: {report.get('state') or 'none'}",
+        f"Sink: {payload.get('sink') or 'none'}",
+        f"Operator: {payload.get('operator') or 'none'}",
+        f"Write closeout: {payload.get('write_closeout', False)}",
+        f"Closeout written: {payload.get('closeout_written', False)}",
+        f"Closeout path: {payload.get('closeout_path') or 'none'}",
+        f"Next safe command: {payload.get('next_safe_command') or 'none'}",
+        f"Next explicit command: {payload.get('next_explicit_operator_command') or 'none'}",
+        f"Observed: writes={payload.get('writes_attempted', 0)} network={payload.get('network_calls_made', 0)}",
+    ]
+    blockers = payload.get("blocked_reasons") or []
+    rows = blockers if isinstance(blockers, list) else []
+    lines.append(f"Blocked reasons: {len(rows)}")
+    for reason in rows:
+        lines.append(f" - {reason}")
+    missing = report.get("missing_artifacts") or []
+    missing_rows = missing if isinstance(missing, list) else []
+    lines.append(f"Missing closeout artifacts: {len(missing_rows)}")
+    for artifact in missing_rows:
+        lines.append(f" - {artifact}")
     stop_conditions = payload.get("explicit_stop_conditions") or []
     stops = stop_conditions if isinstance(stop_conditions, list) else []
     lines.append(f"Stop conditions: {len(stops)}")
@@ -1597,6 +1634,13 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
     )
     runs_selected_readback_pilot_execution_packet_from_response.add_argument("--json", action="store_true")
+    runs_live_pilot_closeout_packet_from_response = runs_sub.add_parser(
+        "live-pilot-closeout-packet-from-response"
+    )
+    runs_live_pilot_closeout_packet_from_response.add_argument("run_id")
+    runs_live_pilot_closeout_packet_from_response.add_argument("--response", required=True)
+    runs_live_pilot_closeout_packet_from_response.add_argument("--write-closeout", action="store_true")
+    runs_live_pilot_closeout_packet_from_response.add_argument("--json", action="store_true")
     runs_live_pilot_validate_response = runs_sub.add_parser("live-pilot-validate-response")
     runs_live_pilot_validate_response.add_argument("run_id")
     runs_live_pilot_validate_response.add_argument("--response", required=True)
@@ -2019,10 +2063,19 @@ def main(argv: list[str] | None = None) -> int:
                 response=args.response,
                 execute_readback_pilot=args.execute_readback_pilot,
             )
+        elif args.runs_command == "live-pilot-closeout-packet-from-response":
+            payload = service.live_pilot_closeout_packet_from_response(
+                run_id=args.run_id,
+                response=args.response,
+                write_closeout=args.write_closeout,
+            )
         elif args.runs_command == "live-pilot-validate-response":
             payload = service.validate_live_pilot_operator_response(run_id=args.run_id, response=args.response)
         else:
             payload = service.get_run(args.run_id)
+        if args.runs_command == "live-pilot-closeout-packet-from-response" and not args.json:
+            print(_render_live_pilot_closeout_packet_from_response_text(payload), end="")
+            return 0
         if args.runs_command == "selected-readback-pilot-execution-packet-from-response" and not args.json:
             print(_render_selected_readback_pilot_execution_packet_from_response_text(payload), end="")
             return 0

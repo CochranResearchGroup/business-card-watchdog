@@ -669,6 +669,12 @@ class BusinessCardService:
                     if selected_run_id
                     else "runs list --json"
                 ),
+                "live_pilot_closeout_packet_from_response": (
+                    f"runs live-pilot-closeout-packet-from-response {selected_run_id} "
+                    "--response <operator-response> --json"
+                    if selected_run_id
+                    else "runs list --json"
+                ),
                 "mcp_manifest": "mcp-manifest",
             },
             "api_routes": {
@@ -743,6 +749,11 @@ class BusinessCardService:
                     f"POST /runs/{selected_run_id}/selected-readback-pilot-execution-packet-from-response"
                     if selected_run_id
                     else "POST /runs/{run_id}/selected-readback-pilot-execution-packet-from-response"
+                ),
+                "live_pilot_closeout_packet_from_response": (
+                    f"POST /runs/{selected_run_id}/live-pilot-closeout-packet-from-response"
+                    if selected_run_id
+                    else "POST /runs/{run_id}/live-pilot-closeout-packet-from-response"
                 ),
             },
             "mcp_tools": {
@@ -862,6 +873,20 @@ class BusinessCardService:
                         "run_id": "<run-id>",
                         "response": "<operator-response>",
                         "execute_readback_pilot": False,
+                    },
+                },
+                "live_pilot_closeout_packet_from_response": {
+                    "tool": "business_card_watchdog_live_pilot_closeout_packet_from_response",
+                    "arguments": {
+                        "run_id": selected_run_id,
+                        "response": "<operator-response>",
+                        "write_closeout": False,
+                    }
+                    if selected_run_id
+                    else {
+                        "run_id": "<run-id>",
+                        "response": "<operator-response>",
+                        "write_closeout": False,
                     },
                 },
             },
@@ -7489,6 +7514,106 @@ class BusinessCardService:
             ],
             "writes_attempted": int(pilot.get("writes_attempted") or 0),
             "network_calls_made": int(pilot.get("network_calls_made") or 0),
+        }
+
+    def live_pilot_closeout_packet_from_response(
+        self,
+        *,
+        run_id: str,
+        response: str,
+        write_closeout: bool = False,
+    ) -> dict[str, Any]:
+        selected_target_handoff = self.selected_live_target_handoff_from_response(
+            run_id=run_id,
+            response=response,
+            write_audit=False,
+        )
+        job_id = str(selected_target_handoff.get("job_id") or "")
+        validation_state = str(selected_target_handoff.get("validation_state") or "")
+        handoff_blockers = list(selected_target_handoff.get("blocked_reasons") or [])
+        blockers = []
+        if selected_target_handoff.get("state") == "blocked" or not job_id:
+            blockers.extend(handoff_blockers)
+            blockers.append("selected target handoff is not ready for closeout")
+        if validation_state not in {
+            "ready_for_live_lookup_request",
+            "ready_to_review_selected_target_audit",
+            "ready_for_live_write_request",
+            "ready_for_live_readback_request",
+            "ready_for_live_pilot_closeout",
+        }:
+            blockers.append(f"validation state {validation_state or 'missing'} is not ready for closeout")
+        closeout = None
+        closeout_path = None
+        closeout_report = None
+        if job_id:
+            closeout = self.build_live_pilot_closeout_for_job(
+                job_id=job_id,
+                run_id=run_id,
+                write=write_closeout and not blockers,
+            )
+            closeout_path = closeout.get("closeout_path")
+            closeout_report = dict(closeout.get("report") or {})
+        packet_state = "blocked" if blockers else "closeout_ready" if closeout_report and closeout_report.get("state") == "complete" else "closeout_incomplete"
+        return {
+            "schema": "business-card-watchdog.live-pilot-closeout-packet-from-response.v1",
+            "generated_at": utc_now(),
+            "state": packet_state,
+            "run_id": run_id,
+            "job_id": job_id or None,
+            "sink": (closeout_report or {}).get("sink") if closeout_report else None,
+            "operator": (closeout_report or {}).get("operator") if closeout_report else None,
+            "validation_state": validation_state or None,
+            "selected_target_handoff_from_response": selected_target_handoff,
+            "selected_target_handoff_blockers": handoff_blockers,
+            "closeout": closeout,
+            "closeout_report": closeout_report,
+            "closeout_path": closeout_path,
+            "write_closeout": write_closeout,
+            "closeout_written": bool(write_closeout and closeout_path),
+            "blocked_reasons": blockers,
+            "next_safe_command": (
+                f"runs live-pilot-closeout-packet-from-response {shlex.quote(run_id)} "
+                f"--response {shlex.quote(response)} --json"
+            ),
+            "next_explicit_operator_command": None
+            if blockers
+            else (
+                f"sinks live-pilot-closeout {job_id} --run-id {run_id} --json"
+                if job_id and not closeout_path
+                else None
+            ),
+            "commands": {
+                "selected_target_handoff": (
+                    f"runs selected-live-target-handoff-from-response {shlex.quote(run_id)} "
+                    f"--response {shlex.quote(response)} --json"
+                ),
+                "selected_readback_packet": (
+                    f"runs selected-readback-pilot-execution-packet-from-response {shlex.quote(run_id)} "
+                    f"--response {shlex.quote(response)} --json"
+                ),
+                "closeout_preview": (
+                    f"sinks live-pilot-closeout {job_id} --run-id {run_id} --no-write --json"
+                    if job_id
+                    else None
+                ),
+                "write_closeout": (
+                    f"runs live-pilot-closeout-packet-from-response {shlex.quote(run_id)} "
+                    f"--response {shlex.quote(response)} --write-closeout --json"
+                    if job_id
+                    else None
+                ),
+                "live_pilot_status": f"runs live-pilot-status {run_id} --no-write --json",
+                "live_pilot_handoff": f"runs live-pilot-handoff {run_id} --no-write --json",
+            },
+            "explicit_stop_conditions": [
+                "Default mode does not write live_pilot_closeout.json.",
+                "The explicit write-closeout flag writes only the closeout report and never runs live lookup, live write, or live readback.",
+                "Do not mark a live pilot complete unless the closeout report state is complete.",
+                "Do not process private SyncThing images, run public-web search, or call paid enrichment from this packet.",
+            ],
+            "writes_attempted": int((closeout_report or {}).get("writes_attempted") or 0),
+            "network_calls_made": int((closeout_report or {}).get("network_calls_made") or 0),
         }
 
     def validate_live_pilot_operator_response(self, *, run_id: str, response: str) -> dict[str, Any]:

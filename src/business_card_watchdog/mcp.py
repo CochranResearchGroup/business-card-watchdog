@@ -280,6 +280,19 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_live_pilot_closeout_packet_from_response",
+                "description": "Preview or explicitly write a live-pilot closeout report from a validated operator response without running live calls.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "response": {"type": "string"},
+                        "write_closeout": {"type": "boolean", "default": False},
+                    },
+                    "required": ["run_id", "response"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_next_actions",
                 "description": "Return deterministic next actions for agent-loop batch orchestration.",
                 "input_schema": {
@@ -995,6 +1008,12 @@ def call_tool(
             run_id=str(args["run_id"]),
             response=str(args["response"]),
             execute_readback_pilot=bool(args.get("execute_readback_pilot", False)),
+        )
+    if tool_name == "business_card_watchdog_live_pilot_closeout_packet_from_response":
+        return service.live_pilot_closeout_packet_from_response(
+            run_id=str(args["run_id"]),
+            response=str(args["response"]),
+            write_closeout=bool(args.get("write_closeout", False)),
         )
     if tool_name == "business_card_watchdog_next_actions":
         return service.next_actions(

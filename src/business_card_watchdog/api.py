@@ -143,6 +143,10 @@ def create_app(config_path: Path | None = None):
         response: str
         execute_readback_pilot: bool = False
 
+    class LivePilotCloseoutPacketFromResponseRequest(BaseModel):
+        response: str
+        write_closeout: bool = False
+
     class SelectedLiveTargetAuditRequest(BaseModel):
         run_id: str
         scope: str | None = None
@@ -366,6 +370,17 @@ def create_app(config_path: Path | None = None):
             run_id=run_id,
             response=request.response,
             execute_readback_pilot=request.execute_readback_pilot,
+        )
+
+    @app.post("/runs/{run_id}/live-pilot-closeout-packet-from-response")
+    def create_run_live_pilot_closeout_packet_from_response(
+        run_id: str,
+        request: LivePilotCloseoutPacketFromResponseRequest,
+    ) -> dict[str, object]:
+        return service().live_pilot_closeout_packet_from_response(
+            run_id=run_id,
+            response=request.response,
+            write_closeout=request.write_closeout,
         )
 
     @app.get("/runs/{run_id}/jobs")

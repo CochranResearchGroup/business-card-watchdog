@@ -867,6 +867,10 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
         f"runs selected-readback-pilot-execution-packet-from-response {run_id} "
         "--response <operator-response> --json"
     )
+    assert dashboard["commands"]["live_pilot_closeout_packet_from_response"] == (
+        f"runs live-pilot-closeout-packet-from-response {run_id} "
+        "--response <operator-response> --json"
+    )
     assert dashboard["commands"]["live_pilot_validate_response"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
@@ -888,6 +892,9 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     )
     assert dashboard["api_routes"]["selected_readback_pilot_execution_packet_from_response"] == (
         f"POST /runs/{run_id}/selected-readback-pilot-execution-packet-from-response"
+    )
+    assert dashboard["api_routes"]["live_pilot_closeout_packet_from_response"] == (
+        f"POST /runs/{run_id}/live-pilot-closeout-packet-from-response"
     )
     assert dashboard["mcp_tools"]["next_actions"] == {
         "tool": "business_card_watchdog_next_actions",
@@ -924,6 +931,10 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     assert dashboard["mcp_tools"]["selected_readback_pilot_execution_packet_from_response"] == {
         "tool": "business_card_watchdog_selected_readback_pilot_execution_packet_from_response",
         "arguments": {"run_id": run_id, "response": "<operator-response>", "execute_readback_pilot": False},
+    }
+    assert dashboard["mcp_tools"]["live_pilot_closeout_packet_from_response"] == {
+        "tool": "business_card_watchdog_live_pilot_closeout_packet_from_response",
+        "arguments": {"run_id": run_id, "response": "<operator-response>", "write_closeout": False},
     }
     assert dashboard["mcp_tools"]["review_routing_drill"] == {
         "tool": "business_card_watchdog_review_routing_drill",
@@ -2921,6 +2932,36 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert blocked_readback["writes_attempted"] == 0
     assert blocked_readback["network_calls_made"] == 0
     assert not (config.runs_dir / run_id / "artifacts" / job_id / "sink_readback_pilot.json").exists()
+
+    closeout_packet = service.live_pilot_closeout_packet_from_response(
+        run_id=run_id,
+        response=preselection_response,
+    )
+    assert closeout_packet["schema"] == "business-card-watchdog.live-pilot-closeout-packet-from-response.v1"
+    assert closeout_packet["state"] == "closeout_incomplete"
+    assert closeout_packet["job_id"] == job_id
+    assert closeout_packet["sink"] == "google_contacts"
+    assert closeout_packet["operator"] == "tester"
+    assert closeout_packet["write_closeout"] is False
+    assert closeout_packet["closeout_written"] is False
+    assert closeout_packet["closeout_path"] is None
+    assert closeout_packet["closeout_report"]["schema"] == "business-card-watchdog.live-pilot-closeout.v1"
+    assert closeout_packet["closeout_report"]["state"] == "incomplete"
+    assert "selected_lookup_smoke" in closeout_packet["closeout_report"]["missing_artifacts"]
+    assert "downstream_duplicate_assessment" in closeout_packet["closeout_report"]["missing_artifacts"]
+    assert closeout_packet["writes_attempted"] == 0
+    assert closeout_packet["network_calls_made"] == 0
+
+    blocked_closeout_write = service.live_pilot_closeout_packet_from_response(
+        run_id=run_id,
+        response=preselection_response,
+        write_closeout=True,
+    )
+    assert blocked_closeout_write["state"] == "closeout_incomplete"
+    assert blocked_closeout_write["write_closeout"] is True
+    assert blocked_closeout_write["closeout_written"] is True
+    assert blocked_closeout_write["closeout_path"]
+    assert (config.runs_dir / run_id / "artifacts" / job_id / "live_pilot_closeout.json").exists()
 
     audit = service.selected_live_target_audit(job_id=job_id, run_id=run_id, scope="lookup")
     assert audit["schema"] == "business-card-watchdog.selected-live-target-audit.v1"
