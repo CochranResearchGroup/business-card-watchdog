@@ -2823,6 +2823,30 @@ Safety:
 
 - This was transport test coverage only. It used fixture data and did not process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
 
+## Turn 151 | 2026-06-15
+
+Continued Plan 0009 with Slice 0009-A75.
+
+Implemented:
+
+- Operator response validation now rejects concrete operator/scope values that conflict with the current handoff template.
+- Service tests cover a wrong-scope response that remains blocked and does not return a select-target command.
+- CLI tests cover a wrong-operator response in readable text output without raw JSON.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service tests/test_mcp.py::test_mcp_jsonl_server_lists_and_calls_tools -q` passed with 5 tests.
+- `.venv/bin/python -m pytest -q` passed with 226 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was validation hardening only. It did not create or modify `selected_live_target.json`, execute the returned select-target command, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
 ## Turn 142 | 2026-06-14
 
 Continued Plan 0009 with Slice 0009-A66.

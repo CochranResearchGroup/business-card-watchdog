@@ -639,6 +639,29 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     assert f"Select target: sinks select-live-target {job_id}" in validation_text
     assert "{" not in validation_text
 
+    wrong_operator_response = (
+        f"run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=other scope=lookup safety_confirmation=fixture contact is safe for google contacts test profile"
+    )
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "live-pilot-validate-response",
+                run_id,
+                "--response",
+                wrong_operator_response,
+            ]
+        )
+        == 0
+    )
+    blocked_validation_text = capsys.readouterr().out
+    assert "State: blocked" in blocked_validation_text
+    assert "Mismatches: operator does not match current operator response template" in blocked_validation_text
+    assert "Select target:" not in blocked_validation_text
+
     assert (
         main(
             [

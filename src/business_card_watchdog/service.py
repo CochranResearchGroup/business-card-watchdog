@@ -5839,6 +5839,13 @@ class BusinessCardService:
                 break
         if not matching_template and not missing_fields:
             mismatches.append("response does not match a current operator response template")
+        if matching_template:
+            template_fields = dict(matching_template.get("copyable_approval_fields") or {})
+            for field in ["operator", "scope"]:
+                expected = str(template_fields.get(field) or "").strip()
+                actual = str(parsed_response.get(field) or "").strip()
+                if expected and not expected.startswith("<") and actual and expected != actual:
+                    mismatches.append(f"{field} does not match current operator response template")
 
         state = "ready_to_select_live_target" if not missing_fields and not mismatches else "blocked"
         select_target_command = None

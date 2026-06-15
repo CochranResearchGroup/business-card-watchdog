@@ -2417,6 +2417,17 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert blocked_validation["select_target_command"] is None
     assert set(blocked_validation["missing_fields"]) == {"operator", "safety_confirmation"}
 
+    wrong_scope_validation = service.validate_live_pilot_operator_response(
+        run_id=run_id,
+        response=(
+            f"run_id={run_id} job_id={job_id} sink=google_contacts operator=tester "
+            "scope=all safety_confirmation=fixture contact is safe for google contacts test profile"
+        ),
+    )
+    assert wrong_scope_validation["state"] == "blocked"
+    assert wrong_scope_validation["select_target_command"] is None
+    assert wrong_scope_validation["mismatches"] == ["scope does not match current operator response template"]
+
     requirements = service.live_selection_requirements(run_id=run_id, sink="google_contacts", write=False)
     assert requirements["state"] == "selected_target_active"
     assert requirements["entries"][0]["missing_operator_fields"] == []
