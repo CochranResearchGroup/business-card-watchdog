@@ -3247,7 +3247,10 @@ class BusinessCardService:
             "selected_target_created": False,
             "target_safety_confirmation_required": True,
             "operator_response_template": {
+                "run_id": run_id,
+                "job_id": entry.get("job_id"),
                 "candidate_id": candidate_id,
+                "work_item_id": entry.get("work_item_id"),
                 "sink": sink,
                 "operator": operator,
                 "scope": scope,
@@ -3262,6 +3265,14 @@ class BusinessCardService:
                 "refresh_handoff": (
                     f"reviews child-selected-target-handoff {shlex.quote(candidate_id)} "
                     f"--run-id {run_id} --sink {shlex.quote(sink)} --operator {shlex.quote(operator)} --json"
+                ),
+                "validate_response": (
+                    f"reviews child-validate-selected-target-response {shlex.quote(candidate_id)} "
+                    f"--run-id {run_id} --response <operator-response> --json"
+                ),
+                "execution_checklist": (
+                    f"reviews child-selected-target-execution-checklist {shlex.quote(candidate_id)} "
+                    f"--run-id {run_id} --response <operator-response> --json"
                 ),
             },
             "explicit_stop_conditions": [
@@ -3300,6 +3311,222 @@ class BusinessCardService:
             "writes_attempted": 0,
             "network_calls_made": 0,
         }
+
+    def validate_child_selected_target_response(
+        self,
+        *,
+        run_id: str,
+        candidate_id: str,
+        response: str,
+    ) -> dict[str, Any]:
+        entry = self._child_route_prep_entry(run_id=run_id, candidate_id=candidate_id)
+        prep_dir = self._child_route_prep_dir(entry)
+        parsed = _parse_operator_response_fields(response)
+        handoff = _read_json_file(prep_dir / "child_selected_target_handoff.json") or {}
+        if not handoff and parsed.get("sink"):
+            handoff = self.child_selected_target_handoff(
+                run_id=run_id,
+                candidate_id=candidate_id,
+                sink=str(parsed["sink"]),
+                operator=str(parsed.get("operator") or "operator"),
+                scope=str(parsed.get("scope") or "write"),
+            )["handoff"]
+        expected = {
+            "run_id": run_id,
+            "job_id": str(entry.get("job_id") or ""),
+            "candidate_id": candidate_id,
+            "work_item_id": str(entry.get("work_item_id") or ""),
+            "sink": str(handoff.get("sink") or ""),
+            "operator": str(handoff.get("operator") or ""),
+            "scope": str(handoff.get("scope") or ""),
+        }
+        required_fields = ["run_id", "job_id", "candidate_id", "sink", "operator", "scope", "safety_confirmation"]
+        missing_fields = [
+            field
+            for field in required_fields
+            if not str(parsed.get(field) or "").strip()
+            or str(parsed.get(field) or "").strip().startswith("<")
+        ]
+        mismatches: list[str] = []
+        if not handoff:
+            mismatches.append("child selected-target handoff artifact is missing")
+        elif handoff.get("state") != "ready_for_operator_selection":
+            mismatches.append(f"child handoff state is {handoff.get('state') or 'missing'}")
+        for field, expected_value in expected.items():
+            if field == "work_item_id" and not parsed.get(field):
+                continue
+            actual = str(parsed.get(field) or "").strip()
+            if expected_value and actual and actual != expected_value:
+                mismatches.append(f"{field} does not match current child handoff")
+        if "safety_confirmation" not in missing_fields:
+            safety_confirmation_blocker = _safety_confirmation_blocker(
+                str(parsed.get("safety_confirmation") or "")
+            )
+            if safety_confirmation_blocker:
+                mismatches.append(safety_confirmation_blocker)
+        state = "ready_for_no_live_child_checklist" if not missing_fields and not mismatches else "blocked"
+        validation = {
+            "schema": "business-card-watchdog.child-selected-target-response-validation.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_id,
+            "job_id": entry.get("job_id"),
+            "candidate_id": candidate_id,
+            "work_item_id": entry.get("work_item_id"),
+            "response": response,
+            "parsed_response": parsed,
+            "expected_fields": expected,
+            "missing_fields": missing_fields,
+            "mismatches": mismatches,
+            "handoff_path": str(prep_dir / "child_selected_target_handoff.json"),
+            "handoff_state": handoff.get("state"),
+            "selected_target_created": False,
+            "creates_selected_live_target": False,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "commands": {
+                "refresh_handoff": (
+                    f"reviews child-selected-target-handoff {shlex.quote(candidate_id)} "
+                    f"--run-id {run_id} --sink {shlex.quote(str(parsed.get('sink') or expected['sink']))} --json"
+                ),
+                "execution_checklist": (
+                    f"reviews child-selected-target-execution-checklist {shlex.quote(candidate_id)} "
+                    f"--run-id {run_id} --response {shlex.quote(response)} --json"
+                ),
+            },
+            "explicit_stop_conditions": [
+                "This validation does not create selected_live_target.json.",
+                "Do not run live lookup, live write, or live readback from this validation report.",
+                "Fix missing fields or mismatches before preparing any child selected-target checklist.",
+            ],
+        }
+        validation_path = prep_dir / "child_selected_target_response_validation.json"
+        validation_path.write_text(json.dumps(validation, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        parent_job_id = str(entry.get("job_id") or "__run__")
+        ledger.record_artifact(job_id=parent_job_id, kind="child_selected_target_response_validation", path=validation_path)
+        ledger.record_event(
+            "child_selected_target_response_validated",
+            {
+                "run_id": run_id,
+                "job_id": entry.get("job_id"),
+                "candidate_id": candidate_id,
+                "state": state,
+                "validation_path": str(validation_path),
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        return validation
+
+    def child_selected_target_execution_checklist(
+        self,
+        *,
+        run_id: str,
+        candidate_id: str,
+        response: str,
+    ) -> dict[str, Any]:
+        validation = self.validate_child_selected_target_response(
+            run_id=run_id,
+            candidate_id=candidate_id,
+            response=response,
+        )
+        entry = self._child_route_prep_entry(run_id=run_id, candidate_id=candidate_id)
+        prep_dir = self._child_route_prep_dir(entry)
+        response_digest = hashlib.sha256(response.encode("utf-8")).hexdigest()
+        checklist_items = [
+            {
+                "name": "child_handoff_ready",
+                "ok": validation.get("handoff_state") == "ready_for_operator_selection",
+                "evidence": validation.get("handoff_path"),
+            },
+            {
+                "name": "operator_response_matches_child_context",
+                "ok": validation.get("state") == "ready_for_no_live_child_checklist",
+                "evidence": "run_id, job_id, candidate_id, sink, operator, and scope",
+            },
+            {
+                "name": "response_digest_recorded_without_live_action",
+                "ok": bool(response_digest),
+                "evidence": "sha256 digest only; raw response remains in local runtime artifact",
+            },
+            {
+                "name": "live_execution_blocked",
+                "ok": True,
+                "evidence": "executable_live_command is null and selected_target_created is false",
+            },
+        ]
+        blocked_reasons = list(validation.get("missing_fields") or []) + list(validation.get("mismatches") or [])
+        state = "ready_for_operator_review" if validation.get("state") == "ready_for_no_live_child_checklist" else "blocked"
+        checklist = {
+            "schema": "business-card-watchdog.child-selected-target-execution-checklist.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_id,
+            "job_id": entry.get("job_id"),
+            "candidate_id": candidate_id,
+            "work_item_id": entry.get("work_item_id"),
+            "sink": (validation.get("parsed_response") or {}).get("sink"),
+            "operator": (validation.get("parsed_response") or {}).get("operator"),
+            "scope": (validation.get("parsed_response") or {}).get("scope"),
+            "validation": validation,
+            "operator_response_redacted": {
+                "raw_response_stored": True,
+                "sha256": response_digest,
+                "fields": {
+                    key: value
+                    for key, value in dict(validation.get("parsed_response") or {}).items()
+                    if key != "safety_confirmation"
+                },
+                "safety_confirmation_stored": False,
+            },
+            "checklist_items": checklist_items,
+            "blocked_reasons": blocked_reasons,
+            "selected_target_created": False,
+            "creates_selected_live_target": False,
+            "executable_live_command": None,
+            "next_safe_command": (
+                f"reviews child-selected-target-handoff {shlex.quote(candidate_id)} "
+                f"--run-id {run_id} --sink {shlex.quote(str((validation.get('parsed_response') or {}).get('sink') or ''))} --json"
+            ),
+            "commands": {
+                "validate_response": (
+                    f"reviews child-validate-selected-target-response {shlex.quote(candidate_id)} "
+                    f"--run-id {run_id} --response <operator-response> --json"
+                ),
+                "refresh_handoff": (
+                    f"reviews child-selected-target-handoff {shlex.quote(candidate_id)} "
+                    f"--run-id {run_id} --sink {shlex.quote(str((validation.get('parsed_response') or {}).get('sink') or ''))} --json"
+                ),
+            },
+            "explicit_stop_conditions": [
+                "This checklist is not selected-target approval.",
+                "Do not create selected_live_target.json from this child checklist.",
+                "Do not run live GWS/Odollo/Odoo lookup, write, or readback from this child checklist.",
+                "Do not process private SyncThing images, run public-web search, or call paid enrichment from this checklist.",
+            ],
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+        checklist_path = prep_dir / "child_selected_target_execution_checklist.json"
+        checklist_path.write_text(json.dumps(checklist, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        parent_job_id = str(entry.get("job_id") or "__run__")
+        ledger.record_artifact(job_id=parent_job_id, kind="child_selected_target_execution_checklist", path=checklist_path)
+        ledger.record_event(
+            "child_selected_target_execution_checklist_created",
+            {
+                "run_id": run_id,
+                "job_id": entry.get("job_id"),
+                "candidate_id": candidate_id,
+                "state": state,
+                "checklist_path": str(checklist_path),
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        checklist["checklist_path"] = str(checklist_path)
+        return checklist
 
     def _child_route_prep_entry(self, *, run_id: str, candidate_id: str) -> dict[str, Any]:
         entry = next(

@@ -59,6 +59,10 @@ def create_app(config_path: Path | None = None):
         scope: str = "write"
         reason: str = ""
 
+    class ChildSelectedTargetResponseRequest(BaseModel):
+        run_id: str
+        response: str
+
     class ReviewDecisionsRequest(BaseModel):
         reviewer: str = "operator"
         decisions: list[dict[str, object]] = Field(default_factory=list)
@@ -604,6 +608,28 @@ def create_app(config_path: Path | None = None):
             operator=request.operator,
             scope=request.scope,
             reason=request.reason,
+        )
+
+    @app.post("/reviews/children/{candidate_id}/selected-target-response-validation")
+    def create_child_selected_target_response_validation(
+        candidate_id: str,
+        request: ChildSelectedTargetResponseRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().validate_child_selected_target_response(
+            run_id=request.run_id,
+            candidate_id=candidate_id,
+            response=request.response,
+        )
+
+    @app.post("/reviews/children/{candidate_id}/selected-target-execution-checklist")
+    def create_child_selected_target_execution_checklist(
+        candidate_id: str,
+        request: ChildSelectedTargetResponseRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().child_selected_target_execution_checklist(
+            run_id=request.run_id,
+            candidate_id=candidate_id,
+            response=request.response,
         )
 
     @app.post("/runs/{run_id}/review-bundle")

@@ -156,6 +156,11 @@ Once clear, `reviews child-sink-apply-preflight <candidate-id> --run-id <run-id>
 previews child sink apply readiness, and
 `reviews child-selected-target-handoff <candidate-id> --run-id <run-id> --sink google_contacts --json`
 writes a no-live operator handoff packet without creating a selected target.
+Use `reviews child-validate-selected-target-response <candidate-id> --run-id <run-id> --response <operator-response> --json`
+to validate a copied child handoff response, then
+`reviews child-selected-target-execution-checklist <candidate-id> --run-id <run-id> --response <operator-response> --json`
+to create a no-live checklist that still blocks selected-target creation and
+live sink execution.
 
 `drills review-routing` creates a synthetic fixture run and proves review approval,
 review bundle/workbook export, duplicate lookup planning, dry-run sink routing, and

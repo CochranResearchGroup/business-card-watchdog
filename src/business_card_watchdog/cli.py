@@ -2074,6 +2074,20 @@ def build_parser() -> argparse.ArgumentParser:
     reviews_child_selected_target_handoff.add_argument("--scope", default="write")
     reviews_child_selected_target_handoff.add_argument("--reason", default="")
     reviews_child_selected_target_handoff.add_argument("--json", action="store_true")
+    reviews_child_validate_selected_target_response = reviews_sub.add_parser(
+        "child-validate-selected-target-response"
+    )
+    reviews_child_validate_selected_target_response.add_argument("candidate_id")
+    reviews_child_validate_selected_target_response.add_argument("--run-id", required=True)
+    reviews_child_validate_selected_target_response.add_argument("--response", required=True)
+    reviews_child_validate_selected_target_response.add_argument("--json", action="store_true")
+    reviews_child_selected_target_execution_checklist = reviews_sub.add_parser(
+        "child-selected-target-execution-checklist"
+    )
+    reviews_child_selected_target_execution_checklist.add_argument("candidate_id")
+    reviews_child_selected_target_execution_checklist.add_argument("--run-id", required=True)
+    reviews_child_selected_target_execution_checklist.add_argument("--response", required=True)
+    reviews_child_selected_target_execution_checklist.add_argument("--json", action="store_true")
     reviews_bundle = reviews_sub.add_parser("bundle")
     reviews_bundle.add_argument("--run-id", required=True)
     reviews_bundle.add_argument("--state", default="all")
@@ -2674,6 +2688,18 @@ def main(argv: list[str] | None = None) -> int:
                 operator=args.operator,
                 scope=args.scope,
                 reason=args.reason,
+            )
+        elif args.reviews_command == "child-validate-selected-target-response":
+            payload = service.validate_child_selected_target_response(
+                run_id=args.run_id,
+                candidate_id=args.candidate_id,
+                response=args.response,
+            )
+        elif args.reviews_command == "child-selected-target-execution-checklist":
+            payload = service.child_selected_target_execution_checklist(
+                run_id=args.run_id,
+                candidate_id=args.candidate_id,
+                response=args.response,
             )
         else:
             payload = service.review_queue(

@@ -546,6 +546,94 @@ def test_cli_child_sink_apply_preflight_and_handoff(
     assert handoff["network_calls_made"] == 0
 
 
+def test_cli_child_selected_target_response_validation_and_checklist(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    pytest = __import__("pytest")
+    pytest.importorskip("cv2")
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+    source_dir = tmp_path / "images"
+    write_multi_card_image(source_dir / "multi.jpg")
+    config = AppConfig(
+        config_path=config_path,
+        data_dir=data_dir,
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+    service = BusinessCardService(config)
+    candidate_id = str(service.child_review_queue(run_id=run_dir.name)[0]["candidate_id"])
+    service.submit_child_review(
+        run_id=run_dir.name,
+        candidate_id=candidate_id,
+        reviewer="operator",
+        action="approve_child_for_routing",
+    )
+    service.prepare_child_route(run_id=run_dir.name, candidate_id=candidate_id)
+    service.record_child_sink_lookup_result(run_id=run_dir.name, candidate_id=candidate_id)
+    service.assess_child_downstream_duplicates(run_id=run_dir.name, candidate_id=candidate_id)
+    service.child_sink_plan_gate(run_id=run_dir.name, candidate_id=candidate_id)
+    handoff = service.child_selected_target_handoff(
+        run_id=run_dir.name,
+        candidate_id=candidate_id,
+        sink="google_contacts",
+        operator="operator",
+    )["handoff"]
+    template = handoff["operator_response_template"]
+    response = (
+        f"run_id={template['run_id']} job_id={template['job_id']} "
+        f"candidate_id={template['candidate_id']} work_item_id={template['work_item_id']} "
+        "sink=google_contacts operator=operator scope=write "
+        "safety_confirmation='approved google contacts target profile'"
+    )
+
+    assert main(
+        [
+            "--config",
+            str(config_path),
+            "reviews",
+            "child-validate-selected-target-response",
+            candidate_id,
+            "--run-id",
+            run_dir.name,
+            "--response",
+            response,
+            "--json",
+        ]
+    ) == 0
+    validation = json.loads(capsys.readouterr().out)
+
+    assert main(
+        [
+            "--config",
+            str(config_path),
+            "reviews",
+            "child-selected-target-execution-checklist",
+            candidate_id,
+            "--run-id",
+            run_dir.name,
+            "--response",
+            response,
+            "--json",
+        ]
+    ) == 0
+    checklist = json.loads(capsys.readouterr().out)
+
+    assert validation["state"] == "ready_for_no_live_child_checklist"
+    assert validation["writes_attempted"] == 0
+    assert validation["network_calls_made"] == 0
+    assert checklist["state"] == "ready_for_operator_review"
+    assert checklist["selected_target_created"] is False
+    assert checklist["executable_live_command"] is None
+    assert checklist["writes_attempted"] == 0
+    assert checklist["network_calls_made"] == 0
+
+
 def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.toml"
     data_dir = tmp_path / "data"

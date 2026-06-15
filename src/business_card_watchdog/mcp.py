@@ -555,6 +555,32 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_child_selected_target_response_validation",
+                "description": "Validate a child selected-target operator response against the current no-live child handoff.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "candidate_id": {"type": "string"},
+                        "response": {"type": "string"},
+                    },
+                    "required": ["run_id", "candidate_id", "response"],
+                },
+            },
+            {
+                "name": "business_card_watchdog_child_selected_target_execution_checklist",
+                "description": "Create a no-live child selected-target execution checklist from a validated operator response.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "candidate_id": {"type": "string"},
+                        "response": {"type": "string"},
+                    },
+                    "required": ["run_id", "candidate_id", "response"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_review_bundle",
                 "description": "Create a run-level batch review bundle with inline review-relevant artifact payloads.",
                 "input_schema": {
@@ -1342,6 +1368,18 @@ def call_tool(
             operator=str(args.get("operator") or "operator"),
             scope=str(args.get("scope") or "write"),
             reason=str(args.get("reason") or ""),
+        )
+    if tool_name == "business_card_watchdog_child_selected_target_response_validation":
+        return service.validate_child_selected_target_response(
+            run_id=str(args["run_id"]),
+            candidate_id=str(args["candidate_id"]),
+            response=str(args["response"]),
+        )
+    if tool_name == "business_card_watchdog_child_selected_target_execution_checklist":
+        return service.child_selected_target_execution_checklist(
+            run_id=str(args["run_id"]),
+            candidate_id=str(args["candidate_id"]),
+            response=str(args["response"]),
         )
     if tool_name == "business_card_watchdog_review_bundle":
         return service.review_bundle(
