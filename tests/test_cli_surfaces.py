@@ -397,6 +397,11 @@ def test_cli_live_selection_packet_writes_no_selected_target(tmp_path: Path, cap
     assert payload["commands"]["validate_operator_response"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
+    assert payload["commands"]["validate_operator_response_prefilled"] == (
+        f"runs live-pilot-validate-response {run_id} "
+        f"--response 'run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=tester scope=lookup safety_confirmation=<confirmation>' --json"
+    )
 
     assert (
         main(
@@ -430,6 +435,11 @@ def test_cli_live_selection_packet_writes_no_selected_target(tmp_path: Path, cap
     assert (
         f"Validate response: runs live-pilot-validate-response {run_id} "
         "--response <operator-response> --json"
+    ) in text
+    assert (
+        f"Validate prefilled response: runs live-pilot-validate-response {run_id} "
+        f"--response 'run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=tester scope=lookup safety_confirmation=<confirmation>' --json"
     ) in text
     assert "Create selected target: sinks select-live-target" in text
     assert "{" not in text

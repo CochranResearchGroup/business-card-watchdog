@@ -283,6 +283,11 @@ def test_service_live_selection_packet_does_not_select_target(tmp_path: Path) ->
     assert packet["commands"]["validate_operator_response"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
+    assert packet["commands"]["validate_operator_response_prefilled"] == (
+        f"runs live-pilot-validate-response {run_id} "
+        f"--response 'run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=tester scope=lookup safety_confirmation=<confirmation>' --json"
+    )
     assert "select-live-target" in packet["commands"]["create_selected_target"]
     artifacts = BusinessCardService(config).list_artifacts(run_id)
     assert any(artifact["kind"] == "live_selection_packet" for artifact in artifacts)

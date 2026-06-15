@@ -6078,6 +6078,10 @@ class BusinessCardService:
                 "validate_operator_response": (
                     f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
                 ),
+                "validate_operator_response_prefilled": (
+                    f"runs live-pilot-validate-response {shlex.quote(run_id)} "
+                    f"--response {shlex.quote(operator_response_template)} --json"
+                ),
                 "create_selected_target": (
                     f"sinks select-live-target {job_id} --run-id {run_id} --sink {sink} "
                     f"--operator {operator} --scope {scope} --safety-confirmation <confirmation>"

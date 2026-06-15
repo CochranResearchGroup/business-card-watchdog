@@ -474,6 +474,11 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert live_packet["commands"]["validate_operator_response"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
+    assert live_packet["commands"]["validate_operator_response_prefilled"] == (
+        f"runs live-pilot-validate-response {run_id} "
+        f"--response 'run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=mcp-test scope=lookup safety_confirmation=<confirmation>' --json"
+    )
     assert active_live_packet["state"] == "blocked"
     assert active_live_packet["existing_selected_target"]["exists"] is True
     assert active_live_packet["existing_selected_target"]["identity"] == selected_target["target"]["selection_id"]

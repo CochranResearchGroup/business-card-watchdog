@@ -142,6 +142,11 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert live_packet["commands"]["validate_operator_response"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
+    assert live_packet["commands"]["validate_operator_response_prefilled"] == (
+        f"runs live-pilot-validate-response {run_id} "
+        f"--response 'run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=api-test scope=lookup safety_confirmation=<confirmation>' --json"
+    )
     selected = client.post(
         f"/jobs/{job_id}/selected-live-target",
         json={
