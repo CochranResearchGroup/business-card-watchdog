@@ -68,6 +68,13 @@ def create_app(config_path: Path | None = None):
         response: str
         acknowledgement: str = ""
 
+    class ChildSelectedTargetAuditRequest(BaseModel):
+        run_id: str
+        sink: str | None = None
+        operator: str | None = None
+        scope: str | None = None
+        write: bool = True
+
     class ReviewDecisionsRequest(BaseModel):
         reviewer: str = "operator"
         decisions: list[dict[str, object]] = Field(default_factory=list)
@@ -647,6 +654,20 @@ def create_app(config_path: Path | None = None):
             candidate_id=candidate_id,
             response=request.response,
             acknowledgement=request.acknowledgement,
+        )
+
+    @app.post("/reviews/children/{candidate_id}/selected-target-audit")
+    def create_child_selected_target_audit(
+        candidate_id: str,
+        request: ChildSelectedTargetAuditRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().child_selected_target_audit(
+            run_id=request.run_id,
+            candidate_id=candidate_id,
+            sink=request.sink,
+            operator=request.operator,
+            scope=request.scope,
+            write=request.write,
         )
 
     @app.post("/runs/{run_id}/review-bundle")

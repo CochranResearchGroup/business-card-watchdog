@@ -67,6 +67,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_child_selected_target_response_validation" in names
     assert "business_card_watchdog_child_selected_target_execution_checklist" in names
     assert "business_card_watchdog_child_selected_target_command_copy_packet" in names
+    assert "business_card_watchdog_child_selected_target_audit" in names
     assert "business_card_watchdog_review_bundle" in names
     assert "business_card_watchdog_review_html" in names
     assert "business_card_watchdog_review_workbook" in names
@@ -434,6 +435,11 @@ def test_mcp_child_selected_target_response_validation_and_checklist(tmp_path: P
         },
         config=config,
     )
+    audit = call_tool(
+        "business_card_watchdog_child_selected_target_audit",
+        {"run_id": run_dir.name, "candidate_id": candidate_id},
+        config=config,
+    )
 
     assert validation["schema"] == "business-card-watchdog.child-selected-target-response-validation.v1"
     assert validation["state"] == "ready_for_no_live_child_checklist"
@@ -452,6 +458,12 @@ def test_mcp_child_selected_target_response_validation_and_checklist(tmp_path: P
     assert command_copy["executable_live_command"] is None
     assert command_copy["writes_attempted"] == 0
     assert command_copy["network_calls_made"] == 0
+    assert audit["schema"] == "business-card-watchdog.child-selected-target-audit.v1"
+    assert audit["state"] == "ready"
+    assert audit["selected_target_exists"] is True
+    assert audit["replacement_requires_abandonment"] is False
+    assert audit["writes_attempted"] == 0
+    assert audit["network_calls_made"] == 0
 
 
 def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:

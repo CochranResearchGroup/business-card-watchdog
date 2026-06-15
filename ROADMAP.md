@@ -6,9 +6,9 @@ Build a robust, installable business-card ingestion system that can process arbi
 
 Product authority: `PRODUCT_SPEC.md`.
 Latest completed control-plane plan: `docs/dev/plans/0008-2026-06-14-runtime-installation-and-pilot-operations.md`.
-Latest completed offline product-hardening plan: `docs/dev/plans/0024-2026-06-15-child-command-copy-acknowledgement.md`.
+Latest completed offline product-hardening plan: `docs/dev/plans/0025-2026-06-15-child-selected-target-audit-guard.md`.
 Next production plan: `docs/dev/plans/0009-2026-06-14-operator-selected-live-smoke-and-pilot-rollout.md`.
-Next offline boundary: child selected-target audit preview and replacement/abandonment guard.
+Next offline boundary: child selected-target abandonment artifact and replacement reset packet.
 Next production boundary: operator-selected live smoke/pilot rollout for one run, one job, and one sink at a time.
 
 ## Milestones

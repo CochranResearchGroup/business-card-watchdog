@@ -2096,6 +2096,14 @@ def build_parser() -> argparse.ArgumentParser:
     reviews_child_selected_target_command_copy_packet.add_argument("--response", required=True)
     reviews_child_selected_target_command_copy_packet.add_argument("--acknowledgement", default="")
     reviews_child_selected_target_command_copy_packet.add_argument("--json", action="store_true")
+    reviews_child_selected_target_audit = reviews_sub.add_parser("child-selected-target-audit")
+    reviews_child_selected_target_audit.add_argument("candidate_id")
+    reviews_child_selected_target_audit.add_argument("--run-id", required=True)
+    reviews_child_selected_target_audit.add_argument("--sink", default=None)
+    reviews_child_selected_target_audit.add_argument("--operator", default=None)
+    reviews_child_selected_target_audit.add_argument("--scope", default=None)
+    reviews_child_selected_target_audit.add_argument("--no-write", action="store_true")
+    reviews_child_selected_target_audit.add_argument("--json", action="store_true")
     reviews_bundle = reviews_sub.add_parser("bundle")
     reviews_bundle.add_argument("--run-id", required=True)
     reviews_bundle.add_argument("--state", default="all")
@@ -2715,6 +2723,15 @@ def main(argv: list[str] | None = None) -> int:
                 candidate_id=args.candidate_id,
                 response=args.response,
                 acknowledgement=args.acknowledgement,
+            )
+        elif args.reviews_command == "child-selected-target-audit":
+            payload = service.child_selected_target_audit(
+                run_id=args.run_id,
+                candidate_id=args.candidate_id,
+                sink=args.sink,
+                operator=args.operator,
+                scope=args.scope,
+                write=not args.no_write,
             )
         else:
             payload = service.review_queue(

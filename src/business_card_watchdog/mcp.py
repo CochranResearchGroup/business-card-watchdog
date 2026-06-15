@@ -595,6 +595,22 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_child_selected_target_audit",
+                "description": "Create a no-live child selected-target audit preview with replacement/abandonment guard state.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "candidate_id": {"type": "string"},
+                        "sink": {"type": "string"},
+                        "operator": {"type": "string"},
+                        "scope": {"type": "string"},
+                        "write": {"type": "boolean", "default": True},
+                    },
+                    "required": ["run_id", "candidate_id"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_review_bundle",
                 "description": "Create a run-level batch review bundle with inline review-relevant artifact payloads.",
                 "input_schema": {
@@ -1401,6 +1417,15 @@ def call_tool(
             candidate_id=str(args["candidate_id"]),
             response=str(args["response"]),
             acknowledgement=str(args.get("acknowledgement") or ""),
+        )
+    if tool_name == "business_card_watchdog_child_selected_target_audit":
+        return service.child_selected_target_audit(
+            run_id=str(args["run_id"]),
+            candidate_id=str(args["candidate_id"]),
+            sink=str(args["sink"]) if args.get("sink") is not None else None,
+            operator=str(args["operator"]) if args.get("operator") is not None else None,
+            scope=str(args["scope"]) if args.get("scope") is not None else None,
+            write=bool(args.get("write", True)),
         )
     if tool_name == "business_card_watchdog_review_bundle":
         return service.review_bundle(

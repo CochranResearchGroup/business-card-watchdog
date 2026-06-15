@@ -411,6 +411,12 @@ def test_child_selected_target_response_validation_and_checklist(tmp_path: Path,
             "sink=google_contacts operator=operator ready to copy"
         ),
     )
+    audit = service.child_selected_target_audit(run_id=run_dir.name, candidate_id=candidate_id)
+    replacement_audit = service.child_selected_target_audit(
+        run_id=run_dir.name,
+        candidate_id=candidate_id,
+        operator="replacement-operator",
+    )
     artifacts = read_jsonl(run_dir / "artifacts.jsonl")
     events = read_jsonl(run_dir / "events.jsonl")
 
@@ -440,9 +446,25 @@ def test_child_selected_target_response_validation_and_checklist(tmp_path: Path,
     assert ready_copy_packet["writes_attempted"] == 0
     assert ready_copy_packet["network_calls_made"] == 0
     assert ready_copy_packet["acknowledgement_redacted"]["raw_acknowledgement_stored"] is False
+    assert audit["schema"] == "business-card-watchdog.child-selected-target-audit.v1"
+    assert audit["state"] == "ready"
+    assert audit["selected_target_exists"] is True
+    assert audit["replacement_requested"] is False
+    assert audit["replacement_requires_abandonment"] is False
+    assert audit["abandonment_supported"] is False
+    assert audit["writes_attempted"] == 0
+    assert audit["network_calls_made"] == 0
+    assert replacement_audit["state"] == "blocked"
+    assert replacement_audit["replacement_requested"] is True
+    assert replacement_audit["replacement_requires_abandonment"] is True
+    assert "replacement requires child selected-target abandonment before a new target preview" in replacement_audit[
+        "blocked_reasons"
+    ]
     assert any(artifact["kind"] == "child_selected_target_response_validation" for artifact in artifacts)
     assert any(artifact["kind"] == "child_selected_target_execution_checklist" for artifact in artifacts)
     assert any(artifact["kind"] == "child_selected_target_command_copy_packet" for artifact in artifacts)
+    assert any(artifact["kind"] == "child_selected_target_audit" for artifact in artifacts)
     assert any(event["event_type"] == "child_selected_target_response_validated" for event in events)
     assert any(event["event_type"] == "child_selected_target_execution_checklist_created" for event in events)
     assert any(event["event_type"] == "child_selected_target_command_copy_packet_created" for event in events)
+    assert any(event["event_type"] == "child_selected_target_audit_created" for event in events)

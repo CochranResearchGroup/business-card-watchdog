@@ -3655,6 +3655,135 @@ class BusinessCardService:
         packet["packet_path"] = str(packet_path)
         return packet
 
+    def child_selected_target_audit(
+        self,
+        *,
+        run_id: str,
+        candidate_id: str,
+        sink: str | None = None,
+        operator: str | None = None,
+        scope: str | None = None,
+        write: bool = True,
+    ) -> dict[str, Any]:
+        entry = self._child_route_prep_entry(run_id=run_id, candidate_id=candidate_id)
+        prep_dir = self._child_route_prep_dir(entry)
+        packet_path = prep_dir / "child_selected_target_command_copy_packet.json"
+        checklist_path = prep_dir / "child_selected_target_execution_checklist.json"
+        packet = _read_json_file(packet_path)
+        checklist = _read_json_file(checklist_path)
+        if checklist is None and packet is not None:
+            checklist = dict(packet.get("checklist") or {})
+        existing_target = packet if packet and packet.get("state") == "ready_for_operator_copy" else None
+        existing_identity = ""
+        if existing_target:
+            existing_identity = "|".join(
+                str(existing_target.get(key) or "")
+                for key in ["run_id", "job_id", "candidate_id", "sink", "operator", "scope"]
+            )
+        requested = {
+            "sink": sink or (existing_target or {}).get("sink") or (checklist or {}).get("sink"),
+            "operator": operator or (existing_target or {}).get("operator") or (checklist or {}).get("operator"),
+            "scope": scope or (existing_target or {}).get("scope") or (checklist or {}).get("scope"),
+        }
+        requested_identity = "|".join(
+            [
+                run_id,
+                str(entry.get("job_id") or ""),
+                candidate_id,
+                str(requested.get("sink") or ""),
+                str(requested.get("operator") or ""),
+                str(requested.get("scope") or ""),
+            ]
+        )
+        abandonment_path = prep_dir / "child_selected_target_abandonment.json"
+        abandonment = _read_json_file(abandonment_path)
+        existing_abandoned = bool(
+            abandonment
+            and str(abandonment.get("selected_target_identity") or "") == existing_identity
+            and abandonment.get("state") == "abandoned"
+        )
+        replacement_requested = bool(existing_target and requested_identity and requested_identity != existing_identity)
+        replacement_requires_abandonment = bool(existing_target and replacement_requested and not existing_abandoned)
+        blocked_reasons: list[str] = []
+        if packet is None:
+            blocked_reasons.append("child selected-target command-copy packet is missing")
+        elif packet.get("state") != "ready_for_operator_copy":
+            blocked_reasons.append(f"child command-copy packet state is {packet.get('state') or 'missing'}")
+        if checklist is None:
+            blocked_reasons.append("child selected-target execution checklist is missing")
+        elif checklist.get("state") != "ready_for_operator_review":
+            blocked_reasons.append(f"child execution checklist state is {checklist.get('state') or 'missing'}")
+        if replacement_requires_abandonment:
+            blocked_reasons.append("replacement requires child selected-target abandonment before a new target preview")
+        state = "ready" if not blocked_reasons else "blocked"
+        audit = {
+            "schema": "business-card-watchdog.child-selected-target-audit.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_id,
+            "job_id": entry.get("job_id"),
+            "candidate_id": candidate_id,
+            "work_item_id": entry.get("work_item_id"),
+            "selected_target_exists": existing_target is not None,
+            "selected_target_identity": existing_identity or None,
+            "selected_target": existing_target,
+            "selected_target_path": str(packet_path),
+            "checklist_path": str(checklist_path),
+            "sink": (existing_target or checklist or {}).get("sink"),
+            "operator": (existing_target or checklist or {}).get("operator"),
+            "scope": (existing_target or checklist or {}).get("scope"),
+            "requested_target": requested,
+            "requested_target_identity": requested_identity or None,
+            "replacement_requested": replacement_requested,
+            "replacement_requires_abandonment": replacement_requires_abandonment,
+            "existing_target_abandoned": existing_abandoned,
+            "abandonment_supported": False,
+            "abandonment_path": str(abandonment_path),
+            "abandonment": abandonment,
+            "blocked_reasons": blocked_reasons,
+            "commands": {
+                "refresh_command_copy_packet": (
+                    f"reviews child-selected-target-command-copy-packet {shlex.quote(candidate_id)} "
+                    f"--run-id {run_id} --response <operator-response> "
+                    "--acknowledgement <operator-acknowledgement> --json"
+                ),
+                "refresh_audit": (
+                    f"reviews child-selected-target-audit {shlex.quote(candidate_id)} --run-id {run_id} --json"
+                ),
+                "abandonment": None,
+            },
+            "explicit_stop_conditions": [
+                "This audit preview does not create, replace, or abandon a selected target.",
+                "Do not create selected_live_target.json from this child audit.",
+                "Do not run live GWS/Odollo/Odoo lookup, write, or readback from this audit.",
+                "Do not proceed with a replacement while replacement_requires_abandonment is true.",
+                "Do not process private SyncThing images, run public-web search, or call paid enrichment from this audit.",
+            ],
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+        if write:
+            audit_path = prep_dir / "child_selected_target_audit.json"
+            audit_path.write_text(json.dumps(audit, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            ledger = RunLedger(self.config.runs_dir / run_id)
+            parent_job_id = str(entry.get("job_id") or "__run__")
+            ledger.record_artifact(job_id=parent_job_id, kind="child_selected_target_audit", path=audit_path)
+            ledger.record_event(
+                "child_selected_target_audit_created",
+                {
+                    "run_id": run_id,
+                    "job_id": entry.get("job_id"),
+                    "candidate_id": candidate_id,
+                    "state": state,
+                    "audit_path": str(audit_path),
+                    "replacement_requires_abandonment": replacement_requires_abandonment,
+                    "writes_attempted": 0,
+                    "network_calls_made": 0,
+                },
+            )
+            audit["audit_path"] = str(audit_path)
+        return audit
+
     def _child_route_prep_entry(self, *, run_id: str, candidate_id: str) -> dict[str, Any]:
         entry = next(
             (

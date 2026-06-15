@@ -164,7 +164,11 @@ live sink execution. Use
 `reviews child-selected-target-command-copy-packet <candidate-id> --run-id <run-id> --response <operator-response> --acknowledgement <operator-acknowledgement> --json`
 to show the next offline command only after the acknowledgement names the run,
 child candidate, sink, and operator. It never returns a live GWS/Odollo/Odoo
-command.
+command. Use
+`reviews child-selected-target-audit <candidate-id> --run-id <run-id> --json`
+to preview the current child selected-target packet and whether a replacement
+would require abandonment. The audit never creates, replaces, or abandons a
+selected target.
 
 `drills review-routing` creates a synthetic fixture run and proves review approval,
 review bundle/workbook export, duplicate lookup planning, dry-run sink routing, and

@@ -645,6 +645,20 @@ def test_cli_child_selected_target_response_validation_and_checklist(
     ) == 0
     command_copy = json.loads(capsys.readouterr().out)
 
+    assert main(
+        [
+            "--config",
+            str(config_path),
+            "reviews",
+            "child-selected-target-audit",
+            candidate_id,
+            "--run-id",
+            run_dir.name,
+            "--json",
+        ]
+    ) == 0
+    audit = json.loads(capsys.readouterr().out)
+
     assert validation["state"] == "ready_for_no_live_child_checklist"
     assert validation["writes_attempted"] == 0
     assert validation["network_calls_made"] == 0
@@ -660,6 +674,12 @@ def test_cli_child_selected_target_response_validation_and_checklist(
     assert command_copy["executable_live_command"] is None
     assert command_copy["writes_attempted"] == 0
     assert command_copy["network_calls_made"] == 0
+    assert audit["schema"] == "business-card-watchdog.child-selected-target-audit.v1"
+    assert audit["state"] == "ready"
+    assert audit["selected_target_exists"] is True
+    assert audit["replacement_requires_abandonment"] is False
+    assert audit["writes_attempted"] == 0
+    assert audit["network_calls_made"] == 0
 
 
 def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) -> None:

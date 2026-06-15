@@ -1337,6 +1337,10 @@ def test_api_child_selected_target_response_validation_and_checklist(tmp_path: P
             ),
         },
     ).json()
+    audit = client.post(
+        f"/reviews/children/{candidate_id}/selected-target-audit",
+        json={"run_id": run_dir.name},
+    ).json()
 
     assert validation["schema"] == "business-card-watchdog.child-selected-target-response-validation.v1"
     assert validation["state"] == "ready_for_no_live_child_checklist"
@@ -1355,6 +1359,12 @@ def test_api_child_selected_target_response_validation_and_checklist(tmp_path: P
     assert command_copy["executable_live_command"] is None
     assert command_copy["writes_attempted"] == 0
     assert command_copy["network_calls_made"] == 0
+    assert audit["schema"] == "business-card-watchdog.child-selected-target-audit.v1"
+    assert audit["state"] == "ready"
+    assert audit["selected_target_exists"] is True
+    assert audit["replacement_requires_abandonment"] is False
+    assert audit["writes_attempted"] == 0
+    assert audit["network_calls_made"] == 0
 
 
 def test_api_multi_card_preclassification_drill_records_candidate_boxes(tmp_path: Path) -> None:
