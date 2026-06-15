@@ -833,7 +833,17 @@ def test_service_watch_reset_returns_runtime_path(tmp_path: Path) -> None:
 
     payload = service.watch_reset()
 
+    assert payload["schema"] == "business-card-watchdog.watch-reset.v1"
     assert payload["reset"] is True
+    assert payload["watch_dir"] == str(config.watch_dir)
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert payload["private_sources_used"] is False
+    assert payload["commands"]["watch_dry_run"] == "watch-dry-run --json"
+    assert "seen-files.jsonl" in payload["reset_files"]
+    assert "Run watch-dry-run before polling private SyncThing inputs after a reset." in (
+        payload["explicit_stop_conditions"]
+    )
     assert not (config.watch_dir / "seen-files.jsonl").exists()
 
 

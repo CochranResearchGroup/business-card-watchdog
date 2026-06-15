@@ -155,12 +155,25 @@ def test_watch_status_scan_can_be_bounded_and_non_recursive(tmp_path: Path) -> N
     assert status.last_error is None
 
 
-def test_watch_reset_cli_requires_yes(tmp_path: Path) -> None:
+def test_watch_reset_cli_requires_yes(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     config_path = tmp_path / "config.toml"
-    config_path.write_text("[watch]\ninputs = []\n", encoding="utf-8")
+    data_dir = tmp_path / "data"
+    watch_dir = data_dir / "watch"
+    watch_dir.mkdir(parents=True)
+    (watch_dir / "seen-files.jsonl").write_text('{"key": "x"}\n', encoding="utf-8")
+    config_path.write_text(f'data_dir = "{data_dir}"\n[watch]\ninputs = []\n', encoding="utf-8")
 
     with pytest.raises(SystemExit, match="without --yes"):
         main(["--config", str(config_path), "watch-reset"])
+
+    assert main(["--config", str(config_path), "watch-reset", "--yes"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["schema"] == "business-card-watchdog.watch-reset.v1"
+    assert payload["reset"] is True
+    assert payload["private_sources_used"] is False
+    assert payload["commands"]["watch_status"] == "watch-status --json"
+    assert "Do not run public-web search" in payload["explicit_stop_conditions"][2]
+    assert not (watch_dir / "seen-files.jsonl").exists()
 
 
 def test_watch_status_cli_outputs_json(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

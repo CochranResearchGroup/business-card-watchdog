@@ -3740,3 +3740,27 @@ Validation:
 Safety:
 
 - This was fixture-backed watch harness and presentation hardening only. It did not process configured/private SyncThing inputs, run public-web search, call paid enrichment, validate a real operator response, create or modify `selected_live_target.json`, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+## Turn 182 | 2026-06-15
+
+Continued Plan 0009 with Slice 0009-A106.
+
+Implemented:
+
+- `watch-reset --yes` now returns `business-card-watchdog.watch-reset.v1` with reset files, command links, zero write/network counters, and private-source status.
+- Watch reset output now includes explicit stop conditions that distinguish resetting watcher state from processing configured/private watch inputs.
+- Service and CLI coverage now assert the structured reset artifact and guard behavior.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_watcher.py::test_watch_reset_cli_requires_yes tests/test_service.py::test_service_watch_reset_returns_runtime_path -q` passed with 2 tests.
+- `.venv/bin/python -m pytest -q` passed with 226 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was watched-folder state reset readback only. It did not process configured/private SyncThing inputs, run public-web search, call paid enrichment, validate a real operator response, create or modify `selected_live_target.json`, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.

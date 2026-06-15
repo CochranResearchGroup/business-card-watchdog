@@ -6409,7 +6409,26 @@ class BusinessCardService:
 
     def watch_reset(self) -> dict[str, Any]:
         PollingWatcher(self.config).reset()
-        return {"reset": True, "watch_dir": str(self.config.watch_dir)}
+        return {
+            "schema": "business-card-watchdog.watch-reset.v1",
+            "generated_at": utc_now(),
+            "reset": True,
+            "watch_dir": str(self.config.watch_dir),
+            "reset_files": ["seen-files.jsonl", "pending-files.json", "status.json"],
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "private_sources_used": False,
+            "commands": {
+                "watch_status": "watch-status --json",
+                "watch_dry_run": "watch-dry-run --json",
+                "status": "status --json",
+            },
+            "explicit_stop_conditions": [
+                "This only resets watcher state; it does not process configured watch inputs.",
+                "Run watch-dry-run before polling private SyncThing inputs after a reset.",
+                "Do not run public-web search, paid enrichment, or live sink operations from watch reset.",
+            ],
+        }
 
     def _require_selected_live_target(
         self,
