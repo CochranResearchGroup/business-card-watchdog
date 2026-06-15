@@ -1733,6 +1733,58 @@ def test_service_review_route_readiness_summarizes_review_and_route_state(tmp_pa
     assert "review_route_readiness_created" in events
 
 
+def test_service_lookup_selection_packet_selects_route_ready_job_without_live_calls(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    source_dir = tmp_path / "cards"
+    write_synthetic_image(source_dir / "card.png")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        prefilter=PrefilterConfig(enabled=False),
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+
+    payload = BusinessCardService(config).lookup_selection_packet(
+        run_dir.name,
+        operator="tester",
+        sink="google_contacts",
+        write=True,
+    )
+
+    assert payload["schema"] == "business-card-watchdog.lookup-selection-packet.v1"
+    assert payload["state"] == "packet_blocked"
+    assert payload["route_ready_count"] == 1
+    assert payload["packet_candidate_count"] == 1
+    assert payload["selected"]["job_id"] == payload["selected_packet"]["job_id"]
+    assert payload["selected"]["sink"] == "google_contacts"
+    assert payload["selected_packet"]["schema"] == "business-card-watchdog.live-selection-packet.v1"
+    assert payload["selected_packet"]["approval_state"] == "pending_operator_approval"
+    assert "lookup:reviewed_contact_exists" in payload["blocked_reasons"]
+    assert payload["creates_selected_live_target"] is False
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert payload["live_sink_calls_made"] is False
+    assert payload["runtime_artifact_written"] is True
+    assert Path(payload["packet_path"]).exists()
+    assert payload["commands"]["lookup_selection_packet"] == (
+        f"runs lookup-selection-packet {run_dir.name} --operator tester --sink google_contacts --json"
+    )
+    assert payload["commands"]["validate_operator_response_prefilled"].startswith(
+        f"runs live-pilot-validate-response {run_dir.name} --response"
+    )
+    assert "This packet does not create selected_live_target.json." in payload["explicit_stop_conditions"]
+
+    recorded = BusinessCardService(config).get_run(run_dir.name)
+    assert any(artifact["kind"] == "lookup_selection_packet" for artifact in recorded["artifacts"])
+    events = (run_dir / "events.jsonl").read_text(encoding="utf-8")
+    assert "lookup_selection_packet_created" in events
+
+
 def test_service_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",

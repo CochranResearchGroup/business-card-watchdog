@@ -5702,3 +5702,33 @@ Validation:
 Safety:
 
 - This added a local-ledger review-route readiness report only. It did not process configured SyncThing/private watch inputs; run OCR/App Intelligence; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.
+
+## Turn 253 | 2026-06-15
+
+Executed Plan 0047 with Slice 0047-A.
+
+Implemented:
+
+- Added `BusinessCardService.lookup_selection_packet`.
+- Added CLI `bcw runs lookup-selection-packet`.
+- Added API `POST /runs/{run_id}/lookup-selection-packet`.
+- Added MCP tool `business_card_watchdog_lookup_selection_packet`.
+- Updated README and ROADMAP for the preview-only lookup selection packet boundary.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_lookup_selection_packet_selects_route_ready_job_without_live_calls tests/test_cli_surfaces.py::test_cli_runs_lookup_selection_packet_reports_selected_candidate tests/test_api.py::test_api_run_lookup_selection_packet_reports_selected_candidate tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_lookup_selection_packet_reports_selected_candidate -q` passed with 5 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/api.py src/business_card_watchdog/mcp.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 317 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `rg -n "lookup-selection-packet|lookup_selection_packet|Lookup selection packet|business_card_watchdog_lookup_selection_packet|Plan 0047" README.md ROADMAP.md RUNBOOK.md docs src tests` passed.
+- `uv build --out-dir dist` built source and wheel distributions.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `codegraph sync && codegraph status` passed; index is up to date.
+- `.venv/bin/bcw drills watch-dry-run-execution --json` passed with one synthetic fixture file processed through a completed dry-run batch and no writes or network calls.
+- `.venv/bin/bcw --config <temp-fixture-config> runs lookup-selection-packet 2026-06-15T13-44-18+00-00 --operator fixture-smoke --sink google_contacts --no-write --json` passed with `state=packet_blocked`, one route-ready job, one selected lookup packet, zero writes, zero network calls, no selected-target creation, and no live sink calls.
+
+Safety:
+
+- This added a run-level lookup selection packet only. It did not create `selected_live_target.json`; process configured SyncThing/private watch inputs; run OCR/App Intelligence; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.

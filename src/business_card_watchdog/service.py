@@ -1911,6 +1911,175 @@ class BusinessCardService:
             )
         return payload
 
+    def lookup_selection_packet(
+        self,
+        run_id: str,
+        *,
+        operator: str,
+        sink: str | None = None,
+        write: bool = True,
+    ) -> dict[str, Any]:
+        selected_sink = str(sink or "").strip()
+        if selected_sink and selected_sink not in {"google_contacts", "odoo"}:
+            raise ValueError("lookup selection packet requires sink google_contacts or odoo")
+        if not operator.strip():
+            raise ValueError("lookup selection packet requires an operator")
+        readiness = self.review_route_readiness(run_id, write=False)
+        route_ready_rows = [
+            row
+            for row in list(readiness.get("rows") or [])
+            if isinstance(row, dict) and row.get("route_ready")
+        ]
+        packet_candidates: list[dict[str, Any]] = []
+        for row in route_ready_rows:
+            job_id = str(row.get("job_id") or "")
+            if not job_id:
+                continue
+            candidate_sinks = [selected_sink] if selected_sink else self._lookup_selection_candidate_sinks(row)
+            for candidate_sink in candidate_sinks:
+                try:
+                    packet = self.live_selection_packet(
+                        job_id=job_id,
+                        run_id=run_id,
+                        sink=candidate_sink,
+                        operator=operator,
+                        scope="lookup",
+                        reason="run-level lookup selection packet prepared from review-route readiness",
+                        write=False,
+                    )
+                except (FileNotFoundError, ValueError) as exc:
+                    packet = {
+                        "schema": "business-card-watchdog.live-selection-packet.v1",
+                        "state": "blocked",
+                        "run_id": run_id,
+                        "job_id": job_id,
+                        "sink": candidate_sink,
+                        "operator": operator,
+                        "scope": "lookup",
+                        "blocked_reasons": [str(exc)],
+                        "writes_attempted": 0,
+                        "network_calls_made": 0,
+                    }
+                packet_candidates.append(
+                    {
+                        "run_id": run_id,
+                        "job_id": job_id,
+                        "sink": candidate_sink,
+                        "row": row,
+                        "packet_state": packet.get("state"),
+                        "blocked_reasons": list(packet.get("blocked_reasons") or []),
+                        "packet": packet,
+                    }
+                )
+        selected = next(
+            (
+                candidate
+                for candidate in packet_candidates
+                if dict(candidate.get("packet") or {}).get("state") == "ready_for_operator_approval"
+            ),
+            packet_candidates[0] if packet_candidates else None,
+        )
+        if selected is None:
+            state = "blocked"
+            blocked_reasons = ["no route-ready review row is available for lookup selection"]
+            selected_packet = None
+        else:
+            selected_packet = dict(selected.get("packet") or {})
+            blocked_reasons = list(selected_packet.get("blocked_reasons") or [])
+            state = (
+                "ready_for_operator_approval"
+                if selected_packet.get("state") == "ready_for_operator_approval"
+                else "packet_blocked"
+            )
+        commands = {
+            "lookup_selection_packet": (
+                f"runs lookup-selection-packet {run_id} --operator {operator}"
+                + (f" --sink {selected_sink}" if selected_sink else "")
+                + " --json"
+            ),
+            "review_route_readiness": f"runs review-route-readiness {run_id} --json",
+            "dry_run_safe_loop": f"runs dry-run-safe-loop {run_id} --limit 5 --json",
+            "live_selection_requirements": (
+                f"live-selection-requirements --run-id {run_id}"
+                + (f" --sink {selected_sink}" if selected_sink else "")
+                + " --no-write --json"
+            ),
+            "live_pilot_status": f"runs live-pilot-status {run_id} --no-write --json",
+            "live_pilot_handoff": f"runs live-pilot-handoff {run_id} --no-write --json",
+        }
+        if selected_packet:
+            packet_commands = dict(selected_packet.get("commands") or {})
+            commands.update(
+                {
+                    "validate_operator_response": packet_commands.get("validate_operator_response"),
+                    "validate_operator_response_prefilled": packet_commands.get("validate_operator_response_prefilled"),
+                    "selected_target_audit": packet_commands.get("selected_target_audit"),
+                    "lookup_smoke_handoff": packet_commands.get("lookup_smoke_handoff"),
+                }
+            )
+        payload: dict[str, Any] = {
+            "schema": "business-card-watchdog.lookup-selection-packet.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "run_id": run_id,
+            "sink": selected_sink or None,
+            "operator": operator,
+            "scope": "lookup",
+            "review_route_readiness_state": readiness.get("state"),
+            "route_ready_count": len(route_ready_rows),
+            "packet_candidate_count": len(packet_candidates),
+            "selected": selected,
+            "selected_packet": selected_packet,
+            "blocked_reasons": blocked_reasons,
+            "packet_candidates": [
+                {
+                    "run_id": candidate.get("run_id"),
+                    "job_id": candidate.get("job_id"),
+                    "sink": candidate.get("sink"),
+                    "packet_state": candidate.get("packet_state"),
+                    "blocked_reasons": candidate.get("blocked_reasons"),
+                }
+                for candidate in packet_candidates
+            ],
+            "private_sources_used": False,
+            "public_web_search_used": False,
+            "paid_enrichment_used": False,
+            "live_sink_calls_made": False,
+            "creates_selected_live_target": False,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "runtime_artifact_written": False,
+            "packet_path": None,
+            "commands": commands,
+            "explicit_stop_conditions": [
+                "This packet chooses a lookup-selection candidate from local review-route readiness only.",
+                "This packet does not create selected_live_target.json.",
+                "Validate the operator response before selecting a live target.",
+                "Do not run live lookup, write, or readback from this packet.",
+                "Do not process private SyncThing images, run public-web search, or call paid enrichment from this packet.",
+            ],
+        }
+        if write:
+            packet_path = self.config.runs_dir / run_id / "lookup_selection_packet.json"
+            payload["runtime_artifact_written"] = True
+            payload["packet_path"] = str(packet_path)
+            packet_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            ledger = RunLedger(self.config.runs_dir / run_id)
+            ledger.record_artifact(job_id="__run__", kind="lookup_selection_packet", path=packet_path)
+            ledger.record_event(
+                "lookup_selection_packet_created",
+                {
+                    "run_id": run_id,
+                    "state": state,
+                    "sink": selected_sink or None,
+                    "operator": operator,
+                    "packet_path": str(packet_path),
+                    "writes_attempted": 0,
+                    "network_calls_made": 0,
+                },
+            )
+        return payload
+
     def phase_report(self, run_id: str) -> dict[str, Any]:
         run = self.get_run(run_id)
         jobs = run["jobs"]
@@ -14160,6 +14329,21 @@ class BusinessCardService:
         if self.config.sink.odoo:
             configured.append("odoo")
         return configured
+
+    def _lookup_selection_candidate_sinks(self, row: dict[str, Any]) -> list[str]:
+        planned = [
+            str(sink)
+            for sink in list(row.get("planned_sinks") or [])
+            if str(sink) in {"google_contacts", "odoo"}
+        ]
+        if planned:
+            return sorted(set(planned))
+        configured: list[str] = []
+        if self.config.sink.google_contacts:
+            configured.append("google_contacts")
+        if self.config.sink.odoo:
+            configured.append("odoo")
+        return configured or ["google_contacts"]
 
     def _live_target_candidate_stop_reasons(
         self,

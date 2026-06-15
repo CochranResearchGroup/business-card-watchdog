@@ -1735,6 +1735,56 @@ def _render_review_route_readiness_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_lookup_selection_packet_text(payload: dict[str, object]) -> str:
+    selected = dict(payload.get("selected") or {})
+    selected_packet = dict(payload.get("selected_packet") or {})
+    commands = dict(payload.get("commands") or {})
+    blocked_reasons = payload.get("blocked_reasons") or []
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    lines = [
+        f"Lookup selection packet: {payload.get('state')}",
+        f"Run: {payload.get('run_id')}",
+        f"Sink: {payload.get('sink') or 'auto'}",
+        f"Operator: {payload.get('operator')}",
+        f"Route-ready rows: {payload.get('route_ready_count', 0)}",
+        f"Packet candidates: {payload.get('packet_candidate_count', 0)}",
+        f"Selected job: {selected.get('job_id') or 'none'}",
+        f"Selected sink: {selected.get('sink') or 'none'}",
+        f"Selected packet: {selected_packet.get('state') or 'none'}",
+        "Observed: "
+        f"writes={payload.get('writes_attempted', 0)} "
+        f"network={payload.get('network_calls_made', 0)} "
+        f"live_sinks={payload.get('live_sink_calls_made', False)} "
+        f"creates_selected_target={payload.get('creates_selected_live_target', False)}",
+        f"Runtime artifact written: {payload.get('runtime_artifact_written', False)}",
+    ]
+    if payload.get("packet_path"):
+        lines.append(f"Packet path: {payload.get('packet_path')}")
+    blocked_rows = blocked_reasons if isinstance(blocked_reasons, list) else []
+    if blocked_rows:
+        lines.append("Blocked reasons:")
+        for reason in blocked_rows:
+            lines.append(f" - {reason}")
+    lines.append("Commands:")
+    for label, key in [
+        ("Lookup selection packet", "lookup_selection_packet"),
+        ("Review-route readiness", "review_route_readiness"),
+        ("Live selection requirements", "live_selection_requirements"),
+        ("Validate operator response", "validate_operator_response"),
+        ("Validate prefilled response", "validate_operator_response_prefilled"),
+        ("Selected target audit", "selected_target_audit"),
+        ("Lookup smoke handoff", "lookup_smoke_handoff"),
+    ]:
+        command = commands.get(key)
+        if command:
+            lines.append(f" - {label}: {command}")
+    stop_rows = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stop_rows)}")
+    for condition in stop_rows:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_runtime_readiness_text(payload: dict[str, object]) -> str:
     checks = payload.get("checks") or []
     blocked = payload.get("blocked_checks") or []
@@ -2561,6 +2611,12 @@ def build_parser() -> argparse.ArgumentParser:
     runs_review_route_readiness.add_argument("run_id")
     runs_review_route_readiness.add_argument("--no-write", action="store_true")
     runs_review_route_readiness.add_argument("--json", action="store_true")
+    runs_lookup_selection_packet = runs_sub.add_parser("lookup-selection-packet")
+    runs_lookup_selection_packet.add_argument("run_id")
+    runs_lookup_selection_packet.add_argument("--operator", required=True)
+    runs_lookup_selection_packet.add_argument("--sink", choices=["google_contacts", "odoo"], default=None)
+    runs_lookup_selection_packet.add_argument("--no-write", action="store_true")
+    runs_lookup_selection_packet.add_argument("--json", action="store_true")
     runs_live_pilot_status = runs_sub.add_parser("live-pilot-status")
     runs_live_pilot_status.add_argument("run_id")
     runs_live_pilot_status.add_argument("--no-write", action="store_true")
@@ -3245,6 +3301,13 @@ def main(argv: list[str] | None = None) -> int:
             payload = service.dry_run_safe_loop(args.run_id, limit=args.limit, write=not args.no_write)
         elif args.runs_command == "review-route-readiness":
             payload = service.review_route_readiness(args.run_id, write=not args.no_write)
+        elif args.runs_command == "lookup-selection-packet":
+            payload = service.lookup_selection_packet(
+                args.run_id,
+                operator=args.operator,
+                sink=args.sink,
+                write=not args.no_write,
+            )
         elif args.runs_command == "live-pilot-status":
             payload = service.live_pilot_status(run_id=args.run_id, write=not args.no_write)
         elif args.runs_command == "live-pilot-handoff":
@@ -3397,6 +3460,9 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.runs_command == "review-route-readiness" and not args.json:
             print(_render_review_route_readiness_text(payload), end="")
+            return 0
+        if args.runs_command == "lookup-selection-packet" and not args.json:
+            print(_render_lookup_selection_packet_text(payload), end="")
             return 0
         if args.runs_command == "phase-report" and not args.json:
             print(_render_phase_report_text(payload), end="")

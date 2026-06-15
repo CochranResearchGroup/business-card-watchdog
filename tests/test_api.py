@@ -1141,6 +1141,41 @@ def test_api_run_review_route_readiness_reports_route_state(tmp_path: Path, monk
     assert payload["runtime_artifact_written"] is False
 
 
+def test_api_run_lookup_selection_packet_reports_selected_candidate(tmp_path: Path, monkeypatch) -> None:
+    from business_card_watchdog.api import create_app
+
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+    source_dir = tmp_path / "cards"
+    write_synthetic_image(source_dir / "card.png")
+    config = AppConfig(
+        config_path=config_path,
+        data_dir=data_dir,
+        prefilter=PrefilterConfig(enabled=False),
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+    client = TestClient(create_app(config_path))
+
+    payload = client.post(
+        f"/runs/{run_dir.name}/lookup-selection-packet",
+        json={"operator": "api-test", "sink": "google_contacts", "write": False},
+    ).json()
+
+    assert payload["schema"] == "business-card-watchdog.lookup-selection-packet.v1"
+    assert payload["state"] == "packet_blocked"
+    assert payload["route_ready_count"] == 1
+    assert payload["selected"]["sink"] == "google_contacts"
+    assert payload["selected_packet"]["operator"] == "api-test"
+    assert payload["creates_selected_live_target"] is False
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert payload["runtime_artifact_written"] is False
+
+
 def test_api_offline_pilot_gap_audit_reports_remaining_boundaries(tmp_path: Path) -> None:
     from business_card_watchdog.api import create_app
 

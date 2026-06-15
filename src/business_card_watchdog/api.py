@@ -176,6 +176,11 @@ def create_app(config_path: Path | None = None):
         reason: str = ""
         write: bool = True
 
+    class LookupSelectionPacketRequest(BaseModel):
+        operator: str
+        sink: str | None = None
+        write: bool = True
+
     class SelectedLiveTargetRequest(BaseModel):
         run_id: str
         sink: str
@@ -398,6 +403,18 @@ def create_app(config_path: Path | None = None):
     @app.get("/runs/{run_id}/review-route-readiness")
     def get_run_review_route_readiness(run_id: str, write: bool = True) -> dict[str, object]:
         return service().review_route_readiness(run_id, write=write)
+
+    @app.post("/runs/{run_id}/lookup-selection-packet")
+    def create_run_lookup_selection_packet(
+        run_id: str,
+        request: LookupSelectionPacketRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().lookup_selection_packet(
+            run_id,
+            operator=request.operator,
+            sink=request.sink,
+            write=request.write,
+        )
 
     @app.get("/runs/{run_id}/live-pilot-status")
     def get_run_live_pilot_status(run_id: str, write: bool = True) -> dict[str, object]:

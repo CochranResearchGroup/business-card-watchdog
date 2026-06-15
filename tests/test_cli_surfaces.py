@@ -502,6 +502,76 @@ def test_cli_runs_review_route_readiness_reports_route_state(tmp_path: Path, mon
     assert "{" not in text
 
 
+def test_cli_runs_lookup_selection_packet_reports_selected_candidate(tmp_path: Path, monkeypatch, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+    source_dir = tmp_path / "cards"
+    write_synthetic_image(source_dir / "card.png")
+    config = AppConfig(
+        config_path=config_path,
+        data_dir=data_dir,
+        prefilter=PrefilterConfig(enabled=False),
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "lookup-selection-packet",
+                run_dir.name,
+                "--operator",
+                "tester",
+                "--sink",
+                "google_contacts",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["schema"] == "business-card-watchdog.lookup-selection-packet.v1"
+    assert payload["state"] == "packet_blocked"
+    assert payload["route_ready_count"] == 1
+    assert payload["selected"]["sink"] == "google_contacts"
+    assert payload["creates_selected_live_target"] is False
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert Path(payload["packet_path"]).exists()
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "lookup-selection-packet",
+                run_dir.name,
+                "--operator",
+                "tester",
+                "--sink",
+                "google_contacts",
+                "--no-write",
+            ]
+        )
+        == 0
+    )
+    text = capsys.readouterr().out
+    assert "Lookup selection packet: packet_blocked" in text
+    assert "Selected sink: google_contacts" in text
+    assert "creates_selected_target=False" in text
+    assert "Validate prefilled response: runs live-pilot-validate-response" in text
+    assert "Stop conditions: 5" in text
+    assert "{" not in text
+
+
 def test_cli_child_reviews_lists_promoted_child_candidates(
     tmp_path: Path,
     monkeypatch,
