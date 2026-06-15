@@ -453,6 +453,8 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert runtime_readiness["network_calls_made"] == 0
     assert review_routing_drill["schema"] == "business-card-watchdog.review-routing-drill.v1"
     assert review_routing_drill["private_sources_used"] is False
+    assert review_routing_drill["agent_loop_readback"]["state"] == "passed"
+    assert review_routing_drill["agent_loop_readback"]["next_manual_boundary"] == "decide_sink_apply"
     assert review_routing_drill["safe_actions"]["skipped_actions"] == ["decide_sink_apply"]
     assert review_routing_drill["writes_attempted"] == 0
     assert review_routing_drill["network_calls_made"] == 0

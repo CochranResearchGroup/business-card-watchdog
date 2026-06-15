@@ -1566,6 +1566,47 @@ class BusinessCardService:
                 if artifact.get("job_id") == job.job_id and str(artifact.get("kind") or "") in _ROUTE_ARTIFACT_FILES
             }
         )
+        required_route_artifacts = [
+            "sink_lookup_plan",
+            "sink_adapter_request_lookup",
+            "sink_lookup_result",
+            "downstream_duplicate_assessment",
+            "sink_plan",
+            "sink_adapter_request_write",
+            "sink_apply_preflight",
+        ]
+        next_action_names = [str(action.get("action") or "") for action in final_next["actions"]]
+        artifact_checks = [
+            {"kind": kind, "exists": kind in route_artifact_kinds}
+            for kind in required_route_artifacts
+        ]
+        agent_loop_readback = {
+            "schema": "business-card-watchdog.review-routing-drill-agent-readback.v1",
+            "state": "passed"
+            if all(check["exists"] for check in artifact_checks)
+            and next_action_names[:1] == ["decide_sink_apply"]
+            and run_next["executed_count"] == 7
+            and run_next["skipped_count"] == 1
+            else "needs_attention",
+            "run_id": run_id,
+            "job_id": job.job_id,
+            "private_sources_used": False,
+            "public_web_search_used": False,
+            "paid_enrichment_used": False,
+            "live_sink_calls_made": False,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "expected_manual_boundary": "decide_sink_apply",
+            "next_manual_boundary": next_action_names[0] if next_action_names else "",
+            "artifact_checks": artifact_checks,
+            "safe_action_counts": {
+                "executed": run_next["executed_count"],
+                "skipped": run_next["skipped_count"],
+            },
+            "safe_actions_executed": [str(action.get("action") or "") for action in run_next["executed"]],
+            "manual_actions_skipped": [str(action.get("action") or "") for action in run_next["skipped"]],
+            "route_artifact_kinds": route_artifact_kinds,
+        }
         payload = {
             "schema": "business-card-watchdog.review-routing-drill.v1",
             "generated_at": utc_now(),
@@ -1601,6 +1642,7 @@ class BusinessCardService:
             "review_workbook_path": review_workbook.get("workbook_path"),
             "phase_dashboard": phase_report["dashboard_summary"],
             "next_actions": final_next["actions"],
+            "agent_loop_readback": agent_loop_readback,
             "commands": {
                 "review_bundle": f"reviews bundle --run-id {run_id} --state all --json",
                 "review_workbook": f"reviews workbook --run-id {run_id} --state all --json",

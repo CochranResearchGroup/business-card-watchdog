@@ -543,6 +543,8 @@ def test_api_review_routing_drill_outputs_fixture_artifact(tmp_path: Path) -> No
 
     assert drill["schema"] == "business-card-watchdog.review-routing-drill.v1"
     assert drill["private_sources_used"] is False
+    assert drill["agent_loop_readback"]["state"] == "passed"
+    assert drill["agent_loop_readback"]["next_manual_boundary"] == "decide_sink_apply"
     assert drill["safe_actions"]["skipped_actions"] == ["decide_sink_apply"]
     assert drill["network_calls_made"] == 0
     assert drill["writes_attempted"] == 0

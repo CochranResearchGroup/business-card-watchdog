@@ -92,6 +92,8 @@ def test_cli_review_routing_drill_outputs_fixture_artifact(tmp_path: Path, capsy
 
     assert payload["schema"] == "business-card-watchdog.review-routing-drill.v1"
     assert payload["private_sources_used"] is False
+    assert payload["agent_loop_readback"]["state"] == "passed"
+    assert payload["agent_loop_readback"]["next_manual_boundary"] == "decide_sink_apply"
     assert payload["safe_actions"]["skipped_actions"] == ["decide_sink_apply"]
     assert payload["commands"]["review_workbook"] == (
         f"reviews workbook --run-id {payload['run_id']} --state all --json"
@@ -103,6 +105,8 @@ def test_cli_review_routing_drill_outputs_fixture_artifact(tmp_path: Path, capsy
     assert "Review routing drill:" in text
     assert "Fixture sinks: google_contacts, odoo" in text
     assert "Review: needs_review -> ready_to_route" in text
+    assert "Agent readback: passed" in text
+    assert "Manual boundary: decide_sink_apply" in text
     assert "Observed: writes=0 network=0 private_sources=False live_sinks=False" in text
     assert "Safe actions executed: 7" in text
     assert "Manual actions skipped: 1" in text

@@ -2210,6 +2210,31 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed; index is up to date.
 
+### Slice 0009-A111 | 2026-06-15 | Drill Agent Readback
+
+Implemented:
+
+- Review/routing drill payloads now include `business-card-watchdog.review-routing-drill-agent-readback.v1`.
+- The agent readback summarizes pass/attention state, expected artifact checks, safe executed/skipped action counts, manual boundary, zero write/network counters, and no-private/no-live flags.
+- Non-JSON drill output now shows agent readback state and the next manual boundary.
+- Service, CLI, API, and MCP coverage now assert the agent readback contract.
+
+Safety:
+
+- This was synthetic drill readback hardening only.
+- It did not process configured/private SyncThing inputs, run public-web search, call paid enrichment, validate a real operator response, create or modify `selected_live_target.json`, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_review_routing_drill_exercises_safe_fixture_route tests/test_cli_surfaces.py::test_cli_review_routing_drill_outputs_fixture_artifact tests/test_api.py::test_api_review_routing_drill_outputs_fixture_artifact tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 4 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 229 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

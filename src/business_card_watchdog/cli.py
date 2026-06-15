@@ -114,6 +114,7 @@ def _render_watch_dry_run_text(payload: dict[str, object]) -> str:
 def _render_review_routing_drill_text(payload: dict[str, object]) -> str:
     review = dict(payload.get("review") or {})
     safe_actions = dict(payload.get("safe_actions") or {})
+    readback = dict(payload.get("agent_loop_readback") or {})
     sink_context = dict(payload.get("fixture_sink_context") or {})
     commands = dict(payload.get("commands") or {})
     stop_conditions = payload.get("explicit_stop_conditions") or []
@@ -132,6 +133,8 @@ def _render_review_routing_drill_text(payload: dict[str, object]) -> str:
         f"odollo={sink_context.get('odollo_tenant') or 'none'} "
         f"dry_run={sink_context.get('dry_run', True)}",
         f"Review: {review.get('initial_state') or 'unknown'} -> {review.get('final_state') or 'unknown'}",
+        f"Agent readback: {readback.get('state') or 'unknown'}",
+        f"Manual boundary: {readback.get('next_manual_boundary') or 'none'}",
         "Observed: "
         f"writes={payload.get('writes_attempted', 0)} "
         f"network={payload.get('network_calls_made', 0)} "

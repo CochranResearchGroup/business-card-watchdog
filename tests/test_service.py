@@ -893,6 +893,16 @@ def test_service_review_routing_drill_exercises_safe_fixture_route(tmp_path: Pat
     assert payload["network_calls_made"] == 0
     assert payload["configured_fixture_sinks"] == ["google_contacts", "odoo"]
     assert payload["review"]["final_state"] == "ready_to_route"
+    assert payload["agent_loop_readback"]["schema"] == (
+        "business-card-watchdog.review-routing-drill-agent-readback.v1"
+    )
+    assert payload["agent_loop_readback"]["state"] == "passed"
+    assert payload["agent_loop_readback"]["next_manual_boundary"] == "decide_sink_apply"
+    assert payload["agent_loop_readback"]["expected_manual_boundary"] == "decide_sink_apply"
+    assert payload["agent_loop_readback"]["safe_action_counts"] == {"executed": 7, "skipped": 1}
+    assert all(check["exists"] for check in payload["agent_loop_readback"]["artifact_checks"])
+    assert payload["agent_loop_readback"]["writes_attempted"] == 0
+    assert payload["agent_loop_readback"]["network_calls_made"] == 0
     assert payload["safe_actions"]["executed_actions"] == [
         "plan_sink_lookup",
         "prepare_sink_lookup_adapter",
