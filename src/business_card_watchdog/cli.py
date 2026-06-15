@@ -332,6 +332,11 @@ def _render_live_pilot_operator_response_validation_text(payload: dict[str, obje
         for item in sequence:
             if isinstance(item, dict):
                 lines.append(f" - {item.get('step')}: {item.get('command')}")
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    stops = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stops)}")
+    for condition in stops:
+        lines.append(f" - {condition}")
     return "\n".join(lines) + "\n"
 
 

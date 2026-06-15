@@ -774,6 +774,9 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
         f" - lookup_smoke_handoff: sinks lookup-smoke-handoff {job_id} "
         f"--run-id {run_id} --sink google_contacts --approved-by tester --json"
     ) in validation_text
+    assert "Stop conditions: 4" in validation_text
+    assert "do not run select_target again" in validation_text
+    assert "Review the selected-target audit and lookup-smoke handoff" in validation_text
     assert "{" not in validation_text
 
     wrong_operator_response = (
