@@ -249,6 +249,12 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     )
     assert live_handoff["entries"][0]["pilot_command_checklist_summary"]["step_count"] == 5
     assert live_handoff["entries"][0]["pilot_command_checklist_summary"]["live_call_count"] == 1
+    api_sequence = live_handoff["entries"][0]["pilot_command_sequence"]
+    assert api_sequence["safe_inspection_step_count"] == 3
+    assert api_sequence["explicit_operator_step_count"] == 2
+    assert api_sequence["live_call_step_count"] == 1
+    assert api_sequence["sink_write_step_count"] == 0
+    assert api_sequence["execution_policy"]["do_not_run_live_or_sink_write_from_handoff"] is True
     assert live_handoff["operator_response_templates"][0]["validation_command"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )

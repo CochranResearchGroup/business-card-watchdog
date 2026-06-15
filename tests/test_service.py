@@ -2697,6 +2697,24 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
         "lookup_smoke_handoff",
         "live_lookup_pilot",
     ]
+    status_sequence = live_status["entries"][0]["pilot_command_sequence"]
+    assert status_sequence["schema"] == "business-card-watchdog.pilot-command-sequence.v1"
+    assert status_sequence["safe_inspection_step_count"] == 3
+    assert status_sequence["explicit_operator_step_count"] == 2
+    assert status_sequence["live_call_step_count"] == 1
+    assert status_sequence["sink_write_step_count"] == 0
+    assert [row["step"] for row in status_sequence["safe_inspection_steps"]] == [
+        "validate_operator_response",
+        "selected_target_audit",
+        "lookup_smoke_handoff",
+    ]
+    assert [row["step"] for row in status_sequence["explicit_operator_steps"]] == [
+        "create_selected_target",
+        "live_lookup_pilot",
+    ]
+    assert status_sequence["next_safe_inspection_step"]["step"] == "validate_operator_response"
+    assert status_sequence["next_explicit_operator_step"]["step"] == "create_selected_target"
+    assert status_sequence["execution_policy"]["do_not_run_live_or_sink_write_from_handoff"] is True
     assert Path(live_status["status_path"]).exists()
 
     handoff = service.live_pilot_handoff(run_id=run_id)
@@ -2716,6 +2734,9 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert handoff["entries"][0]["pilot_command_checklist_summary"]["step_count"] == 5
     assert handoff["entries"][0]["pilot_command_checklist_summary"]["live_call_count"] == 1
     assert handoff["entries"][0]["pilot_command_checklist_summary"]["sink_write_step_count"] == 0
+    assert handoff["entries"][0]["pilot_command_sequence"]["live_call_step_count"] == 1
+    assert handoff["entries"][0]["pilot_command_sequence"]["sink_write_step_count"] == 0
+    assert handoff["entries"][0]["pilot_command_sequence"]["live_call_steps"][0]["step"] == "live_lookup_pilot"
     assert handoff["operator_response_template_count"] == 1
     assert handoff["operator_response_templates"][0]["schema"] == (
         "business-card-watchdog.operator-response-template.v1"

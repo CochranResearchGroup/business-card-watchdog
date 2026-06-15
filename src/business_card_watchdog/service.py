@@ -5929,6 +5929,7 @@ class BusinessCardService:
                     state=str(packet.get("state") or "ready_for_operator_approval"),
                 )
             pilot_command_checklist_summary = _pilot_command_checklist_summary(pilot_command_checklist)
+            pilot_command_sequence = _pilot_command_sequence(pilot_command_checklist)
             copyable_approval_fields = {
                 "run_id": run_id,
                 "job_id": job_id,
@@ -5975,6 +5976,7 @@ class BusinessCardService:
                     "selected_target_operator": selected_target.get("operator") or selected_target.get("approved_by"),
                     "selection_packet_state": packet.get("state"),
                     "pilot_command_checklist_summary": pilot_command_checklist_summary,
+                    "pilot_command_sequence": pilot_command_sequence,
                     "selected_target_audit_state": selected_target_audit.get("state"),
                     "selected_target_audit_blockers": selected_target_audit_blockers,
                     "lookup_smoke_state": (artifacts["selected_lookup_smoke"] or {}).get("state"),
@@ -6170,6 +6172,7 @@ class BusinessCardService:
                     "selected_target_scope": entry.get("selected_target_scope"),
                     "selection_packet_state": entry.get("selection_packet_state"),
                     "pilot_command_checklist_summary": entry.get("pilot_command_checklist_summary"),
+                    "pilot_command_sequence": entry.get("pilot_command_sequence"),
                     "selected_target_audit_state": entry.get("selected_target_audit_state"),
                     "selected_target_audit_blockers": entry.get("selected_target_audit_blockers", []),
                     "lookup_smoke_state": entry.get("lookup_smoke_state"),
@@ -8379,6 +8382,54 @@ def _pilot_command_checklist_summary(checklist: list[Any]) -> dict[str, Any]:
             }
             for row in rows[:8]
         ],
+    }
+
+
+def _pilot_command_sequence(checklist: list[Any]) -> dict[str, Any]:
+    rows = [row for row in checklist if isinstance(row, dict)]
+
+    def format_step(row: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "step": row.get("step"),
+            "command": row.get("command"),
+            "enabled_for_scope": bool(row.get("enabled_for_scope", True)),
+            "requires_explicit_operator_action": bool(row.get("requires_explicit_operator_action", False)),
+            "writes_runtime_artifact": bool(row.get("writes_runtime_artifact", False)),
+            "live_call": bool(row.get("live_call", False)),
+            "writes_sink": bool(row.get("writes_sink", False)),
+            "stop_condition": row.get("stop_condition"),
+        }
+
+    enabled_rows = [row for row in rows if row.get("enabled_for_scope", True)]
+    safe_inspection_steps = [
+        format_step(row)
+        for row in enabled_rows
+        if not row.get("requires_explicit_operator_action") and not row.get("live_call") and not row.get("writes_sink")
+    ]
+    explicit_operator_steps = [format_step(row) for row in enabled_rows if row.get("requires_explicit_operator_action")]
+    live_call_steps = [format_step(row) for row in enabled_rows if row.get("live_call")]
+    sink_write_steps = [format_step(row) for row in enabled_rows if row.get("writes_sink")]
+    return {
+        "schema": "business-card-watchdog.pilot-command-sequence.v1",
+        "step_count": len(rows),
+        "enabled_step_count": len(enabled_rows),
+        "safe_inspection_step_count": len(safe_inspection_steps),
+        "explicit_operator_step_count": len(explicit_operator_steps),
+        "live_call_step_count": len(live_call_steps),
+        "sink_write_step_count": len(sink_write_steps),
+        "safe_inspection_steps": safe_inspection_steps[:8],
+        "explicit_operator_steps": explicit_operator_steps[:8],
+        "live_call_steps": live_call_steps[:8],
+        "sink_write_steps": sink_write_steps[:8],
+        "next_safe_inspection_step": safe_inspection_steps[0] if safe_inspection_steps else None,
+        "next_explicit_operator_step": explicit_operator_steps[0] if explicit_operator_steps else None,
+        "execution_policy": {
+            "auto_execute_safe_inspection_steps_only": True,
+            "requires_operator_before_explicit_steps": True,
+            "requires_operator_before_live_call_steps": True,
+            "requires_operator_before_sink_write_steps": True,
+            "do_not_run_live_or_sink_write_from_handoff": True,
+        },
     }
 
 

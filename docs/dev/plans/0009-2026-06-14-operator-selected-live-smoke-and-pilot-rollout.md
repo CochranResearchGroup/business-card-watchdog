@@ -2210,6 +2210,33 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed; index is up to date.
 
+### Slice 0009-A117 | 2026-06-15 | Handoff Command Sequence Groups
+
+Implemented:
+
+- Added `business-card-watchdog.pilot-command-sequence.v1`.
+- Live pilot status entries now split the ordered pilot checklist into safe-inspection, explicit-operator, live-call, and sink-write step groups.
+- Live pilot handoff entries carry the same sequence groups so subagents can inspect safe runtime handoff steps while stopping before explicit live/operator steps.
+- The sequence payload includes next safe and next explicit steps plus an execution policy that forbids running live or sink-write commands from the handoff.
+- Service, CLI, API, and MCP coverage now assert lookup-scope and all-scope sequence grouping.
+
+Safety:
+
+- This slice is status/handoff sequencing metadata only.
+- It does not create or modify `selected_live_target.json` and does not execute lookup, write, or readback pilots.
+- It does not process configured/private SyncThing inputs, run public-web search, call paid enrichment, validate a real operator response, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 4 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 231 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
 ### Slice 0009-A116 | 2026-06-15 | Dashboard Checklist Rollup
 
 Implemented:

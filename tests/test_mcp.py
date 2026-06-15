@@ -670,6 +670,13 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert live_handoff["entries"][0]["pilot_command_checklist_summary"]["step_count"] == 8
     assert live_handoff["entries"][0]["pilot_command_checklist_summary"]["live_call_count"] == 3
     assert live_handoff["entries"][0]["pilot_command_checklist_summary"]["sink_write_step_count"] == 1
+    mcp_sequence = live_handoff["entries"][0]["pilot_command_sequence"]
+    assert mcp_sequence["safe_inspection_step_count"] == 4
+    assert mcp_sequence["explicit_operator_step_count"] == 4
+    assert mcp_sequence["live_call_step_count"] == 3
+    assert mcp_sequence["sink_write_step_count"] == 1
+    assert mcp_sequence["sink_write_steps"][0]["step"] == "live_write_pilot"
+    assert mcp_sequence["execution_policy"]["requires_operator_before_sink_write_steps"] is True
     assert live_handoff["operator_response_template_count"] == 1
     assert live_handoff["operator_response_templates"][0]["schema"] == (
         "business-card-watchdog.operator-response-template.v1"

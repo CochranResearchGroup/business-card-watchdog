@@ -773,6 +773,16 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
     )
     assert handoff["entries"][0]["pilot_command_checklist_summary"]["step_count"] == 5
     assert handoff["entries"][0]["pilot_command_checklist_summary"]["live_call_count"] == 1
+    sequence = handoff["entries"][0]["pilot_command_sequence"]
+    assert sequence["schema"] == "business-card-watchdog.pilot-command-sequence.v1"
+    assert sequence["safe_inspection_step_count"] == 3
+    assert sequence["explicit_operator_step_count"] == 2
+    assert sequence["live_call_step_count"] == 1
+    assert sequence["sink_write_step_count"] == 0
+    assert sequence["safe_inspection_steps"][0]["step"] == "validate_operator_response"
+    assert sequence["explicit_operator_steps"][0]["step"] == "create_selected_target"
+    assert sequence["live_call_steps"][0]["step"] == "live_lookup_pilot"
+    assert sequence["execution_policy"]["requires_operator_before_live_call_steps"] is True
     assert handoff["operator_response_template_count"] == 1
     assert handoff["operator_response_templates"][0]["template"] == (
         f"run_id={run_id} job_id={job_id} sink=google_contacts "
