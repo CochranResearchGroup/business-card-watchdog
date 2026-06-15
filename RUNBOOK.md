@@ -2627,3 +2627,22 @@ Validation:
 Safety:
 
 - This was command-link/readback hardening only. It did not create `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+## Turn 135 | 2026-06-14
+
+Continued Plan 0009 with Slice 0009-A59.
+
+Implemented:
+
+- Phase reports now expose run-level commands for report refresh, pilot readiness, review bundle, review workbook, safe next actions, and live pilot handoff.
+- Pilot-readiness reports now expose the same run-level commands.
+- CLI text for phase reports and pilot-readiness reports now renders the live pilot handoff command.
+- Service, CLI, API, and MCP tests protect handoff-command visibility from run-level progress reports.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_run_summary_and_review_queue tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 4 tests.
+
+Safety:
+
+- This was command-link/readback hardening only. It did not create `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.

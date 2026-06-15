@@ -430,6 +430,14 @@ class BusinessCardService:
             ),
             "phases": phase_list,
             "jobs": job_rows,
+            "commands": {
+                "phase_report": f"runs phase-report {run_id}",
+                "pilot_readiness": f"runs pilot-readiness {run_id}",
+                "review_bundle": f"reviews bundle --run-id {run_id} --state all",
+                "review_workbook": f"reviews workbook --run-id {run_id} --state all",
+                "run_next_safe": f"actions run-next --run-id {run_id}",
+                "live_pilot_handoff": f"runs live-pilot-handoff {run_id}",
+            },
             "writes_attempted": 0,
             "network_calls_made": 0,
         }
@@ -570,6 +578,14 @@ class BusinessCardService:
             "next_actions": next_actions["actions"],
             "stop_rules": phase_report["stop_rules"],
             "jobs": jobs,
+            "commands": {
+                "phase_report": f"runs phase-report {run_id}",
+                "pilot_readiness": f"runs pilot-readiness {run_id}",
+                "review_bundle": f"reviews bundle --run-id {run_id} --state all",
+                "review_workbook": f"reviews workbook --run-id {run_id} --state all",
+                "run_next_safe": f"actions run-next --run-id {run_id}",
+                "live_pilot_handoff": f"runs live-pilot-handoff {run_id}",
+            },
             "writes_attempted": 0,
             "network_calls_made": 0,
         }

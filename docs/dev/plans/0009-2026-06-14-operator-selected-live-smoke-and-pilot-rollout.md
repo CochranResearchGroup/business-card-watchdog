@@ -1029,6 +1029,24 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_service.py::test_service_run_summary_and_review_queue tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 3 tests.
 
+### Slice 0009-A59 | 2026-06-14 | Phase Reports Handoff Link
+
+Implemented:
+
+- Phase reports now include run-level commands for phase report refresh, pilot readiness, review bundle, review workbook, safe next actions, and live pilot handoff.
+- Pilot-readiness reports now expose the same run-level command set.
+- CLI text renderers now show the live pilot handoff command for phase and pilot-readiness reports.
+- Service, CLI, API, and MCP tests protect handoff-command visibility from progress-report surfaces.
+
+Safety:
+
+- This slice adds command links only.
+- It does not create `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_run_summary_and_review_queue tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 4 tests.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:

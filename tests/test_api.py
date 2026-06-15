@@ -173,11 +173,13 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert phase_report["review_workbook_preview"]["state"] == "not_started"
     assert phase_report["dashboard_summary"]["schema"] == "business-card-watchdog.phase-dashboard-summary.v1"
     assert phase_report["dashboard_summary"]["blocked_phases"] == [{"phase": "review", "count": 1}]
+    assert phase_report["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id}"
     assert phase_report["phases"][2]["phase"] == "review"
     assert phase_report["phases"][2]["counts"]["blocked"] == 1
     readiness_report = client.get(f"/runs/{run_id}/pilot-readiness").json()
     assert readiness_report["schema"] == "business-card-watchdog.pilot-readiness-report.v1"
     assert readiness_report["state"] == "explicit_operator_required"
+    assert readiness_report["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id}"
     assert readiness_report["blocked_job_ids"] == [job_id]
     assert client.get(f"/runs/{run_id}/jobs").json()[0]["job_id"] == job_id
     assert client.get(f"/jobs/{job_id}", params={"run_id": run_id}).json()["job_id"] == job_id

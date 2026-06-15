@@ -370,10 +370,12 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert phase_report["review_workbook_preview"]["state"] == "not_started"
     assert phase_report["dashboard_summary"]["schema"] == "business-card-watchdog.phase-dashboard-summary.v1"
     assert phase_report["dashboard_summary"]["blocked_phases"] == [{"phase": "review", "count": 1}]
+    assert phase_report["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id}"
     assert phase_report["phases"][2]["phase"] == "review"
     assert phase_report["phases"][2]["counts"]["blocked"] == 1
     assert readiness_report["schema"] == "business-card-watchdog.pilot-readiness-report.v1"
     assert readiness_report["blocked_job_ids"] == [job_id]
+    assert readiness_report["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id}"
     assert runtime_readiness["schema"] == "business-card-watchdog.runtime-readiness.v1"
     assert runtime_readiness["network_calls_made"] == 0
     assert service_recovery["schema"] == "business-card-watchdog.service-recovery.v1"

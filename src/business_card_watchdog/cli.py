@@ -16,12 +16,14 @@ from .watcher import PollingWatcher
 def _render_phase_report_text(payload: dict[str, object]) -> str:
     dashboard = dict(payload.get("dashboard_summary") or {})
     preview = dict(payload.get("review_workbook_preview") or {})
+    commands = dict(payload.get("commands") or {})
     lines = [
         f"Run: {payload.get('run_id')}",
         f"State: {payload.get('run_state')}",
         f"Jobs: {payload.get('job_count')}",
         f"Status: {dashboard.get('status_line') or 'unknown'}",
         f"Review workbook preview: {preview.get('state') or dashboard.get('review_workbook_preview_state') or 'unknown'}",
+        f"Live pilot handoff: {commands.get('live_pilot_handoff')}",
     ]
     phase_groups = [
         ("Blocked phases", dashboard.get("blocked_phases")),
@@ -41,6 +43,7 @@ def _render_phase_report_text(payload: dict[str, object]) -> str:
 
 def _render_pilot_readiness_report_text(payload: dict[str, object]) -> str:
     counts = dict(payload.get("counts") or {})
+    commands = dict(payload.get("commands") or {})
     lines = [
         f"Run: {payload.get('run_id')}",
         f"State: {payload.get('state')}",
@@ -55,6 +58,7 @@ def _render_pilot_readiness_report_text(payload: dict[str, object]) -> str:
         f"write_complete={counts.get('write_pilot_complete', 0)} "
         f"readback_complete={counts.get('readback_complete', 0)} "
         f"pilot_report_complete={counts.get('pilot_report_complete', 0)}",
+        f"Live pilot handoff: {commands.get('live_pilot_handoff')}",
     ]
     return "\n".join(lines) + "\n"
 

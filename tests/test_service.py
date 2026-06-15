@@ -378,6 +378,8 @@ def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
     assert phase_report["dashboard_summary"]["review_workbook_preview_state"] == "not_started"
     assert phase_report["dashboard_summary"]["blocked_phases"] == [{"phase": "review", "count": 1}]
     assert phase_report["dashboard_summary"]["explicit_required_phase_count"] == 0
+    assert phase_report["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id}"
+    assert phase_report["commands"]["review_bundle"] == f"reviews bundle --run-id {run_id} --state all"
     assert phase_report["phases"][2]["phase"] == "review"
     assert phase_report["phases"][2]["counts"]["blocked"] == 1
     assert phase_report["jobs"][0]["phase_states"]["review"] == "blocked"
@@ -400,6 +402,8 @@ def test_service_run_summary_and_review_queue(tmp_path: Path) -> None:
     assert readiness_report["jobs"][0]["review_matrix"]["contact_source"] == "missing"
     assert readiness_report["writes_attempted"] == 0
     assert readiness_report["network_calls_made"] == 0
+    assert readiness_report["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id}"
+    assert readiness_report["commands"]["phase_report"] == f"runs phase-report {run_id}"
     assert queue[0]["job_id"] == job_id
     assert queue[0]["artifact_kinds"] == ["contact_spec"]
     assert queue[0]["next_action"]["action"] == "review_contact"
