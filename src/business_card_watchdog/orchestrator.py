@@ -12,6 +12,7 @@ from .fanout import (
     build_child_verification_request_manifest,
     build_synthetic_child_verification_result_manifest,
     materialize_candidate_crops,
+    promote_child_verification_results,
 )
 from .ledger import RunLedger
 from .models import CardJob, utc_now
@@ -176,6 +177,27 @@ class BatchOrchestrator:
                         "job": job.to_dict(),
                         "verification_result_manifest": verification_result_manifest,
                     },
+                )
+                child_promotion_manifest, work_item_manifest = promote_child_verification_results(
+                    result_manifest=verification_result_manifest,
+                    work_item_manifest=work_item_manifest,
+                    promotion_dir=artifact_dir / "child_contact_candidates",
+                    default_country=self.config.normalization.default_country,
+                )
+                child_promotion_manifest_path = artifact_dir / "child_contact_promotions.json"
+                child_promotion_manifest_path.write_text(
+                    json.dumps(child_promotion_manifest, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+                ledger.record_artifact(
+                    job_id=job.job_id,
+                    kind="child_contact_promotions",
+                    path=child_promotion_manifest_path,
+                    metadata={"promotion_count": child_promotion_manifest["promotion_count"]},
+                )
+                ledger.record_event(
+                    "child_contact_promotions_recorded",
+                    {"job": job.to_dict(), "child_promotion_manifest": child_promotion_manifest},
                 )
                 work_item_manifest_path = artifact_dir / "candidate_work_items.json"
                 work_item_manifest_path.write_text(

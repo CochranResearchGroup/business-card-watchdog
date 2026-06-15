@@ -4791,3 +4791,32 @@ Validation:
 Safety:
 
 - This created synthetic offline result artifacts only. It did not process private SyncThing images, execute production OCR/App Intelligence, promote child contacts, route, enrich, write sinks, execute command-copy text, run public-web search, call paid APIs, or call GWS/Odollo/Odoo.
+
+## Turn 222 | 2026-06-15
+
+Executed Plan 0016 with Slice 0016-A.
+
+Implemented:
+
+- Added `business-card-watchdog.child-contact-promotions.v1`.
+- Added child result promotion into normalized `business-card-watchdog.contact-candidate.v1` artifacts.
+- Wired batch orchestration to persist `child_contact_promotions.json` and child contact candidate files.
+- Updated `candidate_work_items.json` so child items move to `child_contact_candidate_ready` and `awaiting_child_contact_review`.
+- Recorded `child_contact_promotions` ledger artifacts and `child_contact_promotions_recorded` events.
+- Updated synthetic multi-card dry-run coverage to verify lineage, review state, normalized email, and route/enrichment/write denial flags.
+- Updated README and roadmap documentation for review-pending child contact promotion.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_preclassifier.py::test_orchestrator_records_multi_card_candidate_manifest -q` passed with 1 test.
+- `.venv/bin/ruff check src/business_card_watchdog/fanout.py src/business_card_watchdog/orchestrator.py tests/test_preclassifier.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 239 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This created review-pending child contact candidates only. It did not process private SyncThing images, execute production OCR/App Intelligence, auto-route contacts, execute command-copy text, run public-web search, call paid APIs, or call GWS/Odollo/Odoo.

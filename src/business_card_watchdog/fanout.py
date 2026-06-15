@@ -10,6 +10,7 @@ CANDIDATE_WORK_ITEMS_SCHEMA = "business-card-watchdog.card-candidate-work-items.
 CANDIDATE_CROPS_SCHEMA = "business-card-watchdog.card-candidate-crops.v1"
 CHILD_VERIFICATION_REQUESTS_SCHEMA = "business-card-watchdog.child-verification-requests.v1"
 CHILD_VERIFICATION_RESULTS_SCHEMA = "business-card-watchdog.child-verification-results.v1"
+CHILD_CONTACT_PROMOTIONS_SCHEMA = "business-card-watchdog.child-contact-promotions.v1"
 
 
 def build_candidate_work_item_manifest(candidate_manifest: dict[str, Any]) -> dict[str, Any]:
@@ -278,6 +279,90 @@ def build_synthetic_child_verification_result_manifest(
             "explicit_stop_conditions": [
                 "Synthetic child verification results are not production OCR/App Intelligence output.",
                 "Do not route, enrich, or write contacts until child results are reviewed and promoted.",
+            ],
+        },
+        updated_manifest,
+    )
+
+
+def promote_child_verification_results(
+    *,
+    result_manifest: dict[str, Any],
+    work_item_manifest: dict[str, Any],
+    promotion_dir: Path,
+    default_country: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    from .contact import build_contact_candidate
+
+    promotion_dir.mkdir(parents=True, exist_ok=True)
+    updated_manifest = deepcopy(work_item_manifest)
+    work_items_by_id = {
+        str(item["work_item_id"]): item
+        for item in updated_manifest["work_items"]
+        if isinstance(item, dict)
+    }
+    promotions: list[dict[str, Any]] = []
+    for result_record in result_manifest.get("results", []):
+        if not isinstance(result_record, dict):
+            continue
+        work_item = work_items_by_id.get(str(result_record["work_item_id"]))
+        if work_item is None:
+            continue
+        result_path = Path(str(result_record["result_path"]))
+        result_detail = json.loads(result_path.read_text(encoding="utf-8"))
+        candidate = build_contact_candidate(
+            dict(result_detail.get("contact_spec") or {}),
+            source="child_verification_result",
+            default_country=default_country,
+        )
+        candidate["lineage"] = {
+            "parent_job_id": result_detail["parent_job_id"],
+            "candidate_id": result_detail["candidate_id"],
+            "work_item_id": result_detail["work_item_id"],
+            "request_id": result_detail["request_id"],
+            "verification_result_path": str(result_path),
+            "crop_path": result_detail["crop_path"],
+        }
+        candidate["review"] = {
+            "state": "needs_review",
+            "reason": "child verification result requires operator review before routing",
+        }
+        candidate["routing_allowed"] = False
+        candidate["enrichment_allowed"] = False
+        candidate["sink_write_allowed"] = False
+        candidate_path = promotion_dir / f"{result_detail['candidate_id']}-contact-candidate.json"
+        candidate_path.write_text(
+            json.dumps(candidate, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        promotion = {
+            "candidate_id": result_detail["candidate_id"],
+            "work_item_id": result_detail["work_item_id"],
+            "parent_job_id": result_detail["parent_job_id"],
+            "verification_result_path": str(result_path),
+            "contact_candidate_path": str(candidate_path),
+            "state": "needs_review",
+            "routing_allowed": False,
+            "enrichment_allowed": False,
+            "sink_write_allowed": False,
+        }
+        promotions.append(promotion)
+        work_item["state"] = "child_contact_candidate_ready"
+        work_item["phase"] = "awaiting_child_contact_review"
+        work_item["child_contact_candidate_path"] = str(candidate_path)
+        work_item["requires_review"] = True
+
+    updated_manifest["child_contact_candidate_ready_count"] = len(promotions)
+    return (
+        {
+            "schema": CHILD_CONTACT_PROMOTIONS_SCHEMA,
+            "parent_job_id": result_manifest["parent_job_id"],
+            "source_image_path": result_manifest["source_image_path"],
+            "promotion_count": len(promotions),
+            "promotions": promotions,
+            "explicit_stop_conditions": [
+                "Child contact candidates require review before routing.",
+                "Do not enrich or write child contacts until reviewed and explicitly routed.",
             ],
         },
         updated_manifest,
