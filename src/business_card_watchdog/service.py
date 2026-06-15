@@ -628,6 +628,11 @@ class BusinessCardService:
                     if selected_run_id
                     else "runs list --json"
                 ),
+                "selected_live_target_preview": (
+                    f"runs selected-live-target-preview {selected_run_id} --response <operator-response> --json"
+                    if selected_run_id
+                    else "runs list --json"
+                ),
                 "mcp_manifest": "mcp-manifest",
             },
             "api_routes": {
@@ -667,6 +672,11 @@ class BusinessCardService:
                     f"POST /runs/{selected_run_id}/selected-live-target-preflight"
                     if selected_run_id
                     else "POST /runs/{run_id}/selected-live-target-preflight"
+                ),
+                "selected_live_target_preview": (
+                    f"POST /runs/{selected_run_id}/selected-live-target-preview"
+                    if selected_run_id
+                    else "POST /runs/{run_id}/selected-live-target-preview"
                 ),
             },
             "mcp_tools": {
@@ -714,6 +724,12 @@ class BusinessCardService:
                 },
                 "selected_live_target_preflight": {
                     "tool": "business_card_watchdog_selected_live_target_preflight",
+                    "arguments": {"run_id": selected_run_id, "response": "<operator-response>"}
+                    if selected_run_id
+                    else {"run_id": "<run-id>", "response": "<operator-response>"},
+                },
+                "selected_live_target_preview": {
+                    "tool": "business_card_watchdog_selected_live_target_artifact_preview",
                     "arguments": {"run_id": selected_run_id, "response": "<operator-response>"}
                     if selected_run_id
                     else {"run_id": "<run-id>", "response": "<operator-response>"},
@@ -6412,6 +6428,131 @@ class BusinessCardService:
                 "This preflight does not create selected_live_target.json.",
                 "Run the select_target command only after confirming tenant/profile/account safety.",
                 "Do not run live lookup, live write, or live readback from this preflight.",
+            ],
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+
+    def selected_live_target_artifact_preview(self, *, run_id: str, response: str) -> dict[str, Any]:
+        preflight = self.selected_live_target_preflight(run_id=run_id, response=response)
+        parsed = dict((preflight.get("approval_readback") or {}).get("parsed_fields") or {})
+        artifact_preview = None
+        artifact_path = None
+        if preflight.get("state") == "ready_to_create_selected_target":
+            job_id = str(parsed.get("job_id") or "")
+            sink = str(parsed.get("sink") or "")
+            operator = str(parsed.get("operator") or "")
+            scope = str(parsed.get("scope") or "")
+            validation = self.validate_live_pilot_operator_response(run_id=run_id, response=response)
+            safety_confirmation = str((validation.get("parsed_response") or {}).get("safety_confirmation") or "")
+            job = self.get_job(job_id, run_id=run_id)
+            artifact_dir = (
+                Path(job["artifact_dir"])
+                if job.get("artifact_dir")
+                else self.config.runs_dir / run_id / "artifacts" / job_id
+            )
+            artifact_path = str(artifact_dir / "selected_live_target.json")
+            lookup_readiness = (
+                self.live_lookup_readiness_report(job_id=job_id, run_id=run_id, sink=sink)
+                if scope in {"lookup", "all"}
+                else None
+            )
+            apply_readiness = (
+                self.build_sink_apply_pilot_readiness_for_job(
+                    job_id=job_id,
+                    run_id=run_id,
+                    sink=sink,
+                )["readiness"]
+                if scope in {"write", "readback", "all"}
+                else None
+            )
+            missing_requirements = []
+            if lookup_readiness is not None:
+                missing_requirements.extend(
+                    f"lookup:{name}" for name in list(lookup_readiness.get("missing_requirements") or [])
+                )
+            if apply_readiness is not None:
+                missing_requirements.extend(
+                    f"apply:{name}" for name in list(apply_readiness.get("missing_requirements") or [])
+                )
+            artifact_preview = {
+                "schema": "business-card-watchdog.selected-live-target.v1",
+                "state": "selected",
+                "status": "selected",
+                "reason": "operator selected this exact run/job/sink/scope for explicit live pilot commands",
+                "run_id": run_id,
+                "job_id": job_id,
+                "sink": sink,
+                "operator": operator,
+                "approved_by": operator,
+                "scope": scope,
+                "selection_id": "<generated-on-write>",
+                "target_safety_confirmed": True,
+                "target_safety_confirmation": safety_confirmation,
+                "scope_allows": {
+                    "lookup": scope in {"lookup", "all"},
+                    "write": scope in {"write", "all"},
+                    "readback": scope in {"readback", "all"},
+                },
+                "created_at": "<generated-on-write>",
+                "job_state": job.get("state"),
+                "readiness": {
+                    "lookup": lookup_readiness,
+                    "apply": apply_readiness,
+                },
+                "missing_requirements": missing_requirements,
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+                "commands": {
+                    "lookup_pilot": (
+                        f"sinks lookup-pilot {job_id} --run-id {run_id} --sink {sink} "
+                        f"--approved-by {operator} --no-simulate"
+                    ),
+                    "write_pilot": (
+                        f"sinks write-pilot {job_id} --run-id {run_id} --sink {sink} "
+                        f"--approved-by {operator} --no-simulate"
+                    ),
+                    "readback_pilot": (
+                        f"sinks readback-pilot {job_id} --run-id {run_id} --sink {sink} "
+                        f"--approved-by {operator} --no-simulate"
+                    ),
+                },
+                "stop_conditions": [
+                    "the live command names a different run, job, sink, operator, or scope",
+                    "readiness artifacts are stale or reference a different sink",
+                    "operator did not explicitly request the non-simulated command after this record was created",
+                    "operator did not confirm the selected card/contact is safe for the target tenant/profile",
+                    "public-web search, paid enrichment, or duplicate merge decisions would be needed first",
+                ],
+                "operator_note": (
+                    "This is durable selected-target approval evidence. It is not a command execution; "
+                    "the operator must still explicitly run the non-simulated pilot command."
+                ),
+            }
+        return {
+            "schema": "business-card-watchdog.selected-live-target-artifact-preview.v1",
+            "generated_at": utc_now(),
+            "state": "ready" if artifact_preview else "blocked",
+            "run_id": run_id,
+            "job_id": preflight.get("job_id"),
+            "preflight_state": preflight.get("state"),
+            "would_write_path": artifact_path,
+            "artifact_preview": artifact_preview,
+            "volatile_fields": ["selection_id", "created_at"] if artifact_preview else [],
+            "blocked_reasons": preflight.get("blocked_reasons") or [],
+            "would_create_selected_live_target": bool(artifact_preview),
+            "creates_selected_live_target": False,
+            "commands": {
+                "preflight": (
+                    f"runs selected-live-target-preflight {shlex.quote(run_id)} "
+                    f"--response {shlex.quote(response)} --json"
+                ),
+                "select_target": preflight.get("select_target_command"),
+            },
+            "explicit_stop_conditions": [
+                "This preview does not create selected_live_target.json.",
+                "Volatile fields are generated only if the operator explicitly runs select_target.",
+                "Do not run live lookup, live write, or live readback from this preview.",
             ],
             "writes_attempted": 0,
             "network_calls_made": 0,

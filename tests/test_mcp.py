@@ -33,6 +33,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_live_pilot_approval_packet" in names
     assert "business_card_watchdog_live_pilot_operator_response_validation" in names
     assert "business_card_watchdog_selected_live_target_preflight" in names
+    assert "business_card_watchdog_selected_live_target_artifact_preview" in names
     assert "business_card_watchdog_next_actions" in names
     assert "business_card_watchdog_run_next_actions" in names
     assert "business_card_watchdog_review_routing_drill" in names
@@ -280,6 +281,18 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
         },
         config=config,
     )
+    selected_target_preview = call_tool(
+        "business_card_watchdog_selected_live_target_artifact_preview",
+        {
+            "run_id": run_id,
+            "response": (
+                f"run_id={run_id} job_id={job_id} sink=google_contacts "
+                "operator=mcp-test scope=all "
+                "safety_confirmation=fixture contact is safe for google contacts test profile"
+            ),
+        },
+        config=config,
+    )
     abandonment = call_tool(
         "business_card_watchdog_live_pilot_abandonment",
         {
@@ -427,6 +440,9 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert operator_dashboard["commands"]["selected_live_target_preflight"] == (
         f"runs selected-live-target-preflight {run_id} --response <operator-response> --json"
     )
+    assert operator_dashboard["commands"]["selected_live_target_preview"] == (
+        f"runs selected-live-target-preview {run_id} --response <operator-response> --json"
+    )
     assert operator_dashboard["safe_next_actions"][3]["action"] == "inspect_live_pilot_status"
     assert operator_dashboard["safe_next_actions"][3]["command"] == (
         f"runs live-pilot-status {run_id} --no-write --json"
@@ -451,6 +467,10 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     }
     assert operator_dashboard["mcp_tools"]["selected_live_target_preflight"] == {
         "tool": "business_card_watchdog_selected_live_target_preflight",
+        "arguments": {"run_id": run_id, "response": "<operator-response>"},
+    }
+    assert operator_dashboard["mcp_tools"]["selected_live_target_preview"] == {
+        "tool": "business_card_watchdog_selected_live_target_artifact_preview",
         "arguments": {"run_id": run_id, "response": "<operator-response>"},
     }
     assert operator_dashboard["next_action_summary"]["by_action"] == {"review_contact": 1}
@@ -767,6 +787,14 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert "selected_live_target already exists" in selected_target_preflight["blocked_reasons"][0]
     assert selected_target_preflight["writes_attempted"] == 0
     assert selected_target_preflight["network_calls_made"] == 0
+    assert selected_target_preview["schema"] == "business-card-watchdog.selected-live-target-artifact-preview.v1"
+    assert selected_target_preview["state"] == "blocked"
+    assert selected_target_preview["artifact_preview"] is None
+    assert selected_target_preview["would_create_selected_live_target"] is False
+    assert selected_target_preview["creates_selected_live_target"] is False
+    assert "selected_live_target already exists" in selected_target_preview["blocked_reasons"][0]
+    assert selected_target_preview["writes_attempted"] == 0
+    assert selected_target_preview["network_calls_made"] == 0
     assert operator_response_validation["schema"] == (
         "business-card-watchdog.live-pilot-operator-response-validation.v1"
     )

@@ -2627,6 +2627,26 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert preselection_preflight["approval_readback"]["response_matches_template"] is True
     assert preselection_preflight["writes_attempted"] == 0
     assert preselection_preflight["network_calls_made"] == 0
+    preselection_preview = service.selected_live_target_artifact_preview(run_id=run_id, response=preselection_response)
+    assert preselection_preview["schema"] == "business-card-watchdog.selected-live-target-artifact-preview.v1"
+    assert preselection_preview["state"] == "ready"
+    assert preselection_preview["would_create_selected_live_target"] is True
+    assert preselection_preview["creates_selected_live_target"] is False
+    assert preselection_preview["would_write_path"].endswith(f"{job_id}/selected_live_target.json")
+    assert preselection_preview["volatile_fields"] == ["selection_id", "created_at"]
+    artifact_preview = preselection_preview["artifact_preview"]
+    assert artifact_preview["schema"] == "business-card-watchdog.selected-live-target.v1"
+    assert artifact_preview["selection_id"] == "<generated-on-write>"
+    assert artifact_preview["created_at"] == "<generated-on-write>"
+    assert artifact_preview["sink"] == "google_contacts"
+    assert artifact_preview["operator"] == "tester"
+    assert artifact_preview["target_safety_confirmed"] is True
+    assert artifact_preview["scope_allows"] == {"lookup": True, "write": False, "readback": False}
+    assert artifact_preview["writes_attempted"] == 0
+    assert artifact_preview["network_calls_made"] == 0
+    assert preselection_preview["writes_attempted"] == 0
+    assert preselection_preview["network_calls_made"] == 0
+    assert not (Path(preselection_preview["would_write_path"])).exists()
 
     target = service.select_live_target_for_job(
         job_id=job_id,
@@ -2901,6 +2921,14 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert "selected_live_target already exists" in selected_preflight["blocked_reasons"][0]
     assert selected_preflight["writes_attempted"] == 0
     assert selected_preflight["network_calls_made"] == 0
+    selected_preview = service.selected_live_target_artifact_preview(run_id=run_id, response=response)
+    assert selected_preview["state"] == "blocked"
+    assert selected_preview["artifact_preview"] is None
+    assert selected_preview["would_create_selected_live_target"] is False
+    assert selected_preview["creates_selected_live_target"] is False
+    assert "selected_live_target already exists" in selected_preview["blocked_reasons"][0]
+    assert selected_preview["writes_attempted"] == 0
+    assert selected_preview["network_calls_made"] == 0
     assert not (Path(target["target_path"]).parent / "selected_live_target_validation.json").exists()
 
     blocked_validation = service.validate_live_pilot_operator_response(

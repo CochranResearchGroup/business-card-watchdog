@@ -269,6 +269,13 @@ def create_app(config_path: Path | None = None):
     ) -> dict[str, object]:
         return service().selected_live_target_preflight(run_id=run_id, response=request.response)
 
+    @app.post("/runs/{run_id}/selected-live-target-preview")
+    def preview_run_selected_live_target(
+        run_id: str,
+        request: SelectedLiveTargetPreflightRequest,
+    ) -> dict[str, object]:
+        return service().selected_live_target_artifact_preview(run_id=run_id, response=request.response)
+
     @app.get("/runs/{run_id}/jobs")
     def list_run_jobs(run_id: str) -> list[dict[str, object]]:
         return service().list_jobs(run_id)

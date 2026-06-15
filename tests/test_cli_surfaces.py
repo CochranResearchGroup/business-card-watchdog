@@ -965,6 +965,53 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
                 "--config",
                 str(config_path),
                 "runs",
+                "selected-live-target-preview",
+                run_id,
+                "--response",
+                response,
+                "--json",
+            ]
+        )
+        == 0
+    )
+    preview = json.loads(capsys.readouterr().out)
+    assert preview["schema"] == "business-card-watchdog.selected-live-target-artifact-preview.v1"
+    assert preview["state"] == "blocked"
+    assert preview["artifact_preview"] is None
+    assert preview["would_create_selected_live_target"] is False
+    assert preview["creates_selected_live_target"] is False
+    assert "selected_live_target already exists" in preview["blocked_reasons"][0]
+    assert preview["writes_attempted"] == 0
+    assert preview["network_calls_made"] == 0
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "selected-live-target-preview",
+                run_id,
+                "--response",
+                response,
+            ]
+        )
+        == 0
+    )
+    preview_text = capsys.readouterr().out
+    assert "State: blocked" in preview_text
+    assert "Would create selected target: False" in preview_text
+    assert "Creates selected target: False" in preview_text
+    assert "selected_live_target already exists" in preview_text
+    assert "Stop conditions: 3" in preview_text
+    assert "{" not in preview_text
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
                 "live-pilot-validate-response",
                 run_id,
                 "--response",

@@ -189,6 +189,18 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_selected_live_target_artifact_preview",
+                "description": "Preview the selected_live_target.json artifact fields that would be written without creating it.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "response": {"type": "string"},
+                    },
+                    "required": ["run_id", "response"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_next_actions",
                 "description": "Return deterministic next actions for agent-loop batch orchestration.",
                 "input_schema": {
@@ -860,6 +872,11 @@ def call_tool(
         )
     if tool_name == "business_card_watchdog_selected_live_target_preflight":
         return service.selected_live_target_preflight(
+            run_id=str(args["run_id"]),
+            response=str(args["response"]),
+        )
+    if tool_name == "business_card_watchdog_selected_live_target_artifact_preview":
+        return service.selected_live_target_artifact_preview(
             run_id=str(args["run_id"]),
             response=str(args["response"]),
         )
