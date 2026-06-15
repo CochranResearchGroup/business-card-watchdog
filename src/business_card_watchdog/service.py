@@ -663,6 +663,12 @@ class BusinessCardService:
                     if selected_run_id
                     else "runs list --json"
                 ),
+                "selected_readback_pilot_execution_packet_from_response": (
+                    f"runs selected-readback-pilot-execution-packet-from-response {selected_run_id} "
+                    "--response <operator-response> --json"
+                    if selected_run_id
+                    else "runs list --json"
+                ),
                 "mcp_manifest": "mcp-manifest",
             },
             "api_routes": {
@@ -732,6 +738,11 @@ class BusinessCardService:
                     f"POST /runs/{selected_run_id}/selected-write-pilot-execution-packet-from-response"
                     if selected_run_id
                     else "POST /runs/{run_id}/selected-write-pilot-execution-packet-from-response"
+                ),
+                "selected_readback_pilot_execution_packet_from_response": (
+                    f"POST /runs/{selected_run_id}/selected-readback-pilot-execution-packet-from-response"
+                    if selected_run_id
+                    else "POST /runs/{run_id}/selected-readback-pilot-execution-packet-from-response"
                 ),
             },
             "mcp_tools": {
@@ -837,6 +848,20 @@ class BusinessCardService:
                         "run_id": "<run-id>",
                         "response": "<operator-response>",
                         "execute_write_pilot": False,
+                    },
+                },
+                "selected_readback_pilot_execution_packet_from_response": {
+                    "tool": "business_card_watchdog_selected_readback_pilot_execution_packet_from_response",
+                    "arguments": {
+                        "run_id": selected_run_id,
+                        "response": "<operator-response>",
+                        "execute_readback_pilot": False,
+                    }
+                    if selected_run_id
+                    else {
+                        "run_id": "<run-id>",
+                        "response": "<operator-response>",
+                        "execute_readback_pilot": False,
                     },
                 },
             },
@@ -7291,6 +7316,176 @@ class BusinessCardService:
             "explicit_stop_conditions": [
                 "Inspect write/readback evidence before closing the live pilot.",
                 "Do not run another write pilot for this job unless the prior write is reconciled.",
+            ],
+            "writes_attempted": int(pilot.get("writes_attempted") or 0),
+            "network_calls_made": int(pilot.get("network_calls_made") or 0),
+        }
+
+    def selected_readback_pilot_execution_packet_from_response(
+        self,
+        *,
+        run_id: str,
+        response: str,
+        execute_readback_pilot: bool = False,
+    ) -> dict[str, Any]:
+        selected_target_handoff = self.selected_live_target_handoff_from_response(
+            run_id=run_id,
+            response=response,
+            write_audit=False,
+        )
+        selected_target = dict(selected_target_handoff.get("selected_target") or {})
+        job_id = str(selected_target_handoff.get("job_id") or selected_target.get("job_id") or "")
+        sink = str(selected_target.get("sink") or "")
+        operator = str(selected_target.get("operator") or selected_target.get("approved_by") or "")
+        sink_write_pilot = None
+        readback_adapter_request = None
+        blockers = list(selected_target_handoff.get("blocked_reasons") or [])
+        if selected_target_handoff.get("state") not in {
+            "ready_for_live_lookup_request",
+            "ready_for_live_write_request",
+            "ready_for_live_readback_request",
+        }:
+            blockers.append("selected target handoff is not ready")
+        if not job_id or not sink or not operator:
+            blockers.append("active selected target is missing job_id, sink, or operator")
+        if sink and sink not in {"google_contacts", "odoo"}:
+            blockers.append(f"unsupported sink for readback pilot: {sink}")
+        scope_allows = dict(selected_target.get("scope_allows") or {})
+        if selected_target and not bool(scope_allows.get("readback")):
+            blockers.append("selected target scope does not allow readback")
+        if job_id:
+            job = self.get_job(job_id, run_id=run_id)
+            artifact_dir = (
+                Path(job["artifact_dir"])
+                if job.get("artifact_dir")
+                else self.config.runs_dir / run_id / "artifacts" / job_id
+            )
+            sink_write_pilot = _read_json_file(artifact_dir / "sink_write_pilot.json")
+            readback_adapter_request = _read_json_file(artifact_dir / "sink_adapter_request_readback.json")
+            if sink_write_pilot is None:
+                blockers.append("sink_write_pilot.json is required before readback pilot")
+            elif sink_write_pilot.get("sink") != sink:
+                blockers.append(f"sink_write_pilot.json is not for sink {sink}")
+            elif sink_write_pilot.get("state") != "live_written":
+                blockers.append(
+                    f"live readback pilot requires live_written sink_write_pilot.json, "
+                    f"found {sink_write_pilot.get('state')!r}"
+                )
+            source_selected_target = dict((sink_write_pilot or {}).get("selected_target") or {})
+            if sink_write_pilot is not None and not _selected_target_identity(source_selected_target):
+                blockers.append("sink_write_pilot.json does not reference a selected live target")
+            elif (
+                sink_write_pilot is not None
+                and _selected_target_identity(source_selected_target) != _selected_target_identity(selected_target)
+            ):
+                blockers.append("sink_write_pilot.json was not created by the current selected live target")
+            if readback_adapter_request is None:
+                blockers.append("sink_adapter_request_readback.json is required before readback pilot")
+            elif not any(
+                request.get("phase") == "readback" and request.get("sink") == sink
+                for request in list(readback_adapter_request.get("requests") or [])
+            ):
+                blockers.append(f"sink_adapter_request_readback.json has no readback request for sink {sink}")
+        ready = not blockers and bool(job_id and sink and operator)
+        execute_command = (
+            f"sinks readback-pilot {job_id} --run-id {run_id} --sink {sink} "
+            f"--approved-by {operator} --no-simulate --json"
+            if job_id and sink and operator
+            else None
+        )
+        base_payload = {
+            "schema": "business-card-watchdog.selected-readback-pilot-execution-packet-from-response.v1",
+            "generated_at": utc_now(),
+            "run_id": run_id,
+            "job_id": job_id or None,
+            "sink": sink or None,
+            "operator": operator or None,
+            "execute_readback_pilot": execute_readback_pilot,
+            "would_execute_readback_pilot": ready,
+            "selected_target_handoff_from_response": selected_target_handoff,
+            "selected_target_identity": selected_target_handoff.get("selected_target_identity"),
+            "sink_write_pilot": sink_write_pilot,
+            "readback_adapter_request": readback_adapter_request,
+            "readback_pilot": None,
+            "readback_pilot_path": None,
+            "blocked_reasons": blockers,
+            "next_safe_command": (
+                f"runs selected-readback-pilot-execution-packet-from-response {shlex.quote(run_id)} "
+                f"--response {shlex.quote(response)} --json"
+            ),
+            "next_explicit_operator_command": execute_command if ready else None,
+            "commands": {
+                "selected_target_handoff": (
+                    f"runs selected-live-target-handoff-from-response {shlex.quote(run_id)} "
+                    f"--response {shlex.quote(response)} --json"
+                ),
+                "selected_write_pilot_packet": (
+                    f"runs selected-write-pilot-execution-packet-from-response {shlex.quote(run_id)} "
+                    f"--response {shlex.quote(response)} --json"
+                ),
+                "prepare_readback_adapter_request": (
+                    f"sinks adapter-request {job_id} --run-id {run_id} --phase readback"
+                    if job_id
+                    else None
+                ),
+                "execute_readback_pilot": execute_command,
+                "live_pilot_status": f"runs live-pilot-status {run_id} --no-write --json",
+                "live_pilot_handoff": f"runs live-pilot-handoff {run_id} --no-write --json",
+            },
+            "explicit_stop_conditions": [
+                "Default mode does not execute sink readback pilot.",
+                "Pass the explicit execute-readback-pilot flag only after write-pilot evidence and readback adapter request are ready.",
+                "Live readback remains blocked unless selected target scope allows readback and the write pilot came from the current selected target.",
+                "Readback must remain read-only and report writes_attempted=0.",
+            ],
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+        if not execute_readback_pilot:
+            return {
+                **base_payload,
+                "state": "ready_to_request_readback_pilot" if ready else "blocked",
+                "execute_readback_pilot": False,
+            }
+        if not ready or not job_id or not sink or not operator:
+            return {
+                **base_payload,
+                "state": "blocked",
+                "execute_readback_pilot": True,
+                "would_execute_readback_pilot": False,
+                "next_explicit_operator_command": None,
+                "explicit_stop_conditions": [
+                    "sink readback pilot was not executed because readiness is blocked.",
+                    "Resolve blocked reasons before retrying with the explicit execute flag.",
+                    "This blocked response did not run live lookup, live write, or live readback.",
+                ],
+            }
+        executed = self.execute_sink_readback_pilot_for_job(
+            job_id=job_id,
+            run_id=run_id,
+            sink=sink,
+            approved_by=operator,
+            simulate=False,
+        )
+        pilot = dict(executed.get("pilot") or {})
+        return {
+            **base_payload,
+            "state": "executed",
+            "execute_readback_pilot": True,
+            "would_execute_readback_pilot": True,
+            "readback_pilot": pilot,
+            "readback_pilot_path": executed.get("pilot_path"),
+            "blocked_reasons": [],
+            "next_safe_command": f"runs live-pilot-status {run_id} --no-write --json",
+            "next_explicit_operator_command": None,
+            "commands": {
+                "live_pilot_status": f"runs live-pilot-status {run_id} --no-write --json",
+                "live_pilot_handoff": f"runs live-pilot-handoff {run_id} --no-write --json",
+                "review_bundle": f"reviews bundle --run-id {run_id} --state all --json",
+            },
+            "explicit_stop_conditions": [
+                "Inspect readback evidence before closing the live pilot.",
+                "Do not run another readback pilot for this job unless the prior readback is reconciled.",
             ],
             "writes_attempted": int(pilot.get("writes_attempted") or 0),
             "network_calls_made": int(pilot.get("network_calls_made") or 0),

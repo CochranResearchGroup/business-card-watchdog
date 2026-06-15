@@ -267,6 +267,19 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_selected_readback_pilot_execution_packet_from_response",
+                "description": "Preview or explicitly execute selected sink readback pilot from a validated operator response, gated by write-pilot evidence.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "response": {"type": "string"},
+                        "execute_readback_pilot": {"type": "boolean", "default": False},
+                    },
+                    "required": ["run_id", "response"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_next_actions",
                 "description": "Return deterministic next actions for agent-loop batch orchestration.",
                 "input_schema": {
@@ -976,6 +989,12 @@ def call_tool(
             run_id=str(args["run_id"]),
             response=str(args["response"]),
             execute_write_pilot=bool(args.get("execute_write_pilot", False)),
+        )
+    if tool_name == "business_card_watchdog_selected_readback_pilot_execution_packet_from_response":
+        return service.selected_readback_pilot_execution_packet_from_response(
+            run_id=str(args["run_id"]),
+            response=str(args["response"]),
+            execute_readback_pilot=bool(args.get("execute_readback_pilot", False)),
         )
     if tool_name == "business_card_watchdog_next_actions":
         return service.next_actions(

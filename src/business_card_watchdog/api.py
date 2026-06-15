@@ -139,6 +139,10 @@ def create_app(config_path: Path | None = None):
         response: str
         execute_write_pilot: bool = False
 
+    class SelectedReadbackPilotExecutionPacketFromResponseRequest(BaseModel):
+        response: str
+        execute_readback_pilot: bool = False
+
     class SelectedLiveTargetAuditRequest(BaseModel):
         run_id: str
         scope: str | None = None
@@ -351,6 +355,17 @@ def create_app(config_path: Path | None = None):
             run_id=run_id,
             response=request.response,
             execute_write_pilot=request.execute_write_pilot,
+        )
+
+    @app.post("/runs/{run_id}/selected-readback-pilot-execution-packet-from-response")
+    def create_run_selected_readback_pilot_execution_packet_from_response(
+        run_id: str,
+        request: SelectedReadbackPilotExecutionPacketFromResponseRequest,
+    ) -> dict[str, object]:
+        return service().selected_readback_pilot_execution_packet_from_response(
+            run_id=run_id,
+            response=request.response,
+            execute_readback_pilot=request.execute_readback_pilot,
         )
 
     @app.get("/runs/{run_id}/jobs")

@@ -1254,6 +1254,54 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
                 "--config",
                 str(config_path),
                 "runs",
+                "selected-readback-pilot-execution-packet-from-response",
+                run_id,
+                "--response",
+                response,
+                "--json",
+            ]
+        )
+        == 0
+    )
+    readback_packet = json.loads(capsys.readouterr().out)
+    assert readback_packet["schema"] == (
+        "business-card-watchdog.selected-readback-pilot-execution-packet-from-response.v1"
+    )
+    assert readback_packet["state"] == "blocked"
+    assert readback_packet["execute_readback_pilot"] is False
+    assert readback_packet["would_execute_readback_pilot"] is False
+    assert readback_packet["readback_pilot"] is None
+    assert readback_packet["readback_pilot_path"] is None
+    assert readback_packet["writes_attempted"] == 0
+    assert readback_packet["network_calls_made"] == 0
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "selected-readback-pilot-execution-packet-from-response",
+                run_id,
+                "--response",
+                response,
+            ]
+        )
+        == 0
+    )
+    readback_packet_text = capsys.readouterr().out
+    assert "State: blocked" in readback_packet_text
+    assert "Execute readback pilot: False" in readback_packet_text
+    assert "Would execute readback pilot: False" in readback_packet_text
+    assert "Readback pilot path: none" in readback_packet_text
+    assert "{" not in readback_packet_text
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
                 "live-pilot-validate-response",
                 run_id,
                 "--response",
