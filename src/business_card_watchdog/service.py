@@ -1400,6 +1400,20 @@ class BusinessCardService:
                 }
             )
         phase_report_after = self.phase_report(run_id) if run_id else None
+        safe_inspection_commands = {
+            "live_pilot_status": f"runs live-pilot-status {run_id} --no-write --json"
+            if run_id
+            else "runs list --json",
+            "live_pilot_handoff": f"runs live-pilot-handoff {run_id} --no-write --json"
+            if run_id
+            else "runs list --json",
+            "operator_dashboard": f"operator-dashboard --run-id {run_id} --json"
+            if run_id
+            else "operator-dashboard --json",
+            "service_recovery": f"service recovery --run-id {run_id} --json"
+            if run_id
+            else "service recovery --json",
+        }
         return {
             "run_id": run_id,
             "limit": limit,
@@ -1411,6 +1425,7 @@ class BusinessCardService:
             "network_calls_made": 0,
             "safe_auto_actions": sorted(_SAFE_NEXT_ACTIONS),
             "explicit_operator_actions": sorted(_EXPLICIT_OPERATOR_ACTIONS),
+            "safe_inspection_commands": safe_inspection_commands,
             "operator_stop_conditions": [
                 "Do not execute skipped actions from run-next without explicit operator approval.",
                 "Do not run live lookup, live write, or live readback from deterministic safe continuation.",

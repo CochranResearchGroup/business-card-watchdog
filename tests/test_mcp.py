@@ -386,6 +386,12 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert status["commands"]["runtime_readiness"] == "runtime-readiness --json"
     assert status["safe_next_actions"][0]["action"] == "inspect_runtime_readiness"
     assert operator_dashboard["schema"] == "business-card-watchdog.operator-dashboard.v1"
+    assert run_next["safe_inspection_commands"]["live_pilot_status"] == (
+        f"runs live-pilot-status {run_id} --no-write --json"
+    )
+    assert run_next["safe_inspection_commands"]["service_recovery"] == (
+        f"service recovery --run-id {run_id} --json"
+    )
     assert operator_dashboard["selected_run_id"] == run_id
     assert operator_dashboard["commands"]["review_queue"] == f"reviews list --run-id {run_id} --state all --json"
     assert operator_dashboard["commands"]["next_actions"] == f"actions next --run-id {run_id} --json"

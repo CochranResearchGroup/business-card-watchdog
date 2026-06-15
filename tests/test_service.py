@@ -3358,6 +3358,12 @@ def test_service_run_next_actions_executes_safe_steps_until_manual_decision(tmp_
     assert payload["network_calls_made"] == 0
     assert "plan_sink_lookup" in payload["safe_auto_actions"]
     assert "execute_sink_write_pilot" in payload["explicit_operator_actions"]
+    assert payload["safe_inspection_commands"] == {
+        "live_pilot_status": f"runs live-pilot-status {run_id} --no-write --json",
+        "live_pilot_handoff": f"runs live-pilot-handoff {run_id} --no-write --json",
+        "operator_dashboard": f"operator-dashboard --run-id {run_id} --json",
+        "service_recovery": f"service recovery --run-id {run_id} --json",
+    }
     assert any("Do not run live lookup" in condition for condition in payload["operator_stop_conditions"])
     assert all(item["safe_to_auto_continue"] is True for item in payload["executed"])
     assert payload["skipped"][0]["safe_to_auto_continue"] is False

@@ -510,6 +510,12 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     run_next = client.post("/actions/run-next", json={"run_id": run_id, "limit": 2}).json()
     assert run_next["executed_count"] >= 1
     assert run_next["executed"][0]["action"].startswith(("plan_", "prepare_", "record_", "assess_"))
+    assert run_next["safe_inspection_commands"]["live_pilot_status"] == (
+        f"runs live-pilot-status {run_id} --no-write --json"
+    )
+    assert run_next["safe_inspection_commands"]["operator_dashboard"] == (
+        f"operator-dashboard --run-id {run_id} --json"
+    )
     assert run_next["phase_report_before"]["schema"] == "business-card-watchdog.phase-report.v1"
     assert run_next["phase_report_after"]["schema"] == "business-card-watchdog.phase-report.v1"
 

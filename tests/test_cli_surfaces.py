@@ -1282,6 +1282,12 @@ def test_cli_jobs_review_records_submission(tmp_path: Path, capsys) -> None:
     assert actions["network_calls_made"] == 0
     assert "plan_sink_lookup" in actions["safe_auto_actions"]
     assert "execute_sink_write_pilot" in actions["explicit_operator_actions"]
+    assert actions["safe_inspection_commands"]["live_pilot_status"] == (
+        f"runs live-pilot-status {run_id} --no-write --json"
+    )
+    assert actions["safe_inspection_commands"]["live_pilot_handoff"] == (
+        f"runs live-pilot-handoff {run_id} --no-write --json"
+    )
     assert all(item["safe_to_auto_continue"] is True for item in actions["executed"])
     assert actions["phase_report_before"]["schema"] == "business-card-watchdog.phase-report.v1"
     assert actions["phase_report_after"]["schema"] == "business-card-watchdog.phase-report.v1"
