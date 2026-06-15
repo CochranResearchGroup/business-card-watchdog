@@ -313,6 +313,7 @@ def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
         ("Service recovery", "service_recovery"),
         ("Runs list", "runs_list"),
         ("Review queue", "review_queue"),
+        ("Child review queue", "child_review_queue"),
         ("Phase report", "phase_report"),
         ("Next actions", "next_actions"),
         ("Run next safe", "run_next_safe"),
@@ -1709,6 +1710,22 @@ def _render_review_queue_text(entries: list[dict[str, object]]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_child_review_queue_text(entries: list[dict[str, object]]) -> str:
+    lines = [f"Child review queue: {len(entries)} candidates"]
+    if not entries:
+        return "\n".join(lines) + "\n"
+    for entry in entries:
+        next_action = dict(entry.get("next_action") or {})
+        lines.append(
+            " - "
+            f"{entry.get('candidate_id')} "
+            f"job={entry.get('job_id')} "
+            f"state={entry.get('state')} "
+            f"next={next_action.get('action') or 'none'}"
+        )
+    return "\n".join(lines) + "\n"
+
+
 def _render_jobs_list_text(entries: list[dict[str, object]]) -> str:
     lines = [f"Jobs: {len(entries)}"]
     for entry in entries:
@@ -1978,6 +1995,10 @@ def build_parser() -> argparse.ArgumentParser:
     reviews_list.add_argument("--next-action", default=None)
     reviews_list.add_argument("--artifact-kind", default=None)
     reviews_list.add_argument("--json", action="store_true")
+    reviews_children = reviews_sub.add_parser("children")
+    reviews_children.add_argument("--run-id", default=None)
+    reviews_children.add_argument("--state", default="needs_review")
+    reviews_children.add_argument("--json", action="store_true")
     reviews_bundle = reviews_sub.add_parser("bundle")
     reviews_bundle.add_argument("--run-id", required=True)
     reviews_bundle.add_argument("--state", default="all")
@@ -2514,6 +2535,11 @@ def main(argv: list[str] | None = None) -> int:
                     reviewer=args.reviewer,
                     decisions=json.loads(decisions_body),
                 )
+        elif args.reviews_command == "children":
+            payload = service.child_review_queue(run_id=args.run_id, state=args.state)
+            if not args.json:
+                print(_render_child_review_queue_text(payload), end="")
+                return 0
         else:
             payload = service.review_queue(
                 run_id=args.run_id,

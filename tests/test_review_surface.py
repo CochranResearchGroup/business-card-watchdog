@@ -7,7 +7,13 @@ from business_card_watchdog.config import AppConfig, PrefilterConfig, SinkConfig
 from business_card_watchdog.orchestrator import BatchOrchestrator
 from business_card_watchdog.service import BusinessCardService
 
-from synthetic_fixtures import SyntheticSkillAdapter, latest_jobs_by_id, read_jsonl, write_synthetic_image
+from synthetic_fixtures import (
+    SyntheticSkillAdapter,
+    latest_jobs_by_id,
+    read_jsonl,
+    write_multi_card_image,
+    write_synthetic_image,
+)
 
 
 def test_review_approval_writes_reviewed_contact_artifact(tmp_path: Path, monkeypatch) -> None:
@@ -51,3 +57,25 @@ def test_review_approval_writes_reviewed_contact_artifact(tmp_path: Path, monkey
     assert reviewed["flat"]["email"] == "reviewed@example.test"
     assert any(artifact["kind"] == "reviewed_contact" for artifact in artifacts)
     assert any(event["event_type"] == "review_submitted" for event in events)
+
+
+def test_child_review_queue_lists_promoted_child_contact_candidates(tmp_path: Path, monkeypatch) -> None:
+    pytest = __import__("pytest")
+    pytest.importorskip("cv2")
+    source_dir = tmp_path / "images"
+    write_multi_card_image(source_dir / "multi.jpg")
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+
+    queue = BusinessCardService(config).child_review_queue(run_id=run_dir.name)
+
+    assert len(queue) >= 3
+    assert queue[0]["schema"] == "business-card-watchdog.child-review-queue-entry.v1"
+    assert queue[0]["state"] == "needs_review"
+    assert queue[0]["next_action"]["action"] == "review_child_contact"
+    assert queue[0]["routing_allowed"] is False
+    assert queue[0]["contact_candidate"]["schema"] == "business-card-watchdog.contact-candidate.v1"
+    assert queue[0]["contact_candidate"]["lineage"]["parent_job_id"] == queue[0]["job_id"]
+    assert BusinessCardService(config).child_review_queue(run_id=run_dir.name, state="all")

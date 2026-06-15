@@ -9,7 +9,9 @@ import pytest
 
 from business_card_watchdog.config import AppConfig, EnrichmentConfig, EnrichmentProviderConfig, SinkConfig
 from business_card_watchdog.contact import build_contact_candidate
+from business_card_watchdog.orchestrator import BatchOrchestrator
 
+from synthetic_fixtures import SyntheticSkillAdapter, write_multi_card_image
 from test_service import make_recorded_run
 
 
@@ -794,6 +796,7 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
         params={"run_id": run_id, "next_action": "review_contact", "artifact_kind": "contact_spec"},
     ).json()
     assert [entry["job_id"] for entry in filtered_reviews] == [job_id]
+
     review_bundle = client.post(f"/runs/{run_id}/review-bundle").json()
     assert review_bundle["schema"] == "business-card-watchdog.review-bundle.v1"
     assert review_bundle["entries"][0]["job_id"] == job_id
@@ -1014,6 +1017,29 @@ def test_api_review_routing_drill_outputs_fixture_artifact(tmp_path: Path) -> No
     assert drill["network_calls_made"] == 0
     assert drill["writes_attempted"] == 0
     assert Path(drill["drill_path"]).exists()
+
+
+def test_api_child_reviews_lists_promoted_child_candidates(tmp_path: Path, monkeypatch) -> None:
+    pytest.importorskip("cv2")
+    from business_card_watchdog.api import create_app
+
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+    source_dir = tmp_path / "images"
+    write_multi_card_image(source_dir / "multi.jpg")
+    config = AppConfig(config_path=config_path, data_dir=data_dir)
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+    client = TestClient(create_app(config_path))
+
+    payload = client.get("/reviews/children", params={"run_id": run_dir.name}).json()
+
+    assert len(payload) >= 3
+    assert payload[0]["state"] == "needs_review"
+    assert payload[0]["next_action"]["action"] == "review_child_contact"
+    assert payload[0]["contact_candidate"]["source"] == "child_verification_result"
 
 
 def test_api_multi_card_preclassification_drill_records_candidate_boxes(tmp_path: Path) -> None:

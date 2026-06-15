@@ -422,6 +422,17 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_child_reviews_list",
+                "description": "List promoted child contact candidates that require review before routing.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "run_id": {"type": "string"},
+                        "state": {"type": "string", "default": "needs_review"},
+                    },
+                },
+            },
+            {
                 "name": "business_card_watchdog_review_bundle",
                 "description": "Create a run-level batch review bundle with inline review-relevant artifact payloads.",
                 "input_schema": {
@@ -1144,6 +1155,11 @@ def call_tool(
             state=str(args.get("state") or "needs_review"),
             next_action=str(args["next_action"]) if args.get("next_action") else None,
             artifact_kind=str(args["artifact_kind"]) if args.get("artifact_kind") else None,
+        )
+    if tool_name == "business_card_watchdog_child_reviews_list":
+        return service.child_review_queue(
+            run_id=str(args["run_id"]) if args.get("run_id") else None,
+            state=str(args.get("state") or "needs_review"),
         )
     if tool_name == "business_card_watchdog_review_bundle":
         return service.review_bundle(

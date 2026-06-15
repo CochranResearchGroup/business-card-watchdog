@@ -18,7 +18,12 @@ from business_card_watchdog.orchestrator import BatchOrchestrator
 from business_card_watchdog.service import BusinessCardService
 from business_card_watchdog.service_ops import service_unit_path
 
-from synthetic_fixtures import SyntheticSkillAdapter, latest_jobs_by_id, write_synthetic_image
+from synthetic_fixtures import (
+    SyntheticSkillAdapter,
+    latest_jobs_by_id,
+    write_multi_card_image,
+    write_synthetic_image,
+)
 from test_service import make_recorded_run
 
 
@@ -173,6 +178,37 @@ def test_cli_multi_card_preclassification_drill_records_candidate_boxes(
     assert "State: passed" in text
     assert "Detected card-like boxes:" in text
     assert "Observed: writes=0 network=0 private_sources=False live_sinks=False" in text
+    assert "{" not in text
+
+
+def test_cli_child_reviews_lists_promoted_child_candidates(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    pytest = __import__("pytest")
+    pytest.importorskip("cv2")
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+    source_dir = tmp_path / "images"
+    write_multi_card_image(source_dir / "multi.jpg")
+    config = AppConfig(config_path=config_path, data_dir=data_dir)
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+
+    assert main(["--config", str(config_path), "reviews", "children", "--run-id", run_dir.name, "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+
+    assert len(payload) >= 3
+    assert payload[0]["next_action"]["action"] == "review_child_contact"
+    assert payload[0]["contact_candidate"]["source"] == "child_verification_result"
+
+    assert main(["--config", str(config_path), "reviews", "children", "--run-id", run_dir.name]) == 0
+    text = capsys.readouterr().out
+    assert "Child review queue:" in text
+    assert "next=review_child_contact" in text
     assert "{" not in text
 
 

@@ -7,8 +7,10 @@ from business_card_watchdog.config import AppConfig, EnrichmentConfig, Enrichmen
 from business_card_watchdog.contact import build_contact_candidate
 from business_card_watchdog.mcp import call_tool, tool_manifest
 from business_card_watchdog.mcp_server import serve_jsonl
+from business_card_watchdog.orchestrator import BatchOrchestrator
 from business_card_watchdog.service import BusinessCardService
 
+from synthetic_fixtures import SyntheticSkillAdapter, write_multi_card_image
 from test_service import make_recorded_run
 
 
@@ -52,6 +54,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_review_routing_drill" in names
     assert "business_card_watchdog_live_pilot_rehearsal_drill" in names
     assert "business_card_watchdog_reviews_list" in names
+    assert "business_card_watchdog_child_reviews_list" in names
     assert "business_card_watchdog_review_bundle" in names
     assert "business_card_watchdog_review_html" in names
     assert "business_card_watchdog_review_workbook" in names
@@ -115,6 +118,27 @@ def test_mcp_multi_card_preclassification_drill_records_candidate_boxes(tmp_path
     assert payload["live_sink_calls_made"] is False
     assert payload["writes_attempted"] == 0
     assert payload["network_calls_made"] == 0
+
+
+def test_mcp_child_reviews_lists_promoted_child_candidates(tmp_path: Path, monkeypatch) -> None:
+    pytest = __import__("pytest")
+    pytest.importorskip("cv2")
+    source_dir = tmp_path / "images"
+    write_multi_card_image(source_dir / "multi.jpg")
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+
+    payload = call_tool(
+        "business_card_watchdog_child_reviews_list",
+        {"run_id": run_dir.name},
+        config=config,
+    )
+
+    assert len(payload) >= 3
+    assert payload[0]["next_action"]["action"] == "review_child_contact"
+    assert payload[0]["contact_candidate"]["source"] == "child_verification_result"
 
 
 def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:

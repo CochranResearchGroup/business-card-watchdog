@@ -593,6 +593,11 @@ class BusinessCardService:
                     if selected_run_id
                     else "runs list --json"
                 ),
+                "child_review_queue": (
+                    f"reviews children --run-id {selected_run_id} --state needs_review --json"
+                    if selected_run_id
+                    else "runs list --json"
+                ),
                 "phase_report": (
                     f"runs phase-report {selected_run_id} --json" if selected_run_id else "runs list --json"
                 ),
@@ -722,6 +727,11 @@ class BusinessCardService:
                     if selected_run_id
                     else "GET /actions/next?limit=20"
                 ),
+                "child_review_queue": (
+                    f"GET /reviews/children?run_id={selected_run_id}&state=needs_review"
+                    if selected_run_id
+                    else "GET /reviews/children?state=needs_review"
+                ),
                 "run_next_safe": "POST /actions/run-next",
                 "multi_card_preclassification_drill": "POST /drills/multi-card-preclassification",
                 "review_routing_drill": "POST /drills/review-routing",
@@ -833,6 +843,12 @@ class BusinessCardService:
                     "arguments": {"run_id": selected_run_id, "limit": 10}
                     if selected_run_id
                     else {"limit": 10},
+                },
+                "child_review_queue": {
+                    "tool": "business_card_watchdog_child_reviews_list",
+                    "arguments": {"run_id": selected_run_id, "state": "needs_review"}
+                    if selected_run_id
+                    else {"state": "needs_review"},
                 },
                 "multi_card_preclassification_drill": {
                     "tool": "business_card_watchdog_multi_card_preclassification_drill",
@@ -2432,6 +2448,77 @@ class BusinessCardService:
                 }
             )
         return queue
+
+    def child_review_queue(
+        self,
+        *,
+        run_id: str | None = None,
+        state: str = "needs_review",
+    ) -> list[dict[str, Any]]:
+        run_ids = [run_id] if run_id is not None else [str(run["run_id"]) for run in self.list_runs()]
+        queue: list[dict[str, Any]] = []
+        for current_run_id in run_ids:
+            if current_run_id is None:
+                continue
+            artifacts = self.list_artifacts(str(current_run_id))
+            jobs_by_id = {str(job["job_id"]): job for job in self.list_jobs(str(current_run_id))}
+            promotion_artifacts = [
+                artifact
+                for artifact in artifacts
+                if artifact.get("kind") == "child_contact_promotions"
+            ]
+            for artifact in promotion_artifacts:
+                manifest = _read_json_file(Path(str(artifact.get("path") or ""))) or {}
+                promotions = [
+                    promotion
+                    for promotion in list(manifest.get("promotions") or [])
+                    if isinstance(promotion, dict)
+                ]
+                for promotion in promotions:
+                    promotion_state = str(promotion.get("state") or "")
+                    if state != "all" and promotion_state != state:
+                        continue
+                    candidate_path = Path(str(promotion.get("contact_candidate_path") or ""))
+                    candidate = _read_json_file(candidate_path) or {}
+                    job = jobs_by_id.get(str(promotion.get("parent_job_id") or ""))
+                    queue.append(
+                        {
+                            "schema": "business-card-watchdog.child-review-queue-entry.v1",
+                            "run_id": str(current_run_id),
+                            "job_id": promotion.get("parent_job_id"),
+                            "candidate_id": promotion.get("candidate_id"),
+                            "work_item_id": promotion.get("work_item_id"),
+                            "state": promotion_state,
+                            "image_path": (job or {}).get("image_path"),
+                            "artifact_dir": (job or {}).get("artifact_dir"),
+                            "contact_candidate_path": str(candidate_path),
+                            "verification_result_path": promotion.get("verification_result_path"),
+                            "contact_candidate": candidate,
+                            "lineage": candidate.get("lineage") if isinstance(candidate, dict) else {},
+                            "review": candidate.get("review") if isinstance(candidate, dict) else {},
+                            "routing_allowed": bool(promotion.get("routing_allowed")),
+                            "enrichment_allowed": bool(promotion.get("enrichment_allowed")),
+                            "sink_write_allowed": bool(promotion.get("sink_write_allowed")),
+                            "next_action": {
+                                "action": "review_child_contact",
+                                "safe_to_auto_continue": False,
+                                "requires_explicit_operator_action": True,
+                                "reason": "promoted child contact candidate requires review before routing",
+                                "command": (
+                                    "reviews children "
+                                    f"--run-id {current_run_id} --state {promotion_state} --json"
+                                ),
+                            },
+                        }
+                    )
+        return sorted(
+            queue,
+            key=lambda row: (
+                str(row.get("run_id") or ""),
+                str(row.get("job_id") or ""),
+                str(row.get("candidate_id") or ""),
+            ),
+        )
 
     def review_bundle(self, *, run_id: str, state: str = "all", write: bool = True) -> dict[str, Any]:
         run = self.get_run(run_id)

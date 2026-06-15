@@ -4820,3 +4820,32 @@ Validation:
 Safety:
 
 - This created review-pending child contact candidates only. It did not process private SyncThing images, execute production OCR/App Intelligence, auto-route contacts, execute command-copy text, run public-web search, call paid APIs, or call GWS/Odollo/Odoo.
+
+## Turn 223 | 2026-06-15
+
+Executed Plan 0017 with Slice 0017-A.
+
+Implemented:
+
+- Added `BusinessCardService.child_review_queue`.
+- Added API route `GET /reviews/children`.
+- Added CLI command `reviews children`.
+- Added MCP tool `business_card_watchdog_child_reviews_list`.
+- Added operator dashboard command/API/MCP map entries for the child review queue.
+- Added synthetic multi-card coverage for service, CLI, API, and MCP child review list surfaces.
+- Updated README and roadmap documentation for promoted child contact review.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_review_surface.py::test_child_review_queue_lists_promoted_child_contact_candidates tests/test_cli_surfaces.py::test_cli_child_reviews_lists_promoted_child_candidates tests/test_api.py::test_api_child_reviews_lists_promoted_child_candidates tests/test_mcp.py::test_mcp_child_reviews_lists_promoted_child_candidates tests/test_mcp.py::test_manifest_has_process_tool -q` passed with 5 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/api.py src/business_card_watchdog/mcp.py tests/test_review_surface.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 243 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was read-only review surfacing. It did not process private SyncThing images, approve child contacts, route, enrich, dedupe, write sinks, execute command-copy text, run public-web search, call paid APIs, or call GWS/Odollo/Odoo.

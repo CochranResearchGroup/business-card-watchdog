@@ -470,6 +470,13 @@ def create_app(config_path: Path | None = None):
             artifact_kind=artifact_kind,
         )
 
+    @app.get("/reviews/children")
+    def list_child_reviews(
+        run_id: str | None = None,
+        state: str = "needs_review",
+    ) -> list[dict[str, object]]:
+        return service().child_review_queue(run_id=run_id, state=state)
+
     @app.post("/runs/{run_id}/review-bundle")
     def create_review_bundle(run_id: str, state: str = "all", write: bool = True) -> dict[str, object]:
         return service().review_bundle(run_id=run_id, state=state, write=write)

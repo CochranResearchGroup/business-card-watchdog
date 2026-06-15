@@ -134,6 +134,8 @@ enrich, or write contacts. Synthetic/offline runs then write
 review workflow can be built without production OCR/App Intelligence or sink calls.
 Those child results are promoted into review-pending `child_contact_promotions.json`
 records and normal contact-candidate files with parent/child lineage preserved.
+Use `reviews children --run-id <run-id> --json` to inspect those promoted child
+candidates before review, routing, enrichment, or sink work.
 
 `drills review-routing` creates a synthetic fixture run and proves review approval,
 review bundle/workbook export, duplicate lookup planning, dry-run sink routing, and
