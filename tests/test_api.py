@@ -235,6 +235,9 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert validation["schema"] == "business-card-watchdog.live-pilot-operator-response-validation.v1"
     assert validation["state"] == "ready_to_select_live_target"
     assert validation["matching_template"]["job_id"] == job_id
+    assert validation["selected_target_audit_command"] == (
+        f"sinks selected-target-audit {job_id} --run-id {run_id} --scope lookup --no-write --json"
+    )
     assert validation["creates_selected_live_target"] is False
     assert validation["writes_attempted"] == 0
     assert validation["network_calls_made"] == 0

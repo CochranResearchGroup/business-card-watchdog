@@ -2500,6 +2500,10 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert "--safety-confirmation 'fixture contact is safe for google contacts test profile'" in validation[
         "select_target_command"
     ]
+    assert validation["selected_target_audit_command"] == (
+        f"sinks selected-target-audit {job_id} --run-id {run_id} --scope lookup --no-write --json"
+    )
+    assert validation["commands"]["selected_target_audit"] == validation["selected_target_audit_command"]
     assert validation["creates_selected_live_target"] is False
     assert validation["writes_attempted"] == 0
     assert validation["network_calls_made"] == 0
@@ -2511,6 +2515,7 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     )
     assert blocked_validation["state"] == "blocked"
     assert blocked_validation["select_target_command"] is None
+    assert blocked_validation["selected_target_audit_command"] is None
     assert set(blocked_validation["missing_fields"]) == {"operator", "safety_confirmation"}
 
     weak_safety_validation = service.validate_live_pilot_operator_response(

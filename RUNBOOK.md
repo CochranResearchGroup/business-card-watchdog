@@ -3419,3 +3419,29 @@ Validation:
 Safety:
 
 - This was no-live dashboard handoff hardening only. It did not validate an operator response, execute any returned select-target command, create or modify `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+## Turn 169 | 2026-06-15
+
+Continued Plan 0009 with Slice 0009-A93.
+
+Implemented:
+
+- Ready operator-response validation reports now include `selected_target_audit_command`.
+- The command is also exposed as `commands.selected_target_audit`.
+- Plain-text validation output now renders the selected-target audit command after the select-target command.
+- Blocked validations keep both selected-target and audit commands null.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval -q` passed with 2 tests.
+- `.venv/bin/python -m pytest tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_jsonl_server_lists_and_calls_tools -q` passed with 2 tests.
+- `.venv/bin/python -m pytest -q` passed with 226 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was no-live validation handoff hardening only. It did not validate a real operator response, execute any returned select-target command, execute selected-target audit, create or modify `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.

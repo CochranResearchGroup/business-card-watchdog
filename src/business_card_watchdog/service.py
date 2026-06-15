@@ -5912,6 +5912,7 @@ class BusinessCardService:
 
         state = "ready_to_select_live_target" if not missing_fields and not mismatches else "blocked"
         select_target_command = None
+        selected_target_audit_command = None
         if state == "ready_to_select_live_target":
             select_target_command = (
                 f"sinks select-live-target {shlex.quote(str(parsed_response['job_id']))} "
@@ -5920,6 +5921,11 @@ class BusinessCardService:
                 f"--operator {shlex.quote(str(parsed_response['operator']))} "
                 f"--scope {shlex.quote(str(parsed_response['scope']))} "
                 f"--safety-confirmation {shlex.quote(str(parsed_response['safety_confirmation']))} --json"
+            )
+            selected_target_audit_command = (
+                f"sinks selected-target-audit {shlex.quote(str(parsed_response['job_id']))} "
+                f"--run-id {shlex.quote(str(parsed_response['run_id']))} "
+                f"--scope {shlex.quote(str(parsed_response['scope']))} --no-write --json"
             )
 
         return {
@@ -5933,6 +5939,7 @@ class BusinessCardService:
             "mismatches": mismatches,
             "matching_template": matching_template,
             "select_target_command": select_target_command,
+            "selected_target_audit_command": selected_target_audit_command,
             "operator_response_contract": contract,
             "writes_attempted": 0,
             "network_calls_made": 0,
@@ -5944,6 +5951,7 @@ class BusinessCardService:
                     f"--response {shlex.quote(response)} --json"
                 ),
                 "select_target": select_target_command,
+                "selected_target_audit": selected_target_audit_command,
             },
             "explicit_stop_conditions": [
                 "This validation does not create selected_live_target.json.",

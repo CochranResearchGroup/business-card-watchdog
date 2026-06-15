@@ -321,6 +321,8 @@ def _render_live_pilot_operator_response_validation_text(payload: dict[str, obje
     ]
     if payload.get("select_target_command"):
         lines.append(f"Select target: {payload.get('select_target_command')}")
+    if payload.get("selected_target_audit_command"):
+        lines.append(f"Selected target audit: {payload.get('selected_target_audit_command')}")
     return "\n".join(lines) + "\n"
 
 
