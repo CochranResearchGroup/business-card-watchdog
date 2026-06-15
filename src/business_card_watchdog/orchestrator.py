@@ -7,6 +7,7 @@ from pathlib import Path
 from .config import AppConfig, ensure_runtime_dirs, resolve_input_path
 from .contact import build_contact_candidate, contact_candidate_to_spec
 from .dedupe import assess_duplicate, remember_identity
+from .fanout import build_candidate_work_item_manifest
 from .ledger import RunLedger
 from .models import CardJob, utc_now
 from .preclassifier import assess_business_card_candidate, build_card_candidate_box_manifest
@@ -99,6 +100,22 @@ class BatchOrchestrator:
                 ledger.record_event(
                     "card_candidates_recorded",
                     {"job": job.to_dict(), "candidate_manifest": candidate_manifest},
+                )
+                work_item_manifest = build_candidate_work_item_manifest(candidate_manifest)
+                work_item_manifest_path = artifact_dir / "candidate_work_items.json"
+                work_item_manifest_path.write_text(
+                    json.dumps(work_item_manifest, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+                ledger.record_artifact(
+                    job_id=job.job_id,
+                    kind="candidate_work_items",
+                    path=work_item_manifest_path,
+                    metadata={"work_item_count": work_item_manifest["work_item_count"]},
+                )
+                ledger.record_event(
+                    "candidate_work_items_recorded",
+                    {"job": job.to_dict(), "work_item_manifest": work_item_manifest},
                 )
             if assessment.decision == "not_business_card" or (
                 assessment.decision == "uncertain" and not self.config.prefilter.process_uncertain

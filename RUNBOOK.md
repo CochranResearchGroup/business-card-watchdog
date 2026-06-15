@@ -4676,3 +4676,31 @@ Validation:
 Safety:
 
 - This was fixture/runtime-artifact only. It did not process private SyncThing inputs, run public-web search, call paid enrichment, invoke per-candidate OCR/App Intelligence, execute command-copy text, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+## Turn 218 | 2026-06-15
+
+Executed Plan 0012 with Slice 0012-A.
+
+Implemented:
+
+- Added `business-card-watchdog.card-candidate-work-items.v1`.
+- Added deterministic candidate work item manifest construction from `card_candidates.json`.
+- Wired batch orchestration to persist `candidate_work_items.json` beside `card_candidates.json`.
+- Recorded `candidate_work_items` ledger artifacts and `candidate_work_items_recorded` events.
+- Extended synthetic multi-card dry-run coverage to verify pending child work items, parent job lineage, and route/enrichment/write denial flags.
+- Updated README and roadmap documentation for the pending child OCR/App Intelligence work queue.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_preclassifier.py::test_orchestrator_records_multi_card_candidate_manifest -q` passed with 1 test.
+- `.venv/bin/ruff check src/business_card_watchdog/fanout.py src/business_card_watchdog/orchestrator.py tests/test_preclassifier.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 239 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was fixture/runtime-artifact only. It did not process private SyncThing inputs, crop images, run public-web search, call paid enrichment, invoke child OCR/App Intelligence, execute command-copy text, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.

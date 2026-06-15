@@ -67,6 +67,7 @@ def test_orchestrator_records_multi_card_candidate_manifest(tmp_path: Path, monk
     job = next(iter(latest_jobs_by_id(run_dir / "jobs.jsonl").values()))
     artifact_dir = Path(job["artifact_dir"])
     manifest = json.loads((artifact_dir / "card_candidates.json").read_text(encoding="utf-8"))
+    work_items = json.loads((artifact_dir / "candidate_work_items.json").read_text(encoding="utf-8"))
     artifact_kinds = [record["kind"] for record in read_jsonl(run_dir / "artifacts.jsonl")]
     events = read_jsonl(run_dir / "events.jsonl")
 
@@ -76,8 +77,17 @@ def test_orchestrator_records_multi_card_candidate_manifest(tmp_path: Path, monk
     assert len(manifest["candidates"]) >= 3
     assert manifest["candidates"][0]["candidate_id"].startswith(job["job_id"] + "-card-")
     assert all(candidate["requires_ocr_verification"] is True for candidate in manifest["candidates"])
+    assert work_items["schema"] == "business-card-watchdog.card-candidate-work-items.v1"
+    assert work_items["parent_job_id"] == job["job_id"]
+    assert work_items["work_item_count"] == manifest["candidate_count"]
+    assert len(work_items["work_items"]) == manifest["candidate_count"]
+    assert work_items["work_items"][0]["candidate_id"] == manifest["candidates"][0]["candidate_id"]
+    assert work_items["work_items"][0]["phase"] == "pending_ocr_app_intelligence_verification"
+    assert all(item["routing_allowed"] is False for item in work_items["work_items"])
     assert "card_candidates" in artifact_kinds
+    assert "candidate_work_items" in artifact_kinds
     assert any(event["event_type"] == "card_candidates_recorded" for event in events)
+    assert any(event["event_type"] == "candidate_work_items_recorded" for event in events)
     assert adapter.apply_google_calls == [False]
 
 

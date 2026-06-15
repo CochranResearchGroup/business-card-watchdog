@@ -121,7 +121,10 @@ data and makes no private, enrichment, or sink calls.
 Ordinary dry-run batch processing also writes `card_candidates.json` beside a job's
 `preclassification.json` when deterministic OpenCV boxes exist. Those records are
 stable pre-OCR candidate boxes for later fanout; they are not contacts and cannot be
-routed or enriched without OCR/App Intelligence verification.
+routed or enriched without OCR/App Intelligence verification. The same run also
+writes `candidate_work_items.json` with one pending child OCR/App Intelligence work
+item per candidate box so later agent loops can process large multi-card photos
+without losing parent image lineage.
 
 `drills review-routing` creates a synthetic fixture run and proves review approval,
 review bundle/workbook export, duplicate lookup planning, dry-run sink routing, and
