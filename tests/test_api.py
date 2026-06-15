@@ -289,6 +289,10 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
         "lookup_smoke_handoff",
     ]
     assert validation["post_selection_sequence"][0]["command"] == validation["selected_target_audit_command"]
+    assert validation["validation_command_sequence"]["safe_inspection_step_count"] == 2
+    assert validation["validation_command_sequence"]["explicit_operator_step_count"] == 0
+    assert validation["validation_command_sequence"]["live_call_step_count"] == 0
+    assert validation["validation_command_sequence"]["sink_write_step_count"] == 0
     assert validation["creates_selected_live_target"] is False
     assert validation["writes_attempted"] == 0
     assert validation["network_calls_made"] == 0

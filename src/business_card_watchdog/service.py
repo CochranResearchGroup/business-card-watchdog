@@ -6398,6 +6398,7 @@ class BusinessCardService:
                         "stop_condition": "Creates a handoff artifact only; does not execute live lookup.",
                     }
                 )
+        validation_command_sequence = _pilot_command_sequence(post_selection_sequence)
 
         explicit_stop_conditions = [
             "This validation does not create selected_live_target.json.",
@@ -6443,6 +6444,7 @@ class BusinessCardService:
             "selected_target_audit_command": selected_target_audit_command,
             "lookup_smoke_handoff_command": lookup_smoke_handoff_command,
             "post_selection_sequence": post_selection_sequence,
+            "validation_command_sequence": validation_command_sequence,
             "operator_response_contract": contract,
             "writes_attempted": 0,
             "network_calls_made": 0,

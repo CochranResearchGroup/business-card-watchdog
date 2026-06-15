@@ -491,6 +491,15 @@ def _render_live_pilot_operator_response_validation_text(payload: dict[str, obje
         for item in sequence:
             if isinstance(item, dict):
                 lines.append(f" - {item.get('step')}: {item.get('command')}")
+    grouped_sequence = dict(payload.get("validation_command_sequence") or {})
+    if grouped_sequence:
+        lines.append(
+            "Validation sequence groups: "
+            f"safe={grouped_sequence.get('safe_inspection_step_count', 0)} "
+            f"explicit={grouped_sequence.get('explicit_operator_step_count', 0)} "
+            f"live={grouped_sequence.get('live_call_step_count', 0)} "
+            f"sink_writes={grouped_sequence.get('sink_write_step_count', 0)}"
+        )
     stop_conditions = payload.get("explicit_stop_conditions") or []
     stops = stop_conditions if isinstance(stop_conditions, list) else []
     lines.append(f"Stop conditions: {len(stops)}")

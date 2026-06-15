@@ -865,6 +865,10 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
         "lookup_smoke_handoff",
     ]
     assert validation["post_selection_sequence"][1]["command"] == validation["lookup_smoke_handoff_command"]
+    assert validation["validation_command_sequence"]["safe_inspection_step_count"] == 2
+    assert validation["validation_command_sequence"]["explicit_operator_step_count"] == 0
+    assert validation["validation_command_sequence"]["live_call_step_count"] == 0
+    assert validation["validation_command_sequence"]["sink_write_step_count"] == 0
 
     assert (
         main(
@@ -894,6 +898,7 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
         f"--run-id {run_id} --sink google_contacts --approved-by tester --json"
     ) in validation_text
     assert "Post-selection sequence:" in validation_text
+    assert "Validation sequence groups: safe=2 explicit=0 live=0 sink_writes=0" in validation_text
     assert f" - select_target: sinks select-live-target {job_id}" not in validation_text
     assert (
         f" - selected_target_audit: sinks selected-target-audit {job_id} "

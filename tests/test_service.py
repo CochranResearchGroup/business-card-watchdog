@@ -2797,6 +2797,17 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert validation["post_selection_sequence"][0]["writes_runtime_artifact"] is False
     assert validation["post_selection_sequence"][1]["command"] == validation["lookup_smoke_handoff_command"]
     assert validation["post_selection_sequence"][1]["network_calls_made"] == 0
+    validation_sequence = validation["validation_command_sequence"]
+    assert validation_sequence["schema"] == "business-card-watchdog.pilot-command-sequence.v1"
+    assert validation_sequence["safe_inspection_step_count"] == 2
+    assert validation_sequence["explicit_operator_step_count"] == 0
+    assert validation_sequence["live_call_step_count"] == 0
+    assert validation_sequence["sink_write_step_count"] == 0
+    assert [item["step"] for item in validation_sequence["safe_inspection_steps"]] == [
+        "selected_target_audit",
+        "lookup_smoke_handoff",
+    ]
+    assert validation_sequence["execution_policy"]["do_not_run_live_or_sink_write_from_handoff"] is True
     assert any("do not run select_target again" in item for item in validation["explicit_stop_conditions"])
     assert any("lookup-smoke handoff" in item for item in validation["explicit_stop_conditions"])
     assert validation["creates_selected_live_target"] is False
@@ -2814,6 +2825,7 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert blocked_validation["selected_target_audit_command"] is None
     assert blocked_validation["lookup_smoke_handoff_command"] is None
     assert blocked_validation["post_selection_sequence"] == []
+    assert blocked_validation["validation_command_sequence"]["step_count"] == 0
     assert set(blocked_validation["missing_fields"]) == {"operator", "safety_confirmation"}
 
     weak_safety_validation = service.validate_live_pilot_operator_response(
