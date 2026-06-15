@@ -1206,6 +1206,54 @@ def test_cli_selected_target_audit_reports_existing_approval(tmp_path: Path, cap
                 "--config",
                 str(config_path),
                 "runs",
+                "selected-write-pilot-execution-packet-from-response",
+                run_id,
+                "--response",
+                response,
+                "--json",
+            ]
+        )
+        == 0
+    )
+    write_packet = json.loads(capsys.readouterr().out)
+    assert write_packet["schema"] == (
+        "business-card-watchdog.selected-write-pilot-execution-packet-from-response.v1"
+    )
+    assert write_packet["state"] == "blocked"
+    assert write_packet["execute_write_pilot"] is False
+    assert write_packet["would_execute_write_pilot"] is False
+    assert write_packet["write_pilot"] is None
+    assert write_packet["write_pilot_path"] is None
+    assert write_packet["writes_attempted"] == 0
+    assert write_packet["network_calls_made"] == 0
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "selected-write-pilot-execution-packet-from-response",
+                run_id,
+                "--response",
+                response,
+            ]
+        )
+        == 0
+    )
+    write_packet_text = capsys.readouterr().out
+    assert "State: blocked" in write_packet_text
+    assert "Execute write pilot: False" in write_packet_text
+    assert "Would execute write pilot: False" in write_packet_text
+    assert "Write pilot path: none" in write_packet_text
+    assert "{" not in write_packet_text
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
                 "live-pilot-validate-response",
                 run_id,
                 "--response",

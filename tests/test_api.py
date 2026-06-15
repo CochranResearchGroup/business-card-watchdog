@@ -95,6 +95,10 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
         f"runs selected-lookup-smoke-execution-packet-from-response {run_id} "
         "--response <operator-response> --json"
     )
+    assert operator_dashboard["commands"]["selected_write_pilot_execution_packet_from_response"] == (
+        f"runs selected-write-pilot-execution-packet-from-response {run_id} "
+        "--response <operator-response> --json"
+    )
     assert operator_dashboard["api_routes"]["live_pilot_validate_response"] == (
         f"POST /runs/{run_id}/live-pilot-operator-response-validation"
     )
@@ -115,6 +119,9 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     )
     assert operator_dashboard["api_routes"]["selected_lookup_smoke_execution_packet_from_response"] == (
         f"POST /runs/{run_id}/selected-lookup-smoke-execution-packet-from-response"
+    )
+    assert operator_dashboard["api_routes"]["selected_write_pilot_execution_packet_from_response"] == (
+        f"POST /runs/{run_id}/selected-write-pilot-execution-packet-from-response"
     )
     assert operator_dashboard["api_routes"]["live_pilot_approval_packet"] == (
         f"GET /runs/{run_id}/live-pilot-approval-packet"
@@ -154,6 +161,10 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert operator_dashboard["mcp_tools"]["selected_lookup_smoke_execution_packet_from_response"] == {
         "tool": "business_card_watchdog_selected_lookup_smoke_execution_packet_from_response",
         "arguments": {"run_id": run_id, "response": "<operator-response>", "execute_selected_lookup_smoke": False},
+    }
+    assert operator_dashboard["mcp_tools"]["selected_write_pilot_execution_packet_from_response"] == {
+        "tool": "business_card_watchdog_selected_write_pilot_execution_packet_from_response",
+        "arguments": {"run_id": run_id, "response": "<operator-response>", "execute_write_pilot": False},
     }
     assert operator_dashboard["writes_attempted"] == 0
     assert operator_dashboard["network_calls_made"] == 0
@@ -465,6 +476,23 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert execution_packet["smoke_path"] is None
     assert execution_packet["writes_attempted"] == 0
     assert execution_packet["network_calls_made"] == 0
+    write_packet = client.post(
+        f"/runs/{run_id}/selected-write-pilot-execution-packet-from-response",
+        json={"response": response},
+    ).json()
+    assert write_packet["schema"] == (
+        "business-card-watchdog.selected-write-pilot-execution-packet-from-response.v1"
+    )
+    assert write_packet["state"] == "blocked"
+    assert write_packet["job_id"] == job_id
+    assert write_packet["sink"] == "google_contacts"
+    assert write_packet["operator"] == "api-test"
+    assert write_packet["execute_write_pilot"] is False
+    assert write_packet["would_execute_write_pilot"] is False
+    assert write_packet["write_pilot"] is None
+    assert write_packet["write_pilot_path"] is None
+    assert write_packet["writes_attempted"] == 0
+    assert write_packet["network_calls_made"] == 0
     validation = client.post(
         f"/runs/{run_id}/live-pilot-operator-response-validation",
         json={"response": response},

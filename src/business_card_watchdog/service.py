@@ -657,6 +657,12 @@ class BusinessCardService:
                     if selected_run_id
                     else "runs list --json"
                 ),
+                "selected_write_pilot_execution_packet_from_response": (
+                    f"runs selected-write-pilot-execution-packet-from-response {selected_run_id} "
+                    "--response <operator-response> --json"
+                    if selected_run_id
+                    else "runs list --json"
+                ),
                 "mcp_manifest": "mcp-manifest",
             },
             "api_routes": {
@@ -721,6 +727,11 @@ class BusinessCardService:
                     f"POST /runs/{selected_run_id}/selected-lookup-smoke-execution-packet-from-response"
                     if selected_run_id
                     else "POST /runs/{run_id}/selected-lookup-smoke-execution-packet-from-response"
+                ),
+                "selected_write_pilot_execution_packet_from_response": (
+                    f"POST /runs/{selected_run_id}/selected-write-pilot-execution-packet-from-response"
+                    if selected_run_id
+                    else "POST /runs/{run_id}/selected-write-pilot-execution-packet-from-response"
                 ),
             },
             "mcp_tools": {
@@ -812,6 +823,20 @@ class BusinessCardService:
                         "run_id": "<run-id>",
                         "response": "<operator-response>",
                         "execute_selected_lookup_smoke": False,
+                    },
+                },
+                "selected_write_pilot_execution_packet_from_response": {
+                    "tool": "business_card_watchdog_selected_write_pilot_execution_packet_from_response",
+                    "arguments": {
+                        "run_id": selected_run_id,
+                        "response": "<operator-response>",
+                        "execute_write_pilot": False,
+                    }
+                    if selected_run_id
+                    else {
+                        "run_id": "<run-id>",
+                        "response": "<operator-response>",
+                        "execute_write_pilot": False,
                     },
                 },
             },
@@ -7095,6 +7120,180 @@ class BusinessCardService:
             ],
             "writes_attempted": int(smoke.get("writes_attempted") or 0),
             "network_calls_made": int(smoke.get("network_calls_made") or 0),
+        }
+
+    def selected_write_pilot_execution_packet_from_response(
+        self,
+        *,
+        run_id: str,
+        response: str,
+        execute_write_pilot: bool = False,
+    ) -> dict[str, Any]:
+        selected_target_handoff = self.selected_live_target_handoff_from_response(
+            run_id=run_id,
+            response=response,
+            write_audit=False,
+        )
+        selected_target = dict(selected_target_handoff.get("selected_target") or {})
+        job_id = str(selected_target_handoff.get("job_id") or selected_target.get("job_id") or "")
+        sink = str(selected_target.get("sink") or "")
+        operator = str(selected_target.get("operator") or selected_target.get("approved_by") or "")
+        artifact_dir = None
+        selected_lookup_smoke = None
+        downstream_duplicate = None
+        duplicate_resolution = None
+        apply_readiness_result = None
+        apply_readiness = None
+        blockers = list(selected_target_handoff.get("blocked_reasons") or [])
+        if selected_target_handoff.get("state") not in {
+            "ready_for_live_lookup_request",
+            "ready_for_live_write_request",
+        }:
+            blockers.append("selected target handoff is not ready")
+        if not job_id or not sink or not operator:
+            blockers.append("active selected target is missing job_id, sink, or operator")
+        if sink and sink not in {"google_contacts", "odoo"}:
+            blockers.append(f"unsupported sink for write pilot: {sink}")
+        scope_allows = dict(selected_target.get("scope_allows") or {})
+        if selected_target and not bool(scope_allows.get("write")):
+            blockers.append("selected target scope does not allow write")
+        if job_id:
+            job = self.get_job(job_id, run_id=run_id)
+            artifact_dir = (
+                Path(job["artifact_dir"])
+                if job.get("artifact_dir")
+                else self.config.runs_dir / run_id / "artifacts" / job_id
+            )
+            selected_lookup_smoke = _read_json_file(artifact_dir / "selected_lookup_smoke.json")
+            downstream_duplicate = _read_json_file(artifact_dir / "downstream_duplicate_assessment.json")
+            duplicate_resolution = _read_json_file(artifact_dir / "duplicate_resolution.json")
+            if selected_lookup_smoke is None:
+                blockers.append("selected_lookup_smoke.json is required before write pilot")
+            duplicate_state = str((downstream_duplicate or {}).get("state") or "missing")
+            resolution_decision = str((duplicate_resolution or {}).get("decision") or "").strip()
+            if downstream_duplicate is None:
+                blockers.append("downstream_duplicate_assessment.json is required before write pilot")
+            elif duplicate_state != "no_match" and (not resolution_decision or resolution_decision == "noop"):
+                blockers.append(f"downstream duplicate state {duplicate_state} must be resolved before write pilot")
+            if sink:
+                apply_readiness_result = self.build_sink_apply_pilot_readiness_for_job(
+                    job_id=job_id,
+                    run_id=run_id,
+                    sink=sink,
+                )
+                apply_readiness = dict(apply_readiness_result.get("readiness") or {})
+                if not apply_readiness.get("can_live_apply_pilot"):
+                    blockers.extend(
+                        f"apply:{name}" for name in list(apply_readiness.get("live_missing_requirements") or [])
+                    )
+        ready = not blockers and bool(job_id and sink and operator)
+        execute_command = (
+            f"sinks write-pilot {job_id} --run-id {run_id} --sink {sink} "
+            f"--approved-by {operator} --no-simulate --json"
+            if job_id and sink and operator
+            else None
+        )
+        base_payload = {
+            "schema": "business-card-watchdog.selected-write-pilot-execution-packet-from-response.v1",
+            "generated_at": utc_now(),
+            "run_id": run_id,
+            "job_id": job_id or None,
+            "sink": sink or None,
+            "operator": operator or None,
+            "execute_write_pilot": execute_write_pilot,
+            "would_execute_write_pilot": ready,
+            "selected_target_handoff_from_response": selected_target_handoff,
+            "selected_target_identity": selected_target_handoff.get("selected_target_identity"),
+            "selected_lookup_smoke": selected_lookup_smoke,
+            "downstream_duplicate_assessment": downstream_duplicate,
+            "duplicate_resolution": duplicate_resolution,
+            "apply_readiness": apply_readiness,
+            "apply_readiness_path": (apply_readiness_result or {}).get("readiness_path")
+            if apply_readiness_result
+            else None,
+            "write_pilot": None,
+            "write_pilot_path": None,
+            "blocked_reasons": blockers,
+            "next_safe_command": (
+                f"runs selected-write-pilot-execution-packet-from-response {shlex.quote(run_id)} "
+                f"--response {shlex.quote(response)} --json"
+            ),
+            "next_explicit_operator_command": execute_command if ready else None,
+            "commands": {
+                "selected_target_handoff": (
+                    f"runs selected-live-target-handoff-from-response {shlex.quote(run_id)} "
+                    f"--response {shlex.quote(response)} --json"
+                ),
+                "selected_lookup_smoke_packet": (
+                    f"runs selected-lookup-smoke-execution-packet-from-response {shlex.quote(run_id)} "
+                    f"--response {shlex.quote(response)} --json"
+                ),
+                "apply_readiness": (
+                    f"sinks apply-pilot-readiness {job_id} --run-id {run_id} --sink {sink}"
+                    if job_id and sink
+                    else None
+                ),
+                "execute_write_pilot": execute_command,
+                "live_pilot_status": f"runs live-pilot-status {run_id} --no-write --json",
+                "live_pilot_handoff": f"runs live-pilot-handoff {run_id} --no-write --json",
+            },
+            "explicit_stop_conditions": [
+                "Default mode does not execute sink write pilot.",
+                "Pass the explicit execute-write-pilot flag only after lookup evidence and duplicate review are ready.",
+                "Live write remains blocked unless selected target scope allows write and live apply readiness passes.",
+                "Do not process private SyncThing images, run public-web search, or call paid enrichment from this packet.",
+            ],
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+        if not execute_write_pilot:
+            return {
+                **base_payload,
+                "state": "ready_to_request_write_pilot" if ready else "blocked",
+                "execute_write_pilot": False,
+            }
+        if not ready or not job_id or not sink or not operator:
+            return {
+                **base_payload,
+                "state": "blocked",
+                "execute_write_pilot": True,
+                "would_execute_write_pilot": False,
+                "next_explicit_operator_command": None,
+                "explicit_stop_conditions": [
+                    "sink write pilot was not executed because readiness is blocked.",
+                    "Resolve blocked reasons before retrying with the explicit execute flag.",
+                    "This blocked response did not run live lookup, live write, or live readback.",
+                ],
+            }
+        executed = self.execute_sink_write_pilot_for_job(
+            job_id=job_id,
+            run_id=run_id,
+            sink=sink,
+            approved_by=operator,
+            simulate=False,
+        )
+        pilot = dict(executed.get("pilot") or {})
+        return {
+            **base_payload,
+            "state": "executed",
+            "execute_write_pilot": True,
+            "would_execute_write_pilot": True,
+            "write_pilot": pilot,
+            "write_pilot_path": executed.get("pilot_path"),
+            "blocked_reasons": [],
+            "next_safe_command": f"runs live-pilot-status {run_id} --no-write --json",
+            "next_explicit_operator_command": None,
+            "commands": {
+                "live_pilot_status": f"runs live-pilot-status {run_id} --no-write --json",
+                "live_pilot_handoff": f"runs live-pilot-handoff {run_id} --no-write --json",
+                "review_bundle": f"reviews bundle --run-id {run_id} --state all --json",
+            },
+            "explicit_stop_conditions": [
+                "Inspect write/readback evidence before closing the live pilot.",
+                "Do not run another write pilot for this job unless the prior write is reconciled.",
+            ],
+            "writes_attempted": int(pilot.get("writes_attempted") or 0),
+            "network_calls_made": int(pilot.get("network_calls_made") or 0),
         }
 
     def validate_live_pilot_operator_response(self, *, run_id: str, response: str) -> dict[str, Any]:

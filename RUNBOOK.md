@@ -4332,3 +4332,30 @@ Validation:
 Safety:
 
 - This was selected lookup smoke execution-packet hardening only. Default mode did not execute selected lookup smoke or write `selected_lookup_smoke.json`; blocked explicit execution returned a blocked packet without live lookup, live write, live readback, public-web search, paid enrichment, GWS/Odollo/Odoo calls, or configured/private SyncThing processing.
+
+## Turn 205 | 2026-06-15
+
+Continued Plan 0009 with Slice 0009-A129.
+
+Implemented:
+
+- Added `business-card-watchdog.selected-write-pilot-execution-packet-from-response.v1`.
+- Added run-scoped selected write-pilot execution packet from a validated operator response across service, CLI, API, and MCP surfaces.
+- Default mode is no-execute and reports selected target context, lookup-smoke evidence, downstream duplicate evidence, live apply readiness, exact explicit write command, and blocked reasons.
+- Explicit execute mode remains blocked unless selected target scope allows write, lookup evidence exists, downstream duplicate review is resolved, and live apply readiness passes.
+- Operator dashboard command/API/MCP maps now advertise the write-pilot execution packet surface.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_operator_dashboard_composes_no_live_readiness tests/test_service.py::test_service_selected_live_target_gates_non_simulated_lookup tests/test_cli_surfaces.py::test_cli_selected_target_audit_reports_existing_approval tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 6 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/api.py src/business_card_watchdog/mcp.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 231 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was selected write-pilot execution-packet hardening only. Default mode did not execute sink write pilot or write `sink_write_pilot.json`; blocked explicit execution returned a blocked packet without live lookup, live write, live readback, public-web search, paid enrichment, GWS/Odollo/Odoo calls, or configured/private SyncThing processing.

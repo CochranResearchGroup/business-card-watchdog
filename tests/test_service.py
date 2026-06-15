@@ -859,6 +859,10 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
         f"runs selected-lookup-smoke-execution-packet-from-response {run_id} "
         "--response <operator-response> --json"
     )
+    assert dashboard["commands"]["selected_write_pilot_execution_packet_from_response"] == (
+        f"runs selected-write-pilot-execution-packet-from-response {run_id} "
+        "--response <operator-response> --json"
+    )
     assert dashboard["commands"]["live_pilot_validate_response"] == (
         f"runs live-pilot-validate-response {run_id} --response <operator-response> --json"
     )
@@ -874,6 +878,9 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     )
     assert dashboard["api_routes"]["selected_lookup_smoke_execution_packet_from_response"] == (
         f"POST /runs/{run_id}/selected-lookup-smoke-execution-packet-from-response"
+    )
+    assert dashboard["api_routes"]["selected_write_pilot_execution_packet_from_response"] == (
+        f"POST /runs/{run_id}/selected-write-pilot-execution-packet-from-response"
     )
     assert dashboard["mcp_tools"]["next_actions"] == {
         "tool": "business_card_watchdog_next_actions",
@@ -902,6 +909,10 @@ def test_service_operator_dashboard_composes_no_live_readiness(tmp_path: Path) -
     assert dashboard["mcp_tools"]["selected_lookup_smoke_execution_packet_from_response"] == {
         "tool": "business_card_watchdog_selected_lookup_smoke_execution_packet_from_response",
         "arguments": {"run_id": run_id, "response": "<operator-response>", "execute_selected_lookup_smoke": False},
+    }
+    assert dashboard["mcp_tools"]["selected_write_pilot_execution_packet_from_response"] == {
+        "tool": "business_card_watchdog_selected_write_pilot_execution_packet_from_response",
+        "arguments": {"run_id": run_id, "response": "<operator-response>", "execute_write_pilot": False},
     }
     assert dashboard["mcp_tools"]["review_routing_drill"] == {
         "tool": "business_card_watchdog_review_routing_drill",
@@ -2827,6 +2838,41 @@ def test_service_selected_live_target_gates_non_simulated_lookup(tmp_path: Path)
     assert blocked_execution["writes_attempted"] == 0
     assert blocked_execution["network_calls_made"] == 0
     assert not (config.runs_dir / run_id / "artifacts" / job_id / "selected_lookup_smoke.json").exists()
+
+    write_packet = service.selected_write_pilot_execution_packet_from_response(
+        run_id=run_id,
+        response=preselection_response,
+    )
+    assert write_packet["schema"] == (
+        "business-card-watchdog.selected-write-pilot-execution-packet-from-response.v1"
+    )
+    assert write_packet["state"] == "blocked"
+    assert write_packet["job_id"] == job_id
+    assert write_packet["sink"] == "google_contacts"
+    assert write_packet["operator"] == "tester"
+    assert write_packet["execute_write_pilot"] is False
+    assert write_packet["would_execute_write_pilot"] is False
+    assert write_packet["write_pilot"] is None
+    assert write_packet["write_pilot_path"] is None
+    assert "selected target scope does not allow write" in write_packet["blocked_reasons"]
+    assert "selected_lookup_smoke.json is required before write pilot" in write_packet["blocked_reasons"]
+    assert "downstream_duplicate_assessment.json is required before write pilot" in write_packet["blocked_reasons"]
+    assert write_packet["writes_attempted"] == 0
+    assert write_packet["network_calls_made"] == 0
+
+    blocked_write = service.selected_write_pilot_execution_packet_from_response(
+        run_id=run_id,
+        response=preselection_response,
+        execute_write_pilot=True,
+    )
+    assert blocked_write["state"] == "blocked"
+    assert blocked_write["execute_write_pilot"] is True
+    assert blocked_write["would_execute_write_pilot"] is False
+    assert blocked_write["write_pilot"] is None
+    assert blocked_write["write_pilot_path"] is None
+    assert blocked_write["writes_attempted"] == 0
+    assert blocked_write["network_calls_made"] == 0
+    assert not (config.runs_dir / run_id / "artifacts" / job_id / "sink_write_pilot.json").exists()
 
     audit = service.selected_live_target_audit(job_id=job_id, run_id=run_id, scope="lookup")
     assert audit["schema"] == "business-card-watchdog.selected-live-target-audit.v1"

@@ -135,6 +135,10 @@ def create_app(config_path: Path | None = None):
         response: str
         execute_selected_lookup_smoke: bool = False
 
+    class SelectedWritePilotExecutionPacketFromResponseRequest(BaseModel):
+        response: str
+        execute_write_pilot: bool = False
+
     class SelectedLiveTargetAuditRequest(BaseModel):
         run_id: str
         scope: str | None = None
@@ -336,6 +340,17 @@ def create_app(config_path: Path | None = None):
             run_id=run_id,
             response=request.response,
             execute_selected_lookup_smoke=request.execute_selected_lookup_smoke,
+        )
+
+    @app.post("/runs/{run_id}/selected-write-pilot-execution-packet-from-response")
+    def create_run_selected_write_pilot_execution_packet_from_response(
+        run_id: str,
+        request: SelectedWritePilotExecutionPacketFromResponseRequest,
+    ) -> dict[str, object]:
+        return service().selected_write_pilot_execution_packet_from_response(
+            run_id=run_id,
+            response=request.response,
+            execute_write_pilot=request.execute_write_pilot,
         )
 
     @app.get("/runs/{run_id}/jobs")
