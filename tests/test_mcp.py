@@ -161,6 +161,9 @@ def test_mcp_child_replacement_readiness_drill_exports_operator_samples(tmp_path
     assert payload["operator_dashboard_child_replacement_summary"]["ready_count"] == 1
     assert payload["writes_attempted"] == 0
     assert payload["network_calls_made"] == 0
+    sample_output_path = Path(payload["sample_outputs"]["child_replacement_readiness_markdown_path"])
+    assert sample_output_path.exists()
+    assert "Child Replacement Readiness Sample Output" in sample_output_path.read_text(encoding="utf-8")
     assert Path(payload["sample_outputs"]["review_bundle_path"]).exists()
     assert Path(payload["drill_path"]).exists()
 

@@ -168,12 +168,16 @@ def test_cli_child_replacement_readiness_drill_exports_operator_samples(tmp_path
     assert payload["operator_dashboard_child_replacement_summary"]["ready_count"] == 1
     assert payload["writes_attempted"] == 0
     assert payload["network_calls_made"] == 0
+    sample_output_path = Path(payload["sample_outputs"]["child_replacement_readiness_markdown_path"])
+    assert sample_output_path.exists()
+    assert "Child Replacement Readiness Sample Output" in sample_output_path.read_text(encoding="utf-8")
     assert Path(payload["sample_outputs"]["review_html_path"]).exists()
 
     assert main(["--config", str(config_path), "drills", "child-replacement-readiness"]) == 0
     text = capsys.readouterr().out
     assert "Child replacement readiness drill:" in text
     assert "closeout: ready_for_operator_closeout" in text
+    assert "Sample output:" in text
     assert "Review HTML:" in text
     assert "{" not in text
 

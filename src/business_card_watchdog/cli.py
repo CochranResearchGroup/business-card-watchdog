@@ -260,6 +260,7 @@ def _render_child_replacement_readiness_drill_text(payload: dict[str, object]) -
         ("Review bundle", "review_bundle_path"),
         ("Review HTML", "review_html_path"),
         ("Review workbook", "review_workbook_path"),
+        ("Sample output", "child_replacement_readiness_markdown_path"),
     ]:
         value = sample_outputs.get(key)
         if value:

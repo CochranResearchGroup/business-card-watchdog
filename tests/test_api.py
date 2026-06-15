@@ -1539,6 +1539,9 @@ def test_api_child_replacement_readiness_drill_exports_operator_samples(tmp_path
     assert drill["operator_dashboard_child_replacement_summary"]["ready_count"] == 1
     assert drill["writes_attempted"] == 0
     assert drill["network_calls_made"] == 0
+    sample_output_path = Path(drill["sample_outputs"]["child_replacement_readiness_markdown_path"])
+    assert sample_output_path.exists()
+    assert "Closeout Rollup" in sample_output_path.read_text(encoding="utf-8")
     assert Path(drill["sample_outputs"]["review_workbook_path"]).exists()
     assert Path(drill["drill_path"]).exists()
 

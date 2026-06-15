@@ -261,4 +261,5 @@ Operational details live in:
 - `docs/operations/public-upstream-validation.md`
 - `docs/operations/live-pilot-checklists.md`
 - `docs/operations/live-pilot-sample-output.md`
+- `docs/operations/child-replacement-sample-output.md`
 - `docs/operations/release-readiness.md`

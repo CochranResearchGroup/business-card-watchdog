@@ -109,6 +109,12 @@ def test_service_child_replacement_readiness_drill_exports_operator_samples(tmp_
     assert Path(drill["sample_outputs"]["review_bundle_path"]).exists()
     assert Path(drill["sample_outputs"]["review_html_path"]).exists()
     assert Path(drill["sample_outputs"]["review_workbook_path"]).exists()
+    sample_output_path = Path(drill["sample_outputs"]["child_replacement_readiness_markdown_path"])
+    sample_output = sample_output_path.read_text(encoding="utf-8")
+    assert sample_output_path.exists()
+    assert "# Child Replacement Readiness Sample Output" in sample_output
+    assert "ready_replacement_copy_packet: `ready_for_replacement_operator_copy`" in sample_output
+    assert "approved fixture replacement google contacts target profile" not in sample_output
     assert Path(drill["drill_path"]).exists()
 
 

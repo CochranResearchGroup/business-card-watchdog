@@ -2814,9 +2814,34 @@ class BusinessCardService:
                 "Use authenticated readiness and live or sandbox write/readback checks before claiming real sink routing.",
             ],
         }
+        sample_output_path = self.config.runs_dir / run_dir.name / "child_replacement_readiness_sample_output.md"
+        payload["sample_outputs"]["child_replacement_readiness_markdown_path"] = str(sample_output_path)
+        payload["sample_outputs"]["documents_packets"] = [
+            "blocked_replacement_audit",
+            "abandonment",
+            "replacement_reset",
+            "blocked_replacement_validation",
+            "replacement_handoff",
+            "replacement_validation",
+            "replacement_checklist",
+            "blocked_replacement_copy_packet",
+            "ready_replacement_copy_packet",
+            "closeout",
+            "review_bundle",
+            "review_html",
+            "review_workbook",
+            "operator_dashboard",
+        ]
+        payload["sample_outputs"]["raw_operator_response_stored"] = False
+        payload["sample_outputs"]["raw_acknowledgement_stored"] = False
+        sample_output_path.write_text(
+            self._render_child_replacement_readiness_sample_output(payload),
+            encoding="utf-8",
+        )
         drill_path = self.config.runs_dir / run_dir.name / "child_replacement_readiness_drill.json"
         drill_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         ledger = RunLedger(self.config.runs_dir / run_dir.name)
+        ledger.record_artifact(job_id="__run__", kind="child_replacement_readiness_sample_output", path=sample_output_path)
         ledger.record_artifact(job_id="__run__", kind="child_replacement_readiness_drill", path=drill_path)
         ledger.record_event(
             "child_replacement_readiness_drill_completed",
@@ -2832,6 +2857,88 @@ class BusinessCardService:
         )
         payload["drill_path"] = str(drill_path)
         return payload
+
+    def _render_child_replacement_readiness_sample_output(self, payload: dict[str, Any]) -> str:
+        sample_outputs = dict(payload.get("sample_outputs") or {})
+        readiness_states = dict(payload.get("readiness_states") or {})
+        commands = dict(payload.get("commands") or {})
+        closeout_rollup = dict(payload.get("closeout_rollup") or {})
+        state_groups = dict(payload.get("review_bundle_child_replacement_groups") or {})
+        dashboard_summary = dict(payload.get("operator_dashboard_child_replacement_summary") or {})
+        stop_conditions = list(payload.get("explicit_stop_conditions") or [])
+        lines = [
+            "# Child Replacement Readiness Sample Output",
+            "",
+            "Synthetic fixture only. Do not use this sample as live sink approval.",
+            "",
+            "## Run",
+            "",
+            f"- Run: `{payload.get('run_id')}`",
+            f"- Job: `{payload.get('job_id')}`",
+            f"- Candidate: `{payload.get('candidate_id')}`",
+            f"- State: `{payload.get('state')}`",
+            f"- Writes attempted: `{payload.get('writes_attempted', 0)}`",
+            f"- Network calls made: `{payload.get('network_calls_made', 0)}`",
+            "",
+            "## Redaction",
+            "",
+            "- Raw operator response stored: `False`",
+            "- Raw acknowledgement stored: `False`",
+            "- Safety confirmation text is not stored in this sample output.",
+            "",
+            "## Readiness States",
+            "",
+        ]
+        for key in [
+            "blocked_replacement_audit",
+            "blocked_replacement_validation",
+            "replacement_handoff",
+            "replacement_response",
+            "replacement_checklist",
+            "blocked_replacement_copy_packet",
+            "ready_replacement_copy_packet",
+            "closeout",
+        ]:
+            lines.append(f"- {key}: `{readiness_states.get(key)}`")
+        lines.extend(
+            [
+                "",
+                "## Closeout Rollup",
+                "",
+                f"- Predecessor artifacts stale: `{closeout_rollup.get('predecessor_artifacts_stale')}`",
+                f"- Replacement handoff ready: `{closeout_rollup.get('replacement_handoff_ready')}`",
+                f"- Replacement response ready: `{closeout_rollup.get('replacement_response_ready')}`",
+                f"- Replacement checklist ready: `{closeout_rollup.get('replacement_checklist_ready')}`",
+                f"- Replacement copy ready: `{closeout_rollup.get('replacement_copy_ready')}`",
+                f"- Selected target created: `{closeout_rollup.get('selected_target_created')}`",
+                f"- Executable live command: `{closeout_rollup.get('executable_live_command')}`",
+                "",
+                "## Review Samples",
+                "",
+                f"- Review bundle: `{sample_outputs.get('review_bundle_path')}`",
+                f"- Review HTML: `{sample_outputs.get('review_html_path')}`",
+                f"- Review workbook: `{sample_outputs.get('review_workbook_path')}`",
+                f"- Operator dashboard: `{sample_outputs.get('operator_dashboard_command')}`",
+                f"- Review bundle child replacement groups: `{json.dumps(state_groups, sort_keys=True)}`",
+                f"- Operator dashboard ready count: `{dashboard_summary.get('ready_count')}`",
+                "",
+                "## Operator Commands",
+                "",
+                f"- Re-run drill: `{commands.get('child_replacement_readiness_drill')}`",
+                f"- Review bundle: `{commands.get('review_bundle')}`",
+                f"- Review HTML: `{commands.get('review_html')}`",
+                f"- Review workbook: `{commands.get('review_workbook')}`",
+                f"- Operator dashboard: `{commands.get('operator_dashboard')}`",
+                f"- Closeout status: `{commands.get('closeout_status')}`",
+                "",
+                "## Stop Conditions",
+                "",
+            ]
+        )
+        for condition in stop_conditions:
+            lines.append(f"- {condition}")
+        lines.append("")
+        return "\n".join(lines)
 
     def list_jobs(self, run_id: str | None = None) -> list[dict[str, Any]]:
         run_ids = [run_id] if run_id is not None else [str(run["run_id"]) for run in self.list_runs()]

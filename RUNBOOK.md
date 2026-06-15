@@ -5312,3 +5312,33 @@ Validation:
 Safety:
 
 - This created synthetic live-pilot rehearsal sample output only. It did not process private SyncThing images; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.
+
+## Turn 240 | 2026-06-15
+
+Executed Plan 0034 with Slice 0034-A.
+
+Implemented:
+
+- Added `child_replacement_readiness_sample_output.md` generation to `drills child-replacement-readiness`.
+- Added `sample_outputs.child_replacement_readiness_markdown_path` to the drill payload.
+- Added `child_replacement_readiness_sample_output` as a run artifact kind.
+- Added CLI text output for the sample path.
+- Added `docs/operations/child-replacement-sample-output.md`.
+- Updated README and roadmap documentation for child replacement sample output.
+- Added service, CLI, API, and MCP coverage for sample output visibility and redaction.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_review_surface.py::test_service_child_replacement_readiness_drill_exports_operator_samples tests/test_cli_surfaces.py::test_cli_child_replacement_readiness_drill_exports_operator_samples tests/test_api.py::test_api_child_replacement_readiness_drill_exports_operator_samples tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_child_replacement_readiness_drill_exports_operator_samples -q` passed with 5 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_review_surface.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 271 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `rg -n "child-replacement-sample-output|child_replacement_readiness_sample_output|Child Replacement Readiness Sample Output|child_replacement_readiness_markdown_path" README.md docs src tests` passed.
+- `uv build --out-dir dist` built source and wheel distributions.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This created synthetic child replacement readiness sample output only. It did not process private SyncThing images; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.
