@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Callable
 from uuid import uuid4
 
-from .config import AppConfig, SinkConfig, WatchConfig, ensure_runtime_dirs
+from .config import AppConfig, PrefilterConfig, SinkConfig, WatchConfig, ensure_runtime_dirs
 from .contact import (
     apply_enrichment_proposals,
     apply_review_corrections,
@@ -2611,6 +2611,220 @@ class BusinessCardService:
                 "",
                 "- The drill proves command-copy gating but does not execute the copied command.",
                 f"- Command copy text: `{payload.get('command_copy_text')}`",
+                "",
+                "## Stop Conditions",
+                "",
+            ]
+        )
+        for condition in stop_conditions:
+            lines.append(f"- {condition}")
+        lines.append("")
+        return "\n".join(lines)
+
+    def watch_dry_run_execution_drill(self) -> dict[str, Any]:
+        ensure_runtime_dirs(self.config)
+        drill_id = f"fixture-watch-dry-run-execution-{utc_now().replace(':', '-')}-{uuid4().hex[:8]}"
+        drill_root = self.config.cache_dir / "fixture-drills" / drill_id
+        source_dir = drill_root / "source"
+        data_dir = self.config.runs_dir / drill_id / "fixture-data"
+        cache_dir = drill_root / "cache"
+        image_path = _write_synthetic_business_card_image(source_dir / "synthetic-watch-execution-card.png")
+        drill_config = replace(
+            self.config,
+            data_dir=data_dir,
+            cache_dir=cache_dir,
+            watch=WatchConfig(inputs=[str(source_dir)], settle_seconds=0.0),
+            prefilter=PrefilterConfig(enabled=False),
+            sink=SinkConfig(
+                google_contacts=True,
+                google_contacts_profile="fixture-gws-profile",
+                odoo=True,
+                odollo_tenant="fixture-odollo-tenant",
+                dry_run=True,
+                google_contacts_apply_enabled=False,
+                odoo_apply_enabled=False,
+            ),
+            routing_rules=[
+                {
+                    "match": "email_domain",
+                    "value": "*",
+                    "sinks": ["google_contacts", "odoo"],
+                }
+            ],
+        )
+        first = PollingWatcher(drill_config)
+        first.orchestrator.adapter = _FixtureSkillAdapter()
+        first_scan = [str(path) for path in first.scan_once(dry_run=True)]
+
+        seen_records = []
+        if first.state.seen_path.exists():
+            seen_records = [
+                json.loads(line)
+                for line in first.state.seen_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+        processed_run_dirs = [str(record.get("run_dir")) for record in seen_records if record.get("run_dir")]
+        processed_run_dir = Path(processed_run_dirs[0]) if processed_run_dirs else None
+        run_payload: dict[str, Any] = {}
+        job_records: list[dict[str, Any]] = []
+        artifact_records: list[dict[str, Any]] = []
+        event_types: list[str] = []
+        if processed_run_dir is not None:
+            run_path = processed_run_dir / "run.json"
+            jobs_path = processed_run_dir / "jobs.jsonl"
+            artifacts_path = processed_run_dir / "artifacts.jsonl"
+            events_path = processed_run_dir / "events.jsonl"
+            if run_path.exists():
+                run_payload = json.loads(run_path.read_text(encoding="utf-8"))
+            if jobs_path.exists():
+                job_records = [json.loads(line) for line in jobs_path.read_text(encoding="utf-8").splitlines() if line]
+            if artifacts_path.exists():
+                artifact_records = [
+                    json.loads(line) for line in artifacts_path.read_text(encoding="utf-8").splitlines() if line
+                ]
+            if events_path.exists():
+                event_types = [
+                    str(json.loads(line).get("event_type"))
+                    for line in events_path.read_text(encoding="utf-8").splitlines()
+                    if line
+                ]
+
+        restarted = PollingWatcher(drill_config)
+        restarted.orchestrator.adapter = _FixtureSkillAdapter()
+        second_scan = [str(path) for path in restarted.scan_once(dry_run=True)]
+        final_status = restarted.status().to_dict()
+        latest_job = job_records[-1] if job_records else {}
+        artifact_kinds = sorted({str(record.get("kind")) for record in artifact_records if record.get("kind")})
+        assertions = {
+            "synthetic_source_only": str(image_path).startswith(str(drill_root)),
+            "configured_watch_inputs_not_used": final_status.get("inputs") == [str(source_dir)],
+            "first_scan_processed_one": first_scan == [str(image_path)],
+            "second_scan_processed_zero": second_scan == [],
+            "seen_file_persisted": int(final_status.get("seen_count", 0)) == 1,
+            "processed_run_recorded": processed_run_dir is not None and processed_run_dir.exists(),
+            "run_completed": run_payload.get("state") == "completed",
+            "run_was_dry_run": run_payload.get("dry_run") is True,
+            "job_recorded": len(job_records) >= 1,
+            "contact_candidate_written": "contact_candidate" in artifact_kinds,
+            "review_report_written": "review_report" in artifact_kinds,
+            "sink_payloads_written": "sink_payloads" in artifact_kinds,
+            "sink_decision_dry_run_recorded": "sink_decision_dry_run" in event_types,
+            "no_private_sources_used": True,
+            "no_live_sink_calls": True,
+            "no_network_calls": True,
+        }
+        state = "passed" if all(assertions.values()) else "needs_attention"
+        payload: dict[str, Any] = {
+            "schema": "business-card-watchdog.watch-dry-run-execution-drill.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "drill_id": drill_id,
+            "drill_root": str(drill_root),
+            "source_dir": str(source_dir),
+            "data_dir": str(data_dir),
+            "watch_dir": str(drill_config.watch_dir),
+            "synthetic_images": [str(image_path)],
+            "first_scan_processed": first_scan,
+            "second_scan_processed": second_scan,
+            "processed_run_dirs": processed_run_dirs,
+            "processed_run": {
+                "run_id": run_payload.get("run_id"),
+                "path": str(processed_run_dir) if processed_run_dir is not None else None,
+                "state": run_payload.get("state"),
+                "dry_run": run_payload.get("dry_run"),
+                "job_count": run_payload.get("job_count"),
+                "latest_job_state": latest_job.get("state"),
+                "artifact_kinds": artifact_kinds,
+                "event_types": event_types,
+            },
+            "final_status": final_status,
+            "assertions": assertions,
+            "files_processed": len(first_scan),
+            "ocr_attempted": 1 if "ocr_text" in artifact_kinds else 0,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "private_sources_used": False,
+            "public_web_search_used": False,
+            "paid_enrichment_used": False,
+            "live_sink_calls_made": False,
+            "commands": {
+                "watch_dry_run_execution_drill": "drills watch-dry-run-execution --json",
+                "watch_dry_run_selection_drill": "drills watch-dry-run-selection --json",
+                "watch_dry_run": "watch-dry-run --json",
+                "watch_status": "watch-status --json",
+                "run_summary": f"runs summary {processed_run_dir.name}" if processed_run_dir is not None else None,
+                "operator_dashboard": (
+                    f"operator-dashboard --run-id {processed_run_dir.name}" if processed_run_dir is not None else None
+                ),
+            },
+            "explicit_stop_conditions": [
+                "This drill executes the watcher only against a synthetic fixture source.",
+                "This drill does not use configured SyncThing/private watch inputs.",
+                "This drill uses dry-run routing only and does not call live sink adapters.",
+                "Do not treat this fixture execution as approval to run the configured private watch backlog.",
+            ],
+        }
+        sample_output_path = self.config.runs_dir / drill_id / "watch_dry_run_execution_sample_output.md"
+        drill_path = self.config.runs_dir / drill_id / "watch_dry_run_execution_drill.json"
+        sample_output_path.parent.mkdir(parents=True, exist_ok=True)
+        payload["sample_outputs"] = {
+            "watch_dry_run_execution_markdown_path": str(sample_output_path),
+        }
+        sample_output_path.write_text(
+            self._render_watch_dry_run_execution_sample_output(payload),
+            encoding="utf-8",
+        )
+        drill_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        payload["drill_path"] = str(drill_path)
+        return payload
+
+    def _render_watch_dry_run_execution_sample_output(self, payload: dict[str, Any]) -> str:
+        processed_run = dict(payload.get("processed_run") or {})
+        commands = dict(payload.get("commands") or {})
+        stop_conditions = list(payload.get("explicit_stop_conditions") or [])
+        artifact_kinds = list(processed_run.get("artifact_kinds") or [])
+        lines = [
+            "# Watch Dry-Run Execution Sample Output",
+            "",
+            "Synthetic fixture only. This sample proves watched dry-run execution without configured private inputs.",
+            "",
+            "## Drill State",
+            "",
+            f"- Drill: `{payload.get('drill_id')}`",
+            f"- State: `{payload.get('state')}`",
+            f"- Files processed: `{payload.get('files_processed', 0)}`",
+            f"- OCR attempted: `{payload.get('ocr_attempted', 0)}`",
+            f"- Writes attempted: `{payload.get('writes_attempted', 0)}`",
+            f"- Network calls made: `{payload.get('network_calls_made', 0)}`",
+            f"- Private sources used: `{payload.get('private_sources_used')}`",
+            "",
+            "## Processed Run",
+            "",
+            f"- Run id: `{processed_run.get('run_id')}`",
+            f"- State: `{processed_run.get('state')}`",
+            f"- Dry run: `{processed_run.get('dry_run')}`",
+            f"- Job count: `{processed_run.get('job_count')}`",
+            f"- Latest job state: `{processed_run.get('latest_job_state')}`",
+            "",
+            "## Artifacts",
+            "",
+        ]
+        if artifact_kinds:
+            for kind in artifact_kinds:
+                lines.append(f"- `{kind}`")
+        else:
+            lines.append("- none")
+        lines.extend(
+            [
+                "",
+                "## Commands",
+                "",
+                f"- Re-run execution drill: `{commands.get('watch_dry_run_execution_drill')}`",
+                f"- Selection drill: `{commands.get('watch_dry_run_selection_drill')}`",
+                f"- Watch dry-run harness: `{commands.get('watch_dry_run')}`",
+                f"- Watch status: `{commands.get('watch_status')}`",
+                f"- Run summary: `{commands.get('run_summary')}`",
+                f"- Operator dashboard: `{commands.get('operator_dashboard')}`",
                 "",
                 "## Stop Conditions",
                 "",

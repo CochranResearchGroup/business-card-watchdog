@@ -423,6 +423,14 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_watch_dry_run_execution_drill",
+                "description": "Run a synthetic watched dry-run execution drill through the real batch orchestrator.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {},
+                },
+            },
+            {
                 "name": "business_card_watchdog_live_pilot_rehearsal_drill",
                 "description": "Run a synthetic no-live live-pilot rehearsal through selected target, readiness export, checklist, and command-copy gates.",
                 "input_schema": {
@@ -1505,6 +1513,8 @@ def call_tool(
         return service.multi_card_preclassification_drill()
     if tool_name == "business_card_watchdog_watch_dry_run_selection_drill":
         return service.watch_dry_run_selection_drill()
+    if tool_name == "business_card_watchdog_watch_dry_run_execution_drill":
+        return service.watch_dry_run_execution_drill()
     if tool_name == "business_card_watchdog_review_routing_drill":
         return service.review_routing_drill()
     if tool_name == "business_card_watchdog_live_pilot_rehearsal_drill":

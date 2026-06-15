@@ -284,6 +284,36 @@ def test_cli_watch_dry_run_selection_drill_exports_sample_output(
     assert "{" not in text
 
 
+def test_cli_watch_dry_run_execution_drill_runs_real_dry_pipeline(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+
+    assert main(["--config", str(config_path), "drills", "watch-dry-run-execution", "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["schema"] == "business-card-watchdog.watch-dry-run-execution-drill.v1"
+    assert payload["state"] == "passed"
+    assert payload["files_processed"] == 1
+    assert payload["ocr_attempted"] == 1
+    assert payload["network_calls_made"] == 0
+    assert payload["processed_run"]["state"] == "completed"
+    sample_output_path = Path(payload["sample_outputs"]["watch_dry_run_execution_markdown_path"])
+    assert sample_output_path.exists()
+
+    assert main(["--config", str(config_path), "drills", "watch-dry-run-execution"]) == 0
+    text = capsys.readouterr().out
+    assert "Watch dry-run execution drill:" in text
+    assert "State: passed" in text
+    assert "Processed run state: completed" in text
+    assert "Observed: files=1 ocr=1 writes=0 network=0" in text
+    assert "Sample output:" in text
+    assert "{" not in text
+
+
 def test_cli_child_reviews_lists_promoted_child_candidates(
     tmp_path: Path,
     monkeypatch,

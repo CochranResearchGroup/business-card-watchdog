@@ -6,9 +6,9 @@ Build a robust, installable business-card ingestion system that can process arbi
 
 Product authority: `PRODUCT_SPEC.md`.
 Latest completed control-plane plan: `docs/dev/plans/0008-2026-06-14-runtime-installation-and-pilot-operations.md`.
-Latest completed offline product-hardening plan: `docs/dev/plans/0040-2026-06-15-watch-dry-run-selection-sample-output.md`.
+Latest completed offline product-hardening plan: `docs/dev/plans/0041-2026-06-15-watch-dry-run-execution-drill.md`.
 Next production plan: `docs/dev/plans/0009-2026-06-14-operator-selected-live-smoke-and-pilot-rollout.md`.
-Next offline boundary: review the fixture watch dry-run selection sample output, then explicitly choose whether to run one private-source watch dry run, or use the preflight sample output to choose one run/job/sink/operator scope.
+Next offline boundary: review the fixture watch dry-run execution sample output, then explicitly choose whether to run one private-source watch dry run, or use the preflight sample output to choose one run/job/sink/operator scope.
 Next production boundary: operator-selected live smoke/pilot rollout for one run, one job, and one sink at a time.
 
 ## Milestones
@@ -43,7 +43,7 @@ Status evidence: Plans 0004 and 0005 are reconciled/closed for review queues, re
 - Add user-scope service install helpers.
 - Add health/status commands for watcher readiness.
 
-Status evidence: Plan 0008 closed runtime readiness, fixture-backed watch dry-run proof, service recovery reporting, and user-scope runtime operations. Plan 0038 added a redacted watch backlog preflight for configured inputs. Plan 0039 added operator-response validation and a command-copy packet for the configured private-source watch dry-run boundary. Plan 0040 added a synthetic sample-output drill for that selection workflow. Real SyncThing/private source processing still requires explicit operator action.
+Status evidence: Plan 0008 closed runtime readiness, fixture-backed watch dry-run proof, service recovery reporting, and user-scope runtime operations. Plan 0038 added a redacted watch backlog preflight for configured inputs. Plan 0039 added operator-response validation and a command-copy packet for the configured private-source watch dry-run boundary. Plan 0040 added a synthetic sample-output drill for that selection workflow. Plan 0041 added a synthetic watched dry-run execution drill through the real batch orchestrator. Real SyncThing/private source processing still requires explicit operator action.
 
 ### M4 | Live Sink Adapters | READY_FOR_OPERATOR_SELECTED_PILOTS
 

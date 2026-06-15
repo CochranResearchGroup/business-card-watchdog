@@ -869,6 +869,10 @@ def create_app(config_path: Path | None = None):
     def watch_dry_run_selection_drill() -> dict[str, object]:
         return service().watch_dry_run_selection_drill()
 
+    @app.post("/drills/watch-dry-run-execution")
+    def watch_dry_run_execution_drill() -> dict[str, object]:
+        return service().watch_dry_run_execution_drill()
+
     @app.post("/drills/review-routing")
     def review_routing_drill() -> dict[str, object]:
         return service().review_routing_drill()

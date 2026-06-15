@@ -1486,6 +1486,37 @@ def test_service_watch_dry_run_selection_drill_exports_sample_output(tmp_path: P
     }
 
 
+def test_service_watch_dry_run_execution_drill_runs_real_dry_pipeline(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        cache_dir=tmp_path / "cache",
+    )
+
+    payload = BusinessCardService(config).watch_dry_run_execution_drill()
+
+    assert payload["schema"] == "business-card-watchdog.watch-dry-run-execution-drill.v1"
+    assert payload["state"] == "passed"
+    assert payload["private_sources_used"] is False
+    assert payload["files_processed"] == 1
+    assert payload["ocr_attempted"] == 1
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert payload["first_scan_processed"] == payload["synthetic_images"]
+    assert payload["second_scan_processed"] == []
+    assert payload["processed_run"]["state"] == "completed"
+    assert payload["processed_run"]["dry_run"] is True
+    assert payload["processed_run"]["job_count"] == 1
+    assert "contact_candidate" in payload["processed_run"]["artifact_kinds"]
+    assert "sink_payloads" in payload["processed_run"]["artifact_kinds"]
+    assert "sink_decision_dry_run" in payload["processed_run"]["event_types"]
+    sample_output_path = Path(payload["sample_outputs"]["watch_dry_run_execution_markdown_path"])
+    assert sample_output_path.exists()
+    sample_output = sample_output_path.read_text(encoding="utf-8")
+    assert "# Watch Dry-Run Execution Sample Output" in sample_output
+    assert "Synthetic fixture only" in sample_output
+
+
 def test_service_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",

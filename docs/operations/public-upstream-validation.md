@@ -467,3 +467,22 @@ Validation:
 Safety:
 
 - The Plan 0040 smoke used a synthetic fixture watch source under the cache directory. It did not process configured SyncThing/private watch inputs; run OCR/App Intelligence; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.
+
+## 2026-06-15 Local Gate For Plan 0041
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_watch_dry_run_execution_drill_runs_real_dry_pipeline tests/test_cli_surfaces.py::test_cli_watch_dry_run_execution_drill_runs_real_dry_pipeline tests/test_api.py::test_api_watch_dry_run_execution_drill_runs_real_dry_pipeline tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_watch_dry_run_execution_drill_runs_real_dry_pipeline -q` passed with 5 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/api.py src/business_card_watchdog/mcp.py tests/test_service.py tests/test_cli_surfaces.py tests/test_api.py tests/test_mcp.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 295 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `rg -n "watch-dry-run-execution|watch_dry_run_execution|Watch Dry-Run Execution|business_card_watchdog_watch_dry_run_execution_drill|Plan 0041" README.md ROADMAP.md RUNBOOK.md docs src tests` passed.
+- `uv build --out-dir dist` built source and wheel distributions.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `codegraph sync && codegraph status` passed; index is up to date.
+- `.venv/bin/bcw drills watch-dry-run-execution --json` passed with `state=passed`, one synthetic fixture file processed, a completed dry-run batch run, OCR/contact/review/sink payload artifacts, zero duplicate processing after restart, zero writes, and zero network calls.
+
+Safety:
+
+- The Plan 0041 smoke used a synthetic fixture watch source under the cache directory. It did not process configured SyncThing/private watch inputs; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.

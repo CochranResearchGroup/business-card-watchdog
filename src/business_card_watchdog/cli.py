@@ -480,6 +480,47 @@ def _render_watch_dry_run_selection_drill_text(payload: dict[str, object]) -> st
     return "\n".join(lines) + "\n"
 
 
+def _render_watch_dry_run_execution_drill_text(payload: dict[str, object]) -> str:
+    assertions = dict(payload.get("assertions") or {})
+    sample_outputs = dict(payload.get("sample_outputs") or {})
+    commands = dict(payload.get("commands") or {})
+    processed_run = dict(payload.get("processed_run") or {})
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    failed = [key for key, value in assertions.items() if value is not True]
+    lines = [
+        "Watch dry-run execution drill:",
+        f"Drill: {payload.get('drill_id')}",
+        f"State: {payload.get('state')}",
+        f"Processed run: {processed_run.get('run_id')}",
+        f"Processed run state: {processed_run.get('state')}",
+        "Observed: "
+        f"files={payload.get('files_processed', 0)} "
+        f"ocr={payload.get('ocr_attempted', 0)} "
+        f"writes={payload.get('writes_attempted', 0)} "
+        f"network={payload.get('network_calls_made', 0)}",
+        f"Assertions: {len(assertions)}",
+    ]
+    if failed:
+        lines.append("Failed assertions: " + ", ".join(sorted(failed)))
+    if sample_outputs.get("watch_dry_run_execution_markdown_path"):
+        lines.append(f"Sample output: {sample_outputs.get('watch_dry_run_execution_markdown_path')}")
+    lines.append("Commands:")
+    for label, key in [
+        ("Re-run execution drill", "watch_dry_run_execution_drill"),
+        ("Selection drill", "watch_dry_run_selection_drill"),
+        ("Run summary", "run_summary"),
+        ("Operator dashboard", "operator_dashboard"),
+    ]:
+        command = commands.get(key)
+        if command:
+            lines.append(f" - {label}: {command}")
+    stop_rows = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stop_rows)}")
+    for condition in stop_rows:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_operator_dashboard_text(payload: dict[str, object]) -> str:
     runtime = dict(payload.get("runtime_readiness") or {})
     recovery = dict(payload.get("service_recovery") or {})
@@ -2535,6 +2576,8 @@ def build_parser() -> argparse.ArgumentParser:
     drills_multi_card_preclassification.add_argument("--json", action="store_true")
     drills_watch_dry_run_selection = drills_sub.add_parser("watch-dry-run-selection")
     drills_watch_dry_run_selection.add_argument("--json", action="store_true")
+    drills_watch_dry_run_execution = drills_sub.add_parser("watch-dry-run-execution")
+    drills_watch_dry_run_execution.add_argument("--json", action="store_true")
     drills_review_routing = drills_sub.add_parser("review-routing")
     drills_review_routing.add_argument("--json", action="store_true")
     drills_live_pilot_rehearsal = drills_sub.add_parser("live-pilot-rehearsal")
@@ -3237,6 +3280,11 @@ def main(argv: list[str] | None = None) -> int:
             payload = service.watch_dry_run_selection_drill()
             if not args.json:
                 print(_render_watch_dry_run_selection_drill_text(payload), end="")
+                return 0
+        elif args.drills_command == "watch-dry-run-execution":
+            payload = service.watch_dry_run_execution_drill()
+            if not args.json:
+                print(_render_watch_dry_run_execution_drill_text(payload), end="")
                 return 0
         elif args.drills_command == "review-routing":
             payload = service.review_routing_drill()

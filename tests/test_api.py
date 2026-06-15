@@ -1566,6 +1566,27 @@ def test_api_watch_dry_run_selection_drill_exports_sample_output(tmp_path: Path)
     assert "Command copy packet: `ready_for_operator_copy`" in sample_output_path.read_text(encoding="utf-8")
 
 
+def test_api_watch_dry_run_execution_drill_runs_real_dry_pipeline(tmp_path: Path) -> None:
+    from business_card_watchdog.api import create_app
+
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+    client = TestClient(create_app(config_path))
+
+    drill = client.post("/drills/watch-dry-run-execution").json()
+
+    assert drill["schema"] == "business-card-watchdog.watch-dry-run-execution-drill.v1"
+    assert drill["state"] == "passed"
+    assert drill["files_processed"] == 1
+    assert drill["ocr_attempted"] == 1
+    assert drill["network_calls_made"] == 0
+    assert drill["processed_run"]["state"] == "completed"
+    assert "contact_candidate" in drill["processed_run"]["artifact_kinds"]
+    sample_output_path = Path(drill["sample_outputs"]["watch_dry_run_execution_markdown_path"])
+    assert sample_output_path.exists()
+
+
 def test_api_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: Path) -> None:
     from business_card_watchdog.api import create_app
 
