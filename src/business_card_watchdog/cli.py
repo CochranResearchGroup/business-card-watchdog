@@ -13,6 +13,50 @@ from .service_ops import install_user_service, service_status, uninstall_user_se
 from .watcher import PollingWatcher
 
 
+def _render_status_text(payload: dict[str, object]) -> str:
+    watch = dict(payload.get("watch") or {})
+    commands = dict(payload.get("commands") or {})
+    safe_actions = payload.get("safe_next_actions") or []
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    lines = [
+        "Status: " + ("ready" if payload.get("skill_ready") else "blocked"),
+        f"Config: {payload.get('config_path')}",
+        f"Data: {payload.get('data_dir')}",
+        f"Cache: {payload.get('cache_dir')}",
+        f"Skill: ready={payload.get('skill_ready')} message={payload.get('skill_message')}",
+        "Watch: "
+        f"inputs={len(watch.get('inputs') or [])} "
+        f"backlog={watch.get('backlog_count', 0)} "
+        f"unsettled={watch.get('unsettled_count', 0)} "
+        f"last_error={watch.get('last_error') or 'none'}",
+        f"Observed: writes={payload.get('writes_attempted', 0)} network={payload.get('network_calls_made', 0)}",
+        "Commands:",
+    ]
+    for label, key in [
+        ("Runtime readiness", "runtime_readiness"),
+        ("Service recovery", "service_recovery"),
+        ("Watch status", "watch_status"),
+        ("Watch dry run", "watch_dry_run"),
+        ("Runs list", "runs_list"),
+        ("MCP manifest", "mcp_manifest"),
+    ]:
+        command = commands.get(key)
+        if command:
+            lines.append(f" - {label}: {command}")
+
+    action_rows = safe_actions if isinstance(safe_actions, list) else []
+    lines.append(f"Safe next actions: {len(action_rows)}")
+    for action in action_rows:
+        if isinstance(action, dict):
+            lines.append(f" - {action.get('action')}: {action.get('command')}")
+
+    stop_rows = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stop_rows)}")
+    for condition in stop_rows:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_phase_report_text(payload: dict[str, object]) -> str:
     dashboard = dict(payload.get("dashboard_summary") or {})
     preview = dict(payload.get("review_workbook_preview") or {})
@@ -1080,7 +1124,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "status":
         payload = service.status()
-        print(json.dumps(payload, indent=2) if args.json else payload)
+        print(json.dumps(payload, indent=2) if args.json else _render_status_text(payload), end="")
         return 0 if payload["skill_ready"] else 2
 
     if args.command == "doctor":

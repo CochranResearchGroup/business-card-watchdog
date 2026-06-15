@@ -59,6 +59,12 @@ inputs = ["$fsr:sync_phone"]
 
 ## First Commands
 
+Inspect local readiness and safe next commands:
+
+```bash
+.venv/bin/bcw status
+```
+
 Dry-run a batch:
 
 ```bash
@@ -140,7 +146,7 @@ The service commands write only under the user config directory, normally:
 
 ## Current State
 
-This is an initial scaffold. It has deterministic run ledgers, config loading, routing decisions, CLI/API/MCP surfaces, and a subprocess adapter for the existing `business-card-to-contact` skill. External writes are intentionally explicit and dry-run first.
+This is an initial scaffold. It has deterministic run ledgers, config loading, routing decisions, CLI/API/MCP surfaces, and a subprocess adapter for the existing `business-card-to-contact` skill. `bcw status` reports safe next commands, stop conditions, and zero write/network counters. External writes are intentionally explicit and dry-run first.
 
 Operational details live in:
 

@@ -51,6 +51,34 @@ def test_cli_runtime_readiness_reports_local_runtime_state(tmp_path: Path, capsy
     assert "{" not in text
 
 
+def test_cli_status_reports_command_map_text_and_json(tmp_path: Path, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+
+    assert main(["--config", str(config_path), "status", "--json"]) in {0, 2}
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["schema"] == "business-card-watchdog.status.v1"
+    assert payload["commands"]["runtime_readiness"] == "runtime-readiness --json"
+    assert payload["commands"]["service_recovery"] == "service recovery --json"
+    assert payload["commands"]["runs_list"] == "runs list --json"
+    assert payload["safe_next_actions"][0]["action"] == "inspect_runtime_readiness"
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+
+    assert main(["--config", str(config_path), "status"]) in {0, 2}
+    text = capsys.readouterr().out
+    assert "Status:" in text
+    assert "Commands:" in text
+    assert "Runtime readiness: runtime-readiness --json" in text
+    assert "Service recovery: service recovery --json" in text
+    assert "Runs list: runs list --json" in text
+    assert "Safe next actions: 3" in text
+    assert "Stop conditions: 3" in text
+    assert "Observed: writes=0 network=0" in text
+    assert "{" not in text
+
+
 def test_cli_service_recovery_reports_status_shape(tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.toml"
     data_dir = tmp_path / "data"
