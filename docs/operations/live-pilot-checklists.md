@@ -39,6 +39,7 @@ Prepare selected-target approval evidence:
   --sink google_contacts \
   --operator <operator> \
   --scope lookup
+.venv/bin/bcw runs live-pilot-handoff <run-id> --no-write
 .venv/bin/bcw sinks select-live-target \
   <job-id> \
   --run-id <run-id> \
@@ -55,7 +56,7 @@ Prepare selected-target approval evidence:
 .venv/bin/bcw runs live-pilot-status <run-id> --no-write
 ```
 
-Use `--sink odoo` when the read-only smoke target is Odollo/Odoo. Start with `live-selection-requirements` when you need candidate-specific packet and approval commands. The packet must show `existing_selected_target.can_select_replacement_now = true` before selecting a replacement; if it shows `replacement_requires_abandonment = true`, run `abandon-live-pilot` for the old target first and then prepare a new packet.
+Use `--sink odoo` when the read-only smoke target is Odollo/Odoo. Start with `live-selection-requirements` when you need candidate-specific packet and approval commands. Use `runs live-pilot-handoff --no-write` when an agent loop needs the current concrete operator response template; it does not create `selected_live_target.json`. The packet must show `existing_selected_target.can_select_replacement_now = true` before selecting a replacement; if it shows `replacement_requires_abandonment = true`, run `abandon-live-pilot` for the old target first and then prepare a new packet.
 Add `--json` to review commands when you need to archive the full structured artifact.
 
 Prepare lookup artifacts:
@@ -152,6 +153,7 @@ Prepare or refresh selected-target approval evidence:
   --sink google_contacts \
   --operator <operator> \
   --scope all
+.venv/bin/bcw runs live-pilot-handoff <run-id> --no-write
 .venv/bin/bcw sinks select-live-target \
   <job-id> \
   --run-id <run-id> \
@@ -168,7 +170,7 @@ Prepare or refresh selected-target approval evidence:
 .venv/bin/bcw runs live-pilot-status <run-id> --no-write
 ```
 
-Start with `live-selection-requirements` when you need candidate-specific packet and approval commands. If a lookup-only selected target already exists, record `abandon-live-pilot` with the reason for replacement before selecting the broader `all` scope target. Do not hand-edit selected-target artifacts.
+Start with `live-selection-requirements` when you need candidate-specific packet and approval commands. Use `runs live-pilot-handoff --no-write` when an agent loop needs the current concrete operator response template; it does not create `selected_live_target.json`. If a lookup-only selected target already exists, record `abandon-live-pilot` with the reason for replacement before selecting the broader `all` scope target. Do not hand-edit selected-target artifacts.
 Add `--json` to review commands when you need to archive the full structured artifact.
 
 Prepare apply artifacts:

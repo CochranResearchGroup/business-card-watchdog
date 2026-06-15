@@ -938,6 +938,27 @@ Validation:
 
 - `.venv/bin/python -m pytest tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 2 tests.
 
+### Slice 0009-A54 | 2026-06-14 | Document Handoff Prompt As Operator Stop Point
+
+Implemented:
+
+- README operator pilot commands now include `bcw runs live-pilot-handoff <run-id> --no-write` before selected-target approval.
+- Live pilot checklists now include the same handoff prompt step for read-only lookup smoke and one-job write/readback pilots.
+- Operator docs now explain that the handoff prompt is useful for agent-loop operator response capture and does not create `selected_live_target.json`.
+
+Safety:
+
+- This slice changes documentation only.
+- It does not create `selected_live_target.json`, process private SyncThing inputs, run public-web search, call paid enrichment, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `.venv/bin/python -m pytest -q` passed with 223 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:
