@@ -330,6 +330,10 @@ def create_app(config_path: Path | None = None):
     def post_next_actions(request: NextActionsRequest = Body(default=NextActionsRequest())) -> dict[str, object]:
         return service().next_actions(run_id=request.run_id, limit=request.limit)
 
+    @app.post("/drills/review-routing")
+    def review_routing_drill() -> dict[str, object]:
+        return service().review_routing_drill()
+
     @app.get("/jobs/{job_id}")
     def get_job(job_id: str, run_id: str | None = None) -> dict[str, object]:
         return service().get_job(job_id, run_id=run_id)

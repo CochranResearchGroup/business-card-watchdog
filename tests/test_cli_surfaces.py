@@ -79,6 +79,23 @@ def test_cli_status_reports_command_map_text_and_json(tmp_path: Path, capsys) ->
     assert "{" not in text
 
 
+def test_cli_review_routing_drill_outputs_fixture_artifact(tmp_path: Path, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+
+    assert main(["--config", str(config_path), "drills", "review-routing", "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["schema"] == "business-card-watchdog.review-routing-drill.v1"
+    assert payload["private_sources_used"] is False
+    assert payload["safe_actions"]["skipped_actions"] == ["decide_sink_apply"]
+    assert payload["commands"]["review_workbook"] == (
+        f"reviews workbook --run-id {payload['run_id']} --state all --json"
+    )
+    assert Path(payload["drill_path"]).exists()
+
+
 def test_cli_operator_dashboard_reports_no_live_summary(tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.toml"
     data_dir = tmp_path / "data"

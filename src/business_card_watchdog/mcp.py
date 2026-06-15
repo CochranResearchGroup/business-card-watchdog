@@ -187,6 +187,14 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_review_routing_drill",
+                "description": "Run a synthetic no-live review/export/routing drill through safe agent-loop actions.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {},
+                },
+            },
+            {
                 "name": "business_card_watchdog_jobs_list",
                 "description": "List latest job states, optionally for one run.",
                 "input_schema": {
@@ -831,6 +839,8 @@ def call_tool(
             run_id=str(args["run_id"]) if args.get("run_id") else None,
             limit=int(args.get("limit", 10)),
         )
+    if tool_name == "business_card_watchdog_review_routing_drill":
+        return service.review_routing_drill()
     if tool_name == "business_card_watchdog_jobs_list":
         return service.list_jobs(str(args["run_id"]) if args.get("run_id") else None)
     if tool_name == "business_card_watchdog_reviews_list":

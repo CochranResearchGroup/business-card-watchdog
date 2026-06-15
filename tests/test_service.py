@@ -847,6 +847,55 @@ def test_service_watch_reset_returns_runtime_path(tmp_path: Path) -> None:
     assert not (config.watch_dir / "seen-files.jsonl").exists()
 
 
+def test_service_review_routing_drill_exercises_safe_fixture_route(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        cache_dir=tmp_path / "cache",
+    )
+
+    payload = BusinessCardService(config).review_routing_drill()
+    run_id = payload["run_id"]
+    job_id = payload["job_id"]
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+
+    assert payload["schema"] == "business-card-watchdog.review-routing-drill.v1"
+    assert payload["private_sources_used"] is False
+    assert payload["public_web_search_used"] is False
+    assert payload["paid_enrichment_used"] is False
+    assert payload["live_sink_calls_made"] is False
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert payload["configured_fixture_sinks"] == ["google_contacts", "odoo"]
+    assert payload["review"]["final_state"] == "ready_to_route"
+    assert payload["safe_actions"]["executed_actions"] == [
+        "plan_sink_lookup",
+        "prepare_sink_lookup_adapter",
+        "record_sink_lookup_result",
+        "assess_downstream_duplicates",
+        "plan_sinks",
+        "prepare_sink_write_adapter",
+        "preflight_sink_apply",
+    ]
+    assert payload["safe_actions"]["skipped_actions"] == ["decide_sink_apply"]
+    assert payload["next_actions"][0]["action"] == "decide_sink_apply"
+    assert set(payload["route_artifact_kinds"]) >= {
+        "sink_lookup_plan",
+        "sink_adapter_request_lookup",
+        "sink_lookup_result",
+        "downstream_duplicate_assessment",
+        "sink_plan",
+        "sink_adapter_request_write",
+        "sink_apply_preflight",
+    }
+    assert Path(payload["drill_path"]).exists()
+    assert Path(payload["review_bundle_path"]).exists()
+    assert Path(payload["review_workbook_path"]).exists()
+    assert (artifact_dir / "reviewed_contact.json").exists()
+    assert not (artifact_dir / "selected_live_target.json").exists()
+    assert "Do not run public-web search, paid enrichment, live lookup" in payload["explicit_stop_conditions"][2]
+
+
 def test_service_doctor_checks_user_scope_paths(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     payload = BusinessCardService(config).doctor()

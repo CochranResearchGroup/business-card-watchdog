@@ -3,13 +3,14 @@ from __future__ import annotations
 import csv
 import json
 import shlex
+from dataclasses import replace
 from html import escape
 from io import StringIO
 from pathlib import Path
 from typing import Any, Callable
 from uuid import uuid4
 
-from .config import AppConfig, WatchConfig, ensure_runtime_dirs
+from .config import AppConfig, SinkConfig, WatchConfig, ensure_runtime_dirs
 from .contact import (
     apply_enrichment_proposals,
     apply_review_corrections,
@@ -33,7 +34,7 @@ from .enrichment import (
 from .ledger import RunLedger
 from .models import CardJob, utc_now
 from .orchestrator import BatchOrchestrator
-from .review import build_review_submission, write_review_submission
+from .review import assess_contact_spec, build_review_submission, write_review_packet, write_review_submission
 from .routing import decide_sinks
 from .sink_apply_adapters import execute_sink_readback_adapter, execute_sink_write_adapter
 from .sink_lookup_adapters import execute_sink_lookup_adapter
@@ -1434,6 +1435,189 @@ class BusinessCardService:
             "phase_report_before": phase_report_before,
             "phase_report_after": phase_report_after,
         }
+
+    def review_routing_drill(self) -> dict[str, Any]:
+        ensure_runtime_dirs(self.config)
+        run_id = f"fixture-review-routing-{utc_now().replace(':', '-')}-{uuid4().hex[:8]}"
+        fixture_dir = self.config.cache_dir / "fixture-drills" / run_id
+        image_path = _write_synthetic_business_card_image(fixture_dir / "synthetic-business-card.png")
+        run_dir = self.config.runs_dir / run_id
+        artifact_dir = run_dir / "artifacts"
+
+        ledger = RunLedger(run_dir)
+        ledger.initialize(source=str(fixture_dir), dry_run=True)
+        ledger.transition_run("discovering")
+
+        job = CardJob.from_path(image_path)
+        job.artifact_dir = str(artifact_dir / job.job_id)
+        ledger.set_job_count(1)
+        ledger.record_job(job)
+        ledger.transition_run("processing")
+        job.transition_to("processing")
+        ledger.record_job(job)
+
+        job_artifact_dir = Path(job.artifact_dir)
+        job_artifact_dir.mkdir(parents=True, exist_ok=True)
+        spec = {
+            "full_name": "",
+            "organization": "Fixture Labs",
+            "title": "Synthetic Routing Drill Contact",
+            "notes": "Synthetic privacy-safe fixture for review, normalization, dedupe, and sink routing drill.",
+            "source_fixture": image_path.name,
+        }
+        spec_path = job_artifact_dir / "spec.json"
+        spec_path.write_text(json.dumps(spec, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger.record_artifact(job_id=job.job_id, kind="contact_spec", path=spec_path)
+
+        candidate = build_contact_candidate(
+            spec,
+            source="fixture_review_routing_drill",
+            default_country=self.config.normalization.default_country,
+        )
+        candidate_path = job_artifact_dir / "contact_candidate.json"
+        candidate_path.write_text(json.dumps(candidate, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger.record_artifact(job_id=job.job_id, kind="contact_candidate", path=candidate_path)
+
+        assessment = assess_contact_spec(contact_candidate_to_spec(candidate))
+        review_packet_path = write_review_packet(
+            packet_path=job_artifact_dir / "review_packet.json",
+            image_path=image_path,
+            spec=contact_candidate_to_spec(candidate),
+            assessment=assessment,
+            contact_candidate=candidate,
+        )
+        ledger.record_artifact(job_id=job.job_id, kind="review_packet", path=review_packet_path)
+        job.transition_to("needs_review")
+        ledger.record_job(job)
+        ledger.record_event(
+            "fixture_review_routing_drill_created",
+            {
+                "job_id": job.job_id,
+                "run_id": run_id,
+                "fixture_dir": str(fixture_dir),
+                "private_sources_used": False,
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        ledger.transition_run("waiting_for_review")
+
+        review_result = self.submit_review(
+            job_id=job.job_id,
+            run_id=run_id,
+            reviewer="fixture-drill",
+            action="approve_for_routing",
+            field_corrections={
+                "full_name": "Fixture Routing Contact",
+                "email": "fixture.routing@example.test",
+                "phone": "+1 555 0100",
+                "organization": "Fixture Labs",
+            },
+            notes="approved by synthetic fixture drill",
+        )
+        ledger.transition_run("routing")
+
+        drill_config = replace(
+            self.config,
+            sink=SinkConfig(
+                google_contacts=True,
+                google_contacts_profile="fixture-gws-profile",
+                odoo=True,
+                odollo_tenant="fixture-odollo-tenant",
+                dry_run=True,
+                google_contacts_apply_enabled=False,
+                odoo_apply_enabled=False,
+            ),
+            routing_rules=[
+                {
+                    "match": "email_domain",
+                    "value": "*",
+                    "sinks": ["google_contacts", "odoo"],
+                }
+            ],
+        )
+        drill_service = BusinessCardService(
+            drill_config,
+            sink_lookup_executor=self.sink_lookup_executor,
+            sink_write_executor=self.sink_write_executor,
+            sink_readback_executor=self.sink_readback_executor,
+        )
+        run_next = drill_service.run_next_actions(run_id=run_id, limit=10)
+        review_bundle = drill_service.review_bundle(run_id=run_id, state="all", write=True)
+        review_workbook = drill_service.review_workbook(run_id=run_id, state="all", write=True)
+        final_next = drill_service.next_actions(run_id=run_id, limit=10)
+        phase_report = drill_service.phase_report(run_id)
+        route_artifact_kinds = sorted(
+            {
+                str(artifact.get("kind") or "")
+                for artifact in drill_service.list_artifacts(run_id)
+                if artifact.get("job_id") == job.job_id and str(artifact.get("kind") or "") in _ROUTE_ARTIFACT_FILES
+            }
+        )
+        payload = {
+            "schema": "business-card-watchdog.review-routing-drill.v1",
+            "generated_at": utc_now(),
+            "run_id": run_id,
+            "job_id": job.job_id,
+            "fixture_dir": str(fixture_dir),
+            "fixture_image_path": str(image_path),
+            "private_sources_used": False,
+            "public_web_search_used": False,
+            "paid_enrichment_used": False,
+            "live_sink_calls_made": False,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "configured_fixture_sinks": ["google_contacts", "odoo"],
+            "fixture_sink_context": {
+                "google_contacts_profile": "fixture-gws-profile",
+                "odollo_tenant": "fixture-odollo-tenant",
+                "dry_run": True,
+            },
+            "review": {
+                "initial_state": "needs_review",
+                "final_state": review_result["job"]["state"],
+                "reviewed_contact_path": str(job_artifact_dir / "reviewed_contact.json"),
+            },
+            "safe_actions": {
+                "executed_count": run_next["executed_count"],
+                "executed_actions": [str(action.get("action") or "") for action in run_next["executed"]],
+                "skipped_count": run_next["skipped_count"],
+                "skipped_actions": [str(action.get("action") or "") for action in run_next["skipped"]],
+            },
+            "route_artifact_kinds": route_artifact_kinds,
+            "review_bundle_path": review_bundle.get("review_bundle_path"),
+            "review_workbook_path": review_workbook.get("workbook_path"),
+            "phase_dashboard": phase_report["dashboard_summary"],
+            "next_actions": final_next["actions"],
+            "commands": {
+                "review_bundle": f"reviews bundle --run-id {run_id} --state all --json",
+                "review_workbook": f"reviews workbook --run-id {run_id} --state all --json",
+                "next_actions": f"actions next --run-id {run_id} --json",
+                "run_next_safe": f"actions run-next --run-id {run_id} --json",
+                "phase_report": f"runs phase-report {run_id} --json",
+            },
+            "explicit_stop_conditions": [
+                "This drill uses only a synthetic fixture image written under the cache directory.",
+                "Do not treat fixture sink context as approval for a real GWS, Odollo, or Odoo target.",
+                "Do not run public-web search, paid enrichment, live lookup, live write, or live readback from this drill.",
+            ],
+        }
+        drill_path = run_dir / "review_routing_drill.json"
+        drill_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger.record_artifact(job_id="__run__", kind="review_routing_drill", path=drill_path)
+        ledger.record_event(
+            "review_routing_drill_completed",
+            {
+                "run_id": run_id,
+                "job_id": job.job_id,
+                "drill_path": str(drill_path),
+                "executed_count": run_next["executed_count"],
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        payload["drill_path"] = str(drill_path)
+        return payload
 
     def list_jobs(self, run_id: str | None = None) -> list[dict[str, Any]]:
         run_ids = [run_id] if run_id is not None else [str(run["run_id"]) for run in self.list_runs()]

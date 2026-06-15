@@ -1179,6 +1179,11 @@ def build_parser() -> argparse.ArgumentParser:
     actions_run_next.add_argument("--limit", type=int, default=10)
     actions_run_next.add_argument("--json", action="store_true")
 
+    drills = sub.add_parser("drills")
+    drills_sub = drills.add_subparsers(dest="drills_command", required=True)
+    drills_review_routing = drills_sub.add_parser("review-routing")
+    drills_review_routing.add_argument("--json", action="store_true")
+
     sinks = sub.add_parser("sinks")
     sinks_sub = sinks.add_subparsers(dest="sinks_command", required=True)
     sinks_check = sinks_sub.add_parser("check")
@@ -1561,6 +1566,12 @@ def main(argv: list[str] | None = None) -> int:
             payload = service.next_actions(run_id=args.run_id, limit=args.limit)
         else:
             payload = service.run_next_actions(run_id=args.run_id, limit=args.limit)
+        print(json.dumps(payload, indent=2) if args.json else payload)
+        return 0
+
+    if args.command == "drills":
+        if args.drills_command == "review-routing":
+            payload = service.review_routing_drill()
         print(json.dumps(payload, indent=2) if args.json else payload)
         return 0
 

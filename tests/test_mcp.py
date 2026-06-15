@@ -33,6 +33,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_live_pilot_operator_response_validation" in names
     assert "business_card_watchdog_next_actions" in names
     assert "business_card_watchdog_run_next_actions" in names
+    assert "business_card_watchdog_review_routing_drill" in names
     assert "business_card_watchdog_reviews_list" in names
     assert "business_card_watchdog_review_bundle" in names
     assert "business_card_watchdog_review_html" in names
@@ -140,6 +141,7 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
         config=config,
     )
     watch_dry_run = call_tool("business_card_watchdog_watch_dry_run", {}, config=config)
+    review_routing_drill = call_tool("business_card_watchdog_review_routing_drill", {}, config=config)
     reviews = call_tool(
         "business_card_watchdog_reviews_list",
         {
@@ -443,6 +445,11 @@ def test_mcp_call_tool_dispatches_to_service(tmp_path: Path) -> None:
     assert readiness_report["commands"]["live_pilot_handoff"] == f"runs live-pilot-handoff {run_id}"
     assert runtime_readiness["schema"] == "business-card-watchdog.runtime-readiness.v1"
     assert runtime_readiness["network_calls_made"] == 0
+    assert review_routing_drill["schema"] == "business-card-watchdog.review-routing-drill.v1"
+    assert review_routing_drill["private_sources_used"] is False
+    assert review_routing_drill["safe_actions"]["skipped_actions"] == ["decide_sink_apply"]
+    assert review_routing_drill["writes_attempted"] == 0
+    assert review_routing_drill["network_calls_made"] == 0
     assert service_recovery["schema"] == "business-card-watchdog.service-recovery.v1"
     assert service_recovery["run_id"] == run_id
     assert service_recovery["commands"]["restart"] == "systemctl --user restart business-card-watchdog.service"

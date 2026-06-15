@@ -520,6 +520,24 @@ def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
     assert run_next["phase_report_after"]["schema"] == "business-card-watchdog.phase-report.v1"
 
 
+def test_api_review_routing_drill_outputs_fixture_artifact(tmp_path: Path) -> None:
+    from business_card_watchdog.api import create_app
+
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+    client = TestClient(create_app(config_path))
+
+    drill = client.post("/drills/review-routing").json()
+
+    assert drill["schema"] == "business-card-watchdog.review-routing-drill.v1"
+    assert drill["private_sources_used"] is False
+    assert drill["safe_actions"]["skipped_actions"] == ["decide_sink_apply"]
+    assert drill["network_calls_made"] == 0
+    assert drill["writes_attempted"] == 0
+    assert Path(drill["drill_path"]).exists()
+
+
 def test_api_sink_readback_pilot_writes_zero_write_artifact(tmp_path: Path) -> None:
     from business_card_watchdog.api import create_app
 

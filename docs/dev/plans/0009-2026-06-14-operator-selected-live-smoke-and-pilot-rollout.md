@@ -2112,6 +2112,30 @@ Validation:
 - `git diff --check` passed.
 - `codegraph sync && codegraph status` passed; index is up to date.
 
+### Slice 0009-A107 | 2026-06-15 | Fixture Review Routing Drill
+
+Implemented:
+
+- Added `business-card-watchdog.review-routing-drill.v1` to create an isolated synthetic run that exercises review approval, review bundle/workbook export, downstream duplicate lookup planning, dry-run sink planning, and apply preflight.
+- Added CLI `bcw drills review-routing`, API `POST /drills/review-routing`, and MCP tool `business_card_watchdog_review_routing_drill`.
+- The drill uses a fixture sink overlay for `google_contacts` and `odoo` routing while preserving the operator's real user config and stopping at `decide_sink_apply`.
+- Service, CLI, API, and MCP coverage now assert the fixture-only boundary, skipped manual apply decision, zero network/write counters, and drill artifact creation.
+
+Safety:
+
+- This was synthetic review/export/routing drill execution only.
+- It did not process configured/private SyncThing inputs, run public-web search, call paid enrichment, validate a real operator response, create or modify `selected_live_target.json`, run live lookup, run live write, run readback, or call GWS/Odollo/Odoo.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_review_routing_drill_exercises_safe_fixture_route tests/test_cli_surfaces.py::test_cli_review_routing_drill_outputs_fixture_artifact tests/test_api.py::test_api_review_routing_drill_outputs_fixture_artifact tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service -q` passed with 5 tests.
+- `.venv/bin/python -m pytest -q` passed with 229 tests.
+- `.venv/bin/ruff check .` passed.
+- `uv build --out-dir dist` passed.
+- `gitleaks detect --source . --no-banner --redact --exit-code 1` passed with no leaks found.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
 ### Slice 0009-A3 | 2026-06-14 | Live Selection Packet
 
 Implemented:
