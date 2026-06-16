@@ -31,6 +31,7 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_live_readiness_audit" in names
     assert "business_card_watchdog_live_selection_requirements" in names
     assert "business_card_watchdog_operator_selected_live_smoke_preflight" in names
+    assert "business_card_watchdog_operator_live_pilot_readiness_packet" in names
     assert "business_card_watchdog_watch_backlog_preflight" in names
     assert "business_card_watchdog_watch_dry_run_selection_handoff" in names
     assert "business_card_watchdog_watch_dry_run_operator_response_validation" in names
@@ -555,6 +556,7 @@ def test_mcp_multi_card_preclassification_drill_records_candidate_boxes(tmp_path
         config_path=tmp_path / "config.toml",
         data_dir=tmp_path / "data",
         cache_dir=tmp_path / "cache",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
     )
 
     payload = call_tool("business_card_watchdog_multi_card_preclassification_drill", {}, config=config)
@@ -647,6 +649,42 @@ def test_mcp_operator_selected_live_smoke_preflight_reports_blocked_boundary(tmp
     assert payload["writes_attempted"] == 0
     assert payload["network_calls_made"] == 0
     assert Path(payload["preflight_path"]).exists()
+
+
+def test_mcp_operator_live_pilot_readiness_packet_reports_ready_boundary(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        f'data_dir = "{tmp_path / "data"}"\n'
+        f'cache_dir = "{tmp_path / "cache"}"\n\n'
+        "[sink]\n"
+        "google_contacts = true\n"
+        "dry_run = true\n",
+        encoding="utf-8",
+    )
+    config = AppConfig(
+        config_path=config_path,
+        data_dir=tmp_path / "data",
+        cache_dir=tmp_path / "cache",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    service = BusinessCardService(config)
+    routing_drill = service.review_routing_drill()
+    run_id = routing_drill["run_id"]
+
+    payload = call_tool(
+        "business_card_watchdog_operator_live_pilot_readiness_packet",
+        {"run_id": run_id, "sink": "google_contacts", "write": True},
+        config=config,
+    )
+
+    assert payload["schema"] == "business-card-watchdog.operator-live-pilot-readiness-packet.v1"
+    assert payload["state"] == "ready_for_operator_response"
+    assert payload["ready_entry_count"] == 1
+    assert all(check["ok"] is True for check in payload["checks"])
+    assert payload["commands"]["live_pilot_rehearsal_drill"] == "drills live-pilot-rehearsal --json"
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert Path(payload["packet_path"]).exists()
 
 
 def test_mcp_child_replacement_readiness_drill_exports_operator_samples(tmp_path: Path) -> None:

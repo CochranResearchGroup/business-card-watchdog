@@ -314,6 +314,11 @@ def create_app(config_path: Path | None = None):
         sink: str | None = None
         write: bool = True
 
+    class OperatorLivePilotReadinessPacketRequest(BaseModel):
+        run_id: str
+        sink: str | None = None
+        write: bool = True
+
     class WatchBacklogPreflightRequest(BaseModel):
         write: bool = True
 
@@ -974,6 +979,28 @@ def create_app(config_path: Path | None = None):
     @app.post("/drills/live-pilot-rehearsal")
     def live_pilot_rehearsal_drill() -> dict[str, object]:
         return service().live_pilot_rehearsal_drill()
+
+    @app.get("/operator/live-pilot-readiness-packet")
+    def get_operator_live_pilot_readiness_packet(
+        run_id: str,
+        sink: str | None = None,
+        write: bool = True,
+    ) -> dict[str, object]:
+        return service().operator_live_pilot_readiness_packet(
+            run_id=run_id,
+            sink=sink,
+            write=write,
+        )
+
+    @app.post("/operator/live-pilot-readiness-packet")
+    def post_operator_live_pilot_readiness_packet(
+        request: OperatorLivePilotReadinessPacketRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().operator_live_pilot_readiness_packet(
+            run_id=request.run_id,
+            sink=request.sink,
+            write=request.write,
+        )
 
     @app.post("/drills/child-replacement-readiness")
     def child_replacement_readiness_drill() -> dict[str, object]:

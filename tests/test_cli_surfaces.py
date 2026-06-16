@@ -119,6 +119,61 @@ def test_cli_offline_pilot_gap_audit_reports_remaining_boundaries(tmp_path: Path
     assert "{" not in text
 
 
+def test_cli_operator_live_pilot_readiness_packet_reports_ready_boundary(tmp_path: Path, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+
+    assert main(["--config", str(config_path), "drills", "review-routing", "--json"]) == 0
+    routing_drill = json.loads(capsys.readouterr().out)
+    run_id = routing_drill["run_id"]
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "operator-live-pilot-readiness-packet",
+                "--run-id",
+                run_id,
+                "--sink",
+                "google_contacts",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    packet = json.loads(capsys.readouterr().out)
+    assert packet["schema"] == "business-card-watchdog.operator-live-pilot-readiness-packet.v1"
+    assert packet["state"] == "ready_for_operator_response"
+    assert packet["ready_entry_count"] == 1
+    assert packet["writes_attempted"] == 0
+    assert packet["network_calls_made"] == 0
+    assert packet["commands"]["live_pilot_rehearsal_drill"] == "drills live-pilot-rehearsal --json"
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "operator-live-pilot-readiness-packet",
+                "--run-id",
+                run_id,
+                "--sink",
+                "google_contacts",
+                "--no-write",
+            ]
+        )
+        == 0
+    )
+    text = capsys.readouterr().out
+    assert "Operator live pilot readiness packet: ready_for_operator_response" in text
+    assert "Selected target approval boundary: runs selected-target-approval-boundary" in text
+    assert "Selected target command copy packet: runs selected-target-command-copy-packet" in text
+    assert "Synthetic rehearsal: drills live-pilot-rehearsal --json" in text
+    assert "{" not in text
+
+
 def test_cli_review_routing_drill_outputs_fixture_artifact(tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.toml"
     data_dir = tmp_path / "data"

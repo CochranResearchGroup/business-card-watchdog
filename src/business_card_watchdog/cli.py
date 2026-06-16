@@ -2224,6 +2224,49 @@ def _render_operator_selected_live_smoke_preflight_text(payload: dict[str, objec
     return "\n".join(lines) + "\n"
 
 
+def _render_operator_live_pilot_readiness_packet_text(payload: dict[str, object]) -> str:
+    checks = payload.get("checks") or []
+    blocked_reasons = payload.get("blocked_reasons") or []
+    commands = dict(payload.get("commands") or {})
+    rehearsal = dict(payload.get("synthetic_rehearsal_contract") or {})
+    lines = [
+        f"Operator live pilot readiness packet: {payload.get('state')}",
+        f"Recommended next step: {payload.get('recommended_next_step')}",
+        f"Run: {payload.get('run_id')}",
+        f"Sink: {payload.get('sink') or 'all'}",
+        f"Entries: ready={payload.get('ready_entry_count', 0)} active={payload.get('active_selected_target_count', 0)}",
+        f"Packet path: {payload.get('packet_path') or 'not written'}",
+        f"Observed: writes={payload.get('writes_attempted', 0)} network={payload.get('network_calls_made', 0)}",
+        f"Synthetic rehearsal: {rehearsal.get('command')}",
+    ]
+    check_rows = checks if isinstance(checks, list) else []
+    lines.append(f"Checks: {len(check_rows)}")
+    for check in check_rows:
+        if isinstance(check, dict):
+            evidence = check.get("evidence")
+            if isinstance(evidence, dict):
+                evidence_text = ", ".join(f"{key}={value}" for key, value in sorted(evidence.items()))
+            else:
+                evidence_text = str(evidence)
+            lines.append(f" - {check.get('name')}: {check.get('ok')} evidence={evidence_text}")
+    blocker_rows = blocked_reasons if isinstance(blocked_reasons, list) else []
+    lines.append(f"Blocked reasons: {len(blocker_rows)}")
+    for reason in blocker_rows:
+        lines.append(f" - {reason}")
+    for label, key in [
+        ("Operator dashboard", "operator_dashboard"),
+        ("Operator preflight", "operator_selected_live_smoke_preflight"),
+        ("Rehearsal drill", "live_pilot_rehearsal_drill"),
+        ("Validate response", "validate_operator_response_prefilled"),
+        ("Selected target approval boundary", "selected_target_approval_boundary"),
+        ("Selected target command copy packet", "selected_target_command_copy_packet"),
+    ]:
+        command = commands.get(key)
+        if command:
+            lines.append(f"{label}: {command}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_live_selection_packet_text(payload: dict[str, object]) -> str:
     existing = dict(payload.get("existing_selected_target") or {})
     scope_allows = dict(payload.get("scope_allows") or {})
@@ -2691,6 +2734,11 @@ def build_parser() -> argparse.ArgumentParser:
     operator_selected_live_smoke_preflight.add_argument("--sink", choices=["google_contacts", "odoo"], default=None)
     operator_selected_live_smoke_preflight.add_argument("--no-write", action="store_true")
     operator_selected_live_smoke_preflight.add_argument("--json", action="store_true")
+    operator_live_pilot_readiness_packet = sub.add_parser("operator-live-pilot-readiness-packet")
+    operator_live_pilot_readiness_packet.add_argument("--run-id", required=True)
+    operator_live_pilot_readiness_packet.add_argument("--sink", choices=["google_contacts", "odoo"], default=None)
+    operator_live_pilot_readiness_packet.add_argument("--no-write", action="store_true")
+    operator_live_pilot_readiness_packet.add_argument("--json", action="store_true")
 
     live_target_candidates = sub.add_parser("live-target-candidates")
     live_target_candidates.add_argument("--run-id", default=None)
@@ -3409,6 +3457,20 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(output, end="")
         return 0 if payload["state"] != "needs_preparation" else 2
+
+    if args.command == "operator-live-pilot-readiness-packet":
+        payload = service.operator_live_pilot_readiness_packet(
+            run_id=args.run_id,
+            sink=args.sink,
+            write=not args.no_write,
+        )
+        output = (
+            json.dumps(payload, indent=2)
+            if args.json
+            else _render_operator_live_pilot_readiness_packet_text(payload)
+        )
+        print(output, end="")
+        return 0 if payload["state"] != "blocked" else 2
 
     if args.command == "live-target-candidates":
         payload = service.live_target_candidates(run_id=args.run_id, sink=args.sink)

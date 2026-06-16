@@ -1445,6 +1445,39 @@ def test_api_operator_selected_live_smoke_preflight_reports_blocked_boundary(tmp
     assert Path(preflight["preflight_path"]).exists()
 
 
+def test_api_operator_live_pilot_readiness_packet_reports_ready_boundary(tmp_path: Path) -> None:
+    from business_card_watchdog.api import create_app
+
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+    client = TestClient(create_app(config_path))
+    routing_drill = client.post("/drills/review-routing").json()
+    run_id = routing_drill["run_id"]
+
+    packet = client.post(
+        "/operator/live-pilot-readiness-packet",
+        json={"run_id": run_id, "sink": "google_contacts", "write": True},
+    ).json()
+
+    assert packet["schema"] == "business-card-watchdog.operator-live-pilot-readiness-packet.v1"
+    assert packet["state"] == "ready_for_operator_response"
+    assert packet["ready_entry_count"] == 1
+    assert all(check["ok"] is True for check in packet["checks"])
+    assert packet["commands"]["live_pilot_rehearsal_drill"] == "drills live-pilot-rehearsal --json"
+    assert packet["writes_attempted"] == 0
+    assert packet["network_calls_made"] == 0
+    assert Path(packet["packet_path"]).exists()
+
+    get_packet = client.get(
+        "/operator/live-pilot-readiness-packet",
+        params={"run_id": run_id, "sink": "google_contacts", "write": False},
+    ).json()
+    assert get_packet["state"] == "ready_for_operator_response"
+    assert get_packet["packet_path"] is None
+    assert get_packet["packet_written"] is False
+
+
 def test_api_review_routing_drill_outputs_fixture_artifact(tmp_path: Path) -> None:
     from business_card_watchdog.api import create_app
 

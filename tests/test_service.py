@@ -514,6 +514,60 @@ def test_service_operator_selected_live_smoke_preflight_reports_blocked_boundary
     )
 
 
+def test_service_operator_live_pilot_readiness_packet_reports_ready_boundary(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        f'data_dir = "{tmp_path / "data"}"\n'
+        f'cache_dir = "{tmp_path / "cache"}"\n\n'
+        "[sink]\n"
+        "google_contacts = true\n"
+        "dry_run = true\n",
+        encoding="utf-8",
+    )
+    config = AppConfig(
+        config_path=config_path,
+        data_dir=tmp_path / "data",
+        cache_dir=tmp_path / "cache",
+        sink=SinkConfig(google_contacts=True, dry_run=True),
+    )
+    service = BusinessCardService(config)
+    routing_drill = service.review_routing_drill()
+    run_id = routing_drill["run_id"]
+    job_id = routing_drill["job_id"]
+
+    packet = service.operator_live_pilot_readiness_packet(run_id=run_id, sink="google_contacts")
+
+    assert packet["schema"] == "business-card-watchdog.operator-live-pilot-readiness-packet.v1"
+    assert packet["state"] == "ready_for_operator_response"
+    assert packet["recommended_next_step"] == "selected_target_approval_boundary"
+    assert packet["ready_entry_count"] == 1
+    assert packet["active_selected_target_count"] == 0
+    assert all(check["ok"] is True for check in packet["checks"])
+    assert packet["blocked_reasons"] == []
+    assert packet["synthetic_rehearsal_contract"]["command"] == "drills live-pilot-rehearsal --json"
+    assert packet["synthetic_rehearsal_contract"]["required_packet_states"] == {
+        "selected_target_approval_boundary": "ready_for_explicit_selected_target_creation",
+        "selected_target_command_copy_packet": "ready_for_operator_copy",
+        "live_pilot_command_copy_packet": "ready_for_operator_copy",
+    }
+    assert packet["commands"]["selected_target_approval_boundary"].startswith(
+        f"runs selected-target-approval-boundary {run_id}"
+    )
+    assert packet["commands"]["selected_target_command_copy_packet"].startswith(
+        f"runs selected-target-command-copy-packet {run_id}"
+    )
+    assert packet["commands"]["validate_operator_response_prefilled"].startswith(
+        f"runs live-pilot-validate-response {run_id}"
+    )
+    assert packet["writes_attempted"] == 0
+    assert packet["network_calls_made"] == 0
+    assert packet["packet_written"] is True
+    assert Path(packet["packet_path"]).exists()
+    assert not (config.runs_dir / run_id / "artifacts" / job_id / "selected_live_target.json").exists()
+    artifacts = service.list_artifacts(run_id)
+    assert any(artifact["kind"] == "operator_live_pilot_readiness_packet" for artifact in artifacts)
+
+
 def test_service_live_selection_packet_does_not_select_target(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",

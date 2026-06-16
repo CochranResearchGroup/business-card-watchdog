@@ -6,6 +6,7 @@ from typing import Any
 
 from .config import AppConfig, load_config
 from .service import BusinessCardService
+from .surface_registry import call_registered_mcp_tool, mcp_tool_manifest_entry
 
 
 def tool_manifest() -> dict[str, object]:
@@ -99,6 +100,7 @@ def tool_manifest() -> dict[str, object]:
                     },
                 },
             },
+            mcp_tool_manifest_entry("business_card_watchdog_operator_live_pilot_readiness_packet"),
             {
                 "name": "business_card_watchdog_runs_list",
                 "description": "List known run records from the user-scoped run index.",
@@ -266,38 +268,8 @@ def tool_manifest() -> dict[str, object]:
                     "required": ["run_id", "response"],
                 },
             },
-            {
-                "name": "business_card_watchdog_selected_target_approval_boundary",
-                "description": "Compose approval packet, response validation, preflight, and selected-target preview without creating selected_live_target.json.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "run_id": {"type": "string"},
-                        "operator": {"type": "string"},
-                        "sink": {"type": "string"},
-                        "job_id": {"type": "string"},
-                        "response": {"type": "string"},
-                        "write": {"type": "boolean", "default": True},
-                    },
-                    "required": ["run_id", "operator"],
-                },
-            },
-            {
-                "name": "business_card_watchdog_selected_target_command_copy_packet",
-                "description": "Return selected-target creation command text only after response validation and matching operator acknowledgement.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "run_id": {"type": "string"},
-                        "operator": {"type": "string"},
-                        "response": {"type": "string"},
-                        "acknowledgement": {"type": "string"},
-                        "sink": {"type": "string"},
-                        "job_id": {"type": "string"},
-                    },
-                    "required": ["run_id", "operator", "response"],
-                },
-            },
+            mcp_tool_manifest_entry("business_card_watchdog_selected_target_approval_boundary"),
+            mcp_tool_manifest_entry("business_card_watchdog_selected_target_command_copy_packet"),
             {
                 "name": "business_card_watchdog_selected_live_target_preflight",
                 "description": "Preflight whether an operator response would be allowed to create selected_live_target.json without writing it.",
@@ -1464,6 +1436,9 @@ def call_tool(
 ) -> Any:
     args = arguments or {}
     service = BusinessCardService(config or load_config(config_path))
+    registered_payload = call_registered_mcp_tool(tool_name, service, args)
+    if registered_payload is not None:
+        return registered_payload
     if tool_name == "business_card_watchdog_process":
         return service.process_source(
             str(args["source"]),
@@ -1561,24 +1536,6 @@ def call_tool(
         return service.validate_live_pilot_operator_response(
             run_id=str(args["run_id"]),
             response=str(args["response"]),
-        )
-    if tool_name == "business_card_watchdog_selected_target_approval_boundary":
-        return service.selected_target_approval_boundary(
-            str(args["run_id"]),
-            operator=str(args["operator"]),
-            sink=str(args["sink"]) if args.get("sink") else None,
-            job_id=str(args["job_id"]) if args.get("job_id") else None,
-            response=str(args["response"]) if args.get("response") else None,
-            write=bool(args.get("write", True)),
-        )
-    if tool_name == "business_card_watchdog_selected_target_command_copy_packet":
-        return service.selected_target_command_copy_packet(
-            str(args["run_id"]),
-            operator=str(args["operator"]),
-            response=str(args["response"]),
-            acknowledgement=str(args["acknowledgement"]) if args.get("acknowledgement") else "",
-            sink=str(args["sink"]) if args.get("sink") else None,
-            job_id=str(args["job_id"]) if args.get("job_id") else None,
         )
     if tool_name == "business_card_watchdog_selected_live_target_preflight":
         return service.selected_live_target_preflight(

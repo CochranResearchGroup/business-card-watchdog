@@ -5879,3 +5879,103 @@ Validation:
 Safety:
 
 - This changed only a synthetic rehearsal drill and local sample output. It did not process configured SyncThing/private watch inputs; run private OCR/App Intelligence; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.
+
+## Turn 259 | 2026-06-15
+
+Recovered Plan 0053 with Slice 0053-A after drift audit.
+
+Implemented:
+
+- Added `BusinessCardService.operator_live_pilot_readiness_packet`.
+- Added CLI command `bcw operator-live-pilot-readiness-packet`.
+- Added API routes `GET /operator/live-pilot-readiness-packet` and `POST /operator/live-pilot-readiness-packet`.
+- Added MCP tool `business_card_watchdog_operator_live_pilot_readiness_packet`.
+- Updated README and ROADMAP for the no-live operator readiness packet.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_operator_live_pilot_readiness_packet_reports_ready_boundary tests/test_cli_surfaces.py::test_cli_operator_live_pilot_readiness_packet_reports_ready_boundary tests/test_api.py::test_api_operator_live_pilot_readiness_packet_reports_ready_boundary tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_operator_live_pilot_readiness_packet_reports_ready_boundary -q` passed with 5 tests.
+- `.venv/bin/python -m pytest -q` passed with 333 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+
+Recovery:
+
+- The previous loop had updated Plan 0053 and ROADMAP but did not add the claimed RUNBOOK closeout before handoff.
+- This entry reconciles the missing closeout evidence without adding more live-pilot feature scope.
+
+Safety:
+
+- This added a local no-live readiness packet only. It did not create `selected_live_target.json`; process configured SyncThing/private watch inputs; run OCR/App Intelligence on private images; run public-web search; call paid enrichment; execute live lookup/write/readback; or write Google Contacts, Odoo, or Odollo records.
+
+## Turn 260 | 2026-06-15
+
+Executed Plan 0054 with Slice 0054-A.
+
+Implemented:
+
+- Added `docs/dev/plans/0054-2026-06-15-drift-recovery-closeout-reconciliation.md`.
+- Updated Plan 0053 validation from a missing runbook pointer to concrete validation evidence.
+- Recorded the drift recovery boundary and stopped further feature expansion.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_operator_live_pilot_readiness_packet_reports_ready_boundary tests/test_cli_surfaces.py::test_cli_operator_live_pilot_readiness_packet_reports_ready_boundary tests/test_api.py::test_api_operator_live_pilot_readiness_packet_reports_ready_boundary tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_operator_live_pilot_readiness_packet_reports_ready_boundary -q` passed with 5 tests.
+- `.venv/bin/python -m pytest -q` passed with 333 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+
+Safety:
+
+- This recovery changed documentation and closeout records only. It did not process private input; create selected targets; execute live lookup, write, or readback; or write Google Contacts, Odoo, or Odollo records.
+
+## Turn 261 | 2026-06-15
+
+Executed Plan 0055 with Slice 0055-A.
+
+Implemented:
+
+- Added `src/business_card_watchdog/live_pilot_packets.py`.
+- Moved the no-live operator live-pilot readiness packet body out of `BusinessCardService`.
+- Moved selected-target approval boundary and selected-target command-copy packet bodies out of `BusinessCardService`.
+- Left the existing `BusinessCardService` methods as compatibility wrappers so CLI/API/MCP surfaces remain unchanged.
+- Updated `ROADMAP.md` and Plan 0055 closeout evidence.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_operator_live_pilot_readiness_packet_reports_ready_boundary tests/test_service.py::test_service_selected_target_approval_boundary_previews_explicit_selection tests/test_service.py::test_service_selected_target_command_copy_packet_requires_acknowledgement tests/test_cli_surfaces.py::test_cli_operator_live_pilot_readiness_packet_reports_ready_boundary tests/test_cli_surfaces.py::test_cli_runs_selected_target_approval_boundary_previews_selection tests/test_cli_surfaces.py::test_cli_runs_selected_target_command_copy_packet_requires_ack tests/test_api.py::test_api_operator_live_pilot_readiness_packet_reports_ready_boundary tests/test_api.py::test_api_run_selected_target_approval_boundary_previews_selection tests/test_api.py::test_api_run_selected_target_command_copy_packet_requires_ack tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_operator_live_pilot_readiness_packet_reports_ready_boundary tests/test_mcp.py::test_mcp_selected_target_approval_boundary_previews_selection tests/test_mcp.py::test_mcp_selected_target_command_copy_packet_requires_ack -q` passed with 13 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/live_pilot_packets.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 333 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was a behavior-preserving extraction only. It did not process private input; create selected targets; execute live lookup, write, or readback; or write Google Contacts, Odoo, or Odollo records.
+
+## Turn 262 | 2026-06-16
+
+Executed Plan 0056 with Slice 0056-A.
+
+Implemented:
+
+- Added `docs/dev/plans/0056-2026-06-16-monolith-decomposition-drift-guard.md` with subagent workstreams, drift gates, and stop conditions.
+- Added `src/business_card_watchdog/surface_registry.py` as a shared MCP surface registry seed.
+- Routed MCP manifest entries and dispatch for the operator live-pilot readiness packet, selected-target approval boundary, and selected-target command-copy packet through the registry.
+- Added `scripts/check_plan_drift.py` to guard roadmap, plan, and runbook closeout pointers.
+- Updated `ROADMAP.md` with Plan 0056 as the latest completed refactor plan.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_operator_live_pilot_readiness_packet_reports_ready_boundary tests/test_mcp.py::test_mcp_selected_target_approval_boundary_previews_selection tests/test_mcp.py::test_mcp_selected_target_command_copy_packet_requires_ack tests/test_service.py::test_service_operator_live_pilot_readiness_packet_reports_ready_boundary tests/test_service.py::test_service_selected_target_approval_boundary_previews_explicit_selection tests/test_service.py::test_service_selected_target_command_copy_packet_requires_acknowledgement -q` passed with 7 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/mcp.py src/business_card_watchdog/surface_registry.py scripts/check_plan_drift.py` passed.
+- `python3 scripts/check_plan_drift.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 333 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `codegraph sync && codegraph status` passed; index is up to date.
+
+Safety:
+
+- This was a behavior-preserving surface registry seed and drift-guard slice only. It did not process private input; create selected targets; execute live lookup, write, or readback; or write Google Contacts, Odoo, or Odollo records.
