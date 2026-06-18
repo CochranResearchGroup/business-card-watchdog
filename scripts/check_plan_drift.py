@@ -26,10 +26,13 @@ def main() -> int:
     require(f"Latest completed refactor plan: `{PLAN_0056}`" in roadmap, "ROADMAP latest refactor plan is stale")
     require("State: CLOSED" in plan, "Plan 0056 is not closed")
     require("Pending." not in plan, "Plan 0056 validation is still pending")
-    require("## Turn 262 | 2026-06-16" in runbook, "RUNBOOK Turn 262 closeout is missing")
-    require("Executed Plan 0056" in runbook, "RUNBOOK does not record Plan 0056 execution")
+    require("## Turn 263 | 2026-06-18" in runbook, "RUNBOOK Turn 263 closeout is missing")
+    require("Finished Plan 0056 with Slices 0056-B and 0056-C" in runbook, "RUNBOOK full Plan 0056 closeout is missing")
     require("codegraph sync && codegraph status" in runbook, "RUNBOOK does not record CodeGraph validation")
-    require("This was a behavior-preserving surface registry seed" in runbook, "RUNBOOK safety boundary is missing")
+    require(
+        "This completed Plan 0056 as behavior-preserving registry and dashboard extraction work" in runbook,
+        "RUNBOOK safety boundary is missing",
+    )
     print("plan drift guard passed")
     return 0
 

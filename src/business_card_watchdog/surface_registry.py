@@ -5,6 +5,13 @@ from typing import Any, Callable
 
 
 MCPHandler = Callable[[Any, dict[str, Any]], dict[str, Any]]
+SINK_CHOICES = ("google_contacts", "odoo")
+OPERATOR_LIVE_PILOT_READINESS_COMMAND = "operator-live-pilot-readiness-packet"
+SELECTED_TARGET_APPROVAL_BOUNDARY_COMMAND = "selected-target-approval-boundary"
+SELECTED_TARGET_COMMAND_COPY_PACKET_COMMAND = "selected-target-command-copy-packet"
+OPERATOR_LIVE_PILOT_READINESS_API_PATH = "/operator/live-pilot-readiness-packet"
+SELECTED_TARGET_APPROVAL_BOUNDARY_API_PATH = "/runs/{run_id}/selected-target-approval-boundary"
+SELECTED_TARGET_COMMAND_COPY_PACKET_API_PATH = "/runs/{run_id}/selected-target-command-copy-packet"
 
 
 @dataclass(frozen=True)
@@ -122,3 +129,61 @@ def call_registered_mcp_tool(tool_name: str, service: Any, args: dict[str, Any])
     if spec is None:
         return None
     return spec.handler(service, args)
+
+
+def add_operator_live_pilot_readiness_parser(subparsers: Any) -> None:
+    parser = subparsers.add_parser(OPERATOR_LIVE_PILOT_READINESS_COMMAND)
+    parser.add_argument("--run-id", required=True)
+    parser.add_argument("--sink", choices=list(SINK_CHOICES), default=None)
+    parser.add_argument("--no-write", action="store_true")
+    parser.add_argument("--json", action="store_true")
+
+
+def add_selected_target_runs_parsers(runs_subparsers: Any) -> None:
+    approval = runs_subparsers.add_parser(SELECTED_TARGET_APPROVAL_BOUNDARY_COMMAND)
+    approval.add_argument("run_id")
+    approval.add_argument("--operator", required=True)
+    approval.add_argument("--sink", choices=list(SINK_CHOICES), default=None)
+    approval.add_argument("--job-id", default=None)
+    approval.add_argument("--response", default=None)
+    approval.add_argument("--no-write", action="store_true")
+    approval.add_argument("--json", action="store_true")
+
+    command_copy = runs_subparsers.add_parser(SELECTED_TARGET_COMMAND_COPY_PACKET_COMMAND)
+    command_copy.add_argument("run_id")
+    command_copy.add_argument("--operator", required=True)
+    command_copy.add_argument("--response", required=True)
+    command_copy.add_argument("--acknowledgement", default="")
+    command_copy.add_argument("--sink", choices=list(SINK_CHOICES), default=None)
+    command_copy.add_argument("--job-id", default=None)
+    command_copy.add_argument("--json", action="store_true")
+
+
+def call_registered_cli_command(service: Any, args: Any) -> dict[str, Any] | None:
+    if getattr(args, "command", None) == OPERATOR_LIVE_PILOT_READINESS_COMMAND:
+        return service.operator_live_pilot_readiness_packet(
+            run_id=args.run_id,
+            sink=args.sink,
+            write=not args.no_write,
+        )
+    if getattr(args, "command", None) != "runs":
+        return None
+    if getattr(args, "runs_command", None) == SELECTED_TARGET_APPROVAL_BOUNDARY_COMMAND:
+        return service.selected_target_approval_boundary(
+            args.run_id,
+            operator=args.operator,
+            sink=args.sink,
+            job_id=args.job_id,
+            response=args.response,
+            write=not args.no_write,
+        )
+    if getattr(args, "runs_command", None) == SELECTED_TARGET_COMMAND_COPY_PACKET_COMMAND:
+        return service.selected_target_command_copy_packet(
+            args.run_id,
+            operator=args.operator,
+            response=args.response,
+            acknowledgement=args.acknowledgement,
+            sink=args.sink,
+            job_id=args.job_id,
+        )
+    return None

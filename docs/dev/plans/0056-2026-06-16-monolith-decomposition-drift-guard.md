@@ -92,13 +92,38 @@ Execute WS1 and the low-risk portion of WS2:
 - Add a repo drift guard under `scripts/`.
 - Update `ROADMAP.md` and `RUNBOOK.md` with validation evidence.
 
+## Slice 0056-B
+
+Execute the remaining low-risk WS3 follow-on for the selected packet cluster:
+
+- Reuse `surface_registry.py` constants/helpers from CLI parser registration
+  and dispatch for the operator readiness and selected-target commands.
+- Reuse the same route-path constants from API decorators while keeping the
+  explicit FastAPI endpoint functions and request models.
+- Preserve command names, route paths, request fields, defaults, schemas, and
+  text renderers.
+
+## Slice 0056-C
+
+Execute the bounded WS4 service aggregator extraction:
+
+- Add `src/business_card_watchdog/operator_dashboard.py`.
+- Move the `operator_dashboard` aggregation body into
+  `build_operator_dashboard`.
+- Keep `BusinessCardService.operator_dashboard` as the compatibility
+  entrypoint.
+- Preserve dashboard schema, command maps, API route maps, MCP tool maps,
+  safe-next-action summaries, and no-live safety counters.
+
 ## Acceptance Criteria
 
 - Plan 0056 records subagent workstreams, drift gates, and stop conditions.
-- The surface registry exists and is used by MCP for the selected packet
-  cluster.
-- MCP manifest entries and dispatch behavior remain equivalent for the selected
-  packet cluster.
+- The surface registry exists and is used by MCP, CLI, and API for the selected
+  packet cluster where that does not hide explicit endpoint request validation.
+- MCP manifest entries, CLI command behavior, and API route behavior remain
+  equivalent for the selected packet cluster.
+- `operator_dashboard` is no longer a large inline `BusinessCardService`
+  method; the service keeps a wrapper compatibility entrypoint.
 - Drift guard passes after closeout docs are updated.
 - Targeted MCP/service/API/CLI tests pass.
 - Full repo venv validation passes.
@@ -106,16 +131,26 @@ Execute WS1 and the low-risk portion of WS2:
 
 ## Validation
 
-- `.venv/bin/python -m pytest tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_operator_live_pilot_readiness_packet_reports_ready_boundary tests/test_mcp.py::test_mcp_selected_target_approval_boundary_previews_selection tests/test_mcp.py::test_mcp_selected_target_command_copy_packet_requires_ack tests/test_service.py::test_service_operator_live_pilot_readiness_packet_reports_ready_boundary tests/test_service.py::test_service_selected_target_approval_boundary_previews_explicit_selection tests/test_service.py::test_service_selected_target_command_copy_packet_requires_acknowledgement -q` passed with 7 tests.
-- `.venv/bin/ruff check src/business_card_watchdog/mcp.py src/business_card_watchdog/surface_registry.py scripts/check_plan_drift.py` passed.
+- Slice 0056-A targeted validation passed:
+  `.venv/bin/python -m pytest tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_operator_live_pilot_readiness_packet_reports_ready_boundary tests/test_mcp.py::test_mcp_selected_target_approval_boundary_previews_selection tests/test_mcp.py::test_mcp_selected_target_command_copy_packet_requires_ack tests/test_service.py::test_service_operator_live_pilot_readiness_packet_reports_ready_boundary tests/test_service.py::test_service_selected_target_approval_boundary_previews_explicit_selection tests/test_service.py::test_service_selected_target_command_copy_packet_requires_acknowledgement -q` passed with 7 tests.
+- Full-plan targeted validation passed:
+  `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_operator_live_pilot_readiness_packet_reports_ready_boundary tests/test_cli_surfaces.py::test_cli_runs_selected_target_approval_boundary_previews_selection tests/test_cli_surfaces.py::test_cli_runs_selected_target_command_copy_packet_requires_ack tests/test_api.py::test_api_operator_live_pilot_readiness_packet_reports_ready_boundary tests/test_api.py::test_api_run_selected_target_approval_boundary_previews_selection tests/test_api.py::test_api_run_selected_target_command_copy_packet_requires_ack tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_operator_live_pilot_readiness_packet_reports_ready_boundary tests/test_mcp.py::test_mcp_selected_target_approval_boundary_previews_selection tests/test_mcp.py::test_mcp_selected_target_command_copy_packet_requires_ack tests/test_service.py::test_service_operator_dashboard_composes_no_live_readiness tests/test_cli_surfaces.py::test_cli_operator_dashboard_reports_no_live_summary -q` passed with 12 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/operator_dashboard.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/api.py src/business_card_watchdog/surface_registry.py` passed.
+- `.venv/bin/ruff check scripts/check_plan_drift.py` passed.
 - `python3 scripts/check_plan_drift.py` passed.
 - `.venv/bin/python -m pytest -q` passed with 333 tests.
 - `.venv/bin/ruff check .` passed.
 - `git diff --check` passed.
-- `codegraph sync && codegraph status` passed; index is up to date.
+- `codegraph sync && codegraph status` passed; index is up to date with 48 files, 1,672 nodes, and 3,348 edges.
 
 ## Closeout
 
-Slice 0056-A completed WS1 and the low-risk MCP portion of WS2. CLI/API
-registry expansion and `operator_dashboard` extraction remain deferred to later
-plans so this slice stays behavior-preserving and easy to validate.
+Plan 0056 completed WS1 through WS4 for the selected packet cluster and the
+first service aggregator extraction. The registry now covers MCP plus bounded
+CLI/API reuse for the operator readiness and selected-target packet surfaces,
+and `operator_dashboard` is extracted behind the existing
+`BusinessCardService.operator_dashboard` wrapper.
+
+Further decomposition remains intentionally incremental: broader CLI/API route
+registry coverage and additional service-method extraction should each use a
+new bounded plan with the same drift guard and compatibility-test pattern.

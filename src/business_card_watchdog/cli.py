@@ -10,6 +10,14 @@ from .mcp import call_tool, manifest_json
 from .mcp_server import serve_jsonl
 from .service import BusinessCardService
 from .service_ops import install_user_service, service_status, uninstall_user_service
+from .surface_registry import (
+    OPERATOR_LIVE_PILOT_READINESS_COMMAND,
+    SELECTED_TARGET_APPROVAL_BOUNDARY_COMMAND,
+    SELECTED_TARGET_COMMAND_COPY_PACKET_COMMAND,
+    add_operator_live_pilot_readiness_parser,
+    add_selected_target_runs_parsers,
+    call_registered_cli_command,
+)
 from .watcher import PollingWatcher
 
 
@@ -2734,11 +2742,7 @@ def build_parser() -> argparse.ArgumentParser:
     operator_selected_live_smoke_preflight.add_argument("--sink", choices=["google_contacts", "odoo"], default=None)
     operator_selected_live_smoke_preflight.add_argument("--no-write", action="store_true")
     operator_selected_live_smoke_preflight.add_argument("--json", action="store_true")
-    operator_live_pilot_readiness_packet = sub.add_parser("operator-live-pilot-readiness-packet")
-    operator_live_pilot_readiness_packet.add_argument("--run-id", required=True)
-    operator_live_pilot_readiness_packet.add_argument("--sink", choices=["google_contacts", "odoo"], default=None)
-    operator_live_pilot_readiness_packet.add_argument("--no-write", action="store_true")
-    operator_live_pilot_readiness_packet.add_argument("--json", action="store_true")
+    add_operator_live_pilot_readiness_parser(sub)
 
     live_target_candidates = sub.add_parser("live-target-candidates")
     live_target_candidates.add_argument("--run-id", default=None)
@@ -2819,22 +2823,7 @@ def build_parser() -> argparse.ArgumentParser:
     runs_live_pilot_approval_packet.add_argument("run_id")
     runs_live_pilot_approval_packet.add_argument("--job-id", default=None)
     runs_live_pilot_approval_packet.add_argument("--json", action="store_true")
-    runs_selected_target_approval_boundary = runs_sub.add_parser("selected-target-approval-boundary")
-    runs_selected_target_approval_boundary.add_argument("run_id")
-    runs_selected_target_approval_boundary.add_argument("--operator", required=True)
-    runs_selected_target_approval_boundary.add_argument("--sink", choices=["google_contacts", "odoo"], default=None)
-    runs_selected_target_approval_boundary.add_argument("--job-id", default=None)
-    runs_selected_target_approval_boundary.add_argument("--response", default=None)
-    runs_selected_target_approval_boundary.add_argument("--no-write", action="store_true")
-    runs_selected_target_approval_boundary.add_argument("--json", action="store_true")
-    runs_selected_target_command_copy_packet = runs_sub.add_parser("selected-target-command-copy-packet")
-    runs_selected_target_command_copy_packet.add_argument("run_id")
-    runs_selected_target_command_copy_packet.add_argument("--operator", required=True)
-    runs_selected_target_command_copy_packet.add_argument("--response", required=True)
-    runs_selected_target_command_copy_packet.add_argument("--acknowledgement", default="")
-    runs_selected_target_command_copy_packet.add_argument("--sink", choices=["google_contacts", "odoo"], default=None)
-    runs_selected_target_command_copy_packet.add_argument("--job-id", default=None)
-    runs_selected_target_command_copy_packet.add_argument("--json", action="store_true")
+    add_selected_target_runs_parsers(runs_sub)
     runs_selected_live_target_preflight = runs_sub.add_parser("selected-live-target-preflight")
     runs_selected_live_target_preflight.add_argument("run_id")
     runs_selected_live_target_preflight.add_argument("--response", required=True)
@@ -3458,12 +3447,8 @@ def main(argv: list[str] | None = None) -> int:
         print(output, end="")
         return 0 if payload["state"] != "needs_preparation" else 2
 
-    if args.command == "operator-live-pilot-readiness-packet":
-        payload = service.operator_live_pilot_readiness_packet(
-            run_id=args.run_id,
-            sink=args.sink,
-            write=not args.no_write,
-        )
+    if args.command == OPERATOR_LIVE_PILOT_READINESS_COMMAND:
+        payload = call_registered_cli_command(service, args)
         output = (
             json.dumps(payload, indent=2)
             if args.json
@@ -3542,24 +3527,11 @@ def main(argv: list[str] | None = None) -> int:
             payload = service.live_pilot_handoff(run_id=args.run_id, write=not args.no_write)
         elif args.runs_command == "live-pilot-approval-packet":
             payload = service.live_pilot_approval_packet(run_id=args.run_id, job_id=args.job_id)
-        elif args.runs_command == "selected-target-approval-boundary":
-            payload = service.selected_target_approval_boundary(
-                args.run_id,
-                operator=args.operator,
-                sink=args.sink,
-                job_id=args.job_id,
-                response=args.response,
-                write=not args.no_write,
-            )
-        elif args.runs_command == "selected-target-command-copy-packet":
-            payload = service.selected_target_command_copy_packet(
-                args.run_id,
-                operator=args.operator,
-                response=args.response,
-                acknowledgement=args.acknowledgement,
-                sink=args.sink,
-                job_id=args.job_id,
-            )
+        elif args.runs_command in {
+            SELECTED_TARGET_APPROVAL_BOUNDARY_COMMAND,
+            SELECTED_TARGET_COMMAND_COPY_PACKET_COMMAND,
+        }:
+            payload = call_registered_cli_command(service, args)
         elif args.runs_command == "selected-live-target-preflight":
             payload = service.selected_live_target_preflight(run_id=args.run_id, response=args.response)
         elif args.runs_command == "selected-live-target-preview":
@@ -3683,10 +3655,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.runs_command == "live-pilot-approval-packet" and not args.json:
             print(_render_live_pilot_approval_packet_text(payload), end="")
             return 0
-        if args.runs_command == "selected-target-approval-boundary" and not args.json:
+        if args.runs_command == SELECTED_TARGET_APPROVAL_BOUNDARY_COMMAND and not args.json:
             print(_render_selected_target_approval_boundary_text(payload), end="")
             return 0
-        if args.runs_command == "selected-target-command-copy-packet" and not args.json:
+        if args.runs_command == SELECTED_TARGET_COMMAND_COPY_PACKET_COMMAND and not args.json:
             print(_render_selected_target_command_copy_packet_text(payload), end="")
             return 0
         if args.runs_command == "live-pilot-validate-response" and not args.json:

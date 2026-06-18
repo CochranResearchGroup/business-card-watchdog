@@ -5979,3 +5979,30 @@ Validation:
 Safety:
 
 - This was a behavior-preserving surface registry seed and drift-guard slice only. It did not process private input; create selected targets; execute live lookup, write, or readback; or write Google Contacts, Odoo, or Odollo records.
+
+## Turn 263 | 2026-06-18
+
+Finished Plan 0056 with Slices 0056-B and 0056-C.
+
+Implemented:
+
+- Extended the selected packet surface registry into CLI parser/dispatch reuse for the operator live-pilot readiness packet, selected-target approval boundary, and selected-target command-copy packet.
+- Reused registry route-path constants from API decorators while keeping explicit FastAPI endpoint functions and request models.
+- Added `src/business_card_watchdog/operator_dashboard.py` and moved the large `operator_dashboard` aggregation behind `build_operator_dashboard`.
+- Kept `BusinessCardService.operator_dashboard` as the compatibility entrypoint.
+- Updated Plan 0056, ROADMAP, and the drift guard to record the full-plan closeout instead of only Slice 0056-A.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_operator_live_pilot_readiness_packet_reports_ready_boundary tests/test_cli_surfaces.py::test_cli_runs_selected_target_approval_boundary_previews_selection tests/test_cli_surfaces.py::test_cli_runs_selected_target_command_copy_packet_requires_ack tests/test_api.py::test_api_operator_live_pilot_readiness_packet_reports_ready_boundary tests/test_api.py::test_api_run_selected_target_approval_boundary_previews_selection tests/test_api.py::test_api_run_selected_target_command_copy_packet_requires_ack tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_operator_live_pilot_readiness_packet_reports_ready_boundary tests/test_mcp.py::test_mcp_selected_target_approval_boundary_previews_selection tests/test_mcp.py::test_mcp_selected_target_command_copy_packet_requires_ack tests/test_service.py::test_service_operator_dashboard_composes_no_live_readiness tests/test_cli_surfaces.py::test_cli_operator_dashboard_reports_no_live_summary -q` passed with 12 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/operator_dashboard.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/api.py src/business_card_watchdog/surface_registry.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 333 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `.venv/bin/ruff check scripts/check_plan_drift.py` passed.
+- `python3 scripts/check_plan_drift.py` passed.
+- `codegraph sync && codegraph status` passed; index is up to date with 48 files, 1,672 nodes, and 3,348 edges.
+
+Safety:
+
+- This completed Plan 0056 as behavior-preserving registry and dashboard extraction work. It did not process private input; create selected targets; execute live lookup, write, or readback; or write Google Contacts, Odoo, or Odollo records.

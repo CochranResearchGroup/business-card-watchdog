@@ -2,6 +2,11 @@ from pathlib import Path
 
 from .config import load_config
 from .service import BusinessCardService
+from .surface_registry import (
+    OPERATOR_LIVE_PILOT_READINESS_API_PATH,
+    SELECTED_TARGET_APPROVAL_BOUNDARY_API_PATH,
+    SELECTED_TARGET_COMMAND_COPY_PACKET_API_PATH,
+)
 
 
 def create_app(config_path: Path | None = None):
@@ -466,7 +471,7 @@ def create_app(config_path: Path | None = None):
     def get_run_live_pilot_approval_packet(run_id: str, job_id: str | None = None) -> dict[str, object]:
         return service().live_pilot_approval_packet(run_id=run_id, job_id=job_id)
 
-    @app.post("/runs/{run_id}/selected-target-approval-boundary")
+    @app.post(SELECTED_TARGET_APPROVAL_BOUNDARY_API_PATH)
     def create_run_selected_target_approval_boundary(
         run_id: str,
         request: SelectedTargetApprovalBoundaryRequest,
@@ -480,7 +485,7 @@ def create_app(config_path: Path | None = None):
             write=request.write,
         )
 
-    @app.post("/runs/{run_id}/selected-target-command-copy-packet")
+    @app.post(SELECTED_TARGET_COMMAND_COPY_PACKET_API_PATH)
     def create_run_selected_target_command_copy_packet(
         run_id: str,
         request: SelectedTargetCommandCopyPacketRequest,
@@ -980,7 +985,7 @@ def create_app(config_path: Path | None = None):
     def live_pilot_rehearsal_drill() -> dict[str, object]:
         return service().live_pilot_rehearsal_drill()
 
-    @app.get("/operator/live-pilot-readiness-packet")
+    @app.get(OPERATOR_LIVE_PILOT_READINESS_API_PATH)
     def get_operator_live_pilot_readiness_packet(
         run_id: str,
         sink: str | None = None,
@@ -992,7 +997,7 @@ def create_app(config_path: Path | None = None):
             write=write,
         )
 
-    @app.post("/operator/live-pilot-readiness-packet")
+    @app.post(OPERATOR_LIVE_PILOT_READINESS_API_PATH)
     def post_operator_live_pilot_readiness_packet(
         request: OperatorLivePilotReadinessPacketRequest = Body(...),
     ) -> dict[str, object]:
