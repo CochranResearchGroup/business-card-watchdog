@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PLAN_0056 = "docs/dev/plans/0056-2026-06-16-monolith-decomposition-drift-guard.md"
+LATEST_REFACTOR_PLAN = "docs/dev/plans/0057-2026-06-18-service-recovery-extraction.md"
 
 
 def require(condition: bool, message: str) -> None:
@@ -20,17 +20,20 @@ def read(path: str) -> str:
 def main() -> int:
     roadmap = read("ROADMAP.md")
     runbook = read("RUNBOOK.md")
-    plan = read(PLAN_0056)
+    plan = read(LATEST_REFACTOR_PLAN)
 
-    require((ROOT / PLAN_0056).exists(), f"{PLAN_0056} is missing")
-    require(f"Latest completed refactor plan: `{PLAN_0056}`" in roadmap, "ROADMAP latest refactor plan is stale")
-    require("State: CLOSED" in plan, "Plan 0056 is not closed")
-    require("Pending." not in plan, "Plan 0056 validation is still pending")
-    require("## Turn 263 | 2026-06-18" in runbook, "RUNBOOK Turn 263 closeout is missing")
-    require("Finished Plan 0056 with Slices 0056-B and 0056-C" in runbook, "RUNBOOK full Plan 0056 closeout is missing")
+    require((ROOT / LATEST_REFACTOR_PLAN).exists(), f"{LATEST_REFACTOR_PLAN} is missing")
+    require(
+        f"Latest completed refactor plan: `{LATEST_REFACTOR_PLAN}`" in roadmap,
+        "ROADMAP latest refactor plan is stale",
+    )
+    require("State: CLOSED" in plan, "Plan 0057 is not closed")
+    require("Pending." not in plan, "Plan 0057 validation is still pending")
+    require("## Turn 264 | 2026-06-18" in runbook, "RUNBOOK Turn 264 closeout is missing")
+    require("Executed Plan 0057 with Slice 0057-A" in runbook, "RUNBOOK Plan 0057 closeout is missing")
     require("codegraph sync && codegraph status" in runbook, "RUNBOOK does not record CodeGraph validation")
     require(
-        "This completed Plan 0056 as behavior-preserving registry and dashboard extraction work" in runbook,
+        "This was a behavior-preserving service-recovery extraction" in runbook,
         "RUNBOOK safety boundary is missing",
     )
     print("plan drift guard passed")

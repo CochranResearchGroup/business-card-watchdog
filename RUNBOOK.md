@@ -6006,3 +6006,30 @@ Validation:
 Safety:
 
 - This completed Plan 0056 as behavior-preserving registry and dashboard extraction work. It did not process private input; create selected targets; execute live lookup, write, or readback; or write Google Contacts, Odoo, or Odollo records.
+
+## Turn 264 | 2026-06-18
+
+Executed Plan 0057 with Slice 0057-A.
+
+Implemented:
+
+- Added `docs/dev/plans/0057-2026-06-18-service-recovery-extraction.md`.
+- Added `src/business_card_watchdog/service_recovery.py` for the read-only service recovery aggregator.
+- Moved the `service_recovery_report` aggregation body behind `build_service_recovery_report`.
+- Kept `BusinessCardService.service_recovery_report` as the compatibility entrypoint.
+- Updated `ROADMAP.md` and `scripts/check_plan_drift.py` so the latest refactor closeout points at Plan 0057.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_recovery_report_composes_status_and_recovery_commands tests/test_cli_surfaces.py::test_cli_service_recovery_reports_status_shape tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service tests/test_service.py::test_service_operator_dashboard_composes_no_live_readiness tests/test_cli_surfaces.py::test_cli_operator_dashboard_reports_no_live_summary -q` passed with 7 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/service_recovery.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 333 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `.venv/bin/ruff check scripts/check_plan_drift.py` passed.
+- `python3 scripts/check_plan_drift.py` passed.
+- `codegraph sync && codegraph status` passed; index is up to date with 49 files, 1,680 nodes, and 3,363 edges.
+
+Safety:
+
+- This was a behavior-preserving service-recovery extraction. It did not process private input; create selected targets; execute live lookup, write, or readback; or write Google Contacts, Odoo, or Odollo records.
