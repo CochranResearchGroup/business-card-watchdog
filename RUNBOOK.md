@@ -6104,3 +6104,79 @@ Safety:
   registry/renderer thinning slice. It did not process private input; create
   selected targets; execute live lookup, write, live pilot execution, or
   readback; or write Google Contacts, Odoo, or Odollo records.
+
+## Turn 267 | 2026-06-20
+
+Committed and pushed the completed Plan 0058 checkpoint, then opened the next
+bounded refactor plan.
+
+Updated:
+
+- Committed Plan 0058 as `706070c` with message
+  `Complete plan 0058 pilot readiness extraction`.
+- Pushed `main` to `upstream/main`.
+- Added `docs/dev/plans/0059-2026-06-20-review-route-lookup-selection-extraction.md`.
+- Updated `ROADMAP.md` so the next refactor plan points at Plan 0059 while
+  the latest completed refactor plan remains Plan 0058.
+- Used CodeGraph context to confirm `lookup_selection_packet` depends on
+  `review_route_readiness`, so Plan 0059 keeps those methods in one extraction
+  cluster.
+
+Validation:
+
+- Pre-commit Plan 0058 validation passed before `706070c`:
+  `python3 scripts/check_plan_drift.py`, `git diff --check`,
+  `.venv/bin/ruff check .`, and `.venv/bin/python -m pytest -q` with 333 tests.
+- Plan 0059 is planning-only; run `git diff --check` and
+  `python3 scripts/check_plan_drift.py` before committing it.
+
+Safety:
+
+- Plan 0059 is planning-only. It does not process private input; create
+  selected targets; execute live lookup, write, live pilot execution, or
+  readback; or write Google Contacts, Odoo, or Odollo records.
+
+## Turn 268 | 2026-06-20
+
+Executed Plan 0059 with the review-route readiness and lookup-selection packet
+cluster.
+
+Implemented:
+
+- Added `src/business_card_watchdog/review_route_packets.py`.
+- Moved the `review_route_readiness` aggregation body behind
+  `build_review_route_readiness`.
+- Moved the `lookup_selection_packet` aggregation body behind
+  `build_lookup_selection_packet`.
+- Kept `BusinessCardService.review_route_readiness` and
+  `BusinessCardService.lookup_selection_packet` as compatibility wrappers.
+- Extended `src/business_card_watchdog/surface_registry.py` with the
+  review-route and lookup-selection MCP tool specs, CLI command constants,
+  parser/dispatch helpers, and API path constants.
+- Reused the registry from `mcp.py`, `cli.py`, and `api.py` for both public
+  surfaces.
+- Moved the review-route readiness and lookup-selection text renderers into
+  `src/business_card_watchdog/cli_renderers.py`.
+- Closed Plan 0059 and updated `ROADMAP.md` so the latest completed refactor
+  plan points at Plan 0059.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_review_route_readiness_summarizes_review_and_route_state tests/test_service.py::test_service_lookup_selection_packet_selects_route_ready_job_without_live_calls tests/test_cli_surfaces.py::test_cli_runs_review_route_readiness_reports_route_state tests/test_cli_surfaces.py::test_cli_runs_lookup_selection_packet_reports_selected_candidate tests/test_api.py::test_api_run_review_route_readiness_reports_route_state tests/test_api.py::test_api_run_lookup_selection_packet_reports_selected_candidate tests/test_mcp.py::test_mcp_review_route_readiness_reports_route_state tests/test_mcp.py::test_mcp_lookup_selection_packet_reports_selected_candidate tests/test_mcp.py::test_manifest_has_process_tool -q`
+  passed with 9 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/review_route_packets.py src/business_card_watchdog/surface_registry.py src/business_card_watchdog/api.py src/business_card_watchdog/mcp.py src/business_card_watchdog/cli.py src/business_card_watchdog/cli_renderers.py`
+  passed.
+- `.venv/bin/python -m pytest -q` passed with 333 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `.venv/bin/ruff check scripts/check_plan_drift.py` passed.
+- `python3 scripts/check_plan_drift.py` passed.
+- `codegraph sync && codegraph status` passed; index is up to date with 52
+  files, 1,705 nodes, and 4,698 edges.
+
+Safety:
+
+- This was a behavior-preserving review-route and lookup-selection extraction.
+  It did not process private input; create selected targets; execute live
+  lookup, write, live pilot execution, or readback; or write Google Contacts,
+  Odoo, or Odollo records.

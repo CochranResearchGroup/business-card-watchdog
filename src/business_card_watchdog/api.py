@@ -3,8 +3,10 @@ from pathlib import Path
 from .config import load_config
 from .service import BusinessCardService
 from .surface_registry import (
+    LOOKUP_SELECTION_PACKET_API_PATH,
     OPERATOR_LIVE_PILOT_READINESS_API_PATH,
     PILOT_READINESS_API_PATH,
+    REVIEW_ROUTE_READINESS_API_PATH,
     SELECTED_TARGET_APPROVAL_BOUNDARY_API_PATH,
     SELECTED_TARGET_COMMAND_COPY_PACKET_API_PATH,
 )
@@ -431,11 +433,11 @@ def create_app(config_path: Path | None = None):
     def get_run_dry_run_safe_loop(run_id: str, limit: int = 5, write: bool = True) -> dict[str, object]:
         return service().dry_run_safe_loop(run_id, limit=limit, write=write)
 
-    @app.get("/runs/{run_id}/review-route-readiness")
+    @app.get(REVIEW_ROUTE_READINESS_API_PATH)
     def get_run_review_route_readiness(run_id: str, write: bool = True) -> dict[str, object]:
         return service().review_route_readiness(run_id, write=write)
 
-    @app.post("/runs/{run_id}/lookup-selection-packet")
+    @app.post(LOOKUP_SELECTION_PACKET_API_PATH)
     def create_run_lookup_selection_packet(
         run_id: str,
         request: LookupSelectionPacketRequest = Body(...),

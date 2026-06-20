@@ -171,32 +171,8 @@ def tool_manifest() -> dict[str, object]:
                     "required": ["run_id"],
                 },
             },
-            {
-                "name": "business_card_watchdog_review_route_readiness",
-                "description": "Summarize review, duplicate, enrichment, and route readiness for a dry-run batch.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "run_id": {"type": "string"},
-                        "write": {"type": "boolean", "default": True},
-                    },
-                    "required": ["run_id"],
-                },
-            },
-            {
-                "name": "business_card_watchdog_lookup_selection_packet",
-                "description": "Choose a route-ready job and prepare a no-live lookup selection packet.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "run_id": {"type": "string"},
-                        "operator": {"type": "string"},
-                        "sink": {"type": "string"},
-                        "write": {"type": "boolean", "default": True},
-                    },
-                    "required": ["run_id", "operator"],
-                },
-            },
+            mcp_tool_manifest_entry("business_card_watchdog_review_route_readiness"),
+            mcp_tool_manifest_entry("business_card_watchdog_lookup_selection_packet"),
             {
                 "name": "business_card_watchdog_close_lookup_prerequisites",
                 "description": "Execute only no-live lookup prerequisite actions before selected-target approval.",
@@ -1488,15 +1464,6 @@ def call_tool(
         return service.dry_run_safe_loop(
             str(args["run_id"]),
             limit=int(args.get("limit", 5)),
-            write=bool(args.get("write", True)),
-        )
-    if tool_name == "business_card_watchdog_review_route_readiness":
-        return service.review_route_readiness(str(args["run_id"]), write=bool(args.get("write", True)))
-    if tool_name == "business_card_watchdog_lookup_selection_packet":
-        return service.lookup_selection_packet(
-            str(args["run_id"]),
-            operator=str(args["operator"]),
-            sink=str(args["sink"]) if args.get("sink") else None,
             write=bool(args.get("write", True)),
         )
     if tool_name == "business_card_watchdog_close_lookup_prerequisites":

@@ -6,18 +6,25 @@ from pathlib import Path
 
 from .api import create_app
 from .config import load_config, write_default_config
-from .cli_renderers import render_pilot_readiness_report_text
+from .cli_renderers import (
+    render_lookup_selection_packet_text,
+    render_pilot_readiness_report_text,
+    render_review_route_readiness_text,
+)
 from .mcp import call_tool, manifest_json
 from .mcp_server import serve_jsonl
 from .service import BusinessCardService
 from .service_ops import install_user_service, service_status, uninstall_user_service
 from .surface_registry import (
+    LOOKUP_SELECTION_PACKET_COMMAND,
     OPERATOR_LIVE_PILOT_READINESS_COMMAND,
     PILOT_READINESS_COMMAND,
+    REVIEW_ROUTE_READINESS_COMMAND,
     SELECTED_TARGET_APPROVAL_BOUNDARY_COMMAND,
     SELECTED_TARGET_COMMAND_COPY_PACKET_COMMAND,
     add_operator_live_pilot_readiness_parser,
     add_pilot_readiness_runs_parser,
+    add_review_route_runs_parsers,
     add_selected_target_runs_parsers,
     call_registered_cli_command,
 )
@@ -1671,117 +1678,6 @@ def _render_dry_run_safe_loop_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _render_review_route_readiness_text(payload: dict[str, object]) -> str:
-    counts = dict(payload.get("counts") or {})
-    action_counts = dict(payload.get("next_action_counts") or {})
-    rows = payload.get("rows") or []
-    commands = dict(payload.get("commands") or {})
-    stop_conditions = payload.get("explicit_stop_conditions") or []
-    lines = [
-        f"Review-route readiness: {payload.get('state')}",
-        f"Run: {payload.get('run_id')}",
-        f"Closeout: {payload.get('closeout_state')}",
-        f"Handoff: {payload.get('handoff_state')}",
-        f"Jobs: {payload.get('job_count', 0)}",
-        f"Needs review: {counts.get('needs_review', 0)}",
-        f"Ready to route: {counts.get('ready_to_route', 0)}",
-        f"Duplicate risky: {counts.get('duplicate_risky', 0)}",
-        f"Enrichment pending: {counts.get('enrichment_pending', 0)}",
-        f"Safe auto: {counts.get('safe_auto', 0)}",
-        f"Explicit operator: {counts.get('explicit_operator', 0)}",
-        "Observed: "
-        f"writes={payload.get('writes_attempted', 0)} "
-        f"network={payload.get('network_calls_made', 0)} "
-        f"live_sinks={payload.get('live_sink_calls_made', False)}",
-        f"Runtime artifact written: {payload.get('runtime_artifact_written', False)}",
-    ]
-    if payload.get("readiness_path"):
-        lines.append(f"Readiness path: {payload.get('readiness_path')}")
-    if action_counts:
-        lines.append("Next action counts:")
-        for action, count in sorted(action_counts.items()):
-            lines.append(f" - {action}: {count}")
-    row_entries = rows if isinstance(rows, list) else []
-    lines.append(f"Rows: {len(row_entries)}")
-    for row in row_entries[:10]:
-        if isinstance(row, dict):
-            next_action = dict(row.get("next_action") or {})
-            lines.append(
-                " - "
-                f"{row.get('job_id')}: {row.get('state')} "
-                f"dup={row.get('duplicate_state')} enrich={row.get('enrichment_state')} "
-                f"route={row.get('route_state')} next={next_action.get('action')}"
-            )
-    lines.append("Commands:")
-    for label, key in [
-        ("Readiness", "review_route_readiness"),
-        ("Safe loop", "dry_run_safe_loop"),
-        ("Handoff", "dry_run_review_handoff"),
-        ("Review bundle", "review_bundle"),
-        ("Next actions", "next_actions"),
-        ("Phase report", "phase_report"),
-        ("Live pilot status", "live_pilot_status"),
-    ]:
-        command = commands.get(key)
-        if command:
-            lines.append(f" - {label}: {command}")
-    stop_rows = stop_conditions if isinstance(stop_conditions, list) else []
-    lines.append(f"Stop conditions: {len(stop_rows)}")
-    for condition in stop_rows:
-        lines.append(f" - {condition}")
-    return "\n".join(lines) + "\n"
-
-
-def _render_lookup_selection_packet_text(payload: dict[str, object]) -> str:
-    selected = dict(payload.get("selected") or {})
-    selected_packet = dict(payload.get("selected_packet") or {})
-    commands = dict(payload.get("commands") or {})
-    blocked_reasons = payload.get("blocked_reasons") or []
-    stop_conditions = payload.get("explicit_stop_conditions") or []
-    lines = [
-        f"Lookup selection packet: {payload.get('state')}",
-        f"Run: {payload.get('run_id')}",
-        f"Sink: {payload.get('sink') or 'auto'}",
-        f"Operator: {payload.get('operator')}",
-        f"Route-ready rows: {payload.get('route_ready_count', 0)}",
-        f"Packet candidates: {payload.get('packet_candidate_count', 0)}",
-        f"Selected job: {selected.get('job_id') or 'none'}",
-        f"Selected sink: {selected.get('sink') or 'none'}",
-        f"Selected packet: {selected_packet.get('state') or 'none'}",
-        "Observed: "
-        f"writes={payload.get('writes_attempted', 0)} "
-        f"network={payload.get('network_calls_made', 0)} "
-        f"live_sinks={payload.get('live_sink_calls_made', False)} "
-        f"creates_selected_target={payload.get('creates_selected_live_target', False)}",
-        f"Runtime artifact written: {payload.get('runtime_artifact_written', False)}",
-    ]
-    if payload.get("packet_path"):
-        lines.append(f"Packet path: {payload.get('packet_path')}")
-    blocked_rows = blocked_reasons if isinstance(blocked_reasons, list) else []
-    if blocked_rows:
-        lines.append("Blocked reasons:")
-        for reason in blocked_rows:
-            lines.append(f" - {reason}")
-    lines.append("Commands:")
-    for label, key in [
-        ("Lookup selection packet", "lookup_selection_packet"),
-        ("Review-route readiness", "review_route_readiness"),
-        ("Live selection requirements", "live_selection_requirements"),
-        ("Validate operator response", "validate_operator_response"),
-        ("Validate prefilled response", "validate_operator_response_prefilled"),
-        ("Selected target audit", "selected_target_audit"),
-        ("Lookup smoke handoff", "lookup_smoke_handoff"),
-    ]:
-        command = commands.get(key)
-        if command:
-            lines.append(f" - {label}: {command}")
-    stop_rows = stop_conditions if isinstance(stop_conditions, list) else []
-    lines.append(f"Stop conditions: {len(stop_rows)}")
-    for condition in stop_rows:
-        lines.append(f" - {condition}")
-    return "\n".join(lines) + "\n"
-
-
 def _render_close_lookup_prerequisites_text(payload: dict[str, object]) -> str:
     commands = dict(payload.get("commands") or {})
     executed = payload.get("executed") or []
@@ -2773,16 +2669,7 @@ def build_parser() -> argparse.ArgumentParser:
     runs_dry_run_safe_loop.add_argument("--limit", type=int, default=5)
     runs_dry_run_safe_loop.add_argument("--no-write", action="store_true")
     runs_dry_run_safe_loop.add_argument("--json", action="store_true")
-    runs_review_route_readiness = runs_sub.add_parser("review-route-readiness")
-    runs_review_route_readiness.add_argument("run_id")
-    runs_review_route_readiness.add_argument("--no-write", action="store_true")
-    runs_review_route_readiness.add_argument("--json", action="store_true")
-    runs_lookup_selection_packet = runs_sub.add_parser("lookup-selection-packet")
-    runs_lookup_selection_packet.add_argument("run_id")
-    runs_lookup_selection_packet.add_argument("--operator", required=True)
-    runs_lookup_selection_packet.add_argument("--sink", choices=["google_contacts", "odoo"], default=None)
-    runs_lookup_selection_packet.add_argument("--no-write", action="store_true")
-    runs_lookup_selection_packet.add_argument("--json", action="store_true")
+    add_review_route_runs_parsers(runs_sub)
     runs_close_lookup_prerequisites = runs_sub.add_parser("close-lookup-prerequisites")
     runs_close_lookup_prerequisites.add_argument("run_id")
     runs_close_lookup_prerequisites.add_argument("--operator", required=True)
@@ -3483,15 +3370,11 @@ def main(argv: list[str] | None = None) -> int:
             payload = service.dry_run_review_handoff(args.run_id, write=not args.no_write)
         elif args.runs_command == "dry-run-safe-loop":
             payload = service.dry_run_safe_loop(args.run_id, limit=args.limit, write=not args.no_write)
-        elif args.runs_command == "review-route-readiness":
-            payload = service.review_route_readiness(args.run_id, write=not args.no_write)
-        elif args.runs_command == "lookup-selection-packet":
-            payload = service.lookup_selection_packet(
-                args.run_id,
-                operator=args.operator,
-                sink=args.sink,
-                write=not args.no_write,
-            )
+        elif args.runs_command in {
+            REVIEW_ROUTE_READINESS_COMMAND,
+            LOOKUP_SELECTION_PACKET_COMMAND,
+        }:
+            payload = call_registered_cli_command(service, args)
         elif args.runs_command == "close-lookup-prerequisites":
             payload = service.close_lookup_prerequisites(
                 args.run_id,
@@ -3661,11 +3544,11 @@ def main(argv: list[str] | None = None) -> int:
         if args.runs_command == "dry-run-safe-loop" and not args.json:
             print(_render_dry_run_safe_loop_text(payload), end="")
             return 0
-        if args.runs_command == "review-route-readiness" and not args.json:
-            print(_render_review_route_readiness_text(payload), end="")
+        if args.runs_command == REVIEW_ROUTE_READINESS_COMMAND and not args.json:
+            print(render_review_route_readiness_text(payload), end="")
             return 0
-        if args.runs_command == "lookup-selection-packet" and not args.json:
-            print(_render_lookup_selection_packet_text(payload), end="")
+        if args.runs_command == LOOKUP_SELECTION_PACKET_COMMAND and not args.json:
+            print(render_lookup_selection_packet_text(payload), end="")
             return 0
         if args.runs_command == "close-lookup-prerequisites" and not args.json:
             print(_render_close_lookup_prerequisites_text(payload), end="")

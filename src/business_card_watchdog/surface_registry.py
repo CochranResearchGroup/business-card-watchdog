@@ -8,10 +8,14 @@ MCPHandler = Callable[[Any, dict[str, Any]], dict[str, Any]]
 SINK_CHOICES = ("google_contacts", "odoo")
 OPERATOR_LIVE_PILOT_READINESS_COMMAND = "operator-live-pilot-readiness-packet"
 PILOT_READINESS_COMMAND = "pilot-readiness"
+REVIEW_ROUTE_READINESS_COMMAND = "review-route-readiness"
+LOOKUP_SELECTION_PACKET_COMMAND = "lookup-selection-packet"
 SELECTED_TARGET_APPROVAL_BOUNDARY_COMMAND = "selected-target-approval-boundary"
 SELECTED_TARGET_COMMAND_COPY_PACKET_COMMAND = "selected-target-command-copy-packet"
 OPERATOR_LIVE_PILOT_READINESS_API_PATH = "/operator/live-pilot-readiness-packet"
 PILOT_READINESS_API_PATH = "/runs/{run_id}/pilot-readiness"
+REVIEW_ROUTE_READINESS_API_PATH = "/runs/{run_id}/review-route-readiness"
+LOOKUP_SELECTION_PACKET_API_PATH = "/runs/{run_id}/lookup-selection-packet"
 SELECTED_TARGET_APPROVAL_BOUNDARY_API_PATH = "/runs/{run_id}/selected-target-approval-boundary"
 SELECTED_TARGET_COMMAND_COPY_PACKET_API_PATH = "/runs/{run_id}/selected-target-command-copy-packet"
 
@@ -41,6 +45,19 @@ def _operator_live_pilot_readiness_packet(service: Any, args: dict[str, Any]) ->
 
 def _pilot_readiness_report(service: Any, args: dict[str, Any]) -> dict[str, Any]:
     return service.pilot_readiness_report(str(args["run_id"]))
+
+
+def _review_route_readiness(service: Any, args: dict[str, Any]) -> dict[str, Any]:
+    return service.review_route_readiness(str(args["run_id"]), write=bool(args.get("write", True)))
+
+
+def _lookup_selection_packet(service: Any, args: dict[str, Any]) -> dict[str, Any]:
+    return service.lookup_selection_packet(
+        str(args["run_id"]),
+        operator=str(args["operator"]),
+        sink=str(args["sink"]) if args.get("sink") else None,
+        write=bool(args.get("write", True)),
+    )
 
 
 def _selected_target_approval_boundary(service: Any, args: dict[str, Any]) -> dict[str, Any]:
@@ -92,6 +109,34 @@ MCP_TOOL_SPECS: dict[str, McpToolSpec] = {
             "required": ["run_id"],
         },
         handler=_pilot_readiness_report,
+    ),
+    "business_card_watchdog_review_route_readiness": McpToolSpec(
+        name="business_card_watchdog_review_route_readiness",
+        description="Summarize review, duplicate, enrichment, and route readiness for a dry-run batch.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "run_id": {"type": "string"},
+                "write": {"type": "boolean", "default": True},
+            },
+            "required": ["run_id"],
+        },
+        handler=_review_route_readiness,
+    ),
+    "business_card_watchdog_lookup_selection_packet": McpToolSpec(
+        name="business_card_watchdog_lookup_selection_packet",
+        description="Choose a route-ready job and prepare a no-live lookup selection packet.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "run_id": {"type": "string"},
+                "operator": {"type": "string"},
+                "sink": {"type": "string"},
+                "write": {"type": "boolean", "default": True},
+            },
+            "required": ["run_id", "operator"],
+        },
+        handler=_lookup_selection_packet,
     ),
     "business_card_watchdog_selected_target_approval_boundary": McpToolSpec(
         name="business_card_watchdog_selected_target_approval_boundary",
@@ -161,6 +206,20 @@ def add_pilot_readiness_runs_parser(runs_subparsers: Any) -> None:
     parser.add_argument("--json", action="store_true")
 
 
+def add_review_route_runs_parsers(runs_subparsers: Any) -> None:
+    readiness = runs_subparsers.add_parser(REVIEW_ROUTE_READINESS_COMMAND)
+    readiness.add_argument("run_id")
+    readiness.add_argument("--no-write", action="store_true")
+    readiness.add_argument("--json", action="store_true")
+
+    lookup = runs_subparsers.add_parser(LOOKUP_SELECTION_PACKET_COMMAND)
+    lookup.add_argument("run_id")
+    lookup.add_argument("--operator", required=True)
+    lookup.add_argument("--sink", choices=list(SINK_CHOICES), default=None)
+    lookup.add_argument("--no-write", action="store_true")
+    lookup.add_argument("--json", action="store_true")
+
+
 def add_selected_target_runs_parsers(runs_subparsers: Any) -> None:
     approval = runs_subparsers.add_parser(SELECTED_TARGET_APPROVAL_BOUNDARY_COMMAND)
     approval.add_argument("run_id")
@@ -192,6 +251,15 @@ def call_registered_cli_command(service: Any, args: Any) -> dict[str, Any] | Non
         return None
     if getattr(args, "runs_command", None) == PILOT_READINESS_COMMAND:
         return service.pilot_readiness_report(args.run_id)
+    if getattr(args, "runs_command", None) == REVIEW_ROUTE_READINESS_COMMAND:
+        return service.review_route_readiness(args.run_id, write=not args.no_write)
+    if getattr(args, "runs_command", None) == LOOKUP_SELECTION_PACKET_COMMAND:
+        return service.lookup_selection_packet(
+            args.run_id,
+            operator=args.operator,
+            sink=args.sink,
+            write=not args.no_write,
+        )
     if getattr(args, "runs_command", None) == SELECTED_TARGET_APPROVAL_BOUNDARY_COMMAND:
         return service.selected_target_approval_boundary(
             args.run_id,
