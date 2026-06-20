@@ -7,9 +7,11 @@ from typing import Any, Callable
 MCPHandler = Callable[[Any, dict[str, Any]], dict[str, Any]]
 SINK_CHOICES = ("google_contacts", "odoo")
 OPERATOR_LIVE_PILOT_READINESS_COMMAND = "operator-live-pilot-readiness-packet"
+PILOT_READINESS_COMMAND = "pilot-readiness"
 SELECTED_TARGET_APPROVAL_BOUNDARY_COMMAND = "selected-target-approval-boundary"
 SELECTED_TARGET_COMMAND_COPY_PACKET_COMMAND = "selected-target-command-copy-packet"
 OPERATOR_LIVE_PILOT_READINESS_API_PATH = "/operator/live-pilot-readiness-packet"
+PILOT_READINESS_API_PATH = "/runs/{run_id}/pilot-readiness"
 SELECTED_TARGET_APPROVAL_BOUNDARY_API_PATH = "/runs/{run_id}/selected-target-approval-boundary"
 SELECTED_TARGET_COMMAND_COPY_PACKET_API_PATH = "/runs/{run_id}/selected-target-command-copy-packet"
 
@@ -35,6 +37,10 @@ def _operator_live_pilot_readiness_packet(service: Any, args: dict[str, Any]) ->
         sink=str(args["sink"]) if args.get("sink") else None,
         write=bool(args.get("write", True)),
     )
+
+
+def _pilot_readiness_report(service: Any, args: dict[str, Any]) -> dict[str, Any]:
+    return service.pilot_readiness_report(str(args["run_id"]))
 
 
 def _selected_target_approval_boundary(service: Any, args: dict[str, Any]) -> dict[str, Any]:
@@ -76,6 +82,16 @@ MCP_TOOL_SPECS: dict[str, McpToolSpec] = {
             "required": ["run_id"],
         },
         handler=_operator_live_pilot_readiness_packet,
+    ),
+    "business_card_watchdog_pilot_readiness_report": McpToolSpec(
+        name="business_card_watchdog_pilot_readiness_report",
+        description="Report whether a run is ready for sink write/readback pilots.",
+        input_schema={
+            "type": "object",
+            "properties": {"run_id": {"type": "string"}},
+            "required": ["run_id"],
+        },
+        handler=_pilot_readiness_report,
     ),
     "business_card_watchdog_selected_target_approval_boundary": McpToolSpec(
         name="business_card_watchdog_selected_target_approval_boundary",
@@ -139,6 +155,12 @@ def add_operator_live_pilot_readiness_parser(subparsers: Any) -> None:
     parser.add_argument("--json", action="store_true")
 
 
+def add_pilot_readiness_runs_parser(runs_subparsers: Any) -> None:
+    parser = runs_subparsers.add_parser(PILOT_READINESS_COMMAND)
+    parser.add_argument("run_id")
+    parser.add_argument("--json", action="store_true")
+
+
 def add_selected_target_runs_parsers(runs_subparsers: Any) -> None:
     approval = runs_subparsers.add_parser(SELECTED_TARGET_APPROVAL_BOUNDARY_COMMAND)
     approval.add_argument("run_id")
@@ -168,6 +190,8 @@ def call_registered_cli_command(service: Any, args: Any) -> dict[str, Any] | Non
         )
     if getattr(args, "command", None) != "runs":
         return None
+    if getattr(args, "runs_command", None) == PILOT_READINESS_COMMAND:
+        return service.pilot_readiness_report(args.run_id)
     if getattr(args, "runs_command", None) == SELECTED_TARGET_APPROVAL_BOUNDARY_COMMAND:
         return service.selected_target_approval_boundary(
             args.run_id,

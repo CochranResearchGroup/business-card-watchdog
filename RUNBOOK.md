@@ -6033,3 +6033,74 @@ Validation:
 Safety:
 
 - This was a behavior-preserving service-recovery extraction. It did not process private input; create selected targets; execute live lookup, write, or readback; or write Google Contacts, Odoo, or Odollo records.
+
+## Turn 265 | 2026-06-19
+
+Opened Plan 0058 as the next goal-compatible monolith refactoring plan.
+
+Updated:
+
+- Added `docs/dev/plans/0058-2026-06-19-goal-compatible-monolith-refactoring.md`.
+- Wired `ROADMAP.md` to show Plan 0058 as the next refactor plan while keeping
+  Plan 0057 as the latest completed refactor plan.
+- Captured current monolith pressure from repo evidence: `service.py` remains
+  roughly 15.4k lines, `cli.py` roughly 4.3k lines, and `mcp.py` roughly 2.1k
+  lines after the Plan 0057 extraction.
+- Captured the pre-plan CodeGraph status: 49 indexed files, 1,680 nodes, and
+  3,363 edges.
+- Defined `/goal` workstreams, subagent boundaries, stop conditions, slice
+  plan, acceptance criteria, and validation rules for further
+  behavior-preserving decomposition.
+
+Validation:
+
+- `git diff --check` passed.
+- `python3 scripts/check_plan_drift.py` passed.
+
+Safety:
+
+- This opened a plan only. It did not process private input; create selected
+  targets; execute live lookup, write, live pilot execution, or readback; or
+  write Google Contacts, Odoo, or Odollo records.
+
+## Turn 266 | 2026-06-19
+
+Executed Plan 0058 with Slices 0058-A through 0058-C for the pilot-readiness
+cluster.
+
+Implemented:
+
+- Added `src/business_card_watchdog/pilot_readiness.py` and moved the
+  `pilot_readiness_report` aggregation body behind `build_pilot_readiness_report`.
+- Kept `BusinessCardService.pilot_readiness_report` as the compatibility
+  wrapper.
+- Added `src/business_card_watchdog/cli_renderers.py` and moved the
+  pilot-readiness text renderer behind `render_pilot_readiness_report_text`.
+- Extended `src/business_card_watchdog/surface_registry.py` with the
+  pilot-readiness MCP tool spec, CLI parser/dispatch helper, and API path
+  constant.
+- Reused the registry from `mcp.py`, `cli.py`, and `api.py` for the
+  pilot-readiness public surface.
+- Closed Plan 0058 and updated `ROADMAP.md` so the latest completed refactor
+  plan points at Plan 0058.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_run_summary_and_review_queue tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_cli_surfaces.py::test_cli_runs_and_jobs_use_recorded_runtime_state tests/test_mcp.py::test_manifest_has_process_tool tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service tests/test_mcp.py::test_mcp_jsonl_server_lists_and_calls_tools -q`
+  passed with 6 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/pilot_readiness.py src/business_card_watchdog/surface_registry.py src/business_card_watchdog/cli.py src/business_card_watchdog/cli_renderers.py src/business_card_watchdog/api.py src/business_card_watchdog/mcp.py`
+  passed.
+- `.venv/bin/python -m pytest -q` passed with 333 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `.venv/bin/ruff check scripts/check_plan_drift.py` passed.
+- `python3 scripts/check_plan_drift.py` passed.
+- `codegraph sync && codegraph status` passed; index is up to date with 51
+  files, 1,691 nodes, and 4,540 edges.
+
+Safety:
+
+- This was a behavior-preserving pilot-readiness extraction and surface
+  registry/renderer thinning slice. It did not process private input; create
+  selected targets; execute live lookup, write, live pilot execution, or
+  readback; or write Google Contacts, Odoo, or Odollo records.

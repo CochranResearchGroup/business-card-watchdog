@@ -133,15 +133,7 @@ def tool_manifest() -> dict[str, object]:
                     "required": ["run_id"],
                 },
             },
-            {
-                "name": "business_card_watchdog_pilot_readiness_report",
-                "description": "Report whether a run is ready for sink write/readback pilots.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {"run_id": {"type": "string"}},
-                    "required": ["run_id"],
-                },
-            },
+            mcp_tool_manifest_entry("business_card_watchdog_pilot_readiness_report"),
             {
                 "name": "business_card_watchdog_dry_run_closeout",
                 "description": "Audit one completed dry-run ledger before review, routing, or live pilot selection.",
@@ -1488,8 +1480,6 @@ def call_tool(
         return service.run_summary(str(args["run_id"]))
     if tool_name == "business_card_watchdog_phase_report":
         return service.phase_report(str(args["run_id"]))
-    if tool_name == "business_card_watchdog_pilot_readiness_report":
-        return service.pilot_readiness_report(str(args["run_id"]))
     if tool_name == "business_card_watchdog_dry_run_closeout":
         return service.dry_run_closeout(str(args["run_id"]), write=bool(args.get("write", True)))
     if tool_name == "business_card_watchdog_dry_run_review_handoff":

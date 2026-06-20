@@ -6,15 +6,18 @@ from pathlib import Path
 
 from .api import create_app
 from .config import load_config, write_default_config
+from .cli_renderers import render_pilot_readiness_report_text
 from .mcp import call_tool, manifest_json
 from .mcp_server import serve_jsonl
 from .service import BusinessCardService
 from .service_ops import install_user_service, service_status, uninstall_user_service
 from .surface_registry import (
     OPERATOR_LIVE_PILOT_READINESS_COMMAND,
+    PILOT_READINESS_COMMAND,
     SELECTED_TARGET_APPROVAL_BOUNDARY_COMMAND,
     SELECTED_TARGET_COMMAND_COPY_PACKET_COMMAND,
     add_operator_live_pilot_readiness_parser,
+    add_pilot_readiness_runs_parser,
     add_selected_target_runs_parsers,
     call_registered_cli_command,
 )
@@ -856,28 +859,6 @@ def _render_phase_report_text(payload: dict[str, object]) -> str:
         else:
             formatted = "none"
         lines.append(f"{label}: {formatted}")
-    return "\n".join(lines) + "\n"
-
-
-def _render_pilot_readiness_report_text(payload: dict[str, object]) -> str:
-    counts = dict(payload.get("counts") or {})
-    commands = dict(payload.get("commands") or {})
-    lines = [
-        f"Run: {payload.get('run_id')}",
-        f"State: {payload.get('state')}",
-        f"Jobs: {payload.get('job_count')}",
-        "Readiness: "
-        f"ready_for_write_pilot={counts.get('ready_for_write_pilot', 0)} "
-        f"safe_auto_available={counts.get('safe_auto_available', 0)} "
-        f"explicit_operator_required={counts.get('explicit_operator_required', 0)} "
-        f"blocked={counts.get('blocked', 0)} "
-        f"complete={counts.get('complete', 0)}",
-        "Pilot evidence: "
-        f"write_complete={counts.get('write_pilot_complete', 0)} "
-        f"readback_complete={counts.get('readback_complete', 0)} "
-        f"pilot_report_complete={counts.get('pilot_report_complete', 0)}",
-        f"Live pilot handoff: {commands.get('live_pilot_handoff')}",
-    ]
     return "\n".join(lines) + "\n"
 
 
@@ -2778,9 +2759,7 @@ def build_parser() -> argparse.ArgumentParser:
     runs_phase_report = runs_sub.add_parser("phase-report")
     runs_phase_report.add_argument("run_id")
     runs_phase_report.add_argument("--json", action="store_true")
-    runs_pilot_readiness = runs_sub.add_parser("pilot-readiness")
-    runs_pilot_readiness.add_argument("run_id")
-    runs_pilot_readiness.add_argument("--json", action="store_true")
+    add_pilot_readiness_runs_parser(runs_sub)
     runs_dry_run_closeout = runs_sub.add_parser("dry-run-closeout")
     runs_dry_run_closeout.add_argument("run_id")
     runs_dry_run_closeout.add_argument("--no-write", action="store_true")
@@ -3496,8 +3475,8 @@ def main(argv: list[str] | None = None) -> int:
             payload = service.run_summary(args.run_id)
         elif args.runs_command == "phase-report":
             payload = service.phase_report(args.run_id)
-        elif args.runs_command == "pilot-readiness":
-            payload = service.pilot_readiness_report(args.run_id)
+        elif args.runs_command == PILOT_READINESS_COMMAND:
+            payload = call_registered_cli_command(service, args)
         elif args.runs_command == "dry-run-closeout":
             payload = service.dry_run_closeout(args.run_id, write=not args.no_write)
         elif args.runs_command == "dry-run-review-handoff":
@@ -3670,8 +3649,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.runs_command == "live-pilot-status" and not args.json:
             print(_render_live_pilot_status_text(payload), end="")
             return 0
-        if args.runs_command == "pilot-readiness" and not args.json:
-            print(_render_pilot_readiness_report_text(payload), end="")
+        if args.runs_command == PILOT_READINESS_COMMAND and not args.json:
+            print(render_pilot_readiness_report_text(payload), end="")
             return 0
         if args.runs_command == "dry-run-closeout" and not args.json:
             print(_render_dry_run_closeout_text(payload), end="")

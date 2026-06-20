@@ -4,6 +4,7 @@ from .config import load_config
 from .service import BusinessCardService
 from .surface_registry import (
     OPERATOR_LIVE_PILOT_READINESS_API_PATH,
+    PILOT_READINESS_API_PATH,
     SELECTED_TARGET_APPROVAL_BOUNDARY_API_PATH,
     SELECTED_TARGET_COMMAND_COPY_PACKET_API_PATH,
 )
@@ -414,7 +415,7 @@ def create_app(config_path: Path | None = None):
     def get_run_phase_report(run_id: str) -> dict[str, object]:
         return service().phase_report(run_id)
 
-    @app.get("/runs/{run_id}/pilot-readiness")
+    @app.get(PILOT_READINESS_API_PATH)
     def get_run_pilot_readiness(run_id: str) -> dict[str, object]:
         return service().pilot_readiness_report(run_id)
 
