@@ -9,8 +9,12 @@ Define the next product-development arc from the current dry-run, reviewable
 control plane to the intended local service:
 
 - Watch configured folders for card images.
+- Accept scanner outputs, including image files and PDF documents, without
+  treating PDFs as already-supported image inputs.
 - Detect business cards deterministically, with optional stochastic review.
 - Crop card images and OCR normalized contact data.
+- Represent card sides explicitly so front/back scans can contribute to one
+  reviewed contact when information is split across both sides.
 - Quality-check extraction and routing with App Intelligence evidence while
   preserving host-owned state transitions.
 - Store contact rows, crop images, enrichment state, and sink attempts in a
@@ -133,19 +137,28 @@ Validation:
 - Failure/retry test for partial projection.
 - Existing service/API/CLI/MCP tests remain green.
 
-### Milestone 3 | Card Detection, Cropping, And OCR Quality Loop
+### Milestone 3 | Scanner Intake, Card Sides, And OCR Quality Loop
 
 Goal-compatible objective:
 
-Harden the image-processing path so watched-folder images produce explicit card
-candidates, crop assets, OCR attempts, and quality gates before contact rows
-become route-ready.
+Harden the scanner/image-processing path so watched-folder images and supported
+scanner documents produce explicit source pages, card-side candidates, crop
+assets, OCR attempts, and quality gates before contact rows become route-ready.
 
 Scope:
 
+- Add a document intake boundary for scanner PDFs that rasterizes pages into
+  page images under runtime artifacts before normal card detection.
+- Keep PDF support separate from `is_supported_image`; PDFs are document
+  sources that produce page-image child work items, not image inputs.
 - Formalize deterministic preclassification and card-candidate metadata.
 - Store candidate boxes, chosen crop, rejected crop reasons, and crop quality
   metrics.
+- Add a card-side model with `front`, `back`, and `unknown` side labels.
+- Add deterministic and reviewable side-pairing evidence for common scanner
+  patterns, including consecutive pages and same-stem image pairs.
+- Merge reviewed front/back OCR fields into one contact candidate only through
+  explicit host-owned review state.
 - Normalize the handoff to the `business-card-to-contact` skill.
 - Add multi-card image behavior as explicit candidates rather than implicit
   single-image extraction.
@@ -156,16 +169,22 @@ Non-goals:
 - No new live sinks.
 - No paid enrichment.
 - No irreversible mutation of source images.
+- No automatic front/back merge without review evidence.
 
 Acceptance criteria:
 
 - Fixture images produce stable candidate/crop metadata.
+- Fixture PDFs produce stable page-image artifacts and page lineage.
 - OCR extraction records quality state and review requirements.
 - Multi-card fixtures produce separate candidate/contact rows.
+- Front/back fixtures can produce one reviewed contact with provenance for each
+  field showing whether it came from the front side, back side, or both.
 
 Validation:
 
 - Synthetic image fixture tests for no-card, one-card, and multi-card cases.
+- Synthetic PDF fixture tests for one-page and two-page scanner documents.
+- Front/back pairing tests for consecutive pages and same-stem image pairs.
 - Crop asset existence and checksum tests.
 - OCR adapter contract tests using fixture output.
 
@@ -387,7 +406,7 @@ Validation:
 
 1. Milestone 1: User-scoped contact store.
 2. Milestone 2: Artifact-to-database projection.
-3. Milestone 3: Detection/cropping/OCR quality loop.
+3. Milestone 3: Scanner intake, card sides, and OCR quality loop.
 4. Milestone 4: App Intelligence review state.
 5. Milestone 5: Enrichment provider contracts.
 6. Milestone 6: GWS default routing policy.
@@ -405,6 +424,14 @@ Implement Milestone 1 from Plan 0060: add the user-scoped contact store under
 repository APIs, fixture-backed projection of existing dry-run artifacts, and
 tests. Do not add live sink writes, paid enrichment calls, or private image
 processing.
+
+## Scanner Directory Note
+
+The planned `SyncThing/Documents/Scanner` watcher input should be added through
+user config only after a no-processing backlog preflight confirms the path and
+after PDF scanner support has a dry-run fixture proof. If the directory already
+contains PDFs, adding it before Milestone 3 would not process those PDFs because
+the current watcher admits image suffixes only.
 
 ## Closeout Requirements For Each Milestone
 
