@@ -6180,3 +6180,47 @@ Safety:
   It did not process private input; create selected targets; execute live
   lookup, write, live pilot execution, or readback; or write Google Contacts,
   Odoo, or Odollo records.
+
+## Turn 269 | 2026-06-20
+
+Committed and pushed Plan 0059, then opened a high-level product development
+milestone plan.
+
+Updated:
+
+- Committed Plan 0059 as `704da0c` with message
+  `Complete plan 0059 review route extraction`.
+- Pushed `main` to `upstream/main`.
+- Added
+  `docs/dev/plans/0060-2026-06-20-product-development-milestone-plan.md`.
+- Linked Plan 0060 from `ROADMAP.md` as the active high-level development
+  plan.
+
+Plan 0060 milestones:
+
+- User-scoped contact store.
+- Artifact-to-database projection.
+- Card detection, cropping, and OCR quality loop.
+- App Intelligence quality review state.
+- Enrichment provider contracts.
+- Routing policy and `ecochran76` GWS default sink.
+- Odollo SoyLei and SABER routing.
+- Contact review surface.
+- Operator-selected live pilot.
+
+Validation:
+
+- Pre-commit Plan 0059 validation in Turn 268 passed before `704da0c`:
+  targeted service/API/CLI/MCP tests, full test suite with 333 tests, full
+  ruff, `git diff --check`, drift guard, and CodeGraph sync/status.
+- Before committing `704da0c`, lightweight gates passed again:
+  `git diff --check`, `python3 scripts/check_plan_drift.py`, and targeted
+  ruff over the changed modules.
+- Plan 0060 is planning-only; run `git diff --check` and
+  `python3 scripts/check_plan_drift.py` before committing it.
+
+Safety:
+
+- Plan 0060 is planning-only. It did not process private input; create selected
+  targets; execute live lookup, enrichment, write, live pilot execution, or
+  readback; or write Google Contacts, Odoo, or Odollo records.

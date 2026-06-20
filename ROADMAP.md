@@ -8,6 +8,7 @@ Product authority: `PRODUCT_SPEC.md`.
 Latest completed control-plane plan: `docs/dev/plans/0008-2026-06-14-runtime-installation-and-pilot-operations.md`.
 Latest completed offline product-hardening plan: `docs/dev/plans/0053-2026-06-15-operator-live-pilot-readiness-packet.md`.
 Latest completed refactor plan: `docs/dev/plans/0059-2026-06-20-review-route-lookup-selection-extraction.md`.
+Active high-level development plan: `docs/dev/plans/0060-2026-06-20-product-development-milestone-plan.md`.
 Next refactor plan: open a bounded follow-on for the next read-only packet cluster.
 Next production plan: `docs/dev/plans/0009-2026-06-14-operator-selected-live-smoke-and-pilot-rollout.md`.
 Next offline boundary: after an operator-selected dry-run batch exists, run `bcw runs dry-run-closeout <run-id> --json`, `bcw runs dry-run-review-handoff <run-id> --json`, bounded `bcw runs dry-run-safe-loop <run-id> --limit <n> --json`, `bcw runs review-route-readiness <run-id> --json`, `bcw runs lookup-selection-packet <run-id> --operator <operator> --json`, `bcw runs close-lookup-prerequisites <run-id> --operator <operator> --json`, `bcw operator-live-pilot-readiness-packet --run-id <run-id> --sink google_contacts --no-write`, `bcw runs selected-target-approval-boundary <run-id> --operator <operator> --json`, and `bcw runs selected-target-command-copy-packet <run-id> --operator <operator> --response <operator-response> --acknowledgement <operator-acknowledgement> --json` until the run reaches explicit selected-target approval.
