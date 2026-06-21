@@ -6224,3 +6224,39 @@ Safety:
 - Plan 0060 is planning-only. It did not process private input; create selected
   targets; execute live lookup, enrichment, write, live pilot execution, or
   readback; or write Google Contacts, Odoo, or Odollo records.
+
+## Turn 270 | 2026-06-20
+
+Hardened watcher status state after concurrent no-processing commands exposed a
+status JSON race.
+
+Implemented:
+
+- Added `docs/dev/plans/0061-2026-06-20-watch-status-atomic-state-hardening.md`.
+- Updated `WatchStateStore.write_status` to write `status.json` through a
+  same-directory temporary file and `os.replace`.
+- Updated `WatchStateStore.read_status` to tolerate missing, empty, or malformed
+  status JSON by returning a default status rather than raising
+  `JSONDecodeError`.
+- Added regression tests for empty status reads and valid replacement writes.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_watcher.py -q` passed with 16 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/watcher.py tests/test_watcher.py`
+  passed.
+- `git diff --check` passed.
+- `python3 scripts/check_plan_drift.py` passed.
+- Concurrent no-processing verification passed:
+  `.venv/bin/bcw watch-status --json` and
+  `.venv/bin/bcw watch-backlog-preflight --no-write --json` both completed over
+  `$fsr:sync_phone` and `$fsr:scanner` with backlog `12`, unsettled `0`, no
+  last error, zero files processed, zero OCR, zero writes, and zero network
+  calls.
+
+Safety:
+
+- This slice changed watcher runtime status state handling only. It did not
+  process watched files; OCR private card images; add PDF/card-backside support;
+  run enrichment; run live lookup, write, or readback; or write Google Contacts,
+  Odoo, or Odollo records.

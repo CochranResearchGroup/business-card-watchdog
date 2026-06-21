@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -134,12 +135,15 @@ class WatchStateStore:
             if scan_truncated is not None
             else current.get("scan_truncated", False),
         }
-        self.status_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        self._write_json_atomic(self.status_path, payload)
 
     def read_status(self) -> WatchStatus:
         if not self.status_path.exists():
-            return WatchStatus(inputs=[], seen_count=len(self.seen_keys()), backlog_count=0, unsettled_count=0)
-        payload = json.loads(self.status_path.read_text(encoding="utf-8"))
+            return self._default_status()
+        try:
+            payload = json.loads(self.status_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return self._default_status()
         return WatchStatus(
             inputs=[str(item) for item in payload.get("inputs", [])],
             seen_count=int(payload.get("seen_count", 0)),
@@ -149,6 +153,14 @@ class WatchStateStore:
             last_error=payload.get("last_error"),
             scan_truncated=bool(payload.get("scan_truncated", False)),
         )
+
+    def _default_status(self) -> WatchStatus:
+        return WatchStatus(inputs=[], seen_count=len(self.seen_keys()), backlog_count=0, unsettled_count=0)
+
+    def _write_json_atomic(self, path: Path, payload: dict[str, Any]) -> None:
+        temp_path = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+        temp_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        os.replace(temp_path, path)
 
     def reset(self) -> None:
         for path in (self.seen_path, self.pending_path, self.status_path):

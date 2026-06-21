@@ -365,3 +365,29 @@ def test_state_store_reset_removes_runtime_files(tmp_path: Path) -> None:
     assert not store.status_path.exists()
     assert not store.pending_path.exists()
     assert not store.seen_path.exists()
+
+
+def test_state_store_read_status_tolerates_empty_status_file(tmp_path: Path) -> None:
+    store = WatchStateStore(tmp_path / "watch")
+    store.status_path.write_text("", encoding="utf-8")
+
+    status = store.read_status()
+
+    assert status.inputs == []
+    assert status.seen_count == 0
+    assert status.backlog_count == 0
+    assert status.unsettled_count == 0
+
+
+def test_state_store_write_status_replaces_with_valid_json(tmp_path: Path) -> None:
+    store = WatchStateStore(tmp_path / "watch")
+    store.status_path.write_text("", encoding="utf-8")
+
+    store.write_status(inputs=["/tmp/cards"], seen_count=1, backlog_count=2, unsettled_count=1)
+
+    payload = json.loads(store.status_path.read_text(encoding="utf-8"))
+    assert payload["inputs"] == ["/tmp/cards"]
+    assert payload["seen_count"] == 1
+    assert payload["backlog_count"] == 2
+    assert payload["unsettled_count"] == 1
+    assert not list(store.watch_dir.glob(".status.json.*.tmp"))
