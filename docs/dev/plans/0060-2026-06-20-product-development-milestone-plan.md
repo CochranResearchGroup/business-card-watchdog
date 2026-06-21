@@ -15,6 +15,8 @@ control plane to the intended local service:
 - Crop card images and OCR normalized contact data.
 - Represent card sides explicitly so front/back scans can contribute to one
   reviewed contact when information is split across both sides.
+- Pair card backs with fronts using OCR-assisted and deterministic contextual
+  evidence; scanner adjacency is useful evidence but not sufficient by itself.
 - Quality-check extraction and routing with App Intelligence evidence while
   preserving host-owned state transitions.
 - Store contact rows, crop images, enrichment state, and sink attempts in a
@@ -154,9 +156,24 @@ Scope:
 - Formalize deterministic preclassification and card-candidate metadata.
 - Store candidate boxes, chosen crop, rejected crop reasons, and crop quality
   metrics.
-- Add a card-side model with `front`, `back`, and `unknown` side labels.
-- Add deterministic and reviewable side-pairing evidence for common scanner
-  patterns, including consecutive pages and same-stem image pairs.
+- Add a card-side model with `front`, `back`, `blank`, and `unknown` side
+  labels.
+- Add per-page and per-crop OCR text artifacts before side pairing, with OCR
+  treated as evidence rather than control authority.
+- Add an OCR-assisted side classifier using deterministic contextual clues such
+  as name/title/email density, organization/domain overlap, phone/address
+  fragments, QR/URL/domain hints, back-of-card disclaimer/social/address-only
+  patterns, and blank/near-blank detection.
+- Add a scored front/back pair-candidate graph instead of a sequence-only
+  matcher. Evidence should include scanner page adjacency, same PDF/session,
+  same-stem image pairs, timestamp adjacency, OCR token overlap, domain/company
+  overlap, visual/crop similarity, and negative evidence such as conflicting
+  person/company/domain signals.
+- Treat scanner page adjacency as a strong but non-authoritative hint. Some
+  scanner workflows may place back before front, and some may drop blank backs,
+  so pairing must allow near-adjacent candidates and explicit blank-side gaps.
+- Store pair proposals with confidence, evidence, and blocked/ambiguous reasons
+  for review.
 - Merge reviewed front/back OCR fields into one contact candidate only through
   explicit host-owned review state.
 - Normalize the handoff to the `business-card-to-contact` skill.
@@ -170,6 +187,8 @@ Non-goals:
 - No paid enrichment.
 - No irreversible mutation of source images.
 - No automatic front/back merge without review evidence.
+- No sequence-only assumption that page N and page N+1 are a true front/back
+  pair.
 
 Acceptance criteria:
 
@@ -177,6 +196,10 @@ Acceptance criteria:
 - Fixture PDFs produce stable page-image artifacts and page lineage.
 - OCR extraction records quality state and review requirements.
 - Multi-card fixtures produce separate candidate/contact rows.
+- Scanner PDF fixtures produce OCR-backed side classifications for `front`,
+  `back`, `blank`, and `unknown`.
+- Pair proposals include scored evidence and negative evidence; ambiguous pairs
+  are blocked for review rather than merged.
 - Front/back fixtures can produce one reviewed contact with provenance for each
   field showing whether it came from the front side, back side, or both.
 
@@ -184,7 +207,10 @@ Validation:
 
 - Synthetic image fixture tests for no-card, one-card, and multi-card cases.
 - Synthetic PDF fixture tests for one-page and two-page scanner documents.
-- Front/back pairing tests for consecutive pages and same-stem image pairs.
+- Front/back pairing tests for consecutive pages, reversed front/back order,
+  dropped blank backs, same-stem image pairs, and conflicting OCR evidence.
+- OCR/context clue tests for name/title/email density, company/domain overlap,
+  address-only backs, QR/URL hints, and blank/near-blank pages.
 - Crop asset existence and checksum tests.
 - OCR adapter contract tests using fixture output.
 

@@ -6306,3 +6306,33 @@ Safety:
   crop, rasterize PDFs, enrich, route, execute live lookup/write/readback, or
   write Google Contacts, Odoo, or Odollo records. The runtime manifest is
   user-scoped private state and was not added to git.
+
+## Turn 272 | 2026-06-21
+
+Integrated the card-backside pairing design into the active high-level
+development plan.
+
+Updated:
+
+- Revised Plan 0060 Milestone 3 so scanner front/back pairing is explicitly
+  OCR-assisted and context-scored rather than sequence-only.
+- Added `front`, `back`, `blank`, and `unknown` side labels.
+- Added OCR/contextual evidence requirements for name/title/email density,
+  company/domain overlap, phone/address fragments, QR/URL/domain hints,
+  back-of-card patterns, and blank/near-blank detection.
+- Added scored pair-candidate graph requirements that combine scanner page
+  adjacency, same PDF/session, same-stem image pairs, timestamp adjacency, OCR
+  token overlap, visual/crop similarity, and negative conflict evidence.
+- Added acceptance/validation coverage for reversed front/back order, dropped
+  blank backs, ambiguous pairs, and conflicting OCR evidence.
+
+Validation:
+
+- Planning-only update. Run `git diff --check` and
+  `python3 scripts/check_plan_drift.py` before committing.
+
+Safety:
+
+- Planning-only update. It did not process watched files; OCR private card
+  images; rasterize PDFs; run enrichment; run live lookup/write/readback; or
+  write Google Contacts, Odoo, or Odollo records.
