@@ -179,6 +179,41 @@ def _render_watch_backlog_preflight_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_watch_practice_corpus_manifest_text(payload: dict[str, object]) -> str:
+    counts = dict(payload.get("counts") or {})
+    commands = dict(payload.get("commands") or {})
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    lines = [
+        f"Practice corpus manifest: {payload.get('state')}",
+        f"Inputs: {payload.get('input_count', 0)}",
+        f"Entries: {payload.get('entry_count', 0)}",
+        f"Include globs: {len(payload.get('include_globs') or [])}",
+        f"Images: {counts.get('images', 0)}",
+        f"PDF documents: {counts.get('pdf_documents', 0)}",
+        f"Current watcher processable: {counts.get('current_watcher_processable', 0)}",
+        f"Unsettled: {counts.get('unsettled', 0)}",
+        f"Errors: {counts.get('errors', 0)}",
+        f"Scan truncated: {payload.get('scan_truncated', False)}",
+        "Observed: "
+        f"files={payload.get('files_processed', 0)} "
+        f"ocr={payload.get('ocr_attempted', 0)} "
+        f"pdfs={payload.get('pdfs_rasterized', 0)} "
+        f"crops={payload.get('crops_created', 0)} "
+        f"writes={payload.get('writes_attempted', 0)} "
+        f"network={payload.get('network_calls_made', 0)}",
+        f"Runtime artifact written: {payload.get('runtime_artifact_written', False)}",
+    ]
+    if payload.get("manifest_path"):
+        lines.append(f"Manifest path: {payload.get('manifest_path')}")
+    if commands.get("practice_corpus_manifest_preview"):
+        lines.append(f"Preview: {commands.get('practice_corpus_manifest_preview')}")
+    stop_rows = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stop_rows)}")
+    for condition in stop_rows:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_watch_dry_run_selection_handoff_text(payload: dict[str, object]) -> str:
     commands = dict(payload.get("commands") or {})
     entries = payload.get("entries") or []
@@ -3217,6 +3252,11 @@ def build_parser() -> argparse.ArgumentParser:
     watch_backlog_preflight.add_argument("--no-write", action="store_true")
     watch_backlog_preflight.add_argument("--json", action="store_true")
 
+    watch_practice_corpus_manifest = sub.add_parser("watch-practice-corpus-manifest")
+    watch_practice_corpus_manifest.add_argument("--no-write", action="store_true")
+    watch_practice_corpus_manifest.add_argument("--include-glob", action="append", default=[])
+    watch_practice_corpus_manifest.add_argument("--json", action="store_true")
+
     watch_dry_run_selection_handoff = sub.add_parser("watch-dry-run-selection-handoff")
     watch_dry_run_selection_handoff.add_argument("--no-write", action="store_true")
     watch_dry_run_selection_handoff.add_argument("--json", action="store_true")
@@ -4079,6 +4119,17 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "watch-backlog-preflight":
         payload = service.watch_backlog_preflight(write=not args.no_write)
         print(json.dumps(payload, indent=2) if args.json else _render_watch_backlog_preflight_text(payload), end="")
+        return 0 if payload["state"] != "blocked" else 2
+
+    if args.command == "watch-practice-corpus-manifest":
+        payload = service.watch_practice_corpus_manifest(
+            write=not args.no_write,
+            include_globs=list(args.include_glob or []),
+        )
+        output = (
+            json.dumps(payload, indent=2) if args.json else _render_watch_practice_corpus_manifest_text(payload)
+        )
+        print(output, end="")
         return 0 if payload["state"] != "blocked" else 2
 
     if args.command == "watch-dry-run-selection-handoff":

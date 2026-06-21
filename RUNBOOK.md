@@ -6260,3 +6260,49 @@ Safety:
   process watched files; OCR private card images; add PDF/card-backside support;
   run enrichment; run live lookup, write, or readback; or write Google Contacts,
   Odoo, or Odollo records.
+
+## Turn 271 | 2026-06-21
+
+Executed Plan 0062 with a no-processing practice-corpus manifest for the current
+two-folder watcher configuration.
+
+Implemented:
+
+- Added `docs/dev/plans/0062-2026-06-21-practice-corpus-manifest.md`.
+- Added `src/business_card_watchdog/practice_corpus.py`.
+- Added `BusinessCardService.watch_practice_corpus_manifest`.
+- Added `bcw watch-practice-corpus-manifest` with repeatable
+  `--include-glob` filters.
+- Added service and CLI tests for synthetic image/PDF practice manifests.
+- Linked Plan 0062 from `ROADMAP.md`.
+
+Runtime execution:
+
+- Preview command:
+  `.venv/bin/bcw watch-practice-corpus-manifest --no-write --include-glob 'Camera/20260620_11*.jpg' --include-glob '2026_06_20_11_21_42.pdf' --json`.
+- Write command:
+  `.venv/bin/bcw watch-practice-corpus-manifest --include-glob 'Camera/20260620_11*.jpg' --include-glob '2026_06_20_11_21_42.pdf' --json`.
+- The written user-scoped runtime manifest is
+  `/home/ecochran76/.local/share/business-card-watchdog/practice_corpus_manifest.json`.
+- The manifest reported 14 entries: 13 phone-camera images and 1 scanner PDF,
+  with 13 current watcher-processable files, 0 unsettled entries, and 0 errors.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_practice_corpus_manifest_inventories_images_and_pdfs_without_processing tests/test_watcher.py::test_watch_practice_corpus_manifest_cli_previews_images_and_pdfs -q`
+  passed with 2 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/practice_corpus.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_service.py tests/test_watcher.py`
+  passed.
+- `.venv/bin/python -m pytest -q` passed with 337 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `python3 scripts/check_plan_drift.py` passed.
+- `codegraph sync && codegraph status` passed; index is up to date with 53
+  files, 1,738 nodes, and 3,026 edges.
+
+Safety:
+
+- Plan 0062 inventoried and hashed selected watched files only. It did not OCR,
+  crop, rasterize PDFs, enrich, route, execute live lookup/write/readback, or
+  write Google Contacts, Odoo, or Odollo records. The runtime manifest is
+  user-scoped private state and was not added to git.

@@ -231,6 +231,61 @@ def test_service_watch_backlog_preflight_can_preview_without_writing(tmp_path: P
     assert not (config.data_dir / "watch_backlog_preflight.json").exists()
 
 
+def test_service_practice_corpus_manifest_inventories_images_and_pdfs_without_processing(
+    tmp_path: Path,
+) -> None:
+    phone = tmp_path / "Private Phone Camera"
+    scanner = tmp_path / "Private Scanner"
+    write_synthetic_image(phone / "20260620_111933.jpg")
+    pdf = scanner / "2026_06_20_11_21_42.pdf"
+    pdf.parent.mkdir(parents=True)
+    pdf.write_bytes(b"%PDF-1.4\n% synthetic scanner fixture\n")
+    (scanner / "old_archive.pdf").write_bytes(b"%PDF-1.4\n% old synthetic archive\n")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        watch=WatchConfig(inputs=["$fsr:sync_phone", "$fsr:scanner"], settle_seconds=0.0),
+        path_aliases={"sync_phone": str(phone), "scanner": str(scanner)},
+    )
+
+    payload = BusinessCardService(config).watch_practice_corpus_manifest(
+        write=True,
+        include_globs=["20260620_11*.jpg", "2026_06_20_11_21_42.pdf"],
+    )
+    serialized = json.dumps(payload, sort_keys=True)
+
+    assert payload["schema"] == "business-card-watchdog.practice-corpus-manifest.v1"
+    assert payload["state"] == "ready_for_training_manifest_review"
+    assert payload["input_count"] == 2
+    assert payload["entry_count"] == 2
+    assert payload["include_globs"] == ["20260620_11*.jpg", "2026_06_20_11_21_42.pdf"]
+    assert payload["recursive"] is False
+    assert payload["filtered_glob_scan"] is True
+    assert payload["counts"]["images"] == 1
+    assert payload["counts"]["pdf_documents"] == 1
+    assert payload["counts"]["current_watcher_processable"] == 1
+    assert payload["private_paths_redacted"] is True
+    assert payload["files_processed"] == 0
+    assert payload["ocr_attempted"] == 0
+    assert payload["pdfs_rasterized"] == 0
+    assert payload["crops_created"] == 0
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert payload["runtime_artifact_written"] is True
+    assert Path(payload["manifest_path"]).exists()
+    assert str(phone) not in serialized
+    assert str(scanner) not in serialized
+    assert "old_archive.pdf" not in serialized
+    entries_by_kind = {entry["media_kind"]: entry for entry in payload["entries"]}
+    assert entries_by_kind["image"]["role_hint"] == "phone_camera_image"
+    assert entries_by_kind["image"]["current_watcher_processable"] is True
+    assert entries_by_kind["pdf_document"]["role_hint"] == "scanner_pdf_document"
+    assert entries_by_kind["pdf_document"]["current_watcher_processable"] is False
+    assert entries_by_kind["pdf_document"]["current_processing_note"] == "requires_future_pdf_scanner_intake"
+    assert len(entries_by_kind["image"]["sha256"]) == 64
+    assert len(entries_by_kind["pdf_document"]["sha256"]) == 64
+
+
 def test_service_watch_dry_run_selection_handoff_validates_response_and_command_copy(
     tmp_path: Path,
 ) -> None:

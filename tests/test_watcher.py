@@ -255,6 +255,94 @@ def test_watch_backlog_preflight_cli_outputs_redacted_counts(
     assert "{" not in text
 
 
+def test_watch_practice_corpus_manifest_cli_previews_images_and_pdfs(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    phone = tmp_path / "Private Phone Camera"
+    scanner = tmp_path / "Private Scanner"
+    write_synthetic_image(phone / "20260620_111933.jpg")
+    pdf = scanner / "2026_06_20_11_21_42.pdf"
+    pdf.parent.mkdir(parents=True)
+    pdf.write_bytes(b"%PDF-1.4\n% synthetic scanner fixture\n")
+    (scanner / "old_archive.pdf").write_bytes(b"%PDF-1.4\n% old synthetic archive\n")
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    config_path.write_text(
+        f'data_dir = "{data_dir}"\n'
+        "[paths]\n"
+        f'sync_phone = "{phone}"\n'
+        f'scanner = "{scanner}"\n'
+        "[watch]\n"
+        'inputs = ["$fsr:sync_phone", "$fsr:scanner"]\n'
+        "settle_seconds = 0.0\n",
+        encoding="utf-8",
+    )
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "watch-practice-corpus-manifest",
+                "--no-write",
+                "--include-glob",
+                "20260620_11*.jpg",
+                "--include-glob",
+                "2026_06_20_11_21_42.pdf",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    payload = json.loads(capsys.readouterr().out)
+    serialized = json.dumps(payload, sort_keys=True)
+
+    assert payload["schema"] == "business-card-watchdog.practice-corpus-manifest.v1"
+    assert payload["entry_count"] == 2
+    assert payload["include_globs"] == ["20260620_11*.jpg", "2026_06_20_11_21_42.pdf"]
+    assert payload["recursive"] is False
+    assert payload["filtered_glob_scan"] is True
+    assert payload["counts"]["images"] == 1
+    assert payload["counts"]["pdf_documents"] == 1
+    assert payload["runtime_artifact_written"] is False
+    assert payload["manifest_path"] is None
+    assert payload["files_processed"] == 0
+    assert payload["ocr_attempted"] == 0
+    assert payload["pdfs_rasterized"] == 0
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert str(phone) not in serialized
+    assert str(scanner) not in serialized
+    assert "old_archive.pdf" not in serialized
+    assert not (data_dir / "practice_corpus_manifest.json").exists()
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "watch-practice-corpus-manifest",
+                "--no-write",
+                "--include-glob",
+                "20260620_11*.jpg",
+                "--include-glob",
+                "2026_06_20_11_21_42.pdf",
+            ]
+        )
+        == 0
+    )
+    text = capsys.readouterr().out
+    assert "Practice corpus manifest: ready_for_training_manifest_review" in text
+    assert "Images: 1" in text
+    assert "Include globs: 2" in text
+    assert "PDF documents: 1" in text
+    assert "Observed: files=0 ocr=0 pdfs=0 crops=0 writes=0 network=0" in text
+    assert str(phone) not in text
+    assert str(scanner) not in text
+    assert "{" not in text
+
+
 def test_watch_dry_run_selection_cli_validates_and_builds_command_copy(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],

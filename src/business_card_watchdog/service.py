@@ -42,6 +42,7 @@ from .models import CardJob, SkillRunResult, utc_now
 from .orchestrator import BatchOrchestrator
 from .operator_dashboard import build_operator_dashboard
 from .pilot_readiness import build_pilot_readiness_report
+from .practice_corpus import build_practice_corpus_manifest
 from .preclassifier import assess_business_card_candidate
 from .review import assess_contact_spec, build_review_submission, write_review_packet, write_review_submission
 from .review_route_packets import build_lookup_selection_packet, build_review_route_readiness
@@ -12351,6 +12352,14 @@ class BusinessCardService:
             payload["preflight_path"] = str(preflight_path)
             preflight_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         return payload
+
+    def watch_practice_corpus_manifest(
+        self,
+        *,
+        write: bool = True,
+        include_globs: list[str] | None = None,
+    ) -> dict[str, Any]:
+        return build_practice_corpus_manifest(self.config, write=write, include_globs=include_globs)
 
     def watch_dry_run_selection_handoff(self, *, write: bool = True) -> dict[str, Any]:
         ensure_runtime_dirs(self.config)
