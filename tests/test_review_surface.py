@@ -154,11 +154,69 @@ def test_child_review_approval_writes_reviewed_child_contact_artifact(tmp_path: 
     assert reviewed["review"]["state"] == "approved_for_dedupe"
     assert reviewed["routing_allowed"] is True
     assert reviewed["sink_write_allowed"] is False
+    assert result["contact_store_projection"]["projected_contacts"] == 2
+    contacts = service.list_contacts()["contacts"]
+    child_contact = service.get_contact(
+        next(contact["contact_id"] for contact in contacts if contact["email"] == "reviewed-child@example.test")
+    )["contact"]
+    assert child_contact["source_job_id"].endswith(f"::{candidate_id}")
+    assert child_contact["payload"]["child_candidate_id"] == candidate_id
+    assert child_contact["payload"]["candidate"]["lineage"]["candidate_id"] == candidate_id
+    assert "reviewed_child_contact" in {asset["asset_kind"] for asset in child_contact["assets"]}
+    assert "child_contact_review_result" in {asset["asset_kind"] for asset in child_contact["assets"]}
     assert any(artifact["kind"] == "child_review_submission" for artifact in artifacts)
     assert any(artifact["kind"] == "reviewed_child_contact" for artifact in artifacts)
     assert any(artifact["kind"] == "child_contact_review_result" for artifact in artifacts)
+    assert any(artifact["kind"] == "contact_store_projection" for artifact in artifacts)
     assert any(event["event_type"] == "child_contact_review_submitted" for event in events)
+    assert any(event["event_type"] == "contact_store_projected" for event in events)
     assert any(entry["candidate_id"] == candidate_id for entry in approved_queue)
+
+
+def test_multiple_reviewed_child_contacts_project_as_distinct_contacts(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pytest = __import__("pytest")
+    pytest.importorskip("cv2")
+    source_dir = tmp_path / "images"
+    write_multi_card_image(source_dir / "multi.jpg")
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+    service = BusinessCardService(config)
+    candidate_ids = [str(entry["candidate_id"]) for entry in service.child_review_queue(run_id=run_dir.name)[:2]]
+
+    for index, candidate_id in enumerate(candidate_ids, start=1):
+        service.submit_child_review(
+            run_id=run_dir.name,
+            candidate_id=candidate_id,
+            reviewer="operator",
+            action="approve_child_for_routing",
+            field_corrections={
+                "full_name": f"Reviewed Child {index}",
+                "email": f"reviewed-child-{index}@example.test",
+            },
+        )
+
+    projection = service.project_contacts_from_run(run_dir.name)
+    contacts = service.list_contacts()["contacts"]
+    child_contacts = [
+        service.get_contact(str(contact["contact_id"]))["contact"]
+        for contact in contacts
+        if str(contact["source_job_id"]).split("::", 1)[-1] in candidate_ids
+    ]
+
+    assert projection["drift"]["state"] == "in_sync"
+    assert projection["projected_contacts"] == 3
+    assert len(child_contacts) == 2
+    assert {contact["email"] for contact in child_contacts} == {
+        "reviewed-child-1@example.test",
+        "reviewed-child-2@example.test",
+    }
+    assert {contact["payload"]["child_candidate_id"] for contact in child_contacts} == set(candidate_ids)
+    assert all(contact["payload"]["parent_job_id"] for contact in child_contacts)
 
 
 def test_child_route_prep_writes_dry_run_lookup_and_sink_plans(tmp_path: Path, monkeypatch) -> None:

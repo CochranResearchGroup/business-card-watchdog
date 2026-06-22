@@ -6594,3 +6594,47 @@ Safety:
 - This slice did not run enrichment providers, public-web search, live
   lookup/write/readback, Google Contacts writes, Odoo/Odollo writes, or
   automatic front/back merges.
+
+## Turn 280 | 2026-06-22
+
+Executed Plan 0069 as the reviewed child-contact projection slice under Plan
+0060 Milestone 3.
+
+Implemented:
+
+- Added `docs/dev/plans/0069-2026-06-22-reviewed-child-contact-projection.md`.
+- Projected `reviewed_child_contact` artifacts as first-class user-scoped
+  contact rows.
+- Used child-specific source job IDs in the form
+  `<parent_job_id>::<candidate_id>` so multiple reviewed cards from one
+  multi-card source image remain distinct.
+- Preserved parent job, child candidate, work item, crop, and review provenance
+  on projected child contact rows.
+- Added child review submission, result, and reviewed contact artifacts to the
+  child contact asset set.
+- Refreshed contact-store projection after child review submission without
+  live sink writes.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_review_surface.py::test_child_review_approval_writes_reviewed_child_contact_artifact tests/test_review_surface.py::test_multiple_reviewed_child_contacts_project_as_distinct_contacts tests/test_contact_store.py::test_contact_store_projects_run_idempotently tests/test_preclassifier.py::test_orchestrator_records_multi_card_candidate_manifest -q`
+  passed with 4 tests.
+- `.venv/bin/python -m pytest tests/test_review_surface.py tests/test_preclassifier.py tests/test_contact_store.py -q`
+  passed with 20 tests.
+- `.venv/bin/python -m pytest tests/test_api.py tests/test_cli_surfaces.py tests/test_mcp.py -q`
+  passed with 111 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/contact_store.py src/business_card_watchdog/service.py tests/test_review_surface.py`
+  passed.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 355 tests.
+- `codegraph sync /home/ecochran76/workspace.local/business-card-watchdog && codegraph status /home/ecochran76/workspace.local/business-card-watchdog`
+  reported the index already up to date, 60 files, 1,918 nodes, and 2,552
+  edges.
+
+Safety:
+
+- This slice did not run production OCR/App Intelligence for child crops, run
+  enrichment providers, public-web search, live lookup/write/readback, Google
+  Contacts writes, Odoo/Odollo writes, or automatic child-contact routing.

@@ -37,6 +37,9 @@ _PROJECTED_ASSET_KINDS = {
     "side_pair_review_submission",
     "side_pair_review_result",
     "reviewed_side_pair_contact",
+    "child_review_submission",
+    "child_contact_review_result",
+    "reviewed_child_contact",
     "reviewed_contact",
     "review_packet",
     "duplicate_assessment",
@@ -243,6 +246,52 @@ class ContactStore:
                 artifacts=artifacts_by_kind,
             )
 
+        child_rows = _reviewed_child_rows(artifacts)
+        for row in child_rows:
+            candidate_artifact = row["candidate_artifact"]
+            candidate_path = Path(str(candidate_artifact.get("path") or ""))
+            candidate = _read_json_file(candidate_path)
+            if candidate is None:
+                skipped_jobs += 1
+                continue
+            parent_job_id = str(row.get("parent_job_id") or candidate.get("lineage", {}).get("parent_job_id") or "")
+            child_source_job_id = _child_source_job_id(parent_job_id, candidate)
+            job = dict(jobs.get(parent_job_id, {}))
+            if row.get("candidate_id"):
+                job["child_candidate_id"] = row["candidate_id"]
+            if row.get("work_item_id"):
+                job["child_work_item_id"] = row["work_item_id"]
+            contact_id = self.upsert_contact_from_candidate(
+                run_id=run_id,
+                job_id=child_source_job_id,
+                candidate=candidate,
+                artifact_path=candidate_path,
+                job=job,
+            )
+            projected_contacts += 1
+            projected_extraction_attempts += self.upsert_extraction_attempt(
+                contact_id=contact_id,
+                run_id=run_id,
+                job_id=child_source_job_id,
+                artifact_path=candidate_path,
+                candidate_kind=str(candidate_artifact.get("kind") or "reviewed_child_contact"),
+                job=job,
+            )
+            projected_assets += self.upsert_assets_for_job(
+                contact_id=contact_id,
+                run_id=run_id,
+                job_id=child_source_job_id,
+                artifacts=row["artifacts"],
+                job=job,
+            )
+            projected_routing_decisions += self.upsert_routing_decision_for_job(
+                contact_id=contact_id,
+                run_id=run_id,
+                job_id=child_source_job_id,
+                artifacts=row["artifacts"],
+                job=job,
+            )
+
         return ProjectionResult(
             run_id=run_id,
             projected_contacts=projected_contacts,
@@ -302,6 +351,9 @@ class ContactStore:
             "contact_spec": spec,
             "source_artifact_path": str(artifact_path),
             "source_image_path": str((job or {}).get("image_path") or ""),
+            "parent_job_id": str((job or {}).get("job_id") or ""),
+            "child_candidate_id": str((job or {}).get("child_candidate_id") or ""),
+            "child_work_item_id": str((job or {}).get("child_work_item_id") or ""),
         }
         with self._connect() as conn:
             self._migrate(conn)
@@ -770,15 +822,63 @@ def _candidate_job_ids(run_dir: Path) -> tuple[set[str], set[str]]:
     unreadable: set[str] = set()
     for artifact in _read_jsonl(run_dir / "artifacts.jsonl"):
         kind = str(artifact.get("kind") or "")
-        if kind not in {"contact_candidate", "reviewed_contact"}:
+        if kind not in {"contact_candidate", "reviewed_contact", "reviewed_child_contact"}:
             continue
         job_id = str(artifact.get("job_id") or "")
         path = Path(str(artifact.get("path") or ""))
-        if _read_json_file(path) is None:
+        payload = _read_json_file(path)
+        if payload is None:
             unreadable.add(job_id)
             continue
+        if kind == "reviewed_child_contact":
+            job_id = _child_source_job_id(job_id, payload)
         expected.add(job_id)
     return expected, unreadable
+
+
+def _reviewed_child_rows(artifacts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    review_artifacts_by_candidate: dict[str, dict[str, dict[str, Any]]] = {}
+    reviewed_rows: list[dict[str, Any]] = []
+    for artifact in artifacts:
+        kind = str(artifact.get("kind") or "")
+        if kind not in {"child_review_submission", "child_contact_review_result", "reviewed_child_contact"}:
+            continue
+        payload = _read_json_file(Path(str(artifact.get("path") or ""))) or {}
+        candidate_id = str(payload.get("candidate_id") or _candidate_id_from_reviewed_child(payload) or "")
+        if not candidate_id:
+            continue
+        review_artifacts_by_candidate.setdefault(candidate_id, {})[kind] = artifact
+        if kind == "reviewed_child_contact":
+            reviewed_rows.append(
+                {
+                    "candidate_id": candidate_id,
+                    "work_item_id": _work_item_id_from_child_payload(payload),
+                    "parent_job_id": str(artifact.get("job_id") or payload.get("lineage", {}).get("parent_job_id") or ""),
+                    "candidate_artifact": artifact,
+                }
+            )
+    rows: list[dict[str, Any]] = []
+    for row in reviewed_rows:
+        candidate_id = str(row["candidate_id"])
+        row["artifacts"] = dict(review_artifacts_by_candidate.get(candidate_id) or {})
+        row["artifacts"]["reviewed_child_contact"] = row["candidate_artifact"]
+        rows.append(row)
+    return rows
+
+
+def _candidate_id_from_reviewed_child(payload: dict[str, Any]) -> str:
+    lineage = payload.get("lineage") if isinstance(payload.get("lineage"), dict) else {}
+    return str(lineage.get("candidate_id") or "")
+
+
+def _work_item_id_from_child_payload(payload: dict[str, Any]) -> str:
+    lineage = payload.get("lineage") if isinstance(payload.get("lineage"), dict) else {}
+    return str(payload.get("work_item_id") or lineage.get("work_item_id") or "")
+
+
+def _child_source_job_id(parent_job_id: str, candidate: dict[str, Any]) -> str:
+    candidate_id = _candidate_id_from_reviewed_child(candidate) or str(candidate.get("candidate_id") or "")
+    return f"{parent_job_id}::{candidate_id}" if candidate_id else parent_job_id
 
 
 def _enrichment_provider(kind: str, payload: dict[str, Any]) -> str:

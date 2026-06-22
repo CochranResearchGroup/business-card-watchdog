@@ -3746,6 +3746,30 @@ class BusinessCardService:
                 "network_calls_made": 0,
             },
         )
+        projection = ContactStore.from_config(self.config).project_run(
+            run_id=run_id,
+            run_dir=self.config.runs_dir / run_id,
+        )
+        projection_path = child_review_dir / "contact_store_projection.json"
+        projection_path.write_text(
+            json.dumps(projection.to_dict(), indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        ledger.record_artifact(
+            job_id=parent_job_id,
+            kind="contact_store_projection",
+            path=projection_path,
+            metadata={"projected_contacts": projection.projected_contacts},
+        )
+        ledger.record_event(
+            "contact_store_projected",
+            {
+                **projection.to_dict(),
+                "projection_path": str(projection_path),
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
         return {
             "schema": "business-card-watchdog.child-review-submission-result.v1",
             "run_id": run_id,
@@ -3758,6 +3782,8 @@ class BusinessCardService:
             "result_path": str(result_path),
             "reviewed_contact": reviewed_contact,
             "reviewed_child_contact_path": str(reviewed_contact_path) if reviewed_contact_path is not None else None,
+            "contact_store_projection": projection.to_dict(),
+            "contact_store_projection_path": str(projection_path),
             "writes_attempted": 0,
             "network_calls_made": 0,
         }
