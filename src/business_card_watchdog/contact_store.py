@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import AppConfig
-from .contact import contact_candidate_to_spec
+from .contact import CONTACT_FIELDS, contact_candidate_to_spec
 from .models import utc_now
 
 
@@ -16,6 +16,7 @@ SCHEMA_VERSION = 5
 CONTACT_STORE_SCHEMA = "business-card-watchdog.contact-store.v1"
 CONTACT_FIELD_CORRECTION_FIELDS = {"display_name", "organization", "email", "phone"}
 CONTACT_CROP_DECISIONS = {"accept", "reject", "needs_recrop", "use_alternate"}
+CONTACT_ENRICHMENT_MERGE_FIELDS = set(CONTACT_FIELDS)
 _PROJECTED_ASSET_KINDS = {
     "artifact_dir",
     "preclassification",
@@ -411,6 +412,141 @@ class ContactStore:
             "contact": self.get_contact(contact_id),
         }
 
+    def apply_enrichment_merge(
+        self,
+        *,
+        contact_id: str,
+        operator: str,
+        attempt_id: str,
+        approved_fields: list[str],
+        reason: str = "",
+    ) -> dict[str, Any]:
+        if not operator.strip():
+            raise ValueError("contact enrichment merge requires an operator")
+        approved = sorted({str(field).strip() for field in approved_fields if str(field).strip()})
+        unsupported = sorted(set(approved) - CONTACT_ENRICHMENT_MERGE_FIELDS)
+        if unsupported:
+            raise ValueError(f"unsupported enrichment merge fields: {', '.join(unsupported)}")
+        contact = self.get_contact(contact_id)
+        attempt = self.get_enrichment_attempt(attempt_id)
+        if str(attempt.get("contact_id") or "") != contact_id:
+            raise KeyError(f"enrichment attempt not found for contact: {attempt_id}")
+        proposals = _enrichment_merge_proposals(attempt)
+        previous_values = _contact_spec_snapshot(contact)
+        approved_set = set(approved)
+        changed: dict[str, dict[str, Any]] = {}
+        skipped: list[dict[str, Any]] = []
+        for proposal in proposals:
+            field = str(proposal.get("field") or "").strip()
+            value = str(proposal.get("value") or "").strip()
+            if field not in CONTACT_ENRICHMENT_MERGE_FIELDS or not value:
+                skipped.append({"field": field, "reason": "unsupported or empty proposal"})
+                continue
+            if field not in approved_set:
+                skipped.append({"field": field, "reason": "field was not approved"})
+                continue
+            if value != previous_values.get(field, ""):
+                changed[field] = {
+                    "previous": previous_values.get(field, ""),
+                    "new": value,
+                    "source": proposal.get("source"),
+                }
+        now = utc_now()
+        mutation_id = _stable_id(
+            "mutation",
+            contact_id,
+            operator,
+            "enrichment_merge",
+            attempt_id,
+            _json_dump_value(changed),
+            now,
+        )
+        contact_payload = dict(contact.get("payload") or {})
+        contact_spec = dict(contact_payload.get("contact_spec") or {})
+        for field, values in changed.items():
+            contact_spec[field] = values["new"]
+        if changed:
+            contact_payload["contact_spec"] = contact_spec
+        merge_decision = {
+            "mutation_id": mutation_id,
+            "action": "enrichment_merge",
+            "operator": operator,
+            "reason": reason,
+            "attempt_id": attempt_id,
+            "approved_fields": approved,
+            "applied": [
+                {
+                    "field": field,
+                    "value": values["new"],
+                    "source": values.get("source"),
+                }
+                for field, values in sorted(changed.items())
+            ],
+            "skipped": skipped,
+            "created_at": now,
+        }
+        contact_payload.setdefault("review_mutations", []).append(merge_decision)
+        contact_payload["enrichment_merge_decision"] = merge_decision
+        mutation_payload = {
+            "action": "enrichment_merge",
+            "operator": operator,
+            "reason": reason,
+            "attempt_id": attempt_id,
+            "approved_fields": approved,
+            "previous_values": previous_values,
+            "new_values": {field: item["new"] for field, item in changed.items()},
+            "changed_fields": changed,
+            "skipped": skipped,
+        }
+        with self._connect() as conn:
+            self._migrate(conn)
+            conn.execute(
+                """
+                INSERT INTO contact_mutations (
+                    mutation_id, contact_id, action, operator, previous_json,
+                    new_json, payload_json, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    mutation_id,
+                    contact_id,
+                    "enrichment_merge",
+                    operator,
+                    _json_dump_value(previous_values),
+                    _json_dump_value({field: item["new"] for field, item in changed.items()}),
+                    _json_dumps(mutation_payload),
+                    now,
+                    now,
+                ),
+            )
+            conn.execute(
+                """
+                UPDATE contacts
+                SET display_name = ?,
+                    organization = ?,
+                    email = ?,
+                    phone = ?,
+                    payload_json = ?,
+                    updated_at = ?
+                WHERE contact_id = ?
+                """,
+                (
+                    changed.get("full_name", {}).get("new", contact.get("display_name") or ""),
+                    changed.get("organization", {}).get("new", contact.get("organization") or ""),
+                    changed.get("email", {}).get("new", contact.get("email") or ""),
+                    changed.get("phone", {}).get("new", contact.get("phone") or ""),
+                    _json_dumps(contact_payload),
+                    now,
+                    contact_id,
+                ),
+            )
+        return {
+            "mutation": self.get_mutation(mutation_id),
+            "attempt": self.get_enrichment_attempt(attempt_id),
+            "contact": self.get_contact(contact_id),
+        }
+
     def get_mutation(self, mutation_id: str) -> dict[str, Any]:
         self.initialize()
         with self._connect() as conn:
@@ -428,6 +564,17 @@ class ContactStore:
             row = conn.execute("SELECT * FROM card_assets WHERE asset_id = ?", (asset_id,)).fetchone()
         if row is None:
             raise KeyError(f"card asset not found: {asset_id}")
+        return _row_with_payload(row)
+
+    def get_enrichment_attempt(self, attempt_id: str) -> dict[str, Any]:
+        self.initialize()
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM enrichment_attempts WHERE attempt_id = ?",
+                (attempt_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError(f"enrichment attempt not found: {attempt_id}")
         return _row_with_payload(row)
 
     def override_route(
@@ -1443,6 +1590,44 @@ def _crop_decision_snapshot(row: dict[str, Any]) -> dict[str, Any]:
         "decided_by": crop_decision.get("decided_by", ""),
         "decided_at": crop_decision.get("decided_at", ""),
     }
+
+
+def _contact_spec_snapshot(contact: dict[str, Any]) -> dict[str, str]:
+    payload = contact.get("payload") if isinstance(contact.get("payload"), dict) else {}
+    contact_spec = payload.get("contact_spec") if isinstance(payload.get("contact_spec"), dict) else {}
+    return {
+        "full_name": str(contact_spec.get("full_name") or contact.get("display_name") or ""),
+        "organization": str(contact_spec.get("organization") or contact.get("organization") or ""),
+        "title": str(contact_spec.get("title") or ""),
+        "email": str(contact_spec.get("email") or contact.get("email") or ""),
+        "phone": str(contact_spec.get("phone") or contact.get("phone") or ""),
+        "website": str(contact_spec.get("website") or ""),
+        "notes": str(contact_spec.get("notes") or ""),
+    }
+
+
+def _enrichment_merge_proposals(attempt: dict[str, Any]) -> list[dict[str, Any]]:
+    payload = attempt.get("payload") if isinstance(attempt.get("payload"), dict) else {}
+    source_payload = payload.get("payload") if isinstance(payload.get("payload"), dict) else {}
+    proposals = source_payload.get("merge_proposals")
+    if isinstance(proposals, list):
+        return [proposal for proposal in proposals if isinstance(proposal, dict)]
+    review = payload.get("review") if isinstance(payload.get("review"), dict) else {}
+    review_proposals = review.get("proposals")
+    if isinstance(review_proposals, list):
+        rows: list[dict[str, Any]] = []
+        for proposal in review_proposals:
+            if not isinstance(proposal, dict):
+                continue
+            rows.append(
+                {
+                    "field": proposal.get("field"),
+                    "value": proposal.get("value"),
+                    "source": proposal.get("source") or attempt.get("provider"),
+                }
+            )
+        return rows
+    return []
 
 
 def _ensure_columns(conn: sqlite3.Connection, table: str, columns: dict[str, str]) -> None:

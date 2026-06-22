@@ -188,6 +188,29 @@ def test_mcp_contact_review_state_safe_loop_parity(tmp_path: Path) -> None:
         kind="crop_manifest",
         path=artifact_dir / "crop_manifest.json",
     )
+    (artifact_dir / "enrichment_result.json").write_text(
+        json.dumps(
+            {
+                "schema": "business-card-watchdog.enrichment-result.v1",
+                "provider": "public_web",
+                "merge_proposals": [
+                    {
+                        "field": "title",
+                        "value": "Principal Engineer",
+                        "source": "public_web",
+                        "requires_review": True,
+                    }
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    RunLedger(config.runs_dir / run_id).record_artifact(
+        job_id=job_id,
+        kind="enrichment_result",
+        path=artifact_dir / "enrichment_result.json",
+    )
     service = BusinessCardService(config)
     service.project_contacts_from_run(run_id)
     contact_id = service.list_contacts()["contacts"][0]["contact_id"]
@@ -271,6 +294,22 @@ def test_mcp_contact_review_state_safe_loop_parity(tmp_path: Path) -> None:
         },
         config=config,
     )
+    enrichment_attempt = next(
+        row
+        for row in crop_decision["contact"]["enrichment_attempts"]
+        if row["payload"]["payload"].get("schema") == "business-card-watchdog.enrichment-result.v1"
+    )
+    enrichment_merge = call_tool(
+        "business_card_watchdog_contact_enrichment_merge",
+        {
+            "contact_id": contact_id,
+            "operator": "mcp-test",
+            "attempt_id": enrichment_attempt["attempt_id"],
+            "approved_fields": ["title"],
+            "reason": "operator approved enrichment title",
+        },
+        config=config,
+    )
     review_surface = call_tool(
         "business_card_watchdog_contact_review_surface",
         {"contact_id": contact_id},
@@ -295,9 +334,12 @@ def test_mcp_contact_review_state_safe_loop_parity(tmp_path: Path) -> None:
     assert crop_decision["schema"] == "business-card-watchdog.contact-crop-decision.v1"
     assert crop_decision["mutation"]["operator"] == "mcp-test"
     assert crop_decision["asset"]["payload"]["crop_decision"]["decision"] == "accept"
+    assert enrichment_merge["schema"] == "business-card-watchdog.contact-enrichment-merge.v1"
+    assert enrichment_merge["mutation"]["operator"] == "mcp-test"
+    assert enrichment_merge["contact"]["payload"]["contact_spec"]["title"] == "Principal Engineer"
     assert review_surface["schema"] == "business-card-watchdog.contact-review-surface.v1"
     assert review_surface["rows"][0]["display_name"] == "Augusta Ada Lovelace"
-    assert review_surface["rows"][0]["counts"]["mutations"] == 3
+    assert review_surface["rows"][0]["counts"]["mutations"] == 4
     assert safe_loop["actions"][0]["status"] == "executed"
     assert safe_loop["actions"][0]["decision"] == "reject"
     assert safe_loop["writes_attempted"] == 0

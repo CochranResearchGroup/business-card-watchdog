@@ -592,6 +592,33 @@ class BusinessCardService:
             "network_calls_made": 0,
         }
 
+    def apply_contact_enrichment_merge(
+        self,
+        *,
+        contact_id: str,
+        operator: str,
+        attempt_id: str,
+        approved_fields: list[str],
+        reason: str = "",
+    ) -> dict[str, Any]:
+        store = ContactStore.from_config(self.config)
+        result = store.apply_enrichment_merge(
+            contact_id=contact_id,
+            operator=operator,
+            attempt_id=attempt_id,
+            approved_fields=approved_fields,
+            reason=reason,
+        )
+        return {
+            "schema": "business-card-watchdog.contact-enrichment-merge.v1",
+            "store": store.status(),
+            "contact": result["contact"],
+            "attempt": result["attempt"],
+            "mutation": result["mutation"],
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+
     def record_contact_review_recommendation(
         self,
         *,

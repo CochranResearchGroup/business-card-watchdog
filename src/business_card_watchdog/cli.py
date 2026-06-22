@@ -3174,6 +3174,13 @@ def build_parser() -> argparse.ArgumentParser:
     contacts_crop_decision.add_argument("--selected-crop-path", default="")
     contacts_crop_decision.add_argument("--selected-crop-sha256", default="")
     contacts_crop_decision.add_argument("--json", action="store_true")
+    contacts_enrichment_merge = contacts_sub.add_parser("enrichment-merge")
+    contacts_enrichment_merge.add_argument("contact_id")
+    contacts_enrichment_merge.add_argument("--operator", default="operator")
+    contacts_enrichment_merge.add_argument("--attempt-id", required=True)
+    contacts_enrichment_merge.add_argument("--approved-fields-json", required=True)
+    contacts_enrichment_merge.add_argument("--reason", default="")
+    contacts_enrichment_merge.add_argument("--json", action="store_true")
     contacts_route_override = contacts_sub.add_parser("route-override")
     contacts_route_override.add_argument("contact_id")
     contacts_route_override.add_argument("--operator", default="operator")
@@ -3816,6 +3823,14 @@ def main(argv: list[str] | None = None) -> int:
                 reason=args.reason,
                 selected_crop_path=args.selected_crop_path,
                 selected_crop_sha256=args.selected_crop_sha256,
+            )
+        elif args.contacts_command == "enrichment-merge":
+            payload = service.apply_contact_enrichment_merge(
+                contact_id=args.contact_id,
+                operator=args.operator,
+                attempt_id=args.attempt_id,
+                approved_fields=list(json.loads(args.approved_fields_json)),
+                reason=args.reason,
             )
         elif args.contacts_command == "route-override":
             payload = service.override_contact_route(

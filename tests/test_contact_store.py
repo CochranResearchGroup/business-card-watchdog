@@ -115,6 +115,42 @@ def _write_recorded_contact_run(config: AppConfig) -> tuple[str, str]:
     return run_id, job.job_id
 
 
+def _record_enrichment_result(config: AppConfig, run_id: str, job_id: str) -> None:
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+    enrichment_result_path = artifact_dir / "enrichment_result.json"
+    enrichment_result_path.write_text(
+        json.dumps(
+            {
+                "schema": "business-card-watchdog.enrichment-result.v1",
+                "provider": "public_web",
+                "merge_proposals": [
+                    {
+                        "field": "title",
+                        "value": "Principal Engineer",
+                        "source": "public_web",
+                        "requires_review": True,
+                    },
+                    {
+                        "field": "website",
+                        "value": "https://example.test/ada",
+                        "source": "public_web",
+                        "requires_review": True,
+                    },
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    RunLedger(config.runs_dir / run_id).record_artifact(
+        job_id=job_id,
+        kind="enrichment_result",
+        path=enrichment_result_path,
+    )
+
+
 def test_contact_store_initializes_schema(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     store = ContactStore.from_config(config)
@@ -539,6 +575,41 @@ def test_contact_crop_decision_is_audited(tmp_path: Path) -> None:
     assert surface["rows"][0]["mutation_audit"][0]["action"] == "crop_decision"
 
 
+def test_contact_enrichment_merge_is_audited(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    run_id, job_id = _write_recorded_contact_run(config)
+    _record_enrichment_result(config, run_id, job_id)
+    service = BusinessCardService(config)
+    service.project_contacts_from_run(run_id)
+    contact = service.get_contact(service.list_contacts()["contacts"][0]["contact_id"])["contact"]
+    attempt = next(
+        row
+        for row in contact["enrichment_attempts"]
+        if row["payload"]["payload"].get("schema") == "business-card-watchdog.enrichment-result.v1"
+    )
+
+    merge = service.apply_contact_enrichment_merge(
+        contact_id=contact["contact_id"],
+        operator="operator",
+        attempt_id=attempt["attempt_id"],
+        approved_fields=["title"],
+        reason="operator approved public-web title",
+    )
+    surface = service.contact_review_surface(contact_id=contact["contact_id"])
+
+    assert merge["schema"] == "business-card-watchdog.contact-enrichment-merge.v1"
+    assert merge["writes_attempted"] == 0
+    assert merge["network_calls_made"] == 0
+    assert merge["mutation"]["action"] == "enrichment_merge"
+    assert merge["mutation"]["operator"] == "operator"
+    assert merge["mutation"]["payload"]["new_values"] == {"title": "Principal Engineer"}
+    assert merge["mutation"]["payload"]["skipped"][0]["field"] == "website"
+    assert merge["contact"]["payload"]["contact_spec"]["title"] == "Principal Engineer"
+    assert merge["contact"]["payload"]["enrichment_merge_decision"]["approved_fields"] == ["title"]
+    assert surface["rows"][0]["counts"]["mutations"] == 1
+    assert surface["rows"][0]["mutation_audit"][0]["action"] == "enrichment_merge"
+
+
 def test_contact_review_safe_loop_only_rejects_explicit_safe_rejections(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, _job_id = _write_recorded_contact_run(config)
@@ -589,7 +660,8 @@ def test_contacts_cli_json_surfaces(tmp_path: Path, capsys) -> None:
     data_dir = tmp_path / "data"
     config_path.write_text(f'data_dir = "{data_dir}"\n[watch]\ninputs = []\n', encoding="utf-8")
     config = AppConfig(config_path=config_path, data_dir=data_dir)
-    run_id, _job_id = _write_recorded_contact_run(config)
+    run_id, job_id = _write_recorded_contact_run(config)
+    _record_enrichment_result(config, run_id, job_id)
 
     assert main(["--config", str(config_path), "contacts", "init", "--json"]) == 0
     init_payload = json.loads(capsys.readouterr().out)
@@ -691,6 +763,38 @@ def test_contacts_cli_json_surfaces(tmp_path: Path, capsys) -> None:
     assert crop_decision["schema"] == "business-card-watchdog.contact-crop-decision.v1"
     assert crop_decision["mutation"]["operator"] == "cli-test"
     assert crop_decision["asset"]["payload"]["crop_decision"]["decision"] == "accept"
+
+    latest = BusinessCardService(config).get_contact(contact_id)["contact"]
+    enrichment_attempt = next(
+        row
+        for row in latest["enrichment_attempts"]
+        if row["payload"]["payload"].get("schema") == "business-card-watchdog.enrichment-result.v1"
+    )
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "contacts",
+                "enrichment-merge",
+                contact_id,
+                "--operator",
+                "cli-test",
+                "--attempt-id",
+                enrichment_attempt["attempt_id"],
+                "--approved-fields-json",
+                '["title"]',
+                "--reason",
+                "operator approved enrichment title",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    enrichment_merge = json.loads(capsys.readouterr().out)
+    assert enrichment_merge["schema"] == "business-card-watchdog.contact-enrichment-merge.v1"
+    assert enrichment_merge["mutation"]["operator"] == "cli-test"
+    assert enrichment_merge["contact"]["payload"]["contact_spec"]["title"] == "Principal Engineer"
 
     assert (
         main(

@@ -107,6 +107,12 @@ def create_app(config_path: Path | None = None):
         selected_crop_path: str = ""
         selected_crop_sha256: str = ""
 
+    class ContactEnrichmentMergeRequest(BaseModel):
+        operator: str = "operator"
+        attempt_id: str
+        approved_fields: list[str] = Field(default_factory=list)
+        reason: str = ""
+
     class ContactRouteOverrideRequest(BaseModel):
         operator: str = "operator"
         selected_sinks: list[str]
@@ -1095,6 +1101,19 @@ def create_app(config_path: Path | None = None):
             reason=request.reason,
             selected_crop_path=request.selected_crop_path,
             selected_crop_sha256=request.selected_crop_sha256,
+        )
+
+    @app.post("/contacts/{contact_id}/enrichment-merge")
+    def apply_contact_enrichment_merge(
+        contact_id: str,
+        request: ContactEnrichmentMergeRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().apply_contact_enrichment_merge(
+            contact_id=contact_id,
+            operator=request.operator,
+            attempt_id=request.attempt_id,
+            approved_fields=list(request.approved_fields),
+            reason=request.reason,
         )
 
     @app.post("/contacts/{contact_id}/route-override")
