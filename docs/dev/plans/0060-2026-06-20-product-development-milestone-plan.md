@@ -435,16 +435,18 @@ Validation:
 
 ### Milestone 8 | Contact Review Surface
 
-Status: IN_PROGRESS. Database-backed contact review surface summaries and
-audited normalized field-correction mutations are available through service,
-API, CLI, and MCP via Plan 0082. Audited route override mutations are available
-through service, API, CLI, and MCP via Plan 0083. Audited crop decision
-mutations are available through service, API, CLI, and MCP via Plan 0085.
-Audited enrichment merge mutations are available through service, API, CLI, and
-MCP via Plan 0086. Audited sink approval state mutations are available through
-service, API, CLI, and MCP via Plan 0087. Remaining Milestone 8 work is to
-decide whether the local HTML review surface is needed now or should remain a
-separate UI plan.
+Status: COMPLETE_FOR_CURRENT_SCOPE. Database-backed contact review surface
+summaries and audited normalized field-correction mutations are available
+through service, API, CLI, and MCP via Plan 0082. Audited route override
+mutations are available through service, API, CLI, and MCP via Plan 0083.
+Audited crop decision mutations are available through service, API, CLI, and MCP
+via Plan 0085. Audited enrichment merge mutations are available through service,
+API, CLI, and MCP via Plan 0086. Audited sink approval state mutations are
+available through service, API, CLI, and MCP via Plan 0087. Plan 0088 closes the
+local HTML decision by keeping Milestone 8 to the no-auth service/API/CLI/MCP
+review scope; a richer database-backed contact HTML UI should be opened as a
+separate UI plan if needed. Continue with Milestone 9 operator-selected live
+pilot work.
 
 Goal-compatible objective:
 

@@ -7269,6 +7269,33 @@ Safety:
   lookup/write/readback, process configured SyncThing/private watch inputs, or
   expose private image bytes.
 
+## Turn 300 | 2026-06-22
+
+Executed Plan 0088 as the Plan 0060 Milestone 8 contact review surface
+closeout slice.
+
+Implemented:
+
+- Closed Plan 0060 Milestone 8 for the current no-auth service/API/CLI/MCP
+  database-backed contact review scope.
+- Recorded that richer database-backed contact HTML UI work should be a separate
+  future UI plan rather than widening Milestone 8.
+- Moved the roadmap next refactor/development pointer to Plan 0060 Milestone 9
+  operator-selected live pilot work using Plan 0009 as the live-pilot authority.
+
+Validation:
+
+- `git diff --check` passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `.venv/bin/python -m pytest tests/test_contact_store.py::test_contacts_cli_json_surfaces tests/test_api.py::test_api_contact_review_state_safe_loop_parity tests/test_mcp.py::test_mcp_contact_review_state_safe_loop_parity -q`
+  passed with 3 tests.
+
+Safety:
+
+- This documentation slice did not run live lookup/write/readback, call external
+  enrichment providers, process configured SyncThing/private watch inputs, or
+  expose private image bytes.
+
 ## Turn 291 | 2026-06-22
 
 Executed Plan 0080 as the next Plan 0060 Milestone 7 contact-store persistence
