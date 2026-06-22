@@ -149,11 +149,15 @@ Validation:
 ### Milestone 3 | Scanner Intake, Card Sides, And OCR Quality Loop
 
 Status: IN_PROGRESS. Scanner document-intake foundation complete via Plan 0065;
-OCR side classification and front/back pair proposals complete via Plan 0066;
-reviewed side-pair merge complete via Plan 0067; deterministic extraction
-quality gates complete via Plan 0068; reviewed child contacts from multi-card
-images project as distinct contact rows via Plan 0069. Remaining work should
-continue with broader App Intelligence review-state hardening.
+OCR side classification and baseline front/back pair proposals complete via
+Plan 0066; reviewed side-pair merge complete via Plan 0067; deterministic
+extraction quality gates complete via Plan 0068; reviewed child contacts from
+multi-card images project as distinct contact rows via Plan 0069. The next
+scanner-side follow-on should harden regular double-sided scanner workflows by
+replacing the current adjacent-page proposal pass with an OCR/contextual
+pairing graph that can score near-adjacent pages, reversed order, same-stem
+image captures, and dropped blank backs before broader App Intelligence
+review-state hardening continues.
 
 Goal-compatible objective:
 
@@ -183,6 +187,9 @@ Scope:
   same-stem image pairs, timestamp adjacency, OCR token overlap, domain/company
   overlap, visual/crop similarity, and negative evidence such as conflicting
   person/company/domain signals.
+- The pair-candidate graph must evaluate all plausible candidates within a
+  bounded scanner session window, not only adjacent page pairs. Adjacency is a
+  weighted feature; it is not sufficient pair evidence.
 - Treat scanner page adjacency as a strong but non-authoritative hint. Some
   scanner workflows may place back before front, and some may drop blank backs,
   so pairing must allow near-adjacent candidates and explicit blank-side gaps.
@@ -196,6 +203,9 @@ Scope:
 - Treat missing blank backs as an expected scanner behavior. A high-confidence
   front may stand alone when the adjacent page is absent or classified blank,
   but a non-blank back must remain unmerged until paired or reviewed.
+- Preserve unpaired non-blank backs as reviewable side candidates with their
+  own OCR/context evidence, so an operator can attach them to the correct front
+  later rather than losing backside-only fields.
 - Allow optional stochastic/app-intelligence review to rank or explain
   ambiguous pairs, but keep pair acceptance, merge, and route-readiness as
   host-owned review transitions.
@@ -239,6 +249,9 @@ Validation:
 - Scanner sequence tests proving adjacency alone cannot merge a pair, reversed
   page order can still propose a pair, and dropped blank backs do not block a
   complete front-side contact from review progression.
+- Pair-graph tests proving a non-adjacent but OCR-compatible front/back pair can
+  outrank an adjacent conflicting pair, and same-stem/timestamp-adjacent image
+  captures can produce proposals outside PDFs.
 - OCR/context clue tests for name/title/email density, company/domain overlap,
   address-only backs, QR/URL hints, and blank/near-blank pages.
 - Crop asset existence and checksum tests.

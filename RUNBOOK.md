@@ -7115,6 +7115,25 @@ Safety:
   process configured SyncThing/private watch inputs, or enable non-loopback API
   behavior.
 
+## Turn 295 | 2026-06-22
+
+Integrated the regular double-sided scanner requirement into active Plan 0060
+instead of opening a separate high-level plan.
+
+Documented:
+
+- Plan 0060 Milestone 3 now distinguishes the completed baseline side-pair work
+  from the pending OCR/contextual pair-graph hardening needed for regular
+  scanner use.
+- The follow-on must treat scanner adjacency as a weighted clue only, score
+  near-adjacent and same-stem image candidates, preserve non-blank unpaired
+  backs for review, and handle reversed page order plus dropped blank backs.
+- Roadmap now points the next scanner-side plan at that hardening slice.
+
+Validation:
+
+- Planning-only change; no code or private card assets changed.
+
 ## Turn 291 | 2026-06-22
 
 Executed Plan 0080 as the next Plan 0060 Milestone 7 contact-store persistence
