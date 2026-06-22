@@ -184,6 +184,19 @@ Scope:
 - Treat scanner page adjacency as a strong but non-authoritative hint. Some
   scanner workflows may place back before front, and some may drop blank backs,
   so pairing must allow near-adjacent candidates and explicit blank-side gaps.
+- For scanner sequences, score both `front -> back` and `back -> front`
+  adjacency edges. Page order may decide candidate priority but must not decide
+  correctness without OCR/context evidence.
+- Use deterministic OCR and contextual clues as required pair evidence:
+  shared company/domain/address/phone fragments, complementary front/back field
+  density, QR/URL/social fragments, and absence of conflicting name/company
+  signals.
+- Treat missing blank backs as an expected scanner behavior. A high-confidence
+  front may stand alone when the adjacent page is absent or classified blank,
+  but a non-blank back must remain unmerged until paired or reviewed.
+- Allow optional stochastic/app-intelligence review to rank or explain
+  ambiguous pairs, but keep pair acceptance, merge, and route-readiness as
+  host-owned review transitions.
 - Store pair proposals with confidence, evidence, and blocked/ambiguous reasons
   for review.
 - Merge reviewed front/back OCR fields into one contact candidate only through
@@ -221,6 +234,9 @@ Validation:
 - Synthetic PDF fixture tests for one-page and two-page scanner documents.
 - Front/back pairing tests for consecutive pages, reversed front/back order,
   dropped blank backs, same-stem image pairs, and conflicting OCR evidence.
+- Scanner sequence tests proving adjacency alone cannot merge a pair, reversed
+  page order can still propose a pair, and dropped blank backs do not block a
+  complete front-side contact from review progression.
 - OCR/context clue tests for name/title/email density, company/domain overlap,
   address-only backs, QR/URL hints, and blank/near-blank pages.
 - Crop asset existence and checksum tests.

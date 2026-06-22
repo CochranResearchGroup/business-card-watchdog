@@ -6530,3 +6530,25 @@ Safety:
 - This slice did not automatically merge side pairs, route merged contacts, run
   enrichment providers, run public-web search, execute live lookup/write/readback,
   or write Google Contacts, Odoo, or Odollo records.
+
+## Turn 278 | 2026-06-22
+
+Updated the active Plan 0060 Milestone 3 scanner-side pairing scope instead of
+opening a duplicate plan.
+
+Captured:
+
+- Scanner adjacency is a priority signal but not correctness proof.
+- Both front-back and back-front scanner page orderings must be scored.
+- OCR/context clues are required pair evidence, including shared domain,
+  company, address, phone, QR/URL/social, and absence of conflicting identity
+  signals.
+- Dropped blank backs are expected scanner behavior; complete fronts can still
+  progress, while non-blank backs remain unmerged until paired or reviewed.
+- Optional stochastic/app-intelligence evidence may rank or explain ambiguous
+  pairs, but acceptance, merge, and route-readiness remain host-owned review
+  transitions.
+
+Validation:
+
+- Documentation-only change reviewed with `git diff`.
