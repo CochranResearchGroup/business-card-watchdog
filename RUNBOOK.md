@@ -7003,6 +7003,43 @@ Safety:
   SyncThing/private watch inputs, create selected-live-target artifacts, or
   enable live sink writes.
 
+## Turn 291 | 2026-06-22
+
+Executed Plan 0080 as the next Plan 0060 Milestone 7 contact-store persistence
+slice.
+
+Implemented:
+
+- Bumped the contact-store schema to v4.
+- Added queryable `route_candidate_state` and `readiness_blockers_json` fields
+  to contact-store routing decisions.
+- Projected Odoo/Odollo tenant readiness packets and duplicate lookup gate
+  blockers from `sink_lookup_plan.json` into routing decision payloads.
+- Preserved selected target tenant references on contact routing decisions.
+- Added migration/backfill behavior for existing routing decision rows.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_contact_store.py -q` passed with 8
+  tests.
+- `.venv/bin/python -m pytest tests/test_dry_run_pipeline.py tests/test_service.py::test_service_contact_route_selection_packets_use_projected_gws_route tests/test_service.py::test_service_contact_route_selection_blocks_gws_profile_mismatch -q`
+  passed with 7 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/contact_store.py tests/test_contact_store.py`
+  passed.
+- `git diff --check` passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `.venv/bin/ruff check .` passed.
+- `.venv/bin/python -m pytest -q` passed with 383 tests.
+- `codegraph sync /home/ecochran76/workspace.local/business-card-watchdog && codegraph status /home/ecochran76/workspace.local/business-card-watchdog`
+  reported the index up to date with 60 files, 2,012 nodes, and 2,104 edges.
+
+Safety:
+
+- This slice did not run live Odollo/Odoo lookup, write, or readback. It did
+  not inspect tenant-private runtime artifacts, process configured
+  SyncThing/private watch inputs, create selected-live-target artifacts, or
+  enable live sink writes.
+
 ## Turn 290 | 2026-06-22
 
 Executed Plan 0079 as the next Plan 0060 Milestone 7 read-only Odollo packet

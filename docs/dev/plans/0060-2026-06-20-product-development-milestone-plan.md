@@ -379,9 +379,10 @@ sink with route-scoped Odollo tenant targets such as `soylei-prod` and
 lookup plans now carry the selected tenant target while preserving
 `sink.odollo_tenant` as a fallback. Read-only tenant readiness reports and
 duplicate lookup gate blockers are now present in Odoo lookup plans via Plan
-0079. Remaining work should persist tenant route readiness blockers in the
-contact store and add selected-target/write-readback pilot boundaries for
-Odollo routes.
+0079. Tenant route candidate state, selected target tenant references, and
+readiness blockers now persist into the contact store via Plan 0080. Remaining
+work should add selected-target/write-readback pilot boundaries for Odollo
+routes.
 
 Goal-compatible objective:
 

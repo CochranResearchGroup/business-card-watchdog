@@ -9,6 +9,7 @@ from business_card_watchdog.contact_store import ContactStore
 from business_card_watchdog.ledger import RunLedger
 from business_card_watchdog.models import CardJob
 from business_card_watchdog.service import BusinessCardService
+from business_card_watchdog.sinks import build_sink_lookup_plan
 
 
 def _write_recorded_contact_run(config: AppConfig) -> tuple[str, str]:
@@ -107,7 +108,7 @@ def test_contact_store_initializes_schema(tmp_path: Path) -> None:
     status = store.initialize()
 
     assert status["exists"] is True
-    assert status["schema_version"] == 3
+    assert status["schema_version"] == 4
     assert config.contact_store_path.exists()
 
 
@@ -195,11 +196,13 @@ def test_contact_store_migrates_selected_sink_columns_without_losing_routes(tmp_
     status = store.initialize()
     detail = store.get_contact("contact_legacy")
 
-    assert status["schema_version"] == 3
+    assert status["schema_version"] == 4
     assert detail["routing_decisions"][0]["decision_id"] == "route_legacy"
     assert detail["routing_decisions"][0]["selected_sinks"] == ["google_contacts"]
     assert detail["routing_decisions"][0]["selected_sink_state"] == "dry_run"
     assert detail["routing_decisions"][0]["selected_target_profile"] == "ecochran76"
+    assert detail["routing_decisions"][0]["route_candidate_state"] == "none"
+    assert detail["routing_decisions"][0]["readiness_blockers"] == []
 
 
 def test_contact_store_projects_run_idempotently(tmp_path: Path) -> None:
@@ -232,8 +235,85 @@ def test_contact_store_projects_run_idempotently(tmp_path: Path) -> None:
     assert detail["routing_decisions"][0]["selected_sink_state"] == "dry_run"
     assert detail["routing_decisions"][0]["selected_target_profile"] == "ecochran76"
     assert detail["routing_decisions"][0]["selected_target_tenant"] == ""
+    assert detail["routing_decisions"][0]["route_candidate_state"] == "none"
+    assert detail["routing_decisions"][0]["readiness_blockers"] == []
     assert detail["sink_attempts"][0]["sink"] == "google_contacts"
     assert detail["review_states"] == []
+
+
+def test_contact_store_projects_odollo_route_readiness_blockers(tmp_path: Path, monkeypatch) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    run_id, job_id = _write_recorded_contact_run(config)
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+    odollo_home = tmp_path / "odollo"
+    tenant_home = odollo_home / "tenants" / "saber-prod"
+    (tenant_home / "resources").mkdir(parents=True)
+    (tenant_home / "artifacts").mkdir()
+    (tenant_home / "actions.ndjson").write_text("", encoding="utf-8")
+    (odollo_home / "odollo.yml").write_text("profiles: {}\n", encoding="utf-8")
+    (odollo_home / "saber-prod.sqlite").write_text("", encoding="utf-8")
+    monkeypatch.setenv("ODOLLO_HOME", str(odollo_home))
+
+    sink_payload_path = artifact_dir / "sink_payloads.json"
+    sink_payload_path.write_text(
+        json.dumps(
+            {
+                "schema": "business-card-watchdog.sink-payloads.v1",
+                "payloads": [
+                    {
+                        "sink": "odoo",
+                        "dry_run": True,
+                        "contact": {"email": "ada@example.test"},
+                        "readiness": {
+                            "status": "ready",
+                            "details": {
+                                "tenant": "saber-prod",
+                                "config_key": "sink.odollo_tenant",
+                                "live_apply_requires_selected_target": True,
+                            },
+                        },
+                    }
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    sink_lookup_plan_path = artifact_dir / "sink_lookup_plan.json"
+    sink_lookup_plan_path.write_text(
+        json.dumps(
+            build_sink_lookup_plan(
+                sinks=["odoo"],
+                spec={"full_name": "Ada Lovelace", "email": "ada@example.test"},
+                dry_run=True,
+                reason="matched providence_context=saber",
+                odollo_tenant="saber-prod",
+            ),
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    ledger = RunLedger(config.runs_dir / run_id)
+    ledger.record_artifact(job_id=job_id, kind="sink_payloads", path=sink_payload_path)
+    ledger.record_artifact(job_id=job_id, kind="sink_lookup_plan", path=sink_lookup_plan_path)
+
+    service = BusinessCardService(config)
+    service.project_contacts_from_run(run_id)
+    detail = service.get_contact(str(service.list_contacts()["contacts"][0]["contact_id"]))["contact"]
+    route = detail["routing_decisions"][0]
+
+    assert route["selected_sinks"] == ["odoo"]
+    assert route["selected_target_tenant"] == "saber-prod"
+    assert route["route_candidate_state"] == "duplicate_lookup_blocked"
+    assert route["readiness_blockers"][0]["source"] == "duplicate_lookup_gate"
+    assert route["readiness_blockers"][0]["category"] == "duplicate_risk"
+    assert route["payload"]["odollo_route_candidates"][0]["tenant"] == "saber-prod"
+    assert route["payload"]["odollo_route_candidates"][0]["tenant_readiness"]["state"] == "pilot_ready"
+    assert route["payload"]["odollo_route_candidates"][0]["duplicate_lookup_gate"]["network_calls_made"] == 0
 
 
 def test_contact_store_projects_enrichment_review_provenance(tmp_path: Path) -> None:
@@ -402,7 +482,7 @@ def test_contacts_cli_json_surfaces(tmp_path: Path, capsys) -> None:
 
     assert main(["--config", str(config_path), "contacts", "init", "--json"]) == 0
     init_payload = json.loads(capsys.readouterr().out)
-    assert init_payload["schema_version"] == 3
+    assert init_payload["schema_version"] == 4
 
     assert main(["--config", str(config_path), "contacts", "project-run", run_id, "--json"]) == 0
     projection = json.loads(capsys.readouterr().out)

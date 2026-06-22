@@ -12,7 +12,7 @@ from .contact import contact_candidate_to_spec
 from .models import utc_now
 
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 CONTACT_STORE_SCHEMA = "business-card-watchdog.contact-store.v1"
 _PROJECTED_ASSET_KINDS = {
     "artifact_dir",
@@ -702,12 +702,18 @@ class ContactStore:
         job: dict[str, Any] | None = None,
     ) -> int:
         sink_payload_artifact = artifacts.get("sink_payloads")
+        sink_lookup_artifact = artifacts.get("sink_lookup_plan")
         duplicate_artifact = artifacts.get("duplicate_assessment") or artifacts.get("downstream_duplicate_assessment")
         sink_payloads = _read_json_file(Path(str((sink_payload_artifact or {}).get("path") or ""))) or {}
+        sink_lookup_plan = _read_json_file(Path(str((sink_lookup_artifact or {}).get("path") or ""))) or {}
         duplicate = _read_json_file(Path(str((duplicate_artifact or {}).get("path") or ""))) or {}
         payload_rows = sink_payloads.get("payloads") if isinstance(sink_payloads.get("payloads"), list) else []
         sinks = sorted({str(row.get("sink") or "") for row in payload_rows if isinstance(row, dict) and row.get("sink")})
         selected_sink_state, selected_target_profile, selected_target_tenant = _selected_route_metadata(payload_rows)
+        route_candidate_state, readiness_blockers, odollo_route_candidates = _route_candidate_metadata(
+            payload_rows=payload_rows,
+            lookup_plan=sink_lookup_plan,
+        )
         job_state = str((job or {}).get("state") or "")
         if sinks:
             state = "ready_to_route"
@@ -719,9 +725,14 @@ class ContactStore:
             "job_state": job_state,
             "sinks": sinks,
             "sink_payloads": sink_payloads,
+            "sink_lookup_plan": sink_lookup_plan,
+            "odollo_route_candidates": odollo_route_candidates,
+            "route_candidate_state": route_candidate_state,
+            "readiness_blockers": readiness_blockers,
             "duplicate_assessment": duplicate,
             "source_artifacts": {
                 "sink_payloads": sink_payload_artifact,
+                "sink_lookup_plan": sink_lookup_artifact,
                 "duplicate_assessment": duplicate_artifact,
             },
         }
@@ -733,9 +744,10 @@ class ContactStore:
                 INSERT INTO routing_decisions (
                     decision_id, contact_id, tenant, state, selected_sinks_json,
                     selected_sink_state, selected_target_profile, selected_target_tenant,
-                    payload_json, created_at, updated_at
+                    route_candidate_state, readiness_blockers_json, payload_json,
+                    created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(decision_id) DO UPDATE SET
                     contact_id = excluded.contact_id,
                     tenant = excluded.tenant,
@@ -744,6 +756,8 @@ class ContactStore:
                     selected_sink_state = excluded.selected_sink_state,
                     selected_target_profile = excluded.selected_target_profile,
                     selected_target_tenant = excluded.selected_target_tenant,
+                    route_candidate_state = excluded.route_candidate_state,
+                    readiness_blockers_json = excluded.readiness_blockers_json,
                     payload_json = excluded.payload_json,
                     updated_at = excluded.updated_at
                 """,
@@ -756,6 +770,8 @@ class ContactStore:
                     selected_sink_state,
                     selected_target_profile,
                     selected_target_tenant,
+                    route_candidate_state,
+                    _json_dump_value(readiness_blockers),
                     _json_dumps(payload),
                     now,
                     now,
@@ -892,6 +908,8 @@ class ContactStore:
                 selected_sink_state TEXT NOT NULL DEFAULT 'none',
                 selected_target_profile TEXT NOT NULL DEFAULT '',
                 selected_target_tenant TEXT NOT NULL DEFAULT '',
+                route_candidate_state TEXT NOT NULL DEFAULT 'none',
+                readiness_blockers_json TEXT NOT NULL DEFAULT '[]',
                 payload_json TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
@@ -954,11 +972,17 @@ class ContactStore:
                 "selected_sink_state": "TEXT NOT NULL DEFAULT 'none'",
                 "selected_target_profile": "TEXT NOT NULL DEFAULT ''",
                 "selected_target_tenant": "TEXT NOT NULL DEFAULT ''",
+                "route_candidate_state": "TEXT NOT NULL DEFAULT 'none'",
+                "readiness_blockers_json": "TEXT NOT NULL DEFAULT '[]'",
             },
         )
         _backfill_selected_route_metadata(conn)
+        _backfill_route_readiness_metadata(conn)
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_routing_selected_state ON routing_decisions(selected_sink_state)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_routing_route_candidate_state ON routing_decisions(route_candidate_state)"
         )
         conn.execute(
             "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
@@ -989,6 +1013,8 @@ def _row_with_payload(row: sqlite3.Row) -> dict[str, Any]:
     payload["payload"] = _json_loads(payload.pop("payload_json"))
     if "selected_sinks_json" in payload:
         payload["selected_sinks"] = _json_load_list(str(payload.pop("selected_sinks_json") or "[]"))
+    if "readiness_blockers_json" in payload:
+        payload["readiness_blockers"] = _json_load_list(str(payload.pop("readiness_blockers_json") or "[]"))
     return payload
 
 
@@ -1015,6 +1041,110 @@ def _selected_route_metadata(payload_rows: list[Any]) -> tuple[str, str, str]:
         elif sink == "odoo" and not target_tenant:
             target_tenant = str(details.get("tenant") or details.get("target_tenant") or "").strip()
     return selected_state, target_profile, target_tenant
+
+
+def _route_candidate_metadata(
+    *,
+    payload_rows: list[Any],
+    lookup_plan: dict[str, Any],
+) -> tuple[str, list[dict[str, Any]], list[dict[str, Any]]]:
+    selected_sinks = {str(row.get("sink") or "") for row in payload_rows if isinstance(row, dict)}
+    if "odoo" not in selected_sinks:
+        return "none", [], []
+    lookups = lookup_plan.get("lookups") if isinstance(lookup_plan.get("lookups"), list) else []
+    candidates: list[dict[str, Any]] = []
+    blockers: list[dict[str, Any]] = []
+    for lookup in lookups:
+        if not isinstance(lookup, dict) or str(lookup.get("sink") or "") != "odoo":
+            continue
+        tenant_readiness = (
+            lookup.get("tenant_readiness") if isinstance(lookup.get("tenant_readiness"), dict) else {}
+        )
+        duplicate_gate = (
+            lookup.get("duplicate_lookup_gate") if isinstance(lookup.get("duplicate_lookup_gate"), dict) else {}
+        )
+        candidate_blockers = _route_blockers_from_packets(
+            tenant_readiness=tenant_readiness,
+            duplicate_gate=duplicate_gate,
+        )
+        tenant = str(tenant_readiness.get("tenant") or _lookup_tenant(lookup) or "").strip()
+        candidate_state = _odollo_candidate_state(
+            tenant_readiness=tenant_readiness,
+            duplicate_gate=duplicate_gate,
+            blockers=candidate_blockers,
+        )
+        candidates.append(
+            {
+                "sink": "odoo",
+                "tenant": tenant,
+                "state": candidate_state,
+                "tenant_readiness": tenant_readiness,
+                "duplicate_lookup_gate": duplicate_gate,
+                "readiness_blockers": candidate_blockers,
+            }
+        )
+        blockers.extend(candidate_blockers)
+    if candidates:
+        return _summarize_route_candidate_state(candidates), blockers, candidates
+    return "missing_readiness_packet", [
+        {
+            "source": "contact_store_projection",
+            "code": "missing_odollo_lookup_plan",
+            "category": "missing_config",
+            "reason": "Odoo route candidate is missing sink_lookup_plan readiness evidence",
+        }
+    ], []
+
+
+def _route_blockers_from_packets(
+    *,
+    tenant_readiness: dict[str, Any],
+    duplicate_gate: dict[str, Any],
+) -> list[dict[str, Any]]:
+    blockers: list[dict[str, Any]] = []
+    for source, packet in (
+        ("tenant_readiness", tenant_readiness),
+        ("duplicate_lookup_gate", duplicate_gate),
+    ):
+        for blocker in packet.get("blockers") if isinstance(packet.get("blockers"), list) else []:
+            if isinstance(blocker, dict):
+                row = dict(blocker)
+                row["source"] = source
+                blockers.append(row)
+    return blockers
+
+
+def _lookup_tenant(lookup: dict[str, Any]) -> str:
+    readiness = lookup.get("readiness") if isinstance(lookup.get("readiness"), dict) else {}
+    details = readiness.get("details") if isinstance(readiness.get("details"), dict) else {}
+    return str(details.get("tenant") or details.get("target_tenant") or "")
+
+
+def _odollo_candidate_state(
+    *,
+    tenant_readiness: dict[str, Any],
+    duplicate_gate: dict[str, Any],
+    blockers: list[dict[str, Any]],
+) -> str:
+    tenant_state = str(tenant_readiness.get("state") or "")
+    if tenant_state in {"missing_config", "blocked_tenant"}:
+        return tenant_state
+    if any(str(blocker.get("category") or "") == "duplicate_risk" for blocker in blockers):
+        return "duplicate_lookup_blocked"
+    duplicate_state = str(duplicate_gate.get("state") or "")
+    if duplicate_state == "pilot_ready":
+        return "pilot_ready"
+    return tenant_state or duplicate_state or "unknown"
+
+
+def _summarize_route_candidate_state(candidates: list[dict[str, Any]]) -> str:
+    states = {str(candidate.get("state") or "") for candidate in candidates}
+    for state in ("missing_config", "blocked_tenant", "missing_readiness_packet", "duplicate_lookup_blocked"):
+        if state in states:
+            return state
+    if states == {"pilot_ready"}:
+        return "pilot_ready"
+    return sorted(states)[0] if states else "none"
 
 
 def _backfill_selected_route_metadata(conn: sqlite3.Connection) -> None:
@@ -1056,6 +1186,45 @@ def _backfill_selected_route_metadata(conn: sqlite3.Connection) -> None:
                 selected_sink_state,
                 selected_target_profile,
                 selected_target_tenant,
+                row["decision_id"],
+            ),
+        )
+
+
+def _backfill_route_readiness_metadata(conn: sqlite3.Connection) -> None:
+    rows = conn.execute(
+        """
+        SELECT decision_id, payload_json
+        FROM routing_decisions
+        WHERE route_candidate_state = 'none' AND readiness_blockers_json = '[]'
+        """
+    ).fetchall()
+    for row in rows:
+        payload = _json_loads(str(row["payload_json"] or "{}"))
+        sink_payloads = payload.get("sink_payloads") if isinstance(payload.get("sink_payloads"), dict) else {}
+        payload_rows = sink_payloads.get("payloads") if isinstance(sink_payloads.get("payloads"), list) else []
+        lookup_plan = payload.get("sink_lookup_plan") if isinstance(payload.get("sink_lookup_plan"), dict) else {}
+        route_candidate_state, readiness_blockers, odollo_route_candidates = _route_candidate_metadata(
+            payload_rows=payload_rows,
+            lookup_plan=lookup_plan,
+        )
+        if route_candidate_state == "none" and not readiness_blockers:
+            continue
+        payload["route_candidate_state"] = route_candidate_state
+        payload["readiness_blockers"] = readiness_blockers
+        payload["odollo_route_candidates"] = odollo_route_candidates
+        conn.execute(
+            """
+            UPDATE routing_decisions
+            SET route_candidate_state = ?,
+                readiness_blockers_json = ?,
+                payload_json = ?
+            WHERE decision_id = ?
+            """,
+            (
+                route_candidate_state,
+                _json_dump_value(readiness_blockers),
+                _json_dumps(payload),
                 row["decision_id"],
             ),
         )
