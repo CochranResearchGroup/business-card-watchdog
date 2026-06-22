@@ -222,6 +222,21 @@ def test_mcp_contact_review_state_safe_loop_parity(tmp_path: Path) -> None:
         {"limit": 5, "reviewer": "mcp-safe-loop", "apply": True},
         config=config,
     )
+    field_correction = call_tool(
+        "business_card_watchdog_contact_field_correct",
+        {
+            "contact_id": contact_id,
+            "operator": "mcp-test",
+            "field_corrections": {"display_name": "Augusta Ada Lovelace"},
+            "reason": "verified by operator",
+        },
+        config=config,
+    )
+    review_surface = call_tool(
+        "business_card_watchdog_contact_review_surface",
+        {"contact_id": contact_id},
+        config=config,
+    )
 
     assert proposed["schema"] == "business-card-watchdog.contact-review-recommendation.v1"
     assert proposed["review_state"]["state"] == "proposed"
@@ -233,6 +248,11 @@ def test_mcp_contact_review_state_safe_loop_parity(tmp_path: Path) -> None:
     assert decision["review_state"]["decided_by"] == "mcp-test"
     assert safe_loop["schema"] == "business-card-watchdog.contact-review-safe-loop.v1"
     assert safe_loop["action_count"] == 1
+    assert field_correction["schema"] == "business-card-watchdog.contact-field-correction.v1"
+    assert field_correction["mutation"]["operator"] == "mcp-test"
+    assert review_surface["schema"] == "business-card-watchdog.contact-review-surface.v1"
+    assert review_surface["rows"][0]["display_name"] == "Augusta Ada Lovelace"
+    assert review_surface["rows"][0]["counts"]["mutations"] == 1
     assert safe_loop["actions"][0]["status"] == "executed"
     assert safe_loop["actions"][0]["decision"] == "reject"
     assert safe_loop["writes_attempted"] == 0

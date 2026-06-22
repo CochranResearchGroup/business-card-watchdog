@@ -486,6 +486,47 @@ class BusinessCardService:
             "network_calls_made": 0,
         }
 
+    def contact_review_surface(self, *, contact_id: str | None = None, limit: int = 100) -> dict[str, Any]:
+        store = ContactStore.from_config(self.config)
+        if contact_id:
+            contacts = [store.get_contact(contact_id)]
+        else:
+            contacts = [store.get_contact(str(row["contact_id"])) for row in store.list_contacts(limit=limit)]
+        rows = [_contact_review_surface_row(contact) for contact in contacts]
+        return {
+            "schema": "business-card-watchdog.contact-review-surface.v1",
+            "store": store.status(),
+            "contact_id": contact_id or "",
+            "rows": rows,
+            "count": len(rows),
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+
+    def apply_contact_field_corrections(
+        self,
+        *,
+        contact_id: str,
+        operator: str,
+        field_corrections: dict[str, Any],
+        reason: str = "",
+    ) -> dict[str, Any]:
+        store = ContactStore.from_config(self.config)
+        result = store.apply_field_corrections(
+            contact_id=contact_id,
+            operator=operator,
+            field_corrections=field_corrections,
+            reason=reason,
+        )
+        return {
+            "schema": "business-card-watchdog.contact-field-correction.v1",
+            "store": store.status(),
+            "contact": result["contact"],
+            "mutation": result["mutation"],
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+
     def record_contact_review_recommendation(
         self,
         *,
@@ -15863,6 +15904,119 @@ def _max_nested_int(value: Any, key: str) -> int:
     if isinstance(value, list):
         return max((_max_nested_int(item, key) for item in value), default=0)
     return 0
+
+
+def _contact_review_surface_row(contact: dict[str, Any]) -> dict[str, Any]:
+    review_states = list(contact.get("review_states") or [])
+    routing_decisions = list(contact.get("routing_decisions") or [])
+    assets = list(contact.get("assets") or [])
+    extraction_attempts = list(contact.get("extraction_attempts") or [])
+    enrichment_attempts = list(contact.get("enrichment_attempts") or [])
+    sink_attempts = list(contact.get("sink_attempts") or [])
+    mutations = list(contact.get("mutations") or [])
+    proposed_reviews = [
+        row for row in review_states if isinstance(row, dict) and row.get("state") == "proposed"
+    ]
+    blocked_routes = [
+        row
+        for row in routing_decisions
+        if isinstance(row, dict)
+        and (
+            row.get("state") != "ready_to_route"
+            or row.get("route_candidate_state") in {"missing_config", "blocked_tenant", "duplicate_lookup_blocked"}
+        )
+    ]
+    route_candidates = [
+        {
+            "decision_id": row.get("decision_id"),
+            "state": row.get("state"),
+            "selected_sinks": list(row.get("selected_sinks") or []),
+            "selected_sink_state": row.get("selected_sink_state"),
+            "selected_target_profile": row.get("selected_target_profile"),
+            "selected_target_tenant": row.get("selected_target_tenant"),
+            "route_candidate_state": row.get("route_candidate_state"),
+            "readiness_blockers": list(row.get("readiness_blockers") or []),
+        }
+        for row in routing_decisions
+        if isinstance(row, dict)
+    ]
+    return {
+        "contact_id": contact.get("contact_id"),
+        "state": contact.get("state"),
+        "display_name": contact.get("display_name"),
+        "organization": contact.get("organization"),
+        "email": contact.get("email"),
+        "phone": contact.get("phone"),
+        "source_run_id": contact.get("source_run_id"),
+        "source_job_id": contact.get("source_job_id"),
+        "review_state": "needs_operator_review"
+        if proposed_reviews or blocked_routes
+        else "ready_for_route_review"
+        if routing_decisions
+        else "needs_projection_review",
+        "counts": {
+            "assets": len(assets),
+            "extraction_attempts": len(extraction_attempts),
+            "enrichment_attempts": len(enrichment_attempts),
+            "routing_decisions": len(routing_decisions),
+            "sink_attempts": len(sink_attempts),
+            "review_states": len(review_states),
+            "proposed_review_states": len(proposed_reviews),
+            "mutations": len(mutations),
+        },
+        "asset_refs": [
+            {
+                "asset_id": asset.get("asset_id"),
+                "asset_kind": asset.get("asset_kind"),
+                "media_kind": asset.get("media_kind"),
+                "side_label": asset.get("side_label"),
+                "path_ref": asset.get("path_ref"),
+            }
+            for asset in assets
+            if isinstance(asset, dict)
+        ],
+        "route_candidates": route_candidates,
+        "enrichment_states": [
+            {
+                "attempt_id": row.get("attempt_id"),
+                "provider": row.get("provider"),
+                "state": row.get("state"),
+            }
+            for row in enrichment_attempts
+            if isinstance(row, dict)
+        ],
+        "sink_states": [
+            {
+                "attempt_id": row.get("attempt_id"),
+                "sink": row.get("sink"),
+                "state": row.get("state"),
+            }
+            for row in sink_attempts
+            if isinstance(row, dict)
+        ],
+        "pending_review_states": [
+            {
+                "review_state_id": row.get("review_state_id"),
+                "category": row.get("category"),
+                "recommendation": row.get("recommendation"),
+                "rationale": row.get("rationale"),
+                "confidence": row.get("confidence"),
+            }
+            for row in proposed_reviews
+            if isinstance(row, dict)
+        ],
+        "mutation_audit": [
+            {
+                "mutation_id": row.get("mutation_id"),
+                "action": row.get("action"),
+                "operator": row.get("operator"),
+                "created_at": row.get("created_at"),
+                "payload": row.get("payload"),
+            }
+            for row in mutations
+            if isinstance(row, dict)
+        ],
+    }
 
 
 def _write_synthetic_business_card_image(path: Path) -> Path:

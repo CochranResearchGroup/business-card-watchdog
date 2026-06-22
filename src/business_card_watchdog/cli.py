@@ -129,6 +129,27 @@ def _render_contact_detail_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_contact_review_surface_text(payload: dict[str, object]) -> str:
+    rows = payload.get("rows") or []
+    lines = [
+        "Contact review surface:",
+        f"Count: {payload.get('count', 0)}",
+    ]
+    for row in rows if isinstance(rows, list) else []:
+        if isinstance(row, dict):
+            counts = dict(row.get("counts") or {})
+            lines.append(
+                " - "
+                f"{row.get('contact_id')} "
+                f"{row.get('display_name') or '(no name)'} "
+                f"review={row.get('review_state')} "
+                f"routes={counts.get('routing_decisions', 0)} "
+                f"pending={counts.get('proposed_review_states', 0)} "
+                f"mutations={counts.get('mutations', 0)}"
+            )
+    return "\n".join(lines) + "\n"
+
+
 def _render_watch_dry_run_text(payload: dict[str, object]) -> str:
     assertions = dict(payload.get("assertions") or {})
     commands = dict(payload.get("commands") or {})
@@ -3134,6 +3155,16 @@ def build_parser() -> argparse.ArgumentParser:
     contacts_show = contacts_sub.add_parser("show")
     contacts_show.add_argument("contact_id")
     contacts_show.add_argument("--json", action="store_true")
+    contacts_review_surface = contacts_sub.add_parser("review-surface")
+    contacts_review_surface.add_argument("--contact-id", default=None)
+    contacts_review_surface.add_argument("--limit", type=int, default=100)
+    contacts_review_surface.add_argument("--json", action="store_true")
+    contacts_field_correct = contacts_sub.add_parser("field-correct")
+    contacts_field_correct.add_argument("contact_id")
+    contacts_field_correct.add_argument("--operator", default="operator")
+    contacts_field_correct.add_argument("--field-corrections-json", required=True)
+    contacts_field_correct.add_argument("--reason", default="")
+    contacts_field_correct.add_argument("--json", action="store_true")
     contacts_review_recommend = contacts_sub.add_parser("review-recommend")
     contacts_review_recommend.add_argument("contact_id")
     contacts_review_recommend.add_argument("--source", default="app_intelligence")
@@ -3747,6 +3778,15 @@ def main(argv: list[str] | None = None) -> int:
             payload = service.list_contacts(limit=args.limit)
         elif args.contacts_command == "show":
             payload = service.get_contact(args.contact_id)
+        elif args.contacts_command == "review-surface":
+            payload = service.contact_review_surface(contact_id=args.contact_id, limit=args.limit)
+        elif args.contacts_command == "field-correct":
+            payload = service.apply_contact_field_corrections(
+                contact_id=args.contact_id,
+                operator=args.operator,
+                field_corrections=json.loads(args.field_corrections_json),
+                reason=args.reason,
+            )
         elif args.contacts_command == "review-recommend":
             payload = service.record_contact_review_recommendation(
                 contact_id=args.contact_id,
@@ -3802,7 +3842,10 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(payload, indent=2), end="")
         elif args.contacts_command == "list":
             print(_render_contacts_list_text(payload), end="")
+        elif args.contacts_command == "review-surface":
+            print(_render_contact_review_surface_text(payload), end="")
         elif args.contacts_command in {
+            "field-correct",
             "review-recommend",
             "review-states",
             "review-decide",

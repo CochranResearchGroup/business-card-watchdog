@@ -2688,6 +2688,18 @@ def test_api_contact_review_state_safe_loop_parity(tmp_path: Path) -> None:
         "/contacts/review-safe-loop",
         json={"limit": 5, "reviewer": "api-safe-loop", "apply": True},
     ).json()
+    field_correction = client.post(
+        f"/contacts/{contact_id}/field-corrections",
+        json={
+            "operator": "api-test",
+            "field_corrections": {"display_name": "Augusta Ada Lovelace"},
+            "reason": "verified by operator",
+        },
+    ).json()
+    review_surface = client.get(
+        "/contacts/review-surface",
+        params={"contact_id": contact_id},
+    ).json()
 
     assert proposed["schema"] == "business-card-watchdog.contact-review-recommendation.v1"
     assert proposed["review_state"]["state"] == "proposed"
@@ -2698,6 +2710,11 @@ def test_api_contact_review_state_safe_loop_parity(tmp_path: Path) -> None:
     assert decision["review_state"]["state"] == "rejected"
     assert decision["review_state"]["decided_by"] == "api-test"
     assert safe_loop["schema"] == "business-card-watchdog.contact-review-safe-loop.v1"
+    assert field_correction["schema"] == "business-card-watchdog.contact-field-correction.v1"
+    assert field_correction["mutation"]["operator"] == "api-test"
+    assert review_surface["schema"] == "business-card-watchdog.contact-review-surface.v1"
+    assert review_surface["rows"][0]["display_name"] == "Augusta Ada Lovelace"
+    assert review_surface["rows"][0]["counts"]["mutations"] == 1
     assert safe_loop["action_count"] == 1
     assert safe_loop["actions"][0]["status"] == "executed"
     assert safe_loop["actions"][0]["decision"] == "reject"

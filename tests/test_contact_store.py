@@ -108,7 +108,7 @@ def test_contact_store_initializes_schema(tmp_path: Path) -> None:
     status = store.initialize()
 
     assert status["exists"] is True
-    assert status["schema_version"] == 4
+    assert status["schema_version"] == 5
     assert config.contact_store_path.exists()
 
 
@@ -196,7 +196,7 @@ def test_contact_store_migrates_selected_sink_columns_without_losing_routes(tmp_
     status = store.initialize()
     detail = store.get_contact("contact_legacy")
 
-    assert status["schema_version"] == 4
+    assert status["schema_version"] == 5
     assert detail["routing_decisions"][0]["decision_id"] == "route_legacy"
     assert detail["routing_decisions"][0]["selected_sinks"] == ["google_contacts"]
     assert detail["routing_decisions"][0]["selected_sink_state"] == "dry_run"
@@ -428,6 +428,36 @@ def test_contact_review_recommendations_are_host_decided(tmp_path: Path) -> None
     assert detail["review_states"][0]["state"] == "rejected"
 
 
+def test_contact_field_corrections_are_audited(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    run_id, _job_id = _write_recorded_contact_run(config)
+    service = BusinessCardService(config)
+    service.project_contacts_from_run(run_id)
+    contact_id = service.list_contacts()["contacts"][0]["contact_id"]
+
+    mutation = service.apply_contact_field_corrections(
+        contact_id=contact_id,
+        operator="operator",
+        field_corrections={"display_name": "Augusta Ada Lovelace", "email": "ada@analysis.test"},
+        reason="operator verified OCR correction",
+    )
+    surface = service.contact_review_surface(contact_id=contact_id)
+    detail = service.get_contact(str(contact_id))["contact"]
+
+    assert mutation["schema"] == "business-card-watchdog.contact-field-correction.v1"
+    assert mutation["writes_attempted"] == 0
+    assert mutation["network_calls_made"] == 0
+    assert mutation["contact"]["display_name"] == "Augusta Ada Lovelace"
+    assert mutation["contact"]["email"] == "ada@analysis.test"
+    assert mutation["mutation"]["action"] == "field_correction"
+    assert mutation["mutation"]["operator"] == "operator"
+    assert mutation["mutation"]["payload"]["changed_fields"]["display_name"]["previous"] == "Ada Lovelace"
+    assert mutation["mutation"]["payload"]["changed_fields"]["display_name"]["new"] == "Augusta Ada Lovelace"
+    assert detail["mutations"][0]["mutation_id"] == mutation["mutation"]["mutation_id"]
+    assert surface["rows"][0]["counts"]["mutations"] == 1
+    assert surface["rows"][0]["mutation_audit"][0]["operator"] == "operator"
+
+
 def test_contact_review_safe_loop_only_rejects_explicit_safe_rejections(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, _job_id = _write_recorded_contact_run(config)
@@ -482,7 +512,7 @@ def test_contacts_cli_json_surfaces(tmp_path: Path, capsys) -> None:
 
     assert main(["--config", str(config_path), "contacts", "init", "--json"]) == 0
     init_payload = json.loads(capsys.readouterr().out)
-    assert init_payload["schema_version"] == 4
+    assert init_payload["schema_version"] == 5
 
     assert main(["--config", str(config_path), "contacts", "project-run", run_id, "--json"]) == 0
     projection = json.loads(capsys.readouterr().out)
@@ -495,6 +525,35 @@ def test_contacts_cli_json_surfaces(tmp_path: Path, capsys) -> None:
     assert main(["--config", str(config_path), "contacts", "show", contact_id, "--json"]) == 0
     detail = json.loads(capsys.readouterr().out)
     assert detail["contact"]["display_name"] == "Ada Lovelace"
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "contacts",
+                "field-correct",
+                contact_id,
+                "--operator",
+                "cli-test",
+                "--field-corrections-json",
+                '{"display_name":"Augusta Ada Lovelace"}',
+                "--reason",
+                "verified by operator",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    field_correction = json.loads(capsys.readouterr().out)
+    assert field_correction["schema"] == "business-card-watchdog.contact-field-correction.v1"
+    assert field_correction["mutation"]["operator"] == "cli-test"
+
+    assert main(["--config", str(config_path), "contacts", "review-surface", "--contact-id", contact_id, "--json"]) == 0
+    review_surface = json.loads(capsys.readouterr().out)
+    assert review_surface["schema"] == "business-card-watchdog.contact-review-surface.v1"
+    assert review_surface["rows"][0]["display_name"] == "Augusta Ada Lovelace"
+    assert review_surface["rows"][0]["counts"]["mutations"] == 1
 
     assert (
         main(

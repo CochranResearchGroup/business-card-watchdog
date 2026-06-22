@@ -421,6 +421,12 @@ Validation:
 
 ### Milestone 8 | Contact Review Surface
 
+Status: IN_PROGRESS. Database-backed contact review surface summaries and
+audited normalized field-correction mutations are available through service,
+API, CLI, and MCP via Plan 0082. Remaining work should add route override, crop
+decision, enrichment merge, and sink approval mutations before considering a
+local HTML review surface.
+
 Goal-compatible objective:
 
 Expose a database-backed review surface where contact rows, card crops,

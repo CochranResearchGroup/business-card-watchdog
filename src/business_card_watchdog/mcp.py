@@ -494,6 +494,31 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_contact_review_surface",
+                "description": "Return a database-backed contact review surface with assets, review states, routing, enrichment, sink, and mutation summaries.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "contact_id": {"type": "string"},
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 1000, "default": 100},
+                    },
+                },
+            },
+            {
+                "name": "business_card_watchdog_contact_field_correct",
+                "description": "Apply audited operator contact-field corrections to a projected contact row.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "contact_id": {"type": "string"},
+                        "operator": {"type": "string", "default": "operator"},
+                        "field_corrections": {"type": "object"},
+                        "reason": {"type": "string"},
+                    },
+                    "required": ["contact_id", "field_corrections"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_contact_route_selection_approval_boundary",
                 "description": (
                     "Build a no-live selected-target approval boundary from a projected contact's stored route decision."
@@ -1703,6 +1728,18 @@ def call_tool(
             limit=int(args.get("limit", 10)),
             reviewer=str(args.get("reviewer") or "safe-loop"),
             apply=bool(args.get("apply", False)),
+        )
+    if tool_name == "business_card_watchdog_contact_review_surface":
+        return service.contact_review_surface(
+            contact_id=str(args["contact_id"]) if args.get("contact_id") else None,
+            limit=int(args.get("limit", 100)),
+        )
+    if tool_name == "business_card_watchdog_contact_field_correct":
+        return service.apply_contact_field_corrections(
+            contact_id=str(args["contact_id"]),
+            operator=str(args.get("operator") or "operator"),
+            field_corrections=dict(args.get("field_corrections") or {}),
+            reason=str(args.get("reason") or ""),
         )
     if tool_name == "business_card_watchdog_contact_route_selection_approval_boundary":
         return service.contact_route_selection_approval_boundary(

@@ -94,6 +94,11 @@ def create_app(config_path: Path | None = None):
         reviewer: str = "safe-loop"
         apply: bool = False
 
+    class ContactFieldCorrectionRequest(BaseModel):
+        operator: str = "operator"
+        field_corrections: dict[str, object] = Field(default_factory=dict)
+        reason: str = ""
+
     class ContactRouteSelectionApprovalBoundaryRequest(BaseModel):
         operator: str = "operator"
         sink: str | None = None
@@ -1038,6 +1043,25 @@ def create_app(config_path: Path | None = None):
             limit=request.limit,
             reviewer=request.reviewer,
             apply=request.apply,
+        )
+
+    @app.get("/contacts/review-surface")
+    def get_contact_review_surface(
+        contact_id: str | None = None,
+        limit: int = 100,
+    ) -> dict[str, object]:
+        return service().contact_review_surface(contact_id=contact_id, limit=limit)
+
+    @app.post("/contacts/{contact_id}/field-corrections")
+    def apply_contact_field_corrections(
+        contact_id: str,
+        request: ContactFieldCorrectionRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().apply_contact_field_corrections(
+            contact_id=contact_id,
+            operator=request.operator,
+            field_corrections=dict(request.field_corrections),
+            reason=request.reason,
         )
 
     @app.post("/contacts/{contact_id}/route-selection-approval-boundary")

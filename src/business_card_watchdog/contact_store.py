@@ -12,8 +12,9 @@ from .contact import contact_candidate_to_spec
 from .models import utc_now
 
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 CONTACT_STORE_SCHEMA = "business-card-watchdog.contact-store.v1"
+CONTACT_FIELD_CORRECTION_FIELDS = {"display_name", "organization", "email", "phone"}
 _PROJECTED_ASSET_KINDS = {
     "artifact_dir",
     "preclassification",
@@ -165,6 +166,10 @@ class ContactStore:
                 "SELECT * FROM external_bindings WHERE contact_id = ? ORDER BY created_at, binding_id",
                 (contact_id,),
             ).fetchall()
+            mutations = conn.execute(
+                "SELECT * FROM contact_mutations WHERE contact_id = ? ORDER BY created_at, mutation_id",
+                (contact_id,),
+            ).fetchall()
             review_states = conn.execute(
                 "SELECT * FROM contact_review_states WHERE contact_id = ? ORDER BY created_at, review_state_id",
                 (contact_id,),
@@ -177,8 +182,129 @@ class ContactStore:
         payload["routing_decisions"] = [_row_with_payload(decision) for decision in routing]
         payload["sink_attempts"] = [_row_with_payload(attempt) for attempt in sinks]
         payload["external_bindings"] = [_row_with_payload(binding) for binding in bindings]
+        payload["mutations"] = [_row_with_payload(mutation) for mutation in mutations]
         payload["review_states"] = [_row_with_payload(review_state) for review_state in review_states]
         return payload
+
+    def apply_field_corrections(
+        self,
+        *,
+        contact_id: str,
+        operator: str,
+        field_corrections: dict[str, Any],
+        reason: str = "",
+    ) -> dict[str, Any]:
+        if not operator.strip():
+            raise ValueError("contact field correction requires an operator")
+        unsupported = sorted(set(field_corrections) - CONTACT_FIELD_CORRECTION_FIELDS)
+        if unsupported:
+            raise ValueError(f"unsupported contact field corrections: {', '.join(unsupported)}")
+        self.initialize()
+        current = self.get_contact(contact_id)
+        previous_values = {field: str(current.get(field) or "") for field in CONTACT_FIELD_CORRECTION_FIELDS}
+        normalized = {
+            field: str(value or "").strip()
+            for field, value in field_corrections.items()
+            if field in CONTACT_FIELD_CORRECTION_FIELDS
+        }
+        changed = {
+            field: {"previous": previous_values[field], "new": value}
+            for field, value in normalized.items()
+            if value != previous_values[field]
+        }
+        now = utc_now()
+        mutation_id = _stable_id(
+            "mutation",
+            contact_id,
+            operator,
+            "field_correction",
+            _json_dump_value(changed),
+            now,
+        )
+        contact_payload = dict(current.get("payload") or {})
+        contact_spec = dict(contact_payload.get("contact_spec") or {})
+        for field, values in changed.items():
+            if field == "display_name":
+                contact_spec["full_name"] = values["new"]
+            else:
+                contact_spec[field] = values["new"]
+        if changed:
+            contact_payload["contact_spec"] = contact_spec
+            contact_payload.setdefault("review_mutations", []).append(
+                {
+                    "mutation_id": mutation_id,
+                    "action": "field_correction",
+                    "operator": operator,
+                    "reason": reason,
+                    "changed_fields": sorted(changed),
+                    "created_at": now,
+                }
+            )
+        mutation_payload = {
+            "action": "field_correction",
+            "operator": operator,
+            "reason": reason,
+            "previous_values": previous_values,
+            "new_values": {field: item["new"] for field, item in changed.items()},
+            "changed_fields": changed,
+        }
+        with self._connect() as conn:
+            self._migrate(conn)
+            conn.execute(
+                """
+                INSERT INTO contact_mutations (
+                    mutation_id, contact_id, action, operator, previous_json,
+                    new_json, payload_json, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    mutation_id,
+                    contact_id,
+                    "field_correction",
+                    operator,
+                    _json_dump_value({field: item["previous"] for field, item in changed.items()}),
+                    _json_dump_value({field: item["new"] for field, item in changed.items()}),
+                    _json_dumps(mutation_payload),
+                    now,
+                    now,
+                ),
+            )
+            if changed:
+                conn.execute(
+                    """
+                    UPDATE contacts
+                    SET display_name = ?,
+                        organization = ?,
+                        email = ?,
+                        phone = ?,
+                        payload_json = ?,
+                        updated_at = ?
+                    WHERE contact_id = ?
+                    """,
+                    (
+                        changed.get("display_name", {}).get("new", previous_values["display_name"]),
+                        changed.get("organization", {}).get("new", previous_values["organization"]),
+                        changed.get("email", {}).get("new", previous_values["email"]),
+                        changed.get("phone", {}).get("new", previous_values["phone"]),
+                        _json_dumps(contact_payload),
+                        now,
+                        contact_id,
+                    ),
+                )
+        mutation = self.get_mutation(mutation_id)
+        return {"mutation": mutation, "contact": self.get_contact(contact_id)}
+
+    def get_mutation(self, mutation_id: str) -> dict[str, Any]:
+        self.initialize()
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM contact_mutations WHERE mutation_id = ?",
+                (mutation_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError(f"contact mutation not found: {mutation_id}")
+        return _row_with_payload(row)
 
     def record_review_recommendation(
         self,
@@ -938,6 +1064,19 @@ class ContactStore:
                 FOREIGN KEY(contact_id) REFERENCES contacts(contact_id) ON DELETE CASCADE
             );
 
+            CREATE TABLE IF NOT EXISTS contact_mutations (
+                mutation_id TEXT PRIMARY KEY,
+                contact_id TEXT NOT NULL,
+                action TEXT NOT NULL,
+                operator TEXT NOT NULL,
+                previous_json TEXT NOT NULL,
+                new_json TEXT NOT NULL,
+                payload_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY(contact_id) REFERENCES contacts(contact_id) ON DELETE CASCADE
+            );
+
             CREATE TABLE IF NOT EXISTS contact_review_states (
                 review_state_id TEXT PRIMARY KEY,
                 contact_id TEXT NOT NULL,
@@ -960,6 +1099,7 @@ class ContactStore:
             CREATE INDEX IF NOT EXISTS idx_assets_contact ON card_assets(contact_id);
             CREATE INDEX IF NOT EXISTS idx_extraction_contact ON extraction_attempts(contact_id);
             CREATE INDEX IF NOT EXISTS idx_routing_contact ON routing_decisions(contact_id);
+            CREATE INDEX IF NOT EXISTS idx_contact_mutations_contact ON contact_mutations(contact_id);
             CREATE INDEX IF NOT EXISTS idx_review_states_contact ON contact_review_states(contact_id);
             CREATE INDEX IF NOT EXISTS idx_review_states_state ON contact_review_states(state);
             """
