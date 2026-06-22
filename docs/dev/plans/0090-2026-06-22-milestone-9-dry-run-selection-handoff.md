@@ -67,9 +67,9 @@ candidate creation, a human operator must:
 5. Validate the response:
    `bcw watch-dry-run-validate-response --response <operator-response> --json`.
 6. Build the command-copy packet with acknowledgement:
-   `bcw watch-dry-run-command-copy-packet --response <operator-response> --acknowledgement <operator-acknowledgement> --json`.
+   `bcw watch-dry-run-command-copy-packet --response <operator-response> --acknowledgement <operator-acknowledgement> --limit 1 --json`.
 7. Only after the packet reports ready for operator copy, run the copied
-   `watch --once --dry-run` command.
+   `watch --once --dry-run --input-ref <input_ref> --limit <n>` command.
 
 ## Outcome
 

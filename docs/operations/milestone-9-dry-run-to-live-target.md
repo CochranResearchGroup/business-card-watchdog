@@ -82,12 +82,20 @@ OPERATOR_ACK="I understand this will dry-run the configured private watch backlo
   --json
 ```
 
-Only continue when the packet reports ready for operator copy and no blocked
-reasons.
+The packet defaults to a bounded one-source command and may be given a larger
+positive `--limit` only when the operator explicitly wants that scope. Only
+continue when the packet reports ready for operator copy and no blocked reasons.
 
 ## 5. Run The Copied Dry-Run Command
 
-Run only the exact command emitted in `command_copy_text`.
+Run only the exact command emitted in `command_copy_text`, for example:
+
+```bash
+.venv/bin/bcw watch --once --dry-run --input-ref <input_ref> --limit <n>
+```
+
+The limit is a source/document limit. A multi-page PDF can still create multiple
+card-side jobs from one processed source.
 
 The dry run may process private watched-folder files, but it must remain dry-run
 only. Do not run public-web search, paid enrichment, live lookup, live write, or

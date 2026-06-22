@@ -486,17 +486,15 @@ Validation:
 
 ### Milestone 9 | Operator-Selected Live Pilot
 
-Status: READY_FOR_OPERATOR_DRY_RUN_SELECTION. Plan 0089 audited the current
-no-live runtime state: runtime readiness is green and the contact store is
-initialized, but there are no contact rows and no live-target candidates. Plan
-0090 recorded the no-live dry-run selection handoff: the watched-folder backlog
-is settled and ready for an operator response, but generic continuation must
-stop before processing private watched-folder backlog or creating
-`selected_live_target.json`. Plan 0091 added the operator checklist from
-synthetic watcher proof through private dry-run approval, contact projection,
-review, route readiness, and live-target candidate inspection. The next step
-requires an explicit operator-selected watched input for dry-run processing,
-then contact projection and review before live target selection can proceed.
+Status: DRY_RUN_REVIEW_REQUIRED. Plan 0089 audited the no-live runtime state:
+runtime readiness was green and the contact store was initialized, but no
+contact rows or live-target candidates existed. Plans 0090 and 0091 added the
+no-live dry-run selection handoff and operator checklist. Plan 0092 added
+scoped `--input-ref` and positive `--limit` controls, generated a bounded
+scanner command-copy packet, and completed one dry-run scanner source/document
+with no live calls. The latest bounded run produced projected contact rows and
+review candidates, but all live-target candidates remain blocked until operator
+review, route readiness, and lookup prerequisite evidence exist.
 
 Goal-compatible objective:
 

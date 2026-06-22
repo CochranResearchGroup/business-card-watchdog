@@ -5,7 +5,7 @@ import os
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 from .config import AppConfig, ensure_runtime_dirs, resolve_input_path
 from .document_intake import is_supported_document
@@ -184,7 +184,15 @@ class PollingWatcher:
         if self.settle_seconds is None:
             self.settle_seconds = self.config.watch.settle_seconds
 
-    def scan_once(self, *, dry_run: bool = True) -> list[Path]:
+    def scan_once(
+        self,
+        *,
+        dry_run: bool = True,
+        input_refs: Sequence[str] | None = None,
+        limit: int | None = None,
+    ) -> list[Path]:
+        if limit is not None and limit <= 0:
+            raise ValueError("watch scan limit must be greater than zero")
         processed: list[Path] = []
         seen = self.state.seen_keys()
         pending = self.state.pending_snapshots()
@@ -192,8 +200,9 @@ class PollingWatcher:
         last_error: str | None = None
         backlog_count = 0
         unsettled_count = 0
+        selected_inputs = _select_watch_inputs(self.config.watch_inputs, input_refs=input_refs)
 
-        for raw_input in self.config.watch_inputs:
+        for raw_input in selected_inputs:
             try:
                 source = resolve_input_path(raw_input, self.config)
                 images = discover_processable_sources(source)
@@ -218,10 +227,14 @@ class PollingWatcher:
                 self.state.mark_seen(snapshot, run_dir=run_dir)
                 seen.add(key)
                 processed.append(image)
+                if limit is not None and len(processed) >= limit:
+                    break
+            if limit is not None and len(processed) >= limit:
+                break
 
         self.state.write_pending(next_pending)
         self.state.write_status(
-            inputs=self.config.watch_inputs,
+            inputs=selected_inputs,
             seen_count=len(seen),
             backlog_count=backlog_count,
             unsettled_count=unsettled_count,
@@ -277,9 +290,16 @@ class PollingWatcher:
     def reset(self) -> None:
         self.state.reset()
 
-    def run(self, *, dry_run: bool = True, once: bool = False) -> None:
+    def run(
+        self,
+        *,
+        dry_run: bool = True,
+        once: bool = False,
+        input_refs: Sequence[str] | None = None,
+        limit: int | None = None,
+    ) -> None:
         while True:
-            self.scan_once(dry_run=dry_run)
+            self.scan_once(dry_run=dry_run, input_refs=input_refs, limit=limit)
             if once:
                 return
             time.sleep(self.interval_seconds)
@@ -298,6 +318,18 @@ def _stable_path(path: Path) -> Path:
     if path.exists():
         return path.resolve()
     return path
+
+
+def _select_watch_inputs(inputs: Sequence[str], *, input_refs: Sequence[str] | None = None) -> list[str]:
+    selected_refs = [str(ref).strip() for ref in list(input_refs or []) if str(ref).strip()]
+    if not selected_refs:
+        return list(inputs)
+    rows = {f"input_{index}": raw_input for index, raw_input in enumerate(inputs)}
+    missing = [ref for ref in selected_refs if ref not in rows]
+    if missing:
+        available = ", ".join(sorted(rows)) or "none"
+        raise ValueError(f"watch input_ref not available: {', '.join(missing)}; available: {available}")
+    return [rows[ref] for ref in selected_refs]
 
 
 def _discover_status_images(

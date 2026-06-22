@@ -37,6 +37,14 @@ def test_cli_has_mcp_stdio_command() -> None:
     assert args.command == "mcp-stdio"
 
 
+def test_cli_watch_accepts_scoped_input_refs() -> None:
+    args = build_parser().parse_args(["watch", "--once", "--dry-run", "--input-ref", "input_1", "--limit", "1"])
+
+    assert args.command == "watch"
+    assert args.input_ref == ["input_1"]
+    assert args.limit == 1
+
+
 def test_cli_runtime_readiness_reports_local_runtime_state(tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.toml"
     data_dir = tmp_path / "data"

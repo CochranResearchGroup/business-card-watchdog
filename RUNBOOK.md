@@ -7403,6 +7403,55 @@ Safety:
   search, call paid enrichment, run live lookup/write/readback, or commit runtime
   manifests/private filenames.
 
+## Turn 304 | 2026-06-22
+
+Executed Plan 0092 as the Plan 0060 Milestone 9 scoped scanner dry-run unblock
+slice.
+
+Implemented:
+
+- Added scoped watcher execution with repeatable `--input-ref`.
+- Added a positive source/document `--limit` to `bcw watch` and to the
+  watch dry-run command-copy packet.
+- Updated API command-copy requests to accept the same limit.
+- Updated README, Plan 0060, Plan 0090, ROADMAP, and the Milestone 9 operator
+  checklist so future private-source dry runs use scoped copied commands.
+- Added closed Plan 0092 with redacted runtime evidence.
+
+Runtime evidence:
+
+- Operator response validation reached `state = "ready_for_command_copy"` for
+  the scanner input ref.
+- Command-copy packet reached `state = "ready_for_operator_copy"` with
+  `selected_input_ref = "input_1"` and `selected_limit = 1`.
+- The exact bounded copied command completed successfully.
+- The bounded run id was `2026-06-22T12-27-33+00-00`.
+- Dry-run closeout returned `state = "ready_for_review_and_routing"`.
+- Dry-run review handoff returned `state = "ready_for_operator_review"` with
+  24 jobs.
+- Contact projection produced 3 projected contacts and 48 projected assets.
+- Live-target candidate inspection returned 24 candidates, all blocked.
+- Route readiness returned `state = "operator_review_required"` with 3 jobs
+  requiring explicit operator review and 0 route-ready jobs.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_watcher.py::test_watcher_scan_once_can_scope_to_input_ref tests/test_watcher.py::test_watcher_scan_once_can_limit_processed_sources tests/test_service.py::test_service_watch_dry_run_selection_handoff_validates_response_and_command_copy tests/test_service.py::test_service_watch_dry_run_command_copy_blocks_invalid_limit tests/test_cli_surfaces.py::test_cli_watch_accepts_scoped_input_refs -q`
+  passed with 5 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/watcher.py src/business_card_watchdog/cli.py src/business_card_watchdog/service.py src/business_card_watchdog/api.py tests/test_watcher.py tests/test_service.py tests/test_cli_surfaces.py`
+  passed.
+- `git diff --check` passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+
+Safety:
+
+- An initial scanner-only dry-run without a limit was interrupted after proving
+  the scope was too broad. The completed evidence for this slice is the later
+  bounded scanner command-copy run.
+- This slice did not create `selected_live_target.json`, run public-web search,
+  call paid enrichment, run live lookup/write/readback, or commit runtime
+  manifests/private filenames.
+
 ## Turn 291 | 2026-06-22
 
 Executed Plan 0080 as the next Plan 0060 Milestone 7 contact-store persistence

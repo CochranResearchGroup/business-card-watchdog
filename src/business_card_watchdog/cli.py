@@ -3444,6 +3444,8 @@ def build_parser() -> argparse.ArgumentParser:
     watch.add_argument("--dry-run", action=argparse.BooleanOptionalAction, default=True)
     watch.add_argument("--interval-seconds", type=float, default=10.0)
     watch.add_argument("--settle-seconds", type=float, default=None)
+    watch.add_argument("--input-ref", action="append", default=[])
+    watch.add_argument("--limit", type=int, default=None)
 
     watch_status = sub.add_parser("watch-status")
     watch_status.add_argument("--json", action="store_true")
@@ -3468,6 +3470,7 @@ def build_parser() -> argparse.ArgumentParser:
     watch_dry_run_command_copy_packet = sub.add_parser("watch-dry-run-command-copy-packet")
     watch_dry_run_command_copy_packet.add_argument("--response", required=True)
     watch_dry_run_command_copy_packet.add_argument("--acknowledgement", default="")
+    watch_dry_run_command_copy_packet.add_argument("--limit", type=int, default=1)
     watch_dry_run_command_copy_packet.add_argument("--json", action="store_true")
 
     watch_dry_run_readiness = sub.add_parser("watch-dry-run-readiness")
@@ -4453,6 +4456,8 @@ def main(argv: list[str] | None = None) -> int:
         ).run(
             dry_run=args.dry_run,
             once=args.once,
+            input_refs=list(args.input_ref or []),
+            limit=args.limit,
         )
         return 0
 
@@ -4497,6 +4502,7 @@ def main(argv: list[str] | None = None) -> int:
         payload = service.watch_dry_run_command_copy_packet(
             response=args.response,
             acknowledgement=args.acknowledgement,
+            limit=args.limit,
         )
         output = json.dumps(payload, indent=2) if args.json else _render_watch_dry_run_command_copy_packet_text(payload)
         print(output, end="")

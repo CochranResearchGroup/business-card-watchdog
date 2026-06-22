@@ -13289,7 +13289,7 @@ class BusinessCardService:
                 "watch_backlog_preflight": "watch-backlog-preflight --json",
                 "watch_dry_run_selection_handoff": "watch-dry-run-selection-handoff --json",
                 "watch_dry_run": "watch-dry-run --json",
-                "watch_once_dry_run": "watch --once --dry-run",
+                "watch_once_dry_run": "watch --once --dry-run --input-ref <input_ref> --limit <n>",
                 "runtime_readiness": "runtime-readiness --json",
                 "service_recovery": "service recovery --json",
             },
@@ -13300,7 +13300,7 @@ class BusinessCardService:
             "explicit_stop_conditions": [
                 "This preflight does not process watched files.",
                 "Do not OCR/process private SyncThing images from this preflight.",
-                "Run watch-dry-run --json or watch --once --dry-run only after explicit operator selection.",
+                "Run watch-dry-run --json or the scoped copied watch command only after explicit operator selection.",
                 "Do not run public-web search, paid enrichment, or live sink operations from watch backlog preflight.",
             ],
         }
@@ -13353,7 +13353,7 @@ class BusinessCardService:
                         "validate_operator_response_prefilled": _watch_dry_run_response_validation_command(template),
                         "command_copy_packet": (
                             "watch-dry-run-command-copy-packet --response <operator-response> "
-                            "--acknowledgement <operator-acknowledgement> --json"
+                            "--acknowledgement <operator-acknowledgement> --limit 1 --json"
                         ),
                     },
                 }
@@ -13385,7 +13385,7 @@ class BusinessCardService:
                 "validate_operator_response": "watch-dry-run-validate-response --response <operator-response> --json",
                 "command_copy_packet": (
                     "watch-dry-run-command-copy-packet --response <operator-response> "
-                    "--acknowledgement <operator-acknowledgement> --json"
+                    "--acknowledgement <operator-acknowledgement> --limit 1 --json"
                 ),
             },
             "handoff_path": str(handoff_path) if write else None,
@@ -13399,7 +13399,7 @@ class BusinessCardService:
             "network_calls_made": 0,
             "explicit_stop_conditions": [
                 "This handoff does not process watched files.",
-                "Do not run watch --once --dry-run until a human validates the operator response and copies the command.",
+                "Do not run a private-source watch dry run until a human validates the operator response and copies the scoped command.",
                 "Do not OCR/process private SyncThing images from this handoff.",
                 "Do not run public-web search, paid enrichment, or live sink operations from watch dry-run selection handoff.",
             ],
@@ -13461,7 +13461,7 @@ class BusinessCardService:
                 "handoff": "watch-dry-run-selection-handoff --no-write --json",
                 "command_copy_packet": (
                     "watch-dry-run-command-copy-packet --response <operator-response> "
-                    "--acknowledgement <operator-acknowledgement> --json"
+                    "--acknowledgement <operator-acknowledgement> --limit 1 --json"
                 ),
             },
             "creates_runtime_artifact": False,
@@ -13476,7 +13476,7 @@ class BusinessCardService:
             "explicit_stop_conditions": [
                 "Validation does not process watched files.",
                 "Validation does not store the raw operator response or safety confirmation.",
-                "Do not run watch --once --dry-run until command-copy packet is ready.",
+                "Do not run a private-source watch dry run until the command-copy packet is ready.",
             ],
         }
 
@@ -13485,18 +13485,33 @@ class BusinessCardService:
         *,
         response: str,
         acknowledgement: str = "",
+        limit: int = 1,
     ) -> dict[str, Any]:
         validation = self.validate_watch_dry_run_operator_response(response=response)
         required_acknowledgement = "I understand this will dry-run the configured private watch backlog"
         acknowledgement_ok = acknowledgement.strip() == required_acknowledgement
         ready = validation.get("state") == "ready_for_command_copy" and acknowledgement_ok
-        command_copy_text = "watch --once --dry-run" if ready else None
+        matching_entry = validation.get("matching_entry") if isinstance(validation.get("matching_entry"), dict) else {}
+        input_ref = str(matching_entry.get("input_ref") or "")
+        limit_ok = limit > 0
+        command_copy_text = (
+            f"watch --once --dry-run --input-ref {shlex.quote(input_ref)} --limit {limit}"
+            if ready and input_ref and limit_ok
+            else None
+        )
         blocked_reasons: list[str] = []
         if validation.get("state") != "ready_for_command_copy":
             blocked_reasons.extend(str(item) for item in list(validation.get("missing_fields") or []))
             blocked_reasons.extend(str(item) for item in list(validation.get("mismatches") or []))
         if not acknowledgement_ok:
             blocked_reasons.append("acknowledgement does not match required text")
+        if not limit_ok:
+            blocked_reasons.append("limit must be greater than zero")
+        if ready and not input_ref:
+            blocked_reasons.append("validated response did not include an input_ref")
+            ready = False
+        if ready and not limit_ok:
+            ready = False
         return {
             "schema": "business-card-watchdog.watch-dry-run-command-copy-packet.v1",
             "generated_at": utc_now(),
@@ -13505,6 +13520,8 @@ class BusinessCardService:
             "acknowledgement_required": True,
             "required_acknowledgement": required_acknowledgement,
             "acknowledgement_ok": acknowledgement_ok,
+            "selected_input_ref": input_ref or None,
+            "selected_limit": limit,
             "command_copy_text": command_copy_text,
             "executable_command": command_copy_text,
             "blocked_reasons": blocked_reasons,
@@ -13607,7 +13624,7 @@ class BusinessCardService:
                     "evidence": {
                         "command": (
                             "watch-dry-run-command-copy-packet --response <operator-response> "
-                            "--acknowledgement <operator-acknowledgement> --json"
+                            "--acknowledgement <operator-acknowledgement> --limit 1 --json"
                         ),
                         "required_acknowledgement": "I understand this will dry-run the configured private watch backlog",
                     },
@@ -13637,14 +13654,14 @@ class BusinessCardService:
                     "step": "build_command_copy_packet",
                     "command": (
                         "watch-dry-run-command-copy-packet --response <operator-response> "
-                        "--acknowledgement <operator-acknowledgement> --json"
+                        "--acknowledgement <operator-acknowledgement> --limit 1 --json"
                     ),
                     "requires_explicit_operator_action": True,
                     "safe_to_auto_continue": False,
                 },
                 {
                     "step": "run_private_watch_dry_run",
-                    "command": "watch --once --dry-run",
+                    "command": "watch --once --dry-run --input-ref <input_ref> --limit <n>",
                     "requires_explicit_operator_action": True,
                     "safe_to_auto_continue": False,
                     "blocked_until": "command_copy_packet_state_ready_for_operator_copy",
@@ -13668,14 +13685,14 @@ class BusinessCardService:
                 "watch_dry_run_validate_response": "watch-dry-run-validate-response --response <operator-response> --json",
                 "watch_dry_run_command_copy_packet": (
                     "watch-dry-run-command-copy-packet --response <operator-response> "
-                    "--acknowledgement <operator-acknowledgement> --json"
+                    "--acknowledgement <operator-acknowledgement> --limit 1 --json"
                 ),
-                "watch_once_dry_run": "watch --once --dry-run",
+                "watch_once_dry_run": "watch --once --dry-run --input-ref <input_ref> --limit <n>",
             },
             "explicit_stop_conditions": [
                 "This readiness packet does not process watched files.",
                 "This readiness packet does not return a copyable private-source dry-run command.",
-                "Only run watch --once --dry-run after response validation and command-copy acknowledgement.",
+                "Only run the scoped copied watch command after response validation and command-copy acknowledgement.",
                 "Do not run public-web search, paid enrichment, or live sink operations from this readiness packet.",
             ],
         }
@@ -15911,8 +15928,8 @@ def _runtime_safe_next_actions(
         actions.append(
             {
                 "action": "run_fixture_watch_dry_run",
-                "command": "watch --once --dry-run",
-                "reason": "runtime prerequisites are sufficient for the next fixture-backed Plan 0008 slice",
+                "command": "drills watch-dry-run-execution --json",
+                "reason": "runtime prerequisites are sufficient for the fixture-backed watch dry-run proof",
                 "safe_to_auto_continue": True,
                 "requires_explicit_operator_action": False,
             }
@@ -15970,8 +15987,8 @@ def _watch_backlog_preflight_actions(
             },
             {
                 "action": "operator_explicit_watch_dry_run",
-                "command": "watch --once --dry-run",
-                "reason": "backlog is present and settled; run only after operator response validation and command-copy acknowledgement",
+                "command": "watch --once --dry-run --input-ref <input_ref> --limit <n>",
+                "reason": "backlog is present and settled; run only the scoped copied command after operator response validation and command-copy acknowledgement",
                 "safe_to_auto_continue": False,
                 "requires_explicit_operator_action": True,
             },

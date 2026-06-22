@@ -137,8 +137,9 @@ recommended next action, and stop conditions. If backlog is present, use
 `watch-dry-run-selection-handoff --json`, validate the returned operator
 response template with `watch-dry-run-validate-response`, and request
 `watch-dry-run-command-copy-packet` with the required acknowledgement. The packet
-returns `watch --once --dry-run` as copyable text only after validation; it does
-not execute the private-source dry run.
+returns a scoped command such as
+`watch --once --dry-run --input-ref <input_ref> --limit <n>` as copyable text
+only after validation; it does not execute the private-source dry run.
 
 `drills watch-dry-run-selection` creates a synthetic watched source and rehearses
 the preflight, handoff, response validation, and command-copy packet without
@@ -154,8 +155,8 @@ live sink/network surfaces.
 
 `watch-dry-run-readiness` inspects the configured watch backlog without
 processing files and emits the operator checklist required before any
-private-source `watch --once --dry-run`. It keeps paths and filenames redacted,
-requires fixture execution review plus response validation, and does not return a
+private-source watch dry run. It keeps paths and filenames redacted, requires
+fixture execution review plus response validation, and does not return a
 copyable dry-run command.
 
 For the Plan 0060 Milestone 9 path from the current empty contact store to live
@@ -275,7 +276,7 @@ replacement refresh. It uses fixture data only and does not call live sinks.
 `drills watch-dry-run-selection` exports sample output for the configured-watch
 dry-run approval workflow using only a synthetic watch source. It proves the
 command-copy packet can be reached without touching private SyncThing inputs or
-executing `watch --once --dry-run`.
+executing a private-source watch dry-run command.
 
 `drills watch-dry-run-execution` exports sample output for a synthetic watched
 dry-run execution. It does execute fixture OCR/spec/review/normalization/routing
@@ -284,8 +285,10 @@ inputs and does not call live sinks.
 
 `watch-dry-run-readiness` is the no-processing configured-source checkpoint
 between fixture execution review and any operator-selected private dry run. It
-reports only redacted aggregate backlog state and keeps `watch --once --dry-run`
-blocked behind the existing response-validation and command-copy packet.
+reports only redacted aggregate backlog state and keeps private-source watch
+execution blocked behind the existing response-validation and command-copy
+packet. When unblocked, command-copy text is scoped to one selected input ref
+and a positive source/document limit.
 
 `runs dry-run-closeout` is the post-dry-run checkpoint. It reads the completed
 run ledger, records an optional closeout artifact, and keeps review/routing or

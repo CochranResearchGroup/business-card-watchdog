@@ -403,6 +403,7 @@ def create_app(config_path: Path | None = None):
     class WatchDryRunOperatorResponseRequest(BaseModel):
         response: str
         acknowledgement: str = ""
+        limit: int = 1
 
     app = FastAPI(title="Business Card Watchdog")
 
@@ -1552,6 +1553,7 @@ def create_app(config_path: Path | None = None):
         return service().watch_dry_run_command_copy_packet(
             response=request.response,
             acknowledgement=request.acknowledgement,
+            limit=request.limit,
         )
 
     @app.post("/watch/dry-run-readiness")

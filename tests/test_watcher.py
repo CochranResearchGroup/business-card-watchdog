@@ -100,6 +100,48 @@ def test_watcher_processes_pdf_document_sources(tmp_path: Path) -> None:
     assert PollingWatcher(config).status().backlog_count == 0
 
 
+def test_watcher_scan_once_can_scope_to_input_ref(tmp_path: Path) -> None:
+    phone = tmp_path / "phone"
+    scanner = tmp_path / "scanner"
+    write_synthetic_image(phone / "phone-card.png")
+    write_synthetic_image(scanner / "scanner-card.png")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        cache_dir=tmp_path / "cache",
+        watch=WatchConfig(inputs=[str(phone), str(scanner)], settle_seconds=0.0),
+    )
+    watcher = PollingWatcher(config)
+    processed: list[str] = []
+    fake_process(watcher, processed, tmp_path)
+
+    assert [path.name for path in watcher.scan_once(dry_run=True, input_refs=["input_1"])] == [
+        "scanner-card.png"
+    ]
+    assert processed == ["scanner-card.png"]
+    status = watcher.state.read_status()
+    assert status.inputs == [str(scanner)]
+
+    with pytest.raises(ValueError, match="watch input_ref not available"):
+        watcher.scan_once(dry_run=True, input_refs=["input_9"])
+
+
+def test_watcher_scan_once_can_limit_processed_sources(tmp_path: Path) -> None:
+    source = tmp_path / "scanner"
+    write_synthetic_image(source / "scanner-card-1.png")
+    write_synthetic_image(source / "scanner-card-2.png")
+    config = make_config(tmp_path, source, settle_seconds=0.0)
+    watcher = PollingWatcher(config)
+    processed: list[str] = []
+    fake_process(watcher, processed, tmp_path)
+
+    assert len(watcher.scan_once(dry_run=True, limit=1)) == 1
+    assert len(processed) == 1
+
+    with pytest.raises(ValueError, match="watch scan limit must be greater than zero"):
+        watcher.scan_once(dry_run=True, limit=0)
+
+
 def test_watch_state_reset_allows_reprocessing(tmp_path: Path) -> None:
     source = tmp_path / "cards"
     write_synthetic_image(source / "card.png")

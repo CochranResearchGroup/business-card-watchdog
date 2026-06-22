@@ -387,7 +387,9 @@ def test_service_watch_dry_run_selection_handoff_validates_response_and_command_
     assert "private-card-photo.png" not in serialized_validation
     assert packet["schema"] == "business-card-watchdog.watch-dry-run-command-copy-packet.v1"
     assert packet["state"] == "ready_for_operator_copy"
-    assert packet["command_copy_text"] == "watch --once --dry-run"
+    assert packet["selected_input_ref"] == "input_0"
+    assert packet["selected_limit"] == 1
+    assert packet["command_copy_text"] == "watch --once --dry-run --input-ref input_0 --limit 1"
     assert packet["processes_watched_files"] is False
     assert packet["copying_command_would_process_watched_files"] is True
     assert packet["writes_attempted"] == 0
@@ -412,6 +414,30 @@ def test_service_watch_dry_run_command_copy_blocks_without_acknowledgement(tmp_p
     assert packet["state"] == "blocked"
     assert packet["command_copy_text"] is None
     assert "acknowledgement does not match required text" in packet["blocked_reasons"]
+
+
+def test_service_watch_dry_run_command_copy_blocks_invalid_limit(tmp_path: Path) -> None:
+    source = tmp_path / "Private Phone Camera"
+    write_synthetic_image(source / "private-card-photo.png")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        watch=WatchConfig(inputs=[str(source)], settle_seconds=0.0),
+    )
+    response = (
+        "input_ref=input_0 operator=tester mode=dry_run "
+        "safety_confirmation='private dry run approved for this configured source'"
+    )
+
+    packet = BusinessCardService(config).watch_dry_run_command_copy_packet(
+        response=response,
+        acknowledgement="I understand this will dry-run the configured private watch backlog",
+        limit=0,
+    )
+
+    assert packet["state"] == "blocked"
+    assert packet["command_copy_text"] is None
+    assert "limit must be greater than zero" in packet["blocked_reasons"]
 
 
 def test_service_watch_dry_run_readiness_redacts_private_source_and_blocks_command(tmp_path: Path) -> None:
