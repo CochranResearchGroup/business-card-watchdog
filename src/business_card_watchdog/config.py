@@ -73,6 +73,12 @@ class EnrichmentConfig:
     max_paid_provider_results_per_contact: int = 5
     max_paid_provider_results_per_run: int = 50
     apollo: EnrichmentProviderConfig = field(default_factory=EnrichmentProviderConfig)
+    people_data_labs: EnrichmentProviderConfig = field(
+        default_factory=lambda: EnrichmentProviderConfig(
+            api_key_env="PDL_API_KEY",
+            base_url="https://api.peopledatalabs.com/v5/person/enrich",
+        )
+    )
 
 
 @dataclass(frozen=True)
@@ -131,6 +137,7 @@ def load_config(path: Path | None = None) -> AppConfig:
     enrichment_providers = enrichment.get("providers", {})
     public_web_provider = enrichment_providers.get("public_web", {})
     apollo_provider = enrichment_providers.get("apollo", {})
+    people_data_labs_provider = enrichment_providers.get("people_data_labs", {})
     routing = raw.get("routing", {})
 
     return AppConfig(
@@ -167,6 +174,16 @@ def load_config(path: Path | None = None) -> AppConfig:
                 enabled=bool(apollo_provider.get("enabled", False)),
                 api_key_env=str(apollo_provider.get("api_key_env", "APOLLO_API_KEY")),
                 base_url=str(apollo_provider.get("base_url", "https://api.apollo.io")),
+            ),
+            people_data_labs=EnrichmentProviderConfig(
+                enabled=bool(people_data_labs_provider.get("enabled", False)),
+                api_key_env=str(people_data_labs_provider.get("api_key_env", "PDL_API_KEY")),
+                base_url=str(
+                    people_data_labs_provider.get(
+                        "base_url",
+                        "https://api.peopledatalabs.com/v5/person/enrich",
+                    )
+                ),
             ),
         ),
         sink=SinkConfig(
@@ -226,6 +243,11 @@ max_queries_per_contact = 8
 enabled = false
 api_key_env = "APOLLO_API_KEY"
 base_url = "https://api.apollo.io"
+
+[enrichment.providers.people_data_labs]
+enabled = false
+api_key_env = "PDL_API_KEY"
+base_url = "https://api.peopledatalabs.com/v5/person/enrich"
 
 [sink]
 dry_run = true

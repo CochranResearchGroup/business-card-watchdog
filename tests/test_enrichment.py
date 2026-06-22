@@ -289,6 +289,91 @@ def test_paid_api_provider_request_is_zero_network_and_secret_free(tmp_path: Pat
     assert "secret" not in str(request)
 
 
+def test_people_data_labs_provider_contract_is_zero_call_and_secret_free(tmp_path: Path) -> None:
+    keys_path = tmp_path / "API-keys.env"
+    keys_path.write_text("PDL_API_KEY=fixture-value-redacted\n", encoding="utf-8")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        enrichment=EnrichmentConfig(
+            enabled=True,
+            allow_paid_api=True,
+            api_keys_env=keys_path,
+            people_data_labs=EnrichmentProviderConfig(
+                enabled=True,
+                api_key_env="PDL_API_KEY",
+                base_url="https://api.peopledatalabs.com/v5/person/enrich",
+            ),
+        ),
+    )
+    readiness = [
+        check.to_dict()
+        for check in check_enrichment_readiness(
+            config,
+            mode="api",
+            allow_paid_enrichment=True,
+            provider="people_data_labs",
+        )
+    ]
+
+    request = build_paid_api_provider_request(
+        config,
+        build_contact_candidate(
+            {
+                "full_name": "Ada Lovelace",
+                "organization": "Example Labs",
+                "email": "ada@example.test",
+                "phone": "555-010-1234",
+                "website": "https://example.test/team",
+            }
+        ),
+        mode="api",
+        requested_by="tester",
+        allow_paid_enrichment=True,
+        readiness=readiness,
+        provider="people_data_labs",
+    )
+    result = score_paid_api_provider_results(
+        build_contact_candidate(
+            {
+                "full_name": "Ada Lovelace",
+                "organization": "Example Labs",
+                "email": "ada@example.test",
+            }
+        ),
+        provider="people_data_labs",
+        results=[
+            {
+                "status": 200,
+                "likelihood": 10,
+                "data": {
+                    "full_name": "Ada Lovelace",
+                    "work_email": "ada@example.test",
+                    "job_title": "Principal",
+                    "job_company_name": "Example Labs",
+                    "job_company_website": "example.test",
+                },
+            }
+        ],
+    )
+
+    assert readiness[0]["status"] == "ready"
+    assert readiness[0]["provider"] == "people_data_labs"
+    assert request["schema"] == "business-card-watchdog.enrichment-provider-request.v1"
+    assert request["provider"] == "people_data_labs"
+    assert request["operation"] == "person_enrichment"
+    assert request["api_key_env"] == "PDL_API_KEY"
+    assert request["request_fields"]["company"] == "Example Labs"
+    assert request["request_fields"]["phone"] == "+15550101234"
+    assert request["network_calls_made"] == 0
+    assert request["paid_api_calls_attempted"] == 0
+    assert "fixture-value-redacted" not in json.dumps(request)
+    assert result["provider"] == "people_data_labs"
+    assert result["results"][0]["title"] == "Principal"
+    assert result["results"][0]["organization"] == "Example Labs"
+    assert result["paid_api_calls_attempted"] == 0
+    assert any(proposal["field"] == "title" for proposal in result["merge_proposals"])
+
+
 def test_paid_api_provider_handoff_is_explicit_and_secret_free() -> None:
     provider_request = {
         "schema": "business-card-watchdog.enrichment-provider-request.v1",

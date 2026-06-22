@@ -22,6 +22,11 @@ ENRICHMENT_PUBLIC_WEB_RESULT_SCHEMA = "business-card-watchdog.enrichment-public-
 ENRICHMENT_PROVIDER_RESULT_SCHEMA = "business-card-watchdog.enrichment-provider-result.v1"
 ODOLLO_REUSE_NOTE = "adapted_from_odollo_enrichment_patterns"
 PHONE_DIGIT_RE = re.compile(r"\D+")
+PAID_PROVIDER_ALIASES = {
+    "apollo": "apollo",
+    "people_data_labs": "people_data_labs",
+    "pdl": "people_data_labs",
+}
 DIRECTORY_DOMAINS = {
     "apollo.io",
     "bbb.org",
@@ -63,6 +68,7 @@ def check_enrichment_readiness(
     *,
     mode: str | None = None,
     allow_paid_enrichment: bool = False,
+    provider: str = "apollo",
 ) -> list[EnrichmentReadiness]:
     requested = mode or config.enrichment.default_mode
     if requested == "none":
@@ -104,7 +110,13 @@ def check_enrichment_readiness(
             )
         )
     if requested in {"api", "all"}:
-        readiness.append(_apollo_readiness(config, allow_paid_enrichment=allow_paid_enrichment))
+        readiness.append(
+            _paid_provider_readiness(
+                config,
+                provider=provider,
+                allow_paid_enrichment=allow_paid_enrichment,
+            )
+        )
     return readiness
 
 
@@ -274,9 +286,12 @@ def build_paid_api_provider_request(
     requested_by: str,
     allow_paid_enrichment: bool,
     readiness: list[dict[str, Any]],
+    provider: str = "apollo",
 ) -> dict[str, Any]:
+    provider_name = _normalize_paid_provider(provider)
+    provider_config = _paid_provider_config(config, provider_name)
+    provider_ready = next((check for check in readiness if check.get("provider") == provider_name), {})
     spec = contact_candidate_to_spec(contact_candidate)
-    apollo_ready = next((check for check in readiness if check.get("provider") == "apollo"), {})
     observed = {
         key: spec[key]
         for key in ("full_name", "organization", "email", "phone", "website")
@@ -284,28 +299,23 @@ def build_paid_api_provider_request(
     }
     return {
         "schema": ENRICHMENT_PROVIDER_REQUEST_SCHEMA,
-        "provider": "apollo",
+        "provider": provider_name,
         "mode": mode,
         "reuse_note": ODOLLO_REUSE_NOTE,
         "requested_by": requested_by,
-        "status": "prepared" if apollo_ready.get("status") == "ready" else "blocked",
-        "reason": apollo_ready.get("reason") or "Apollo readiness was not evaluated",
+        "status": "prepared" if provider_ready.get("status") == "ready" else "blocked",
+        "reason": provider_ready.get("reason") or f"{_provider_display_name(provider_name)} readiness was not evaluated",
         "cost_class": "paid_api",
         "allow_paid_enrichment": allow_paid_enrichment,
         "network_calls_made": 0,
         "paid_api_calls_attempted": 0,
         "max_results": config.enrichment.max_paid_provider_results_per_contact,
-        "api_key_env": config.enrichment.apollo.api_key_env,
-        "api_key_available": apollo_ready.get("status") == "ready",
-        "base_url": config.enrichment.apollo.base_url,
-        "operation": "person_company_lookup",
+        "api_key_env": provider_config.api_key_env,
+        "api_key_available": provider_ready.get("status") == "ready",
+        "base_url": provider_config.base_url,
+        "operation": _paid_provider_operation(provider_name),
         "observed": observed,
-        "request_fields": {
-            "email": observed.get("email", ""),
-            "name": observed.get("full_name", ""),
-            "organization_name": observed.get("organization", ""),
-            "domain": _host(str(observed.get("website") or "")),
-        },
+        "request_fields": _paid_provider_request_fields(provider_name, observed),
     }
 
 
@@ -362,7 +372,10 @@ def score_paid_api_provider_results(
     max_results: int | None = None,
 ) -> dict[str, Any]:
     spec = contact_candidate_to_spec(contact_candidate)
-    normalized = [_normalize_provider_result(spec, result, index=index) for index, result in enumerate(results)]
+    normalized = [
+        _normalize_provider_result(spec, result, index=index, provider=provider)
+        for index, result in enumerate(results)
+    ]
     normalized.sort(key=lambda row: int(row["score"]), reverse=True)
     return {
         "schema": ENRICHMENT_PROVIDER_RESULT_SCHEMA,
@@ -421,41 +434,52 @@ def _public_web_phone_queries(
     return queries[:max_queries]
 
 
-def _apollo_readiness(config: AppConfig, *, allow_paid_enrichment: bool) -> EnrichmentReadiness:
-    provider = config.enrichment.apollo
-    if not provider.enabled:
+def _paid_provider_readiness(
+    config: AppConfig,
+    *,
+    provider: str,
+    allow_paid_enrichment: bool,
+) -> EnrichmentReadiness:
+    provider_name = _normalize_paid_provider(provider)
+    provider_config = _paid_provider_config(config, provider_name)
+    display = _provider_display_name(provider_name)
+    if not provider_config.enabled:
         return EnrichmentReadiness(
             mode="api",
-            provider="apollo",
+            provider=provider_name,
             status="blocked",
-            reason="Apollo enrichment provider is disabled",
+            reason=f"{display} enrichment provider is disabled",
             cost_class="paid_api",
         )
     if not config.enrichment.allow_paid_api or not allow_paid_enrichment:
         return EnrichmentReadiness(
             mode="api",
-            provider="apollo",
+            provider=provider_name,
             status="blocked",
             reason="paid API enrichment requires config allow_paid_api and explicit operator request",
             cost_class="paid_api",
         )
     key_names = _present_env_keys(config.enrichment.api_keys_env)
-    if provider.api_key_env not in key_names:
+    if provider_config.api_key_env not in key_names:
         return EnrichmentReadiness(
             mode="api",
-            provider="apollo",
+            provider=provider_name,
             status="blocked",
-            reason="Apollo API key is not available",
+            reason=f"{display} API key is not available",
             cost_class="paid_api",
-            missing_key=provider.api_key_env,
+            missing_key=provider_config.api_key_env,
         )
     return EnrichmentReadiness(
         mode="api",
-        provider="apollo",
+        provider=provider_name,
         status="ready",
-        reason="Apollo API key name is present; no provider call was made",
+        reason=f"{display} API key name is present; no provider call was made",
         cost_class="paid_api",
     )
+
+
+def _apollo_readiness(config: AppConfig, *, allow_paid_enrichment: bool) -> EnrichmentReadiness:
+    return _paid_provider_readiness(config, provider="apollo", allow_paid_enrichment=allow_paid_enrichment)
 
 
 def _cost_gate(mode: str, *, allow_paid_enrichment: bool) -> dict[str, Any]:
@@ -516,19 +540,32 @@ def _merge_proposals(spec: dict[str, Any], scored: list[dict[str, Any]]) -> list
     ]
 
 
-def _normalize_provider_result(spec: dict[str, Any], result: dict[str, Any], *, index: int) -> dict[str, Any]:
-    person = _extract_apollo_person(result)
+def _normalize_provider_result(
+    spec: dict[str, Any],
+    result: dict[str, Any],
+    *,
+    index: int,
+    provider: str,
+) -> dict[str, Any]:
+    person = _extract_provider_person(result, provider=provider)
     organization = dict(result.get("organization") or result.get("account") or {})
-    email = str(person.get("email") or result.get("email") or "").strip().lower()
-    full_name = str(person.get("name") or result.get("name") or "").strip()
-    title = str(person.get("title") or result.get("title") or "").strip()
+    email = str(person.get("email") or person.get("work_email") or result.get("email") or "").strip().lower()
+    full_name = str(person.get("name") or person.get("full_name") or result.get("name") or "").strip()
+    title = str(person.get("title") or person.get("job_title") or result.get("title") or "").strip()
     org_name = str(
         organization.get("name")
         or result.get("organization_name")
+        or person.get("job_company_name")
         or result.get("company")
         or ""
     ).strip()
-    website = str(organization.get("website_url") or organization.get("domain") or result.get("website") or "").strip()
+    website = str(
+        organization.get("website_url")
+        or organization.get("domain")
+        or person.get("job_company_website")
+        or result.get("website")
+        or ""
+    ).strip()
     score = 0
     signals: list[str] = []
     for field, value, points in (
@@ -599,6 +636,63 @@ def _extract_apollo_person(payload: dict[str, Any]) -> dict[str, Any]:
                 if isinstance(item, dict) and (item.get("id") or item.get("email") or item.get("name")):
                     return dict(item)
     return dict(payload)
+
+
+def _extract_provider_person(payload: dict[str, Any], *, provider: str) -> dict[str, Any]:
+    provider_name = _normalize_paid_provider(provider)
+    if provider_name == "people_data_labs":
+        data = payload.get("data")
+        if isinstance(data, dict):
+            return dict(data)
+        return dict(payload)
+    return _extract_apollo_person(payload)
+
+
+def _normalize_paid_provider(provider: str) -> str:
+    key = str(provider or "apollo").strip().lower().replace("-", "_")
+    if key not in PAID_PROVIDER_ALIASES:
+        supported = ", ".join(sorted(set(PAID_PROVIDER_ALIASES.values())))
+        raise ValueError(f"unsupported paid enrichment provider: {provider}; supported providers: {supported}")
+    return PAID_PROVIDER_ALIASES[key]
+
+
+def _paid_provider_config(config: AppConfig, provider: str):
+    provider_name = _normalize_paid_provider(provider)
+    if provider_name == "people_data_labs":
+        return config.enrichment.people_data_labs
+    return config.enrichment.apollo
+
+
+def _provider_display_name(provider: str) -> str:
+    provider_name = _normalize_paid_provider(provider)
+    if provider_name == "people_data_labs":
+        return "People Data Labs"
+    return "Apollo"
+
+
+def _paid_provider_operation(provider: str) -> str:
+    provider_name = _normalize_paid_provider(provider)
+    if provider_name == "people_data_labs":
+        return "person_enrichment"
+    return "person_company_lookup"
+
+
+def _paid_provider_request_fields(provider: str, observed: dict[str, Any]) -> dict[str, Any]:
+    provider_name = _normalize_paid_provider(provider)
+    if provider_name == "people_data_labs":
+        return {
+            "email": observed.get("email", ""),
+            "name": observed.get("full_name", ""),
+            "company": observed.get("organization", ""),
+            "phone": observed.get("phone", ""),
+            "website": observed.get("website", ""),
+        }
+    return {
+        "email": observed.get("email", ""),
+        "name": observed.get("full_name", ""),
+        "organization_name": observed.get("organization", ""),
+        "domain": _host(str(observed.get("website") or "")),
+    }
 
 
 def _normalize_phone_for_public_web(phone: str, *, default_country_code: str = "1") -> dict[str, Any]:

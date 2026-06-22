@@ -287,6 +287,13 @@ Validation:
 
 ### Milestone 5 | Enrichment Provider Contracts
 
+Status: IN_PROGRESS. Public-web and Apollo preview/provider-result contracts
+pre-existed this milestone. People Data Labs provider config, readiness,
+preview request/handoff, explicit result import normalization, and API/CLI/MCP
+provider selection are complete via Plan 0073. Remaining work should harden
+contact-store enrichment review status/provenance around reviewed enrichment
+merges.
+
 Goal-compatible objective:
 
 Add explicit provider contracts for web-search, Apollo, and People Data Labs

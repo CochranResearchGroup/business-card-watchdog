@@ -2649,6 +2649,86 @@ def test_mcp_enrichment_request_can_prepare_paid_provider_without_call(tmp_path:
     assert result["provider_result"]["paid_api_calls_attempted"] == 0
 
 
+def test_mcp_enrichment_request_can_select_people_data_labs_without_call(tmp_path: Path) -> None:
+    keys_path = tmp_path / "API-keys.env"
+    keys_path.write_text("PDL_API_KEY=fixture-value-redacted\n", encoding="utf-8")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        enrichment=EnrichmentConfig(
+            enabled=True,
+            allow_paid_api=True,
+            api_keys_env=keys_path,
+            people_data_labs=EnrichmentProviderConfig(enabled=True, api_key_env="PDL_API_KEY"),
+        ),
+    )
+    run_id, job_id = make_recorded_run(config)
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+    (artifact_dir / "contact_candidate.json").write_text(
+        json.dumps(build_contact_candidate({"full_name": "Ada Lovelace", "email": "ada@example.test"}))
+        + "\n",
+        encoding="utf-8",
+    )
+
+    readiness = call_tool(
+        "business_card_watchdog_enrichment_check",
+        {"mode": "api", "allow_paid_enrichment": True, "provider": "people_data_labs"},
+        config=config,
+    )
+    payload = call_tool(
+        "business_card_watchdog_enrichment_request",
+        {
+            "job_id": job_id,
+            "run_id": run_id,
+            "mode": "api",
+            "allow_paid_enrichment": True,
+            "provider": "people_data_labs",
+            "provider_results": [
+                {
+                    "data": {
+                        "full_name": "Ada Lovelace",
+                        "work_email": "ada@example.test",
+                        "job_title": "Principal",
+                        "job_company_name": "Example Labs",
+                    }
+                }
+            ],
+        },
+        config=config,
+    )
+    result = call_tool(
+        "business_card_watchdog_provider_enrichment_results",
+        {
+            "job_id": job_id,
+            "run_id": run_id,
+            "provider": "people_data_labs",
+            "submitted_by": "mcp-agent",
+            "results": [
+                {
+                    "data": {
+                        "full_name": "Ada Lovelace",
+                        "work_email": "ada@example.test",
+                        "job_title": "Principal",
+                        "job_company_name": "Example Labs",
+                    }
+                }
+            ],
+        },
+        config=config,
+    )
+
+    assert readiness["checks"][0]["provider"] == "people_data_labs"
+    assert readiness["checks"][0]["status"] == "ready"
+    assert payload["provider_request"]["provider"] == "people_data_labs"
+    assert payload["provider_request"]["operation"] == "person_enrichment"
+    assert payload["provider_result"]["provider"] == "people_data_labs"
+    assert payload["provider_result"]["paid_api_calls_attempted"] == 0
+    assert result["provider_result"]["submitted_by"] == "mcp-agent"
+    assert result["provider_result"]["provider"] == "people_data_labs"
+    assert result["provider_result"]["paid_api_calls_attempted"] == 0
+    assert "fixture-value-redacted" not in json.dumps([readiness, payload, result])
+
+
 def test_mcp_public_web_enrichment_results_are_explicit(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",

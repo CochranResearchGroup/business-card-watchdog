@@ -133,6 +133,7 @@ def create_app(config_path: Path | None = None):
         mode: str = "public_web"
         requested_by: str = "operator"
         allow_paid_enrichment: bool = False
+        provider: str = "apollo"
         public_web_results: list[dict[str, object]] = Field(default_factory=list)
         provider_results: list[dict[str, object]] = Field(default_factory=list)
 
@@ -1103,6 +1104,7 @@ def create_app(config_path: Path | None = None):
             mode=request.mode,
             requested_by=request.requested_by,
             allow_paid_enrichment=request.allow_paid_enrichment,
+            provider=request.provider,
             public_web_results=[dict(row) for row in request.public_web_results],
             provider_results=[dict(row) for row in request.provider_results],
         )
@@ -1366,6 +1368,7 @@ def create_app(config_path: Path | None = None):
         return service().enrichment_readiness(
             mode=request.mode,
             allow_paid_enrichment=request.allow_paid_enrichment,
+            provider=request.provider,
         )
 
     @app.get("/watch/status")

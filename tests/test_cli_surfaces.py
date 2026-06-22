@@ -4590,6 +4590,80 @@ def test_cli_enrichment_request_writes_paid_provider_request_without_call(tmp_pa
     assert result_payload["provider_result"]["paid_api_calls_attempted"] == 0
 
 
+def test_cli_enrichment_request_can_select_people_data_labs_without_call(tmp_path: Path, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    keys_path = tmp_path / "API-keys.env"
+    keys_path.write_text("PDL_API_KEY=fixture-value-redacted\n", encoding="utf-8")
+    config_path.write_text(
+        f'data_dir = "{data_dir}"\n'
+        "[watch]\ninputs = []\n"
+        "[enrichment]\nenabled = true\nallow_paid_api = true\n"
+        f'api_keys_env = "{keys_path}"\n'
+        "[enrichment.providers.people_data_labs]\nenabled = true\napi_key_env = \"PDL_API_KEY\"\n",
+        encoding="utf-8",
+    )
+    run_id, job_id = make_recorded_run(
+        AppConfig(
+            config_path=config_path,
+            data_dir=data_dir,
+            enrichment=EnrichmentConfig(
+                enabled=True,
+                allow_paid_api=True,
+                api_keys_env=keys_path,
+                people_data_labs=EnrichmentProviderConfig(enabled=True, api_key_env="PDL_API_KEY"),
+            ),
+        )
+    )
+    artifact_dir = data_dir / "runs" / run_id / "artifacts" / job_id
+    (artifact_dir / "contact_candidate.json").write_text(
+        json.dumps(
+            build_contact_candidate(
+                {
+                    "full_name": "Ada Lovelace",
+                    "organization": "Example Labs",
+                    "email": "ada@example.test",
+                }
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "enrichment",
+                "request",
+                job_id,
+                "--run-id",
+                run_id,
+                "--mode",
+                "api",
+                "--allow-paid-enrichment",
+                "--provider",
+                "people_data_labs",
+                "--provider-results-json",
+                (
+                    '[{"data":{"full_name":"Ada Lovelace","work_email":"ada@example.test",'
+                    '"job_title":"Principal","job_company_name":"Example Labs"}}]'
+                ),
+                "--json",
+            ]
+        )
+        == 0
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["provider_request"]["provider"] == "people_data_labs"
+    assert payload["provider_request"]["operation"] == "person_enrichment"
+    assert payload["provider_result"]["provider"] == "people_data_labs"
+    assert payload["provider_result"]["paid_api_calls_attempted"] == 0
+    assert "fixture-value-redacted" not in json.dumps(payload)
+
+
 def test_cli_doctor_reports_user_scope_checks(tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.toml"
     write_config(config_path, tmp_path / "data")

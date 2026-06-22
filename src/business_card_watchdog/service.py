@@ -7433,16 +7433,19 @@ class BusinessCardService:
         *,
         mode: str | None = None,
         allow_paid_enrichment: bool = False,
+        provider: str = "apollo",
     ) -> dict[str, Any]:
         checks = check_enrichment_readiness(
             self.config,
             mode=mode,
             allow_paid_enrichment=allow_paid_enrichment,
+            provider=provider,
         )
         return {
             "enabled": self.config.enrichment.enabled,
             "default_mode": self.config.enrichment.default_mode,
             "allow_paid_api": self.config.enrichment.allow_paid_api,
+            "provider": provider,
             "checks": [check.to_dict() for check in checks],
         }
 
@@ -7454,12 +7457,14 @@ class BusinessCardService:
         mode: str = "public_web",
         requested_by: str = "operator",
         allow_paid_enrichment: bool = False,
+        provider: str = "apollo",
         public_web_results: list[dict[str, Any]] | None = None,
         provider_results: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         readiness = self.enrichment_readiness(
             mode=mode,
             allow_paid_enrichment=allow_paid_enrichment,
+            provider=provider,
         )
         if any(check["status"] != "ready" for check in readiness["checks"]):
             return {
@@ -7517,6 +7522,7 @@ class BusinessCardService:
                 requested_by=requested_by,
                 allow_paid_enrichment=allow_paid_enrichment,
                 readiness=list(readiness["checks"]),
+                provider=provider,
             )
             provider_request_path = artifact_dir / "enrichment_provider_request.json"
             provider_request_path.write_text(
@@ -7537,7 +7543,7 @@ class BusinessCardService:
                     )
                 provider_result_payload = score_paid_api_provider_results(
                     candidate,
-                    provider="apollo",
+                    provider=provider,
                     results=provider_results,
                     max_results=max_provider_results,
                 )
@@ -7572,15 +7578,16 @@ class BusinessCardService:
             {
                 "job_id": job_id,
                 "run_id": run_id,
-                    "mode": mode,
-                    "requested_by": requested_by,
-                    "request_path": str(request_path),
-                    "result_path": str(result_path) if result_path else None,
-                    "public_web_request_path": str(public_web_request_path) if public_web_request_path else None,
-                    "provider_request_path": str(provider_request_path) if provider_request_path else None,
-                    "provider_result_path": str(provider_result_path) if provider_result_path else None,
-                },
-            )
+                "mode": mode,
+                "provider": provider,
+                "requested_by": requested_by,
+                "request_path": str(request_path),
+                "result_path": str(result_path) if result_path else None,
+                "public_web_request_path": str(public_web_request_path) if public_web_request_path else None,
+                "provider_request_path": str(provider_request_path) if provider_request_path else None,
+                "provider_result_path": str(provider_result_path) if provider_result_path else None,
+            },
+        )
         return {
             "status": "ok",
             "readiness": readiness,

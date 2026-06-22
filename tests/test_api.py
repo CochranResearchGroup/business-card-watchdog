@@ -2317,6 +2317,110 @@ def test_api_enrichment_request_accepts_paid_provider_results(tmp_path: Path) ->
     assert "Do not process private SyncThing images" in watch_dry_run["explicit_stop_conditions"][0]
 
 
+def test_api_enrichment_request_can_select_people_data_labs_without_call(tmp_path: Path) -> None:
+    from business_card_watchdog.api import create_app
+
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    keys_path = tmp_path / "API-keys.env"
+    keys_path.write_text("PDL_API_KEY=fixture-value-redacted\n", encoding="utf-8")
+    config_path.write_text(
+        f'data_dir = "{data_dir}"\n'
+        "[watch]\ninputs = []\n"
+        "[enrichment]\nenabled = true\nallow_paid_api = true\n"
+        f'api_keys_env = "{keys_path}"\n'
+        "[enrichment.providers.people_data_labs]\nenabled = true\napi_key_env = \"PDL_API_KEY\"\n",
+        encoding="utf-8",
+    )
+    config = AppConfig(
+        config_path=config_path,
+        data_dir=data_dir,
+        enrichment=EnrichmentConfig(
+            enabled=True,
+            allow_paid_api=True,
+            api_keys_env=keys_path,
+            people_data_labs=EnrichmentProviderConfig(enabled=True, api_key_env="PDL_API_KEY"),
+        ),
+    )
+    run_id, job_id = make_recorded_run(config)
+    artifact_dir = data_dir / "runs" / run_id / "artifacts" / job_id
+    (artifact_dir / "contact_candidate.json").write_text(
+        json.dumps(
+            build_contact_candidate(
+                {
+                    "full_name": "Ada Lovelace",
+                    "organization": "Example Labs",
+                    "email": "ada@example.test",
+                }
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    client = TestClient(create_app(config_path))
+
+    readiness = client.post(
+        "/enrichment/check",
+        json={"run_id": run_id, "mode": "api", "allow_paid_enrichment": True, "provider": "people_data_labs"},
+    ).json()
+    payload = client.post(
+        f"/jobs/{job_id}/enrichment",
+        json={
+            "run_id": run_id,
+            "mode": "api",
+            "allow_paid_enrichment": True,
+            "provider": "people_data_labs",
+            "provider_results": [
+                {
+                    "status": 200,
+                    "likelihood": 10,
+                    "data": {
+                        "full_name": "Ada Lovelace",
+                        "work_email": "ada@example.test",
+                        "job_title": "Principal",
+                        "job_company_name": "Example Labs",
+                    },
+                }
+            ],
+        },
+    ).json()
+    handoff = client.post(
+        f"/jobs/{job_id}/enrichment/provider-handoff",
+        json={"run_id": run_id},
+    ).json()
+    result = client.post(
+        f"/jobs/{job_id}/enrichment/provider-results",
+        json={
+            "run_id": run_id,
+            "provider": "people_data_labs",
+            "submitted_by": "api-agent",
+            "results": [
+                {
+                    "data": {
+                        "full_name": "Ada Lovelace",
+                        "work_email": "ada@example.test",
+                        "job_title": "Principal",
+                        "job_company_name": "Example Labs",
+                    }
+                }
+            ],
+        },
+    ).json()
+
+    assert readiness["checks"][0]["provider"] == "people_data_labs"
+    assert readiness["checks"][0]["status"] == "ready"
+    assert payload["provider_request"]["provider"] == "people_data_labs"
+    assert payload["provider_request"]["operation"] == "person_enrichment"
+    assert payload["provider_result"]["provider"] == "people_data_labs"
+    assert payload["provider_result"]["paid_api_calls_attempted"] == 0
+    assert handoff["handoff"]["provider"] == "people_data_labs"
+    assert handoff["handoff"]["paid_api_calls_attempted"] == 0
+    assert result["provider_result"]["submitted_by"] == "api-agent"
+    assert result["provider_result"]["provider"] == "people_data_labs"
+    assert result["provider_result"]["paid_api_calls_attempted"] == 0
+    assert "fixture-value-redacted" not in json.dumps([readiness, payload, handoff, result])
+
+
 def test_api_executes_sink_lookup_pilot_with_mocked_matches(tmp_path: Path, monkeypatch) -> None:
     from business_card_watchdog.api import create_app
     import business_card_watchdog.service as service_module

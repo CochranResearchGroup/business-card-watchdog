@@ -37,6 +37,11 @@ max_queries_per_contact = 3
 enabled = true
 api_key_env = "CUSTOM_APOLLO_KEY"
 base_url = "https://apollo.example.test"
+
+[enrichment.providers.people_data_labs]
+enabled = true
+api_key_env = "CUSTOM_PDL_KEY"
+base_url = "https://pdl.example.test/v5/person/enrich"
 """,
         encoding="utf-8",
     )
@@ -52,6 +57,9 @@ base_url = "https://apollo.example.test"
     assert config.enrichment.max_paid_provider_results_per_run == 4
     assert config.enrichment.apollo.enabled is True
     assert config.enrichment.apollo.api_key_env == "CUSTOM_APOLLO_KEY"
+    assert config.enrichment.people_data_labs.enabled is True
+    assert config.enrichment.people_data_labs.api_key_env == "CUSTOM_PDL_KEY"
+    assert config.enrichment.people_data_labs.base_url == "https://pdl.example.test/v5/person/enrich"
 
 
 def test_load_normalization_default_country(tmp_path: Path) -> None:

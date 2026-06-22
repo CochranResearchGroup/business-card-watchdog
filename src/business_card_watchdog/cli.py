@@ -3321,6 +3321,7 @@ def build_parser() -> argparse.ArgumentParser:
     enrichment_check = enrichment_sub.add_parser("check")
     enrichment_check.add_argument("--mode", choices=["none", "public_web", "api", "all"], default=None)
     enrichment_check.add_argument("--allow-paid-enrichment", action="store_true")
+    enrichment_check.add_argument("--provider", default="apollo")
     enrichment_check.add_argument("--json", action="store_true")
     enrichment_request = enrichment_sub.add_parser("request")
     enrichment_request.add_argument("job_id")
@@ -3328,6 +3329,7 @@ def build_parser() -> argparse.ArgumentParser:
     enrichment_request.add_argument("--mode", choices=["public_web", "api", "all"], default="public_web")
     enrichment_request.add_argument("--requested-by", default="operator")
     enrichment_request.add_argument("--allow-paid-enrichment", action="store_true")
+    enrichment_request.add_argument("--provider", default="apollo")
     enrichment_request.add_argument("--public-web-results-json", default="[]")
     enrichment_request.add_argument("--provider-results-json", default="[]")
     enrichment_request.add_argument("--json", action="store_true")
@@ -4242,6 +4244,7 @@ def main(argv: list[str] | None = None) -> int:
             payload = service.enrichment_readiness(
                 mode=args.mode,
                 allow_paid_enrichment=args.allow_paid_enrichment,
+                provider=args.provider,
             )
         elif args.enrichment_command == "request":
             payload = service.request_enrichment(
@@ -4250,6 +4253,7 @@ def main(argv: list[str] | None = None) -> int:
                 mode=args.mode,
                 requested_by=args.requested_by,
                 allow_paid_enrichment=args.allow_paid_enrichment,
+                provider=args.provider,
                 public_web_results=json.loads(args.public_web_results_json),
                 provider_results=json.loads(args.provider_results_json),
             )

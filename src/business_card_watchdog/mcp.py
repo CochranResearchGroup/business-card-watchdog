@@ -1305,6 +1305,7 @@ def tool_manifest() -> dict[str, object]:
                             "enum": ["none", "public_web", "api", "all"],
                         },
                         "allow_paid_enrichment": {"type": "boolean", "default": False},
+                        "provider": {"type": "string", "default": "apollo"},
                     },
                 },
             },
@@ -1323,6 +1324,7 @@ def tool_manifest() -> dict[str, object]:
                         },
                         "requested_by": {"type": "string", "default": "operator"},
                         "allow_paid_enrichment": {"type": "boolean", "default": False},
+                        "provider": {"type": "string", "default": "apollo"},
                         "public_web_results": {"type": "array", "items": {"type": "object"}},
                         "provider_results": {"type": "array", "items": {"type": "object"}},
                     },
@@ -2053,6 +2055,7 @@ def call_tool(
         return service.enrichment_readiness(
             mode=str(args["mode"]) if args.get("mode") else None,
             allow_paid_enrichment=bool(args.get("allow_paid_enrichment", False)),
+            provider=str(args.get("provider") or "apollo"),
         )
     if tool_name == "business_card_watchdog_enrichment_request":
         return service.request_enrichment(
@@ -2061,6 +2064,7 @@ def call_tool(
             mode=str(args.get("mode") or "public_web"),
             requested_by=str(args.get("requested_by") or "operator"),
             allow_paid_enrichment=bool(args.get("allow_paid_enrichment", False)),
+            provider=str(args.get("provider") or "apollo"),
             public_web_results=list(args.get("public_web_results") or []),
             provider_results=list(args.get("provider_results") or []),
         )
