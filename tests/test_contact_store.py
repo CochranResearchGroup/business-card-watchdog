@@ -1,4 +1,5 @@
 import json
+import sqlite3
 from pathlib import Path
 
 from business_card_watchdog.cli import main
@@ -46,7 +47,22 @@ def _write_recorded_contact_run(config: AppConfig) -> tuple[str, str]:
         json.dumps(
             {
                 "schema": "business-card-watchdog.sink-payloads.v1",
-                "payloads": [{"sink": "google_contacts", "dry_run": True, "contact": {"email": "ada@example.test"}}],
+                "payloads": [
+                    {
+                        "sink": "google_contacts",
+                        "dry_run": True,
+                        "contact": {"email": "ada@example.test"},
+                        "readiness": {
+                            "status": "ready",
+                            "details": {
+                                "profile": "ecochran76",
+                                "target_account": "ecochran76",
+                                "config_key": "sink.google_contacts_profile",
+                                "live_apply_requires_selected_target": True,
+                            },
+                        },
+                    }
+                ],
             },
             indent=2,
             sort_keys=True,
@@ -91,8 +107,99 @@ def test_contact_store_initializes_schema(tmp_path: Path) -> None:
     status = store.initialize()
 
     assert status["exists"] is True
-    assert status["schema_version"] == 2
+    assert status["schema_version"] == 3
     assert config.contact_store_path.exists()
+
+
+def test_contact_store_migrates_selected_sink_columns_without_losing_routes(tmp_path: Path) -> None:
+    db_path = tmp_path / "contacts.sqlite"
+    now = "2026-06-22T00:00:00Z"
+    route_payload = {
+        "sinks": ["google_contacts"],
+        "sink_payloads": {
+            "payloads": [
+                {
+                    "sink": "google_contacts",
+                    "dry_run": True,
+                    "readiness": {
+                        "details": {
+                            "profile": "ecochran76",
+                            "target_account": "ecochran76",
+                        }
+                    },
+                }
+            ]
+        },
+    }
+    with sqlite3.connect(db_path) as conn:
+        conn.executescript(
+            """
+            CREATE TABLE schema_migrations (
+                version INTEGER PRIMARY KEY,
+                applied_at TEXT NOT NULL
+            );
+            CREATE TABLE contacts (
+                contact_id TEXT PRIMARY KEY,
+                source_run_id TEXT NOT NULL,
+                source_job_id TEXT NOT NULL,
+                state TEXT NOT NULL,
+                display_name TEXT NOT NULL DEFAULT '',
+                organization TEXT NOT NULL DEFAULT '',
+                email TEXT NOT NULL DEFAULT '',
+                phone TEXT NOT NULL DEFAULT '',
+                payload_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE TABLE routing_decisions (
+                decision_id TEXT PRIMARY KEY,
+                contact_id TEXT,
+                tenant TEXT NOT NULL,
+                state TEXT NOT NULL,
+                payload_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            """
+        )
+        conn.execute("INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)", (2, now))
+        conn.execute(
+            """
+            INSERT INTO contacts (
+                contact_id, source_run_id, source_job_id, state, display_name,
+                payload_json, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("contact_legacy", "run-legacy", "job-legacy", "projected", "Legacy Contact", "{}", now, now),
+        )
+        conn.execute(
+            """
+            INSERT INTO routing_decisions (
+                decision_id, contact_id, tenant, state, payload_json, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "route_legacy",
+                "contact_legacy",
+                "google_contacts",
+                "ready_to_route",
+                json.dumps(route_payload),
+                now,
+                now,
+            ),
+        )
+
+    store = ContactStore(db_path)
+    status = store.initialize()
+    detail = store.get_contact("contact_legacy")
+
+    assert status["schema_version"] == 3
+    assert detail["routing_decisions"][0]["decision_id"] == "route_legacy"
+    assert detail["routing_decisions"][0]["selected_sinks"] == ["google_contacts"]
+    assert detail["routing_decisions"][0]["selected_sink_state"] == "dry_run"
+    assert detail["routing_decisions"][0]["selected_target_profile"] == "ecochran76"
 
 
 def test_contact_store_projects_run_idempotently(tmp_path: Path) -> None:
@@ -121,6 +228,10 @@ def test_contact_store_projects_run_idempotently(tmp_path: Path) -> None:
     assert len(detail["extraction_attempts"]) == 1
     assert detail["enrichment_attempts"][0]["provider"] == "public_web"
     assert detail["routing_decisions"][0]["state"] == "ready_to_route"
+    assert detail["routing_decisions"][0]["selected_sinks"] == ["google_contacts"]
+    assert detail["routing_decisions"][0]["selected_sink_state"] == "dry_run"
+    assert detail["routing_decisions"][0]["selected_target_profile"] == "ecochran76"
+    assert detail["routing_decisions"][0]["selected_target_tenant"] == ""
     assert detail["sink_attempts"][0]["sink"] == "google_contacts"
     assert detail["review_states"] == []
 
@@ -291,7 +402,7 @@ def test_contacts_cli_json_surfaces(tmp_path: Path, capsys) -> None:
 
     assert main(["--config", str(config_path), "contacts", "init", "--json"]) == 0
     init_payload = json.loads(capsys.readouterr().out)
-    assert init_payload["schema_version"] == 2
+    assert init_payload["schema_version"] == 3
 
     assert main(["--config", str(config_path), "contacts", "project-run", run_id, "--json"]) == 0
     projection = json.loads(capsys.readouterr().out)

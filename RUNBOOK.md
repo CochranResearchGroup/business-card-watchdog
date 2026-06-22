@@ -6881,3 +6881,45 @@ Safety:
   paid enrichment, Odoo, or Odollo calls. It did not process configured
   SyncThing/private watch inputs, enable broad live writes, or bypass
   selected-target gates.
+
+## Turn 287 | 2026-06-22
+
+Executed Plan 0076 as the Plan 0060 Milestone 6 contact-store selected sink
+state slice.
+
+Implemented:
+
+- Added contact-store schema version 3.
+- Added first-class routing decision columns for selected sinks, selected sink
+  state, selected target profile, and selected target tenant.
+- Added migration backfill from legacy routing payload JSON so existing route
+  rows retain selected sink metadata when available.
+- Projected dry-run Google Contacts readiness metadata into durable routing
+  decision columns.
+- Exposed selected sinks as parsed list data in contact detail responses.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_contact_store.py::test_contact_store_migrates_selected_sink_columns_without_losing_routes tests/test_contact_store.py::test_contact_store_projects_run_idempotently -q`
+  passed with 2 tests.
+- `.venv/bin/python -m pytest tests/test_contact_store.py -q` passed with 7
+  tests.
+- `.venv/bin/python -m pytest tests/test_api.py::test_api_run_lookup_selection_packet_reports_selected_candidate tests/test_api.py::test_api_run_selected_target_approval_boundary_previews_selection tests/test_api.py::test_api_run_selected_target_command_copy_packet_requires_ack -q`
+  passed with 3 tests.
+- `.venv/bin/python -m pytest tests/test_service.py -q` passed with 112 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/contact_store.py tests/test_contact_store.py`
+  passed.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 367 tests.
+- `codegraph sync /home/ecochran76/workspace.local/business-card-watchdog && codegraph status /home/ecochran76/workspace.local/business-card-watchdog`
+  reported the index already up to date, 60 files, 1,967 nodes, and 2,079
+  edges.
+
+Safety:
+
+- This slice did not run live Google lookup/write/readback, public-web search,
+  paid enrichment, Odoo, or Odollo calls. It did not process configured
+  SyncThing/private watch inputs, create selected-live-target artifacts, or
+  enable live sink writes.

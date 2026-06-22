@@ -12,7 +12,7 @@ from .contact import contact_candidate_to_spec
 from .models import utc_now
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 CONTACT_STORE_SCHEMA = "business-card-watchdog.contact-store.v1"
 _PROJECTED_ASSET_KINDS = {
     "artifact_dir",
@@ -707,6 +707,7 @@ class ContactStore:
         duplicate = _read_json_file(Path(str((duplicate_artifact or {}).get("path") or ""))) or {}
         payload_rows = sink_payloads.get("payloads") if isinstance(sink_payloads.get("payloads"), list) else []
         sinks = sorted({str(row.get("sink") or "") for row in payload_rows if isinstance(row, dict) and row.get("sink")})
+        selected_sink_state, selected_target_profile, selected_target_tenant = _selected_route_metadata(payload_rows)
         job_state = str((job or {}).get("state") or "")
         if sinks:
             state = "ready_to_route"
@@ -730,13 +731,19 @@ class ContactStore:
             conn.execute(
                 """
                 INSERT INTO routing_decisions (
-                    decision_id, contact_id, tenant, state, payload_json, created_at, updated_at
+                    decision_id, contact_id, tenant, state, selected_sinks_json,
+                    selected_sink_state, selected_target_profile, selected_target_tenant,
+                    payload_json, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(decision_id) DO UPDATE SET
                     contact_id = excluded.contact_id,
                     tenant = excluded.tenant,
                     state = excluded.state,
+                    selected_sinks_json = excluded.selected_sinks_json,
+                    selected_sink_state = excluded.selected_sink_state,
+                    selected_target_profile = excluded.selected_target_profile,
+                    selected_target_tenant = excluded.selected_target_tenant,
                     payload_json = excluded.payload_json,
                     updated_at = excluded.updated_at
                 """,
@@ -745,6 +752,10 @@ class ContactStore:
                     contact_id,
                     ",".join(sinks) if sinks else "unassigned",
                     state,
+                    _json_dump_value(sinks),
+                    selected_sink_state,
+                    selected_target_profile,
+                    selected_target_tenant,
                     _json_dumps(payload),
                     now,
                     now,
@@ -877,6 +888,10 @@ class ContactStore:
                 contact_id TEXT,
                 tenant TEXT NOT NULL,
                 state TEXT NOT NULL,
+                selected_sinks_json TEXT NOT NULL DEFAULT '[]',
+                selected_sink_state TEXT NOT NULL DEFAULT 'none',
+                selected_target_profile TEXT NOT NULL DEFAULT '',
+                selected_target_tenant TEXT NOT NULL DEFAULT '',
                 payload_json TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
@@ -926,9 +941,24 @@ class ContactStore:
             CREATE INDEX IF NOT EXISTS idx_contacts_email ON contacts(email);
             CREATE INDEX IF NOT EXISTS idx_assets_contact ON card_assets(contact_id);
             CREATE INDEX IF NOT EXISTS idx_extraction_contact ON extraction_attempts(contact_id);
+            CREATE INDEX IF NOT EXISTS idx_routing_contact ON routing_decisions(contact_id);
             CREATE INDEX IF NOT EXISTS idx_review_states_contact ON contact_review_states(contact_id);
             CREATE INDEX IF NOT EXISTS idx_review_states_state ON contact_review_states(state);
             """
+        )
+        _ensure_columns(
+            conn,
+            "routing_decisions",
+            {
+                "selected_sinks_json": "TEXT NOT NULL DEFAULT '[]'",
+                "selected_sink_state": "TEXT NOT NULL DEFAULT 'none'",
+                "selected_target_profile": "TEXT NOT NULL DEFAULT ''",
+                "selected_target_tenant": "TEXT NOT NULL DEFAULT ''",
+            },
+        )
+        _backfill_selected_route_metadata(conn)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_routing_selected_state ON routing_decisions(selected_sink_state)"
         )
         conn.execute(
             "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
@@ -945,6 +975,10 @@ def _json_dumps(payload: dict[str, Any]) -> str:
     return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
 
+def _json_dump_value(payload: Any) -> str:
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
+
+
 def _json_loads(value: str) -> dict[str, Any]:
     payload = json.loads(value)
     return payload if isinstance(payload, dict) else {}
@@ -953,7 +987,86 @@ def _json_loads(value: str) -> dict[str, Any]:
 def _row_with_payload(row: sqlite3.Row) -> dict[str, Any]:
     payload = dict(row)
     payload["payload"] = _json_loads(payload.pop("payload_json"))
+    if "selected_sinks_json" in payload:
+        payload["selected_sinks"] = _json_load_list(str(payload.pop("selected_sinks_json") or "[]"))
     return payload
+
+
+def _ensure_columns(conn: sqlite3.Connection, table: str, columns: dict[str, str]) -> None:
+    existing = {str(row["name"]) for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    for name, definition in columns.items():
+        if name not in existing:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
+
+
+def _selected_route_metadata(payload_rows: list[Any]) -> tuple[str, str, str]:
+    rows = [row for row in payload_rows if isinstance(row, dict) and str(row.get("sink") or "").strip()]
+    if not rows:
+        return "none", "", ""
+    selected_state = "dry_run" if all(bool(row.get("dry_run", True)) for row in rows) else "planned"
+    target_profile = ""
+    target_tenant = ""
+    for row in rows:
+        readiness = row.get("readiness") if isinstance(row.get("readiness"), dict) else {}
+        details = readiness.get("details") if isinstance(readiness.get("details"), dict) else {}
+        sink = str(row.get("sink") or "")
+        if sink == "google_contacts" and not target_profile:
+            target_profile = str(details.get("target_account") or details.get("profile") or "").strip()
+        elif sink == "odoo" and not target_tenant:
+            target_tenant = str(details.get("tenant") or details.get("target_tenant") or "").strip()
+    return selected_state, target_profile, target_tenant
+
+
+def _backfill_selected_route_metadata(conn: sqlite3.Connection) -> None:
+    rows = conn.execute(
+        """
+        SELECT decision_id, payload_json
+        FROM routing_decisions
+        WHERE selected_sinks_json = '[]' AND selected_sink_state = 'none'
+        """
+    ).fetchall()
+    for row in rows:
+        payload = _json_loads(str(row["payload_json"] or "{}"))
+        payload_sinks = [str(sink) for sink in payload.get("sinks") or [] if str(sink).strip()]
+        sink_payloads = payload.get("sink_payloads") if isinstance(payload.get("sink_payloads"), dict) else {}
+        payload_rows = sink_payloads.get("payloads") if isinstance(sink_payloads.get("payloads"), list) else []
+        if not payload_rows and payload_sinks:
+            payload_rows = [{"sink": sink, "dry_run": True} for sink in payload_sinks]
+        selected_sinks = sorted(
+            {
+                str(payload_row.get("sink") or "")
+                for payload_row in payload_rows
+                if isinstance(payload_row, dict) and payload_row.get("sink")
+            }
+        )
+        selected_sink_state, selected_target_profile, selected_target_tenant = _selected_route_metadata(payload_rows)
+        if not selected_sinks:
+            continue
+        conn.execute(
+            """
+            UPDATE routing_decisions
+            SET selected_sinks_json = ?,
+                selected_sink_state = ?,
+                selected_target_profile = ?,
+                selected_target_tenant = ?
+            WHERE decision_id = ?
+            """,
+            (
+                _json_dump_value(selected_sinks),
+                selected_sink_state,
+                selected_target_profile,
+                selected_target_tenant,
+                row["decision_id"],
+            ),
+        )
+
+
+def _json_load_list(value: str) -> list[Any]:
+    try:
+        payload = json.loads(value)
+    except json.JSONDecodeError:
+        return []
+    return payload if isinstance(payload, list) else []
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
