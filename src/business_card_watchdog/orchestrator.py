@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .config import AppConfig, ensure_runtime_dirs, resolve_input_path
 from .contact import build_contact_candidate, contact_candidate_to_spec
+from .contact_store import ContactStore
 from .dedupe import assess_duplicate, remember_identity
 from .fanout import (
     build_candidate_work_item_manifest,
@@ -61,9 +62,45 @@ class BatchOrchestrator:
             for future in as_completed(futures):
                 future.result()
 
+        self._project_contact_store(ledger)
         ledger.record_event("run_completed", {"job_count": len(jobs)})
         ledger.transition_run("completed")
         return run_dir
+
+    def _project_contact_store(self, ledger: RunLedger) -> None:
+        store = ContactStore.from_config(self.config)
+        projection_path = ledger.run_dir / "contact_store_projection.json"
+        try:
+            projection = store.project_run(run_id=ledger.run_dir.name, run_dir=ledger.run_dir).to_dict()
+            projection["drift"] = store.run_projection_status(run_id=ledger.run_dir.name, run_dir=ledger.run_dir)
+            projection["projection_path"] = str(projection_path)
+            projection["writes_attempted"] = 0
+            projection["network_calls_made"] = 0
+            projection_path.write_text(
+                json.dumps(projection, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            ledger.record_artifact(
+                job_id="__run__",
+                kind="contact_store_projection",
+                path=projection_path,
+                metadata={
+                    "projected_contacts": projection["projected_contacts"],
+                    "drift_state": projection["drift"]["state"],
+                },
+            )
+            ledger.record_event("contact_store_projected", projection)
+        except Exception as exc:
+            ledger.record_event(
+                "contact_store_projection_failed",
+                {
+                    "run_id": ledger.run_dir.name,
+                    "error": str(exc),
+                    "retry_command": f"contacts project-run {ledger.run_dir.name} --json",
+                    "writes_attempted": 0,
+                    "network_calls_made": 0,
+                },
+            )
 
     def _process_one(self, job: CardJob, ledger: RunLedger, dry_run: bool) -> None:
         job.transition_to("processing")

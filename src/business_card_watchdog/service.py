@@ -488,6 +488,22 @@ class BusinessCardService:
         return {
             **result.to_dict(),
             "store": store.status(),
+            "drift": store.run_projection_status(run_id=run_id, run_dir=run_dir),
+            "repair_command": f"contacts project-run {run_id} --json",
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+
+    def contact_projection_drift(self, run_id: str) -> dict[str, Any]:
+        run_dir = self.config.runs_dir / run_id
+        if not (run_dir / "run.json").exists():
+            raise FileNotFoundError(f"run not found: {run_id}")
+        store = ContactStore.from_config(self.config)
+        return {
+            "schema": "business-card-watchdog.contact-projection-drift-report.v1",
+            "store": store.status(),
+            "drift": store.run_projection_status(run_id=run_id, run_dir=run_dir),
+            "repair_command": f"contacts project-run {run_id} --json",
             "writes_attempted": 0,
             "network_calls_made": 0,
         }

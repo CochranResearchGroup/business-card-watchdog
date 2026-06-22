@@ -108,6 +108,10 @@ Validation:
 
 ### Milestone 2 | Artifact-To-Database Projection
 
+Status: BASELINE_COMPLETE via Plan 0064. Follow-on work should start at
+Milestone 3 unless projection schema needs to expand for scanner/card-side
+artifacts.
+
 Goal-compatible objective:
 
 Wire the current dry-run batch pipeline so every reviewed extraction creates or

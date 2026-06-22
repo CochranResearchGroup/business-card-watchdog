@@ -3103,6 +3103,9 @@ def build_parser() -> argparse.ArgumentParser:
     contacts_project_run = contacts_sub.add_parser("project-run")
     contacts_project_run.add_argument("run_id")
     contacts_project_run.add_argument("--json", action="store_true")
+    contacts_drift = contacts_sub.add_parser("drift")
+    contacts_drift.add_argument("run_id")
+    contacts_drift.add_argument("--json", action="store_true")
 
     drills = sub.add_parser("drills")
     drills_sub = drills.add_subparsers(dest="drills_command", required=True)
@@ -3669,11 +3672,13 @@ def main(argv: list[str] | None = None) -> int:
             payload = service.list_contacts(limit=args.limit)
         elif args.contacts_command == "show":
             payload = service.get_contact(args.contact_id)
-        else:
+        elif args.contacts_command == "project-run":
             payload = service.project_contacts_from_run(args.run_id)
+        else:
+            payload = service.contact_projection_drift(args.run_id)
         if args.json:
             print(json.dumps(payload, indent=2), end="")
-        elif args.contacts_command in {"status", "init", "project-run"}:
+        elif args.contacts_command in {"status", "init", "project-run", "drift"}:
             print(json.dumps(payload, indent=2), end="")
         elif args.contacts_command == "list":
             print(_render_contacts_list_text(payload), end="")

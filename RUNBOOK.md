@@ -6373,3 +6373,40 @@ Safety:
   It did not process watched files; OCR private card images; rasterize PDFs; run
   enrichment; run live lookup/write/readback; or write Google Contacts, Odoo, or
   Odollo records.
+
+## Turn 274 | 2026-06-22
+
+Executed Plan 0064 as the Plan 0060 Milestone 2 implementation slice.
+
+Implemented:
+
+- Added `docs/dev/plans/0064-2026-06-22-artifact-to-database-projection.md`.
+- Wired `BatchOrchestrator.process_source` to project run artifacts into the
+  user-scoped contact store after extraction artifacts are written.
+- Added `contact_store_projection.json` run artifact and
+  `contact_store_projected` ledger event for successful projection.
+- Added retryable `contact_store_projection_failed` ledger evidence with a
+  `contacts project-run <run-id> --json` repair command when projection fails.
+- Extended contact-store projection to include source/crop/OCR/review assets,
+  enrichment attempts, routing decisions, sink attempts, normalized contact
+  fields, and extraction provenance.
+- Added contact-store drift/readback status and `bcw contacts drift <run-id>`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_contact_store.py tests/test_dry_run_pipeline.py -q`
+  passed with 6 tests.
+- `.venv/bin/python -m pytest tests/test_api.py tests/test_cli_surfaces.py tests/test_mcp.py -q`
+  passed with 111 tests.
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_review_surface.py tests/test_enrichment.py -q`
+  passed with 141 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `.venv/bin/python -m pytest -q` passed with 341 tests.
+
+Safety:
+
+- This slice projects existing run artifacts only. It did not add OCR behavior,
+  rasterize PDFs, process private watched folders on its own, run enrichment
+  providers, run live lookup/write/readback, or write Google Contacts, Odoo, or
+  Odollo records.

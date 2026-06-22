@@ -5,6 +5,7 @@ from pathlib import Path
 
 from business_card_watchdog.config import AppConfig, PrefilterConfig, SinkConfig
 from business_card_watchdog.orchestrator import BatchOrchestrator
+from business_card_watchdog.service import BusinessCardService
 
 from synthetic_fixtures import (
     SyntheticSkillAdapter,
@@ -105,14 +106,28 @@ def test_batch_dry_run_uses_synthetic_adapter_without_credentials(
         "contact_candidate",
         "duplicate_assessment",
         "sink_payloads",
+        "contact_store_projection",
     ]
 
     normalized_events = normalize_events(read_jsonl(run_dir / "events.jsonl"))
     event_types = [event["event_type"] for event in normalized_events]
     assert event_types[0] == "run_initialized"
     assert event_types.count("sink_decision_dry_run") == 2
+    assert "contact_store_projected" in event_types
     assert "run_completed" in event_types
     assert normalized_events[event_types.index("run_completed")]["payload"] == {"job_count": 2}
+
+    contact_projection = json.loads((run_dir / "contact_store_projection.json").read_text(encoding="utf-8"))
+    assert contact_projection["projected_contacts"] == 2
+    assert contact_projection["projected_sink_attempts"] == 4
+    assert contact_projection["drift"]["state"] == "in_sync"
+    contacts = BusinessCardService(config).list_contacts()["contacts"]
+    assert {contact["email"] for contact in contacts} == {"alpha@example.test", "beta@example.test"}
+    alpha_detail = BusinessCardService(config).get_contact(
+        next(contact["contact_id"] for contact in contacts if contact["email"] == "alpha@example.test")
+    )["contact"]
+    assert {attempt["sink"] for attempt in alpha_detail["sink_attempts"]} == {"google_contacts", "odoo"}
+    assert alpha_detail["routing_decisions"][0]["state"] == "ready_to_route"
 
 
 def test_incomplete_synthetic_spec_creates_review_packet(tmp_path: Path, monkeypatch) -> None:
@@ -144,3 +159,31 @@ def test_incomplete_synthetic_spec_creates_review_packet(tmp_path: Path, monkeyp
     assert review_packet["assessment"]["status"] == "needs_review"
     assert review_packet["contact_candidate"]["schema"] == "business-card-watchdog.contact-candidate.v1"
     assert any(event["event_type"] == "job_needs_review" for event in events)
+    assert any(event["event_type"] == "contact_store_projected" for event in events)
+
+
+def test_projection_failure_is_retryable_ledger_evidence(tmp_path: Path, monkeypatch) -> None:
+    source_dir = tmp_path / "synthetic-cards"
+    write_synthetic_image(source_dir / "alpha.png")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        cache_dir=tmp_path / "cache",
+        prefilter=PrefilterConfig(process_uncertain=True),
+    )
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+
+    def broken_projection(*_args, **_kwargs):
+        raise RuntimeError("synthetic projection failure")
+
+    monkeypatch.setattr("business_card_watchdog.orchestrator.ContactStore.project_run", broken_projection)
+
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+    run_payload = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    events = read_jsonl(run_dir / "events.jsonl")
+
+    assert run_payload["state"] == "completed"
+    failure = next(event for event in events if event["event_type"] == "contact_store_projection_failed")
+    assert failure["payload"]["error"] == "synthetic projection failure"
+    assert failure["payload"]["retry_command"] == f"contacts project-run {run_dir.name} --json"

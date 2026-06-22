@@ -18,6 +18,8 @@ def _write_recorded_contact_run(config: AppConfig) -> tuple[str, str]:
     artifact_dir.mkdir(parents=True, exist_ok=True)
     candidate_path = artifact_dir / "contact_candidate.json"
     spec_path = artifact_dir / "spec.json"
+    sink_payload_path = artifact_dir / "sink_payloads.json"
+    enrichment_path = artifact_dir / "enrichment_request.json"
     candidate = build_contact_candidate(
         {
             "full_name": "Ada Lovelace",
@@ -40,6 +42,31 @@ def _write_recorded_contact_run(config: AppConfig) -> tuple[str, str]:
         + "\n",
         encoding="utf-8",
     )
+    sink_payload_path.write_text(
+        json.dumps(
+            {
+                "schema": "business-card-watchdog.sink-payloads.v1",
+                "payloads": [{"sink": "google_contacts", "dry_run": True, "contact": {"email": "ada@example.test"}}],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    enrichment_path.write_text(
+        json.dumps(
+            {
+                "schema": "business-card-watchdog.enrichment-request.v1",
+                "provider": "public_web",
+                "state": "requested",
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     ledger = RunLedger(run_dir)
     ledger.initialize(source="synthetic", dry_run=True)
     job.artifact_dir = str(artifact_dir)
@@ -48,6 +75,8 @@ def _write_recorded_contact_run(config: AppConfig) -> tuple[str, str]:
     ledger.record_job(job)
     ledger.record_artifact(job_id=job.job_id, kind="contact_candidate", path=candidate_path)
     ledger.record_artifact(job_id=job.job_id, kind="contact_spec", path=spec_path)
+    ledger.record_artifact(job_id=job.job_id, kind="sink_payloads", path=sink_payload_path)
+    ledger.record_artifact(job_id=job.job_id, kind="enrichment_request", path=enrichment_path)
     ledger.transition_run("discovering")
     ledger.transition_run("processing")
     ledger.transition_run("waiting_for_review")
@@ -77,6 +106,10 @@ def test_contact_store_projects_run_idempotently(tmp_path: Path) -> None:
     detail = service.get_contact(str(contacts[0]["contact_id"]))["contact"]
 
     assert first["projected_contacts"] == 1
+    assert first["projected_enrichment_attempts"] == 1
+    assert first["projected_routing_decisions"] == 1
+    assert first["projected_sink_attempts"] == 1
+    assert first["drift"]["state"] == "in_sync"
     assert second["projected_contacts"] == 1
     assert len(contacts) == 1
     assert contacts[0]["display_name"] == "Ada Lovelace"
@@ -86,6 +119,9 @@ def test_contact_store_projects_run_idempotently(tmp_path: Path) -> None:
     assert detail["payload"]["contact_spec"]["organization"] == "Example Labs"
     assert len(detail["assets"]) >= 2
     assert len(detail["extraction_attempts"]) == 1
+    assert detail["enrichment_attempts"][0]["provider"] == "public_web"
+    assert detail["routing_decisions"][0]["state"] == "ready_to_route"
+    assert detail["sink_attempts"][0]["sink"] == "google_contacts"
 
 
 def test_contacts_cli_json_surfaces(tmp_path: Path, capsys) -> None:
@@ -110,3 +146,7 @@ def test_contacts_cli_json_surfaces(tmp_path: Path, capsys) -> None:
     assert main(["--config", str(config_path), "contacts", "show", contact_id, "--json"]) == 0
     detail = json.loads(capsys.readouterr().out)
     assert detail["contact"]["display_name"] == "Ada Lovelace"
+
+    assert main(["--config", str(config_path), "contacts", "drift", run_id, "--json"]) == 0
+    drift = json.loads(capsys.readouterr().out)
+    assert drift["drift"]["state"] == "in_sync"

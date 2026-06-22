@@ -14,6 +14,38 @@ from .models import utc_now
 
 SCHEMA_VERSION = 1
 CONTACT_STORE_SCHEMA = "business-card-watchdog.contact-store.v1"
+_PROJECTED_ASSET_KINDS = {
+    "artifact_dir",
+    "preclassification",
+    "card_candidates",
+    "candidate_crops",
+    "child_verification_requests",
+    "child_verification_results",
+    "child_contact_promotions",
+    "candidate_work_items",
+    "contact_spec",
+    "review_report",
+    "ocr_text",
+    "crop_manifest",
+    "contact_sheet",
+    "contact_candidate",
+    "reviewed_contact",
+    "review_packet",
+    "duplicate_assessment",
+    "downstream_duplicate_assessment",
+    "sink_payloads",
+    "sink_lookup_plan",
+    "sink_plan",
+    "enrichment_request",
+    "enrichment_public_web_request",
+    "enrichment_public_web_search_handoff",
+    "enrichment_public_web_result",
+    "enrichment_provider_request",
+    "enrichment_provider_handoff",
+    "enrichment_provider_result",
+    "enrichment_result",
+    "enrichment_merge_review",
+}
 
 
 @dataclass(frozen=True)
@@ -22,6 +54,9 @@ class ProjectionResult:
     projected_contacts: int
     projected_assets: int
     projected_extraction_attempts: int
+    projected_enrichment_attempts: int
+    projected_routing_decisions: int
+    projected_sink_attempts: int
     skipped_jobs: int
 
     def to_dict(self) -> dict[str, Any]:
@@ -31,6 +66,9 @@ class ProjectionResult:
             "projected_contacts": self.projected_contacts,
             "projected_assets": self.projected_assets,
             "projected_extraction_attempts": self.projected_extraction_attempts,
+            "projected_enrichment_attempts": self.projected_enrichment_attempts,
+            "projected_routing_decisions": self.projected_routing_decisions,
+            "projected_sink_attempts": self.projected_sink_attempts,
             "skipped_jobs": self.skipped_jobs,
         }
 
@@ -99,10 +137,30 @@ class ContactStore:
                 "SELECT * FROM extraction_attempts WHERE contact_id = ? ORDER BY created_at, attempt_id",
                 (contact_id,),
             ).fetchall()
+            enrichment = conn.execute(
+                "SELECT * FROM enrichment_attempts WHERE contact_id = ? ORDER BY created_at, attempt_id",
+                (contact_id,),
+            ).fetchall()
+            routing = conn.execute(
+                "SELECT * FROM routing_decisions WHERE contact_id = ? ORDER BY created_at, decision_id",
+                (contact_id,),
+            ).fetchall()
+            sinks = conn.execute(
+                "SELECT * FROM sink_attempts WHERE contact_id = ? ORDER BY created_at, attempt_id",
+                (contact_id,),
+            ).fetchall()
+            bindings = conn.execute(
+                "SELECT * FROM external_bindings WHERE contact_id = ? ORDER BY created_at, binding_id",
+                (contact_id,),
+            ).fetchall()
         payload = dict(row)
         payload["payload"] = _json_loads(payload.pop("payload_json"))
         payload["assets"] = [_row_with_payload(asset) for asset in assets]
         payload["extraction_attempts"] = [_row_with_payload(attempt) for attempt in attempts]
+        payload["enrichment_attempts"] = [_row_with_payload(attempt) for attempt in enrichment]
+        payload["routing_decisions"] = [_row_with_payload(decision) for decision in routing]
+        payload["sink_attempts"] = [_row_with_payload(attempt) for attempt in sinks]
+        payload["external_bindings"] = [_row_with_payload(binding) for binding in bindings]
         return payload
 
     def project_run(self, *, run_id: str, run_dir: Path) -> ProjectionResult:
@@ -119,6 +177,9 @@ class ContactStore:
         projected_contacts = 0
         projected_assets = 0
         projected_extraction_attempts = 0
+        projected_enrichment_attempts = 0
+        projected_routing_decisions = 0
+        projected_sink_attempts = 0
         skipped_jobs = 0
         for job_id, artifacts_by_kind in by_job.items():
             candidate_artifact = artifacts_by_kind.get("reviewed_contact") or artifacts_by_kind.get("contact_candidate")
@@ -154,14 +215,61 @@ class ContactStore:
                 artifacts=artifacts_by_kind,
                 job=job,
             )
+            projected_enrichment_attempts += self.upsert_enrichment_attempts_for_job(
+                contact_id=contact_id,
+                run_id=run_id,
+                job_id=job_id,
+                artifacts=artifacts_by_kind,
+            )
+            projected_routing_decisions += self.upsert_routing_decision_for_job(
+                contact_id=contact_id,
+                run_id=run_id,
+                job_id=job_id,
+                artifacts=artifacts_by_kind,
+                job=job,
+            )
+            projected_sink_attempts += self.upsert_sink_attempts_for_job(
+                contact_id=contact_id,
+                run_id=run_id,
+                job_id=job_id,
+                artifacts=artifacts_by_kind,
+            )
 
         return ProjectionResult(
             run_id=run_id,
             projected_contacts=projected_contacts,
             projected_assets=projected_assets,
             projected_extraction_attempts=projected_extraction_attempts,
+            projected_enrichment_attempts=projected_enrichment_attempts,
+            projected_routing_decisions=projected_routing_decisions,
+            projected_sink_attempts=projected_sink_attempts,
             skipped_jobs=skipped_jobs,
         )
+
+    def run_projection_status(self, *, run_id: str, run_dir: Path) -> dict[str, Any]:
+        self.initialize()
+        expected_job_ids, unreadable_job_ids = _candidate_job_ids(run_dir)
+        with self._connect() as conn:
+            self._migrate(conn)
+            rows = conn.execute(
+                "SELECT contact_id, source_job_id FROM contacts WHERE source_run_id = ?",
+                (run_id,),
+            ).fetchall()
+        projected_job_ids = {str(row["source_job_id"]) for row in rows}
+        missing_job_ids = sorted(expected_job_ids - projected_job_ids)
+        extra_job_ids = sorted(projected_job_ids - expected_job_ids)
+        return {
+            "schema": "business-card-watchdog.contact-store-drift.v1",
+            "run_id": run_id,
+            "state": "in_sync" if not missing_job_ids and not extra_job_ids and not unreadable_job_ids else "drift",
+            "expected_contact_count": len(expected_job_ids),
+            "projected_contact_count": len(projected_job_ids),
+            "missing_job_ids": missing_job_ids,
+            "extra_job_ids": extra_job_ids,
+            "unreadable_candidate_job_ids": sorted(unreadable_job_ids),
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
 
     def upsert_contact_from_candidate(
         self,
@@ -297,7 +405,7 @@ class ContactStore:
             )
         for kind, artifact in artifacts.items():
             path = str(artifact.get("path") or "")
-            if kind not in {"contact_candidate", "reviewed_contact", "contact_spec", "review_packet"} or not path:
+            if kind not in _PROJECTED_ASSET_KINDS or not path:
                 continue
             rows.append(
                 (
@@ -330,6 +438,165 @@ class ContactStore:
                         updated_at = excluded.updated_at
                     """,
                     (*row, now),
+                )
+        return len(rows)
+
+    def upsert_enrichment_attempts_for_job(
+        self,
+        *,
+        contact_id: str,
+        run_id: str,
+        job_id: str,
+        artifacts: dict[str, dict[str, Any]],
+    ) -> int:
+        rows: list[tuple[str, str, str, str, str, str, str]] = []
+        now = utc_now()
+        for kind, artifact in artifacts.items():
+            if not kind.startswith("enrichment"):
+                continue
+            path = Path(str(artifact.get("path") or ""))
+            payload = _read_json_file(path) or {}
+            provider = _enrichment_provider(kind, payload)
+            state = str(payload.get("state") or payload.get("status") or "recorded")
+            rows.append(
+                (
+                    _stable_id("enrich", run_id, job_id, kind, str(path)),
+                    contact_id,
+                    provider,
+                    state,
+                    _json_dumps({"artifact": artifact, "payload": payload}),
+                    now,
+                    now,
+                )
+            )
+        with self._connect() as conn:
+            self._migrate(conn)
+            for row in rows:
+                conn.execute(
+                    """
+                    INSERT INTO enrichment_attempts (
+                        attempt_id, contact_id, provider, state, payload_json, created_at, updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(attempt_id) DO UPDATE SET
+                        contact_id = excluded.contact_id,
+                        provider = excluded.provider,
+                        state = excluded.state,
+                        payload_json = excluded.payload_json,
+                        updated_at = excluded.updated_at
+                    """,
+                    row,
+                )
+        return len(rows)
+
+    def upsert_routing_decision_for_job(
+        self,
+        *,
+        contact_id: str,
+        run_id: str,
+        job_id: str,
+        artifacts: dict[str, dict[str, Any]],
+        job: dict[str, Any] | None = None,
+    ) -> int:
+        sink_payload_artifact = artifacts.get("sink_payloads")
+        duplicate_artifact = artifacts.get("duplicate_assessment") or artifacts.get("downstream_duplicate_assessment")
+        sink_payloads = _read_json_file(Path(str((sink_payload_artifact or {}).get("path") or ""))) or {}
+        duplicate = _read_json_file(Path(str((duplicate_artifact or {}).get("path") or ""))) or {}
+        payload_rows = sink_payloads.get("payloads") if isinstance(sink_payloads.get("payloads"), list) else []
+        sinks = sorted({str(row.get("sink") or "") for row in payload_rows if isinstance(row, dict) and row.get("sink")})
+        job_state = str((job or {}).get("state") or "")
+        if sinks:
+            state = "ready_to_route"
+        elif duplicate.get("blocks_routing") or job_state == "needs_review":
+            state = "needs_review"
+        else:
+            state = "no_route"
+        payload = {
+            "job_state": job_state,
+            "sinks": sinks,
+            "sink_payloads": sink_payloads,
+            "duplicate_assessment": duplicate,
+            "source_artifacts": {
+                "sink_payloads": sink_payload_artifact,
+                "duplicate_assessment": duplicate_artifact,
+            },
+        }
+        now = utc_now()
+        with self._connect() as conn:
+            self._migrate(conn)
+            conn.execute(
+                """
+                INSERT INTO routing_decisions (
+                    decision_id, contact_id, tenant, state, payload_json, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(decision_id) DO UPDATE SET
+                    contact_id = excluded.contact_id,
+                    tenant = excluded.tenant,
+                    state = excluded.state,
+                    payload_json = excluded.payload_json,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    _stable_id("route", run_id, job_id),
+                    contact_id,
+                    ",".join(sinks) if sinks else "unassigned",
+                    state,
+                    _json_dumps(payload),
+                    now,
+                    now,
+                ),
+            )
+        return 1
+
+    def upsert_sink_attempts_for_job(
+        self,
+        *,
+        contact_id: str,
+        run_id: str,
+        job_id: str,
+        artifacts: dict[str, dict[str, Any]],
+    ) -> int:
+        sink_payload_artifact = artifacts.get("sink_payloads")
+        sink_payloads = _read_json_file(Path(str((sink_payload_artifact or {}).get("path") or ""))) or {}
+        payload_rows = sink_payloads.get("payloads") if isinstance(sink_payloads.get("payloads"), list) else []
+        rows: list[tuple[str, str, str, str, str, str, str]] = []
+        now = utc_now()
+        for row in payload_rows:
+            if not isinstance(row, dict):
+                continue
+            sink = str(row.get("sink") or "")
+            if not sink:
+                continue
+            state = "dry_run" if row.get("dry_run", True) else "planned"
+            rows.append(
+                (
+                    _stable_id("sink", run_id, job_id, sink),
+                    contact_id,
+                    sink,
+                    state,
+                    _json_dumps({"sink_payload": row, "artifact": sink_payload_artifact}),
+                    now,
+                    now,
+                )
+            )
+        with self._connect() as conn:
+            self._migrate(conn)
+            for row in rows:
+                conn.execute(
+                    """
+                    INSERT INTO sink_attempts (
+                        attempt_id, contact_id, sink, state, payload_json, created_at, updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(attempt_id) DO UPDATE SET
+                        contact_id = excluded.contact_id,
+                        sink = excluded.sink,
+                        state = excluded.state,
+                        payload_json = excluded.payload_json,
+                        updated_at = excluded.updated_at
+                    """,
+                    row,
                 )
         return len(rows)
 
@@ -488,6 +755,33 @@ def _read_json_file(path: Path) -> dict[str, Any] | None:
     except (OSError, json.JSONDecodeError):
         return None
     return payload if isinstance(payload, dict) else None
+
+
+def _candidate_job_ids(run_dir: Path) -> tuple[set[str], set[str]]:
+    expected: set[str] = set()
+    unreadable: set[str] = set()
+    for artifact in _read_jsonl(run_dir / "artifacts.jsonl"):
+        kind = str(artifact.get("kind") or "")
+        if kind not in {"contact_candidate", "reviewed_contact"}:
+            continue
+        job_id = str(artifact.get("job_id") or "")
+        path = Path(str(artifact.get("path") or ""))
+        if _read_json_file(path) is None:
+            unreadable.add(job_id)
+            continue
+        expected.add(job_id)
+    return expected, unreadable
+
+
+def _enrichment_provider(kind: str, payload: dict[str, Any]) -> str:
+    provider = str(payload.get("provider") or "").strip()
+    if provider:
+        return provider
+    if "public_web" in kind:
+        return "public_web"
+    if "provider" in kind:
+        return str(payload.get("provider_name") or "paid_provider")
+    return "unknown"
 
 
 def _media_kind(path: str) -> str:
