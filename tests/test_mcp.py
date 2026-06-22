@@ -12,6 +12,7 @@ from business_card_watchdog.config import (
     WatchConfig,
 )
 from business_card_watchdog.contact import build_contact_candidate
+from business_card_watchdog.ledger import RunLedger
 from business_card_watchdog.mcp import call_tool, tool_manifest
 from business_card_watchdog.mcp_server import serve_jsonl
 from business_card_watchdog.orchestrator import BatchOrchestrator
@@ -72,6 +73,10 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_live_pilot_command_copy_packet_from_response" in names
     assert "business_card_watchdog_next_actions" in names
     assert "business_card_watchdog_run_next_actions" in names
+    assert "business_card_watchdog_contact_review_recommend" in names
+    assert "business_card_watchdog_contact_review_states" in names
+    assert "business_card_watchdog_contact_review_decide" in names
+    assert "business_card_watchdog_contact_review_safe_loop" in names
     assert "business_card_watchdog_offline_pilot_gap_audit" in names
     assert "business_card_watchdog_multi_card_preclassification_drill" in names
     assert "business_card_watchdog_watch_dry_run_selection_drill" in names
@@ -142,6 +147,94 @@ def test_manifest_has_process_tool() -> None:
     assert "resolve_duplicate" in review_tool["input_schema"]["properties"]["action"]["enum"]
     assert "reject_not_card" in review_tool["input_schema"]["properties"]["action"]["enum"]
     assert "skip" in review_tool["input_schema"]["properties"]["action"]["enum"]
+
+
+def test_mcp_contact_review_state_safe_loop_parity(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    run_id, job_id = make_recorded_run(config)
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+    (artifact_dir / "contact_candidate.json").write_text(
+        json.dumps(
+            build_contact_candidate(
+                {
+                    "full_name": "Ada Lovelace",
+                    "organization": "Example Labs",
+                    "email": "ada@example.test",
+                }
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    RunLedger(config.runs_dir / run_id).record_artifact(
+        job_id=job_id,
+        kind="contact_candidate",
+        path=artifact_dir / "contact_candidate.json",
+    )
+    service = BusinessCardService(config)
+    service.project_contacts_from_run(run_id)
+    contact_id = service.list_contacts()["contacts"][0]["contact_id"]
+
+    proposed = call_tool(
+        "business_card_watchdog_contact_review_recommend",
+        {
+            "contact_id": contact_id,
+            "source": "app_intelligence",
+            "category": "route_readiness",
+            "recommendation": "request_enrichment_before_routing",
+            "rationale": "missing independent organization confirmation",
+            "confidence": 0.82,
+            "evidence": {"signals": ["organization_only"]},
+        },
+        config=config,
+    )
+    review_state_id = proposed["review_state"]["review_state_id"]
+    listing = call_tool(
+        "business_card_watchdog_contact_review_states",
+        {"contact_id": contact_id, "state": "proposed"},
+        config=config,
+    )
+    decision = call_tool(
+        "business_card_watchdog_contact_review_decide",
+        {
+            "review_state_id": review_state_id,
+            "reviewer": "mcp-test",
+            "decision": "reject",
+            "notes": "not needed for dry-run routing",
+        },
+        config=config,
+    )
+
+    call_tool(
+        "business_card_watchdog_contact_review_recommend",
+        {
+            "contact_id": contact_id,
+            "category": "route_readiness",
+            "recommendation": "ignore_low_value_hint",
+            "evidence": {"safe_to_auto_continue": True, "safe_auto_decision": "reject"},
+        },
+        config=config,
+    )
+    safe_loop = call_tool(
+        "business_card_watchdog_contact_review_safe_loop",
+        {"limit": 5, "reviewer": "mcp-safe-loop", "apply": True},
+        config=config,
+    )
+
+    assert proposed["schema"] == "business-card-watchdog.contact-review-recommendation.v1"
+    assert proposed["review_state"]["state"] == "proposed"
+    assert proposed["writes_attempted"] == 0
+    assert proposed["network_calls_made"] == 0
+    assert listing["schema"] == "business-card-watchdog.contact-review-states.v1"
+    assert listing["count"] == 1
+    assert decision["review_state"]["state"] == "rejected"
+    assert decision["review_state"]["decided_by"] == "mcp-test"
+    assert safe_loop["schema"] == "business-card-watchdog.contact-review-safe-loop.v1"
+    assert safe_loop["action_count"] == 1
+    assert safe_loop["actions"][0]["status"] == "executed"
+    assert safe_loop["actions"][0]["decision"] == "reject"
+    assert safe_loop["writes_attempted"] == 0
+    assert safe_loop["network_calls_made"] == 0
 
 
 def test_mcp_watch_backlog_preflight_redacts_private_source_paths(tmp_path: Path) -> None:

@@ -9,6 +9,7 @@ import pytest
 
 from business_card_watchdog.config import AppConfig, EnrichmentConfig, EnrichmentProviderConfig, PrefilterConfig, SinkConfig
 from business_card_watchdog.contact import build_contact_candidate
+from business_card_watchdog.ledger import RunLedger
 from business_card_watchdog.orchestrator import BatchOrchestrator
 from business_card_watchdog.service import BusinessCardService
 
@@ -2457,3 +2458,85 @@ def test_api_records_public_web_enrichment_results(tmp_path: Path) -> None:
     assert payload["public_web_result"]["searched_by"] == "api-search"
     assert payload["public_web_result"]["network_calls_made"] == 0
     assert payload["result"]["schema"] == "business-card-watchdog.enrichment-result.v1"
+
+
+def test_api_contact_review_state_safe_loop_parity(tmp_path: Path) -> None:
+    from business_card_watchdog.api import create_app
+
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+    config = AppConfig(config_path=config_path, data_dir=data_dir)
+    run_id, job_id = make_recorded_run(config)
+    artifact_dir = data_dir / "runs" / run_id / "artifacts" / job_id
+    (artifact_dir / "contact_candidate.json").write_text(
+        json.dumps(
+            build_contact_candidate(
+                {
+                    "full_name": "Ada Lovelace",
+                    "organization": "Example Labs",
+                    "email": "ada@example.test",
+                }
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    RunLedger(config.runs_dir / run_id).record_artifact(
+        job_id=job_id,
+        kind="contact_candidate",
+        path=artifact_dir / "contact_candidate.json",
+    )
+    service = BusinessCardService(config)
+    service.project_contacts_from_run(run_id)
+    contact_id = service.list_contacts()["contacts"][0]["contact_id"]
+    client = TestClient(create_app(config_path))
+
+    proposed = client.post(
+        f"/contacts/{contact_id}/review-recommendations",
+        json={
+            "source": "app_intelligence",
+            "category": "route_readiness",
+            "recommendation": "request_enrichment_before_routing",
+            "rationale": "missing independent organization confirmation",
+            "confidence": 0.82,
+            "evidence": {"signals": ["organization_only"]},
+        },
+    ).json()
+    review_state_id = proposed["review_state"]["review_state_id"]
+    listing = client.get(
+        "/contacts/review-states",
+        params={"contact_id": contact_id, "state": "proposed"},
+    ).json()
+    decision = client.post(
+        f"/contacts/review-states/{review_state_id}/decision",
+        json={"reviewer": "api-test", "decision": "reject", "notes": "not needed for dry-run routing"},
+    ).json()
+
+    client.post(
+        f"/contacts/{contact_id}/review-recommendations",
+        json={
+            "category": "route_readiness",
+            "recommendation": "ignore_low_value_hint",
+            "evidence": {"safe_to_auto_continue": True, "safe_auto_decision": "reject"},
+        },
+    )
+    safe_loop = client.post(
+        "/contacts/review-safe-loop",
+        json={"limit": 5, "reviewer": "api-safe-loop", "apply": True},
+    ).json()
+
+    assert proposed["schema"] == "business-card-watchdog.contact-review-recommendation.v1"
+    assert proposed["review_state"]["state"] == "proposed"
+    assert proposed["writes_attempted"] == 0
+    assert proposed["network_calls_made"] == 0
+    assert listing["schema"] == "business-card-watchdog.contact-review-states.v1"
+    assert listing["count"] == 1
+    assert decision["review_state"]["state"] == "rejected"
+    assert decision["review_state"]["decided_by"] == "api-test"
+    assert safe_loop["schema"] == "business-card-watchdog.contact-review-safe-loop.v1"
+    assert safe_loop["action_count"] == 1
+    assert safe_loop["actions"][0]["status"] == "executed"
+    assert safe_loop["actions"][0]["decision"] == "reject"
+    assert safe_loop["writes_attempted"] == 0
+    assert safe_loop["network_calls_made"] == 0

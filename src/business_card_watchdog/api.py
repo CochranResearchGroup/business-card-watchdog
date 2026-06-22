@@ -76,6 +76,24 @@ def create_app(config_path: Path | None = None):
         response: str
         acknowledgement: str = ""
 
+    class ContactReviewRecommendationRequest(BaseModel):
+        source: str = "app_intelligence"
+        category: str
+        recommendation: str
+        rationale: str = ""
+        confidence: float | None = None
+        evidence: dict[str, object] = Field(default_factory=dict)
+
+    class ContactReviewDecisionRequest(BaseModel):
+        reviewer: str = "operator"
+        decision: str
+        notes: str = ""
+
+    class ContactReviewSafeLoopRequest(BaseModel):
+        limit: int = 10
+        reviewer: str = "safe-loop"
+        apply: bool = False
+
     class ChildSelectedTargetAuditRequest(BaseModel):
         run_id: str
         sink: str | None = None
@@ -963,6 +981,51 @@ def create_app(config_path: Path | None = None):
     @app.post("/actions/next")
     def post_next_actions(request: NextActionsRequest = Body(default=NextActionsRequest())) -> dict[str, object]:
         return service().next_actions(run_id=request.run_id, limit=request.limit)
+
+    @app.post("/contacts/{contact_id}/review-recommendations")
+    def create_contact_review_recommendation(
+        contact_id: str,
+        request: ContactReviewRecommendationRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().record_contact_review_recommendation(
+            contact_id=contact_id,
+            source=request.source,
+            category=request.category,
+            recommendation=request.recommendation,
+            rationale=request.rationale,
+            confidence=request.confidence,
+            evidence=dict(request.evidence),
+        )
+
+    @app.get("/contacts/review-states")
+    def list_contact_review_states(
+        contact_id: str | None = None,
+        state: str = "all",
+        limit: int = 100,
+    ) -> dict[str, object]:
+        return service().list_contact_review_states(contact_id=contact_id, state=state, limit=limit)
+
+    @app.post("/contacts/review-states/{review_state_id}/decision")
+    def decide_contact_review_state(
+        review_state_id: str,
+        request: ContactReviewDecisionRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().decide_contact_review_state(
+            review_state_id=review_state_id,
+            reviewer=request.reviewer,
+            decision=request.decision,
+            notes=request.notes,
+        )
+
+    @app.post("/contacts/review-safe-loop")
+    def run_contact_review_safe_loop(
+        request: ContactReviewSafeLoopRequest = Body(default=ContactReviewSafeLoopRequest()),
+    ) -> dict[str, object]:
+        return service().run_contact_review_safe_loop(
+            limit=request.limit,
+            reviewer=request.reviewer,
+            apply=request.apply,
+        )
 
     @app.get("/offline-pilot-gap-audit")
     def offline_pilot_gap_audit(write: bool = True) -> dict[str, object]:

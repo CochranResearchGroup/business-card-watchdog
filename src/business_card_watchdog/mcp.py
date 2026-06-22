@@ -439,6 +439,61 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_contact_review_recommend",
+                "description": "Record an App Intelligence contact review recommendation as evidence without mutating contact fields.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "contact_id": {"type": "string"},
+                        "source": {"type": "string", "default": "app_intelligence"},
+                        "category": {"type": "string"},
+                        "recommendation": {"type": "string"},
+                        "rationale": {"type": "string"},
+                        "confidence": {"type": "number"},
+                        "evidence": {"type": "object"},
+                    },
+                    "required": ["contact_id", "category", "recommendation"],
+                },
+            },
+            {
+                "name": "business_card_watchdog_contact_review_states",
+                "description": "List database-backed contact review states by contact and state.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "contact_id": {"type": "string"},
+                        "state": {"type": "string", "default": "all"},
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 1000, "default": 100},
+                    },
+                },
+            },
+            {
+                "name": "business_card_watchdog_contact_review_decide",
+                "description": "Apply a host-owned accept/reject decision to a contact review state.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "review_state_id": {"type": "string"},
+                        "reviewer": {"type": "string", "default": "operator"},
+                        "decision": {"type": "string", "enum": ["accept", "reject"]},
+                        "notes": {"type": "string"},
+                    },
+                    "required": ["review_state_id", "decision"],
+                },
+            },
+            {
+                "name": "business_card_watchdog_contact_review_safe_loop",
+                "description": "Preview or apply bounded safe auto-rejections for contact review states without accepting recommendations.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 1000, "default": 10},
+                        "reviewer": {"type": "string", "default": "safe-loop"},
+                        "apply": {"type": "boolean", "default": False},
+                    },
+                },
+            },
+            {
                 "name": "business_card_watchdog_offline_pilot_gap_audit",
                 "description": "Inspect offline pilot drill/documentation coverage and remaining live/operator boundaries without running live calls.",
                 "input_schema": {
@@ -1583,6 +1638,35 @@ def call_tool(
         return service.run_next_actions(
             run_id=str(args["run_id"]) if args.get("run_id") else None,
             limit=int(args.get("limit", 10)),
+        )
+    if tool_name == "business_card_watchdog_contact_review_recommend":
+        return service.record_contact_review_recommendation(
+            contact_id=str(args["contact_id"]),
+            source=str(args.get("source") or "app_intelligence"),
+            category=str(args["category"]),
+            recommendation=str(args["recommendation"]),
+            rationale=str(args.get("rationale") or ""),
+            confidence=float(args["confidence"]) if args.get("confidence") is not None else None,
+            evidence=dict(args.get("evidence") or {}),
+        )
+    if tool_name == "business_card_watchdog_contact_review_states":
+        return service.list_contact_review_states(
+            contact_id=str(args["contact_id"]) if args.get("contact_id") else None,
+            state=str(args.get("state") or "all"),
+            limit=int(args.get("limit", 100)),
+        )
+    if tool_name == "business_card_watchdog_contact_review_decide":
+        return service.decide_contact_review_state(
+            review_state_id=str(args["review_state_id"]),
+            reviewer=str(args.get("reviewer") or "operator"),
+            decision=str(args["decision"]),
+            notes=str(args.get("notes") or ""),
+        )
+    if tool_name == "business_card_watchdog_contact_review_safe_loop":
+        return service.run_contact_review_safe_loop(
+            limit=int(args.get("limit", 10)),
+            reviewer=str(args.get("reviewer") or "safe-loop"),
+            apply=bool(args.get("apply", False)),
         )
     if tool_name == "business_card_watchdog_offline_pilot_gap_audit":
         return service.offline_pilot_gap_audit(write=bool(args.get("write", True)))
