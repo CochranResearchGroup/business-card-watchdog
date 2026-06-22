@@ -7372,6 +7372,37 @@ Safety:
   PDFs, create crops, create `selected_live_target.json`, run enrichment, run
   live lookup/write/readback, or commit runtime manifests/private filenames.
 
+## Turn 303 | 2026-06-22
+
+Executed Plan 0091 as the Plan 0060 Milestone 9 operator checklist slice.
+
+Implemented:
+
+- Added `docs/operations/milestone-9-dry-run-to-live-target.md`.
+- Documented the operator sequence from synthetic watcher proof through
+  private-input dry-run command-copy, dry-run closeout, contact projection,
+  contact review, route readiness, and live-target candidate inspection.
+- Linked the checklist from README and `docs/operations/live-pilot-checklists.md`.
+- Updated Plan 0060 and ROADMAP with the Plan 0091 status.
+
+Validation:
+
+- `.venv/bin/python -m business_card_watchdog.cli drills watch-dry-run-execution --json`
+  returned `state = "passed"` with one synthetic file processed, a completed
+  dry-run batch, contact projection artifact evidence, zero writes, zero network
+  calls, and configured watch inputs not used.
+- `rg -n "milestone-9-dry-run-to-live-target|Plan 0091|watch-dry-run-execution|contact projection|live-target-candidates" README.md docs/operations/milestone-9-dry-run-to-live-target.md docs/operations/live-pilot-checklists.md docs/dev/plans/0060-2026-06-20-product-development-milestone-plan.md docs/dev/plans/0091-2026-06-22-milestone-9-operator-checklist.md ROADMAP.md RUNBOOK.md`
+  passed.
+- `git diff --check` passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+
+Safety:
+
+- This slice used synthetic fixture data only. It did not process configured
+  private watched files, create `selected_live_target.json`, run public-web
+  search, call paid enrichment, run live lookup/write/readback, or commit runtime
+  manifests/private filenames.
+
 ## Turn 291 | 2026-06-22
 
 Executed Plan 0080 as the next Plan 0060 Milestone 7 contact-store persistence

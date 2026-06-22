@@ -492,9 +492,11 @@ initialized, but there are no contact rows and no live-target candidates. Plan
 0090 recorded the no-live dry-run selection handoff: the watched-folder backlog
 is settled and ready for an operator response, but generic continuation must
 stop before processing private watched-folder backlog or creating
-`selected_live_target.json`. The next step requires an explicit
-operator-selected watched input for dry-run processing, then contact projection
-and review before live target selection can proceed.
+`selected_live_target.json`. Plan 0091 added the operator checklist from
+synthetic watcher proof through private dry-run approval, contact projection,
+review, route readiness, and live-target candidate inspection. The next step
+requires an explicit operator-selected watched input for dry-run processing,
+then contact projection and review before live target selection can proceed.
 
 Goal-compatible objective:
 

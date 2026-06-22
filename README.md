@@ -158,6 +158,14 @@ private-source `watch --once --dry-run`. It keeps paths and filenames redacted,
 requires fixture execution review plus response validation, and does not return a
 copyable dry-run command.
 
+For the Plan 0060 Milestone 9 path from the current empty contact store to live
+target candidates, follow
+`docs/operations/milestone-9-dry-run-to-live-target.md`. That checklist starts
+with the synthetic watcher drill, then requires an operator-selected private
+watched input, dry-run command-copy acknowledgement, dry-run closeout, contact
+projection, review, route readiness, and live-target candidate inspection before
+any selected live target can be created.
+
 After an operator-selected dry-run batch completes, run
 `runs dry-run-closeout <run-id> --json` before review or live-pilot selection.
 The closeout reads only the local run ledger and checks that the run completed in

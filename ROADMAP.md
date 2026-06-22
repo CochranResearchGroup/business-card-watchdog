@@ -36,6 +36,7 @@ Latest completed contact review sink-approval plan: `docs/dev/plans/0087-2026-06
 Latest completed contact review surface closeout plan: `docs/dev/plans/0088-2026-06-22-contact-review-surface-closeout.md`.
 Latest completed live pilot target-selection audit plan: `docs/dev/plans/0089-2026-06-22-live-pilot-target-selection-audit.md`.
 Latest completed Milestone 9 dry-run selection handoff plan: `docs/dev/plans/0090-2026-06-22-milestone-9-dry-run-selection-handoff.md`.
+Latest completed Milestone 9 operator checklist plan: `docs/dev/plans/0091-2026-06-22-milestone-9-operator-checklist.md`.
 Latest completed practice-corpus plan: `docs/dev/plans/0062-2026-06-21-practice-corpus-manifest.md`.
 Latest completed scanner side-pair graph plan: `docs/dev/plans/0084-2026-06-22-ocr-contextual-side-pair-graph.md`.
 Next refactor/development plan: Plan 0060 Milestone 9 operator-selected dry-run processing from one watched input, followed by contact projection and review before live target selection.

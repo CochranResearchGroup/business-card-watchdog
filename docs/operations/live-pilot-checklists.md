@@ -12,6 +12,12 @@ Before selecting a real target, use the synthetic rehearsal drill to prove the l
 
 The drill creates a synthetic fixture run and rehearses selected-target creation, selected-target audit, lookup handoff, redacted readiness export, execution checklist, and command-copy packet without executing the copied command or calling GWS/Odollo/Odoo. It is not approval for a real target.
 
+If the contact store has no reviewed target candidates yet, first follow
+`docs/operations/milestone-9-dry-run-to-live-target.md`. That checklist covers
+the operator-selected watched-folder dry run, contact projection, review surface,
+route readiness, and live-target candidate inspection required before any real
+live target can be selected.
+
 ## Read-Only Lookup Smoke
 
 Purpose: prove Google Workspace Contacts and/or Odollo/Odoo lookup adapters can read matching contacts without writing.
