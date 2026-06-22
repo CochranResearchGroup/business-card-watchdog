@@ -150,8 +150,9 @@ Validation:
 
 Status: IN_PROGRESS. Scanner document-intake foundation complete via Plan 0065;
 OCR side classification and front/back pair proposals complete via Plan 0066;
-reviewed side-pair merge complete via Plan 0067; quality-gate hardening remains
-follow-on work.
+reviewed side-pair merge complete via Plan 0067; deterministic extraction
+quality gates complete via Plan 0068. Remaining work should continue with
+multi-card crop promotion and broader App Intelligence review-state hardening.
 
 Goal-compatible objective:
 

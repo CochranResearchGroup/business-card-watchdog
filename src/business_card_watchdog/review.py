@@ -63,6 +63,7 @@ def write_review_packet(
     spec: dict[str, Any],
     assessment: ReviewAssessment,
     contact_candidate: dict[str, Any] | None = None,
+    extraction_quality: dict[str, Any] | None = None,
 ) -> Path:
     packet_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -75,6 +76,7 @@ def write_review_packet(
             if spec.get(key)
         },
         "contact_candidate": contact_candidate or {},
+        "extraction_quality": extraction_quality or {},
         "instructions": [
             "Keep only fields visible on the card unless an enrichment policy explicitly permits more.",
             "Put uncertain leftovers in notes with provenance.",

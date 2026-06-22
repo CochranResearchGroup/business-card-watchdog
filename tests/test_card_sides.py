@@ -126,6 +126,11 @@ def test_scanner_pdf_run_records_side_classification_and_pair_proposals(
         side = json.loads((Path(job["artifact_dir"]) / "card_side_candidate.json").read_text(encoding="utf-8"))
         labels.add(side["side_label"])
         assert side["ocr_text_sha256"]
+        quality = json.loads((Path(job["artifact_dir"]) / "extraction_quality.json").read_text(encoding="utf-8"))
+        if side["side_label"] == "back":
+            assert job["state"] == "needs_review"
+            assert quality["reasons"] == ["side_not_route_ready"]
+            assert not (Path(job["artifact_dir"]) / "sink_payloads.json").exists()
     assert labels == {"front", "back"}
     detail = BusinessCardService(config).get_contact(
         BusinessCardService(config).list_contacts()["contacts"][0]["contact_id"]

@@ -26,6 +26,7 @@ from .fanout import (
 from .ledger import RunLedger
 from .models import CardJob, utc_now
 from .preclassifier import assess_business_card_candidate, build_card_candidate_box_manifest
+from .quality import assess_extraction_quality, write_extraction_quality
 from .review import assess_contact_spec, write_review_packet
 from .routing import decide_sinks, load_contact_spec
 from .sinks import build_sink_payloads, write_sink_payloads
@@ -397,6 +398,7 @@ class BatchOrchestrator:
             ledger.record_event("job_failed", {"job": job.to_dict(), "stderr": result.stderr[-4000:]})
             return
 
+        side_candidate: dict[str, Any] | None = None
         if source_page is not None:
             ocr_path = result.artifact_dir / "ocr.txt"
             ocr_text = ocr_path.read_text(encoding="utf-8") if ocr_path.exists() else ""
@@ -441,6 +443,46 @@ class BatchOrchestrator:
         )
 
         contact_spec = contact_candidate_to_spec(contact_candidate)
+        extraction_quality = assess_extraction_quality(
+            artifact_dir=result.artifact_dir,
+            source_page=source_page,
+            side_candidate=side_candidate,
+        )
+        extraction_quality_path = write_extraction_quality(
+            result.artifact_dir / "extraction_quality.json",
+            extraction_quality,
+        )
+        ledger.record_artifact(
+            job_id=job.job_id,
+            kind="extraction_quality",
+            path=extraction_quality_path,
+            metadata={
+                "status": extraction_quality.status,
+                "route_ready_allowed": extraction_quality.route_ready_allowed,
+            },
+        )
+        ledger.record_event(
+            "extraction_quality_assessed",
+            {"job": job.to_dict(), "assessment": extraction_quality.to_dict()},
+        )
+        if extraction_quality.needs_review:
+            review_packet = write_review_packet(
+                packet_path=result.artifact_dir / "review_packet.json",
+                image_path=Path(job.image_path),
+                spec=contact_spec,
+                assessment=assess_contact_spec(contact_spec),
+                contact_candidate=contact_candidate,
+                extraction_quality=extraction_quality.to_dict(),
+            )
+            ledger.record_artifact(job_id=job.job_id, kind="review_packet", path=review_packet)
+            job.transition_to("needs_review")
+            ledger.record_job(job)
+            ledger.record_event(
+                "job_quality_needs_review",
+                {"job": job.to_dict(), "assessment": extraction_quality.to_dict()},
+            )
+            return
+
         assessment = assess_contact_spec(contact_spec)
         if assessment.needs_review:
             review_packet = write_review_packet(
@@ -449,6 +491,7 @@ class BatchOrchestrator:
                 spec=contact_spec,
                 assessment=assessment,
                 contact_candidate=contact_candidate,
+                extraction_quality=extraction_quality.to_dict(),
             )
             ledger.record_artifact(job_id=job.job_id, kind="review_packet", path=review_packet)
             job.transition_to("needs_review")

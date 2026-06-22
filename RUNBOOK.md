@@ -6552,3 +6552,45 @@ Captured:
 Validation:
 
 - Documentation-only change reviewed with `git diff`.
+
+## Turn 279 | 2026-06-22
+
+Executed Plan 0068 as the deterministic extraction quality-gate slice under
+Plan 0060 Milestone 3.
+
+Implemented:
+
+- Added `src/business_card_watchdog/quality.py`.
+- Added `business-card-watchdog.extraction-quality.v1` artifacts for successful
+  adapter runs.
+- Checked OCR text presence/token count and crop-manifest presence/count before
+  duplicate and sink decisions.
+- Blocked scanner-derived `back`, `blank`, `unknown`, or missing side labels
+  from direct route-readiness.
+- Added extraction-quality evidence to review packets.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_quality.py tests/test_dry_run_pipeline.py::test_batch_dry_run_uses_synthetic_adapter_without_credentials tests/test_dry_run_pipeline.py::test_incomplete_synthetic_spec_creates_review_packet tests/test_dry_run_pipeline.py::test_short_ocr_quality_creates_review_packet_before_routing -q`
+  passed with 6 tests.
+- `.venv/bin/python -m pytest tests/test_quality.py tests/test_card_sides.py tests/test_dry_run_pipeline.py -q`
+  passed with 15 tests.
+- `.venv/bin/python -m pytest tests/test_quality.py tests/test_card_sides.py tests/test_dry_run_pipeline.py tests/test_contact_store.py tests/test_review_surface.py -q`
+  passed with 27 tests.
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_api.py tests/test_mcp.py tests/test_cli_surfaces.py -q`
+  passed with 223 tests.
+- `.venv/bin/ruff check src/business_card_watchdog tests/test_quality.py tests/test_card_sides.py tests/test_dry_run_pipeline.py`
+  passed.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 354 tests.
+- `codegraph sync /home/ecochran76/workspace.local/business-card-watchdog && codegraph status /home/ecochran76/workspace.local/business-card-watchdog`
+  reported the index already up to date, 60 files, 1,913 nodes, and 2,567
+  edges.
+
+Safety:
+
+- This slice did not run enrichment providers, public-web search, live
+  lookup/write/readback, Google Contacts writes, Odoo/Odollo writes, or
+  automatic front/back merges.

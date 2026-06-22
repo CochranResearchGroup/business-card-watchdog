@@ -62,6 +62,7 @@ def test_batch_dry_run_uses_synthetic_adapter_without_credentials(
         assert (artifact_dir / "crop_manifest.json").exists()
         assert (artifact_dir / "ocr.txt").exists()
         assert (artifact_dir / "contact_candidate.json").exists()
+        assert (artifact_dir / "extraction_quality.json").exists()
         assert (artifact_dir / "sink_payloads.json").exists()
         spec = json.loads((artifact_dir / "spec.json").read_text(encoding="utf-8"))
         assert spec["email"].endswith("@example.test")
@@ -97,6 +98,7 @@ def test_batch_dry_run_uses_synthetic_adapter_without_credentials(
         "ocr_text",
         "crop_manifest",
         "contact_candidate",
+        "extraction_quality",
         "duplicate_assessment",
         "sink_payloads",
         "preclassification",
@@ -106,6 +108,7 @@ def test_batch_dry_run_uses_synthetic_adapter_without_credentials(
         "ocr_text",
         "crop_manifest",
         "contact_candidate",
+        "extraction_quality",
         "duplicate_assessment",
         "sink_payloads",
         "contact_store_projection",
@@ -160,6 +163,7 @@ def test_incomplete_synthetic_spec_creates_review_packet(tmp_path: Path, monkeyp
     assert final_job["state"] == "needs_review"
     assert review_packet["assessment"]["status"] == "needs_review"
     assert review_packet["contact_candidate"]["schema"] == "business-card-watchdog.contact-candidate.v1"
+    assert review_packet["extraction_quality"]["status"] == "pass"
     assert any(event["event_type"] == "job_needs_review" for event in events)
     assert any(event["event_type"] == "contact_store_projected" for event in events)
 
@@ -245,6 +249,9 @@ def test_pdf_document_intake_materializes_page_jobs_and_side_candidates(
         assert side["side_label"] == "front"
         assert side["classification_reason"] == "contact_identity_density"
         assert side["ocr_text_sha256"]
+        quality = json.loads((artifact_dir / "extraction_quality.json").read_text(encoding="utf-8"))
+        assert quality["schema"] == "business-card-watchdog.extraction-quality.v1"
+        assert quality["status"] == "pass"
 
     contacts = BusinessCardService(config).list_contacts()["contacts"]
     assert len(contacts) == 2
@@ -252,3 +259,36 @@ def test_pdf_document_intake_materializes_page_jobs_and_side_candidates(
     asset_kinds = {asset["asset_kind"] for asset in detail["assets"]}
     assert {"source_page", "card_side_candidate", "contact_candidate"}.issubset(asset_kinds)
     assert BusinessCardService(config).contact_projection_drift(run_dir.name)["drift"]["state"] == "in_sync"
+
+
+def test_short_ocr_quality_creates_review_packet_before_routing(tmp_path: Path, monkeypatch) -> None:
+    source_dir = tmp_path / "synthetic-cards"
+    write_synthetic_image(source_dir / "short-ocr.png")
+
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        cache_dir=tmp_path / "cache",
+        prefilter=PrefilterConfig(process_uncertain=True),
+        sink=SinkConfig(google_contacts=True, odoo=True, dry_run=True),
+    )
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(
+        orchestrator,
+        "adapter",
+        SyntheticSkillAdapter(ocr_by_stem={"short-ocr": "Ada\n"}),
+    )
+
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+    final_job = next(iter(latest_jobs_by_id(run_dir / "jobs.jsonl").values()))
+    artifact_dir = Path(final_job["artifact_dir"])
+    quality = json.loads((artifact_dir / "extraction_quality.json").read_text(encoding="utf-8"))
+    review_packet = json.loads((artifact_dir / "review_packet.json").read_text(encoding="utf-8"))
+    events = read_jsonl(run_dir / "events.jsonl")
+
+    assert final_job["state"] == "needs_review"
+    assert quality["status"] == "needs_review"
+    assert quality["reasons"] == ["ocr_text_too_short"]
+    assert review_packet["extraction_quality"]["reasons"] == ["ocr_text_too_short"]
+    assert not (artifact_dir / "sink_payloads.json").exists()
+    assert any(event["event_type"] == "job_quality_needs_review" for event in events)
