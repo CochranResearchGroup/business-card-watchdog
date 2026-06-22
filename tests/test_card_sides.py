@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from business_card_watchdog.card_sides import build_pair_proposals, classify_card_side
+from business_card_watchdog.cli import main
 from business_card_watchdog.config import AppConfig, PrefilterConfig
 from business_card_watchdog.orchestrator import BatchOrchestrator
 from business_card_watchdog.service import BusinessCardService
@@ -166,3 +167,142 @@ def test_scanner_pdf_blank_back_does_not_create_pair_proposal(tmp_path: Path, mo
     pairs = json.loads(Path(pair_artifact["path"]).read_text(encoding="utf-8"))
     assert pairs["proposal_count"] == 0
     assert pairs["skipped"][0]["side_labels"] == ["front", "blank"]
+
+
+def _front_back_run(tmp_path: Path, monkeypatch) -> tuple[AppConfig, Path, str]:
+    source_pdf = tmp_path / "scanner" / "review-merge.pdf"
+    source_pdf.parent.mkdir(parents=True)
+    source_pdf.write_bytes(
+        b"%PDF-1.4\n"
+        b"1 0 obj << /Type /Page >> endobj\n"
+        b"2 0 obj << /Type /Page >> endobj\n"
+        b"%%EOF\n"
+    )
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        cache_dir=tmp_path / "cache",
+        prefilter=PrefilterConfig(enabled=False),
+    )
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(
+        orchestrator,
+        "adapter",
+        SyntheticSkillAdapter(
+            specs_by_stem={
+                "page-0001": {
+                    "full_name": "Ada Lovelace",
+                    "organization": "Example Labs",
+                    "title": "Principal Engineer",
+                    "email": "ada@example.test",
+                    "phone": "+1-555-010-1234",
+                },
+                "page-0002": {
+                    "website": "example.test/ada",
+                    "notes": "Back side includes portfolio QR.",
+                },
+            },
+            ocr_by_stem={
+                "page-0001": (
+                    "Ada Lovelace\nPrincipal Engineer\nExample Labs\n"
+                    "ada@example.test\n+1 555 010 1234\n"
+                ),
+                "page-0002": "Scan QR\nlinkedin.com/in/ada\nexample.test/ada\n",
+            },
+        ),
+    )
+    run_dir = orchestrator.process_source(str(source_pdf), dry_run=True, workers=1)
+    proposal_id = BusinessCardService(config).side_pair_review_queue(run_id=run_dir.name)[0]["proposal_id"]
+    return config, run_dir, str(proposal_id)
+
+
+def test_side_pair_review_approval_writes_merged_contact_with_side_provenance(
+    tmp_path: Path, monkeypatch
+) -> None:
+    config, run_dir, proposal_id = _front_back_run(tmp_path, monkeypatch)
+    service = BusinessCardService(config)
+
+    queue = service.side_pair_review_queue(run_id=run_dir.name)
+    result = service.submit_side_pair_review(
+        run_id=run_dir.name,
+        proposal_id=proposal_id,
+        reviewer="operator",
+        action="approve_side_pair_merge",
+        field_corrections={"notes": "Reviewed front/back merge."},
+        notes="approved pair",
+    )
+
+    assert len(queue) == 1
+    assert result["state"] == "merged_for_review"
+    reviewed = result["reviewed_contact"]
+    assert reviewed["flat"]["full_name"] == "Ada Lovelace"
+    assert reviewed["flat"]["website"] == "https://example.test/ada"
+    assert reviewed["flat"]["notes"] == "Reviewed front/back merge."
+    provenance = reviewed["side_pair"]["field_provenance"]
+    assert provenance["email"]["selected_side"] == "front"
+    assert provenance["website"]["selected_side"] == "back"
+    assert provenance["notes"]["selected_side"] == "reviewer_correction"
+    artifacts = read_jsonl(run_dir / "artifacts.jsonl")
+    assert any(artifact["kind"] == "side_pair_review_submission" for artifact in artifacts)
+    assert any(artifact["kind"] == "reviewed_side_pair_contact" for artifact in artifacts)
+    assert any(artifact["kind"] == "side_pair_review_result" for artifact in artifacts)
+    reviewed_queue = service.side_pair_review_queue(run_id=run_dir.name, state="all")
+    assert reviewed_queue[0]["state"] == "merged_for_review"
+
+
+def test_side_pair_review_rejection_does_not_write_merged_contact(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir, proposal_id = _front_back_run(tmp_path, monkeypatch)
+    service = BusinessCardService(config)
+
+    result = service.submit_side_pair_review(
+        run_id=run_dir.name,
+        proposal_id=proposal_id,
+        reviewer="operator",
+        action="reject_side_pair",
+        notes="not the same person",
+    )
+
+    assert result["state"] == "rejected"
+    assert result["reviewed_contact"] is None
+    artifacts = read_jsonl(run_dir / "artifacts.jsonl")
+    assert any(artifact["kind"] == "side_pair_review_result" for artifact in artifacts)
+    assert not any(artifact["kind"] == "reviewed_side_pair_contact" for artifact in artifacts)
+
+
+def test_side_pair_review_cli_json_smoke(tmp_path: Path, monkeypatch, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    cache_dir = tmp_path / "cache"
+    config_path.write_text(
+        f'data_dir = "{data_dir}"\ncache_dir = "{cache_dir}"\n[prefilter]\nenabled = false\n',
+        encoding="utf-8",
+    )
+    config, run_dir, proposal_id = _front_back_run(tmp_path, monkeypatch)
+    config_path.write_text(
+        f'data_dir = "{config.data_dir}"\ncache_dir = "{config.cache_dir}"\n[prefilter]\nenabled = false\n',
+        encoding="utf-8",
+    )
+
+    assert main(["--config", str(config_path), "reviews", "side-pairs", "--run-id", run_dir.name, "--json"]) == 0
+    queue = json.loads(capsys.readouterr().out)
+    assert queue[0]["proposal_id"] == proposal_id
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "reviews",
+                "side-pair-review",
+                proposal_id,
+                "--run-id",
+                run_dir.name,
+                "--action",
+                "approve_side_pair_merge",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    result = json.loads(capsys.readouterr().out)
+    assert result["state"] == "merged_for_review"

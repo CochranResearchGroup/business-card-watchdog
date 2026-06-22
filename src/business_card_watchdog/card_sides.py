@@ -127,6 +127,78 @@ def build_pair_proposals(
     }
 
 
+def merge_side_pair_contacts(
+    *,
+    front_candidate: dict[str, Any],
+    back_candidate: dict[str, Any],
+    proposal: dict[str, Any],
+    reviewer: str,
+    reviewed_at: str,
+    field_corrections: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    from .contact import CONTACT_FIELDS, build_contact_candidate
+
+    front_spec = _candidate_spec(front_candidate)
+    back_spec = _candidate_spec(back_candidate)
+    corrections = {key: str(value).strip() for key, value in dict(field_corrections or {}).items()}
+    merged_spec: dict[str, Any] = {}
+    field_provenance: dict[str, dict[str, Any]] = {}
+    for field in CONTACT_FIELDS:
+        front_value = str(front_spec.get(field) or "").strip()
+        back_value = str(back_spec.get(field) or "").strip()
+        corrected = corrections.get(field, "")
+        if corrected:
+            merged_spec[field] = corrected
+            field_provenance[field] = {
+                "selected_side": "reviewer_correction",
+                "front_value": front_value,
+                "back_value": back_value,
+                "reviewer": reviewer,
+            }
+        elif front_value and back_value and front_value == back_value:
+            merged_spec[field] = front_value
+            field_provenance[field] = {
+                "selected_side": "both",
+                "front_value": front_value,
+                "back_value": back_value,
+            }
+        elif front_value:
+            merged_spec[field] = front_value
+            field_provenance[field] = {
+                "selected_side": "front",
+                "front_value": front_value,
+                "back_value": back_value,
+            }
+        elif back_value:
+            merged_spec[field] = back_value
+            field_provenance[field] = {
+                "selected_side": "back",
+                "front_value": front_value,
+                "back_value": back_value,
+            }
+    reviewed = build_contact_candidate(merged_spec, source="side_pair_review")
+    reviewed["schema"] = "business-card-watchdog.reviewed-side-pair-contact.v1"
+    reviewed["review"] = {
+        "state": "approved_for_routing_review",
+        "reviewer": reviewer,
+        "reviewed_at": reviewed_at,
+        "action": "approve_side_pair_merge",
+    }
+    reviewed["side_pair"] = {
+        "proposal_id": proposal.get("proposal_id"),
+        "front_job_id": proposal.get("front_job_id"),
+        "back_job_id": proposal.get("back_job_id"),
+        "front_page_number": proposal.get("front_page_number"),
+        "back_page_number": proposal.get("back_page_number"),
+        "source_document_path": proposal.get("source_document_path"),
+        "field_provenance": field_provenance,
+    }
+    reviewed["routing_allowed"] = False
+    reviewed["enrichment_allowed"] = False
+    reviewed["sink_write_allowed"] = False
+    return reviewed
+
+
 def _pair_candidate(
     *,
     run_id: str,
@@ -224,6 +296,12 @@ def _domain_from_email(email: str) -> str:
     if "@" not in email:
         return ""
     return email.rsplit("@", 1)[-1].lower()
+
+
+def _candidate_spec(candidate: dict[str, Any]) -> dict[str, Any]:
+    from .contact import contact_candidate_to_spec
+
+    return contact_candidate_to_spec(candidate)
 
 
 def _stable_id(*parts: str) -> str:

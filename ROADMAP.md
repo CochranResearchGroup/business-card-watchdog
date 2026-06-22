@@ -13,6 +13,7 @@ Latest completed contact-store plan: `docs/dev/plans/0063-2026-06-21-user-scoped
 Latest completed projection plan: `docs/dev/plans/0064-2026-06-22-artifact-to-database-projection.md`.
 Latest completed scanner-intake plan: `docs/dev/plans/0065-2026-06-22-scanner-document-intake.md`.
 Latest completed card-side plan: `docs/dev/plans/0066-2026-06-22-ocr-side-classification-pair-proposals.md`.
+Latest completed side-merge plan: `docs/dev/plans/0067-2026-06-22-reviewed-side-pair-merge.md`.
 Latest completed practice-corpus plan: `docs/dev/plans/0062-2026-06-21-practice-corpus-manifest.md`.
 Next refactor plan: open a bounded follow-on for the next read-only packet cluster.
 Next production plan: `docs/dev/plans/0009-2026-06-14-operator-selected-live-smoke-and-pilot-rollout.md`.

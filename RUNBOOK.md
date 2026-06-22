@@ -6491,3 +6491,42 @@ Safety:
 - This slice treats OCR as evidence only. It did not automatically merge
   front/back contacts, run enrichment providers, run public-web search, execute
   live lookup/write/readback, or write Google Contacts, Odoo, or Odollo records.
+
+## Turn 277 | 2026-06-22
+
+Executed Plan 0067 as the reviewed front/back side-pair merge slice under Plan
+0060 Milestone 3.
+
+Implemented:
+
+- Added `docs/dev/plans/0067-2026-06-22-reviewed-side-pair-merge.md`.
+- Added side-pair review queue support from `card_side_pair_proposals.json`.
+- Added explicit side-pair review submission support for
+  `approve_side_pair_merge`, `keep_needs_review`, and `reject_side_pair`.
+- Added `bcw reviews side-pairs` and `bcw reviews side-pair-review`.
+- Added reviewed front/back merge behavior through `merge_side_pair_contacts`.
+- Wrote durable `side_pair_review_submission`,
+  `reviewed_side_pair_contact`, and `side_pair_review_result` artifacts.
+- Preserved field-level side provenance showing whether merged fields came from
+  the front side, back side, both, or reviewer correction.
+- Kept merged side-pair contacts out of routing/sink writes pending final
+  contact review.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_card_sides.py -q` passed with 7 tests.
+- `.venv/bin/python -m pytest tests/test_card_sides.py tests/test_review_surface.py tests/test_cli_surfaces.py -q`
+  passed with 67 tests.
+- `.venv/bin/python -m pytest tests/test_contact_store.py tests/test_dry_run_pipeline.py tests/test_service.py -q`
+  passed with 119 tests.
+- `.venv/bin/python -m pytest tests/test_api.py tests/test_mcp.py -q` passed
+  with 60 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `.venv/bin/python -m pytest -q` passed with 350 tests.
+
+Safety:
+
+- This slice did not automatically merge side pairs, route merged contacts, run
+  enrichment providers, run public-web search, execute live lookup/write/readback,
+  or write Google Contacts, Odoo, or Odollo records.

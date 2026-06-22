@@ -2586,6 +2586,24 @@ def _render_child_review_queue_text(entries: list[dict[str, object]]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_side_pair_review_queue_text(entries: list[dict[str, object]]) -> str:
+    lines = [f"Side pair review queue: {len(entries)} proposals"]
+    if not entries:
+        return "\n".join(lines) + "\n"
+    for entry in entries:
+        next_action = dict(entry.get("next_action") or {})
+        proposal = dict(entry.get("proposal") or {})
+        lines.append(
+            " - "
+            f"{entry.get('proposal_id')} "
+            f"state={entry.get('state')} "
+            f"front={proposal.get('front_job_id')} "
+            f"back={proposal.get('back_job_id')} "
+            f"next={next_action.get('action') or 'none'}"
+        )
+    return "\n".join(lines) + "\n"
+
+
 def _render_child_route_prep_queue_text(entries: list[dict[str, object]]) -> str:
     lines = [f"Child route prep queue: {len(entries)} candidates"]
     if not entries:
@@ -2906,6 +2924,22 @@ def build_parser() -> argparse.ArgumentParser:
     reviews_children.add_argument("--run-id", default=None)
     reviews_children.add_argument("--state", default="needs_review")
     reviews_children.add_argument("--json", action="store_true")
+    reviews_side_pairs = reviews_sub.add_parser("side-pairs")
+    reviews_side_pairs.add_argument("--run-id", default=None)
+    reviews_side_pairs.add_argument("--state", default="proposed")
+    reviews_side_pairs.add_argument("--json", action="store_true")
+    reviews_side_pair_review = reviews_sub.add_parser("side-pair-review")
+    reviews_side_pair_review.add_argument("proposal_id")
+    reviews_side_pair_review.add_argument("--run-id", required=True)
+    reviews_side_pair_review.add_argument("--reviewer", default="operator")
+    reviews_side_pair_review.add_argument(
+        "--action",
+        choices=["approve_side_pair_merge", "keep_needs_review", "reject_side_pair"],
+        default="keep_needs_review",
+    )
+    reviews_side_pair_review.add_argument("--field-corrections-json", default="{}")
+    reviews_side_pair_review.add_argument("--notes", default="")
+    reviews_side_pair_review.add_argument("--json", action="store_true")
     reviews_child_review = reviews_sub.add_parser("child-review")
     reviews_child_review.add_argument("candidate_id")
     reviews_child_review.add_argument("--run-id", required=True)
@@ -3738,6 +3772,20 @@ def main(argv: list[str] | None = None) -> int:
             if not args.json:
                 print(_render_child_review_queue_text(payload), end="")
                 return 0
+        elif args.reviews_command == "side-pairs":
+            payload = service.side_pair_review_queue(run_id=args.run_id, state=args.state)
+            if not args.json:
+                print(_render_side_pair_review_queue_text(payload), end="")
+                return 0
+        elif args.reviews_command == "side-pair-review":
+            payload = service.submit_side_pair_review(
+                run_id=args.run_id,
+                proposal_id=args.proposal_id,
+                reviewer=args.reviewer,
+                action=args.action,
+                field_corrections=json.loads(args.field_corrections_json),
+                notes=args.notes,
+            )
         elif args.reviews_command == "child-review":
             payload = service.submit_child_review(
                 run_id=args.run_id,

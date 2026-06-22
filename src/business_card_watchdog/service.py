@@ -20,6 +20,7 @@ from .contact import (
     contact_candidate_to_spec,
     field_provenance_from_canonical,
 )
+from .card_sides import merge_side_pair_contacts
 from .contact_store import ContactStore
 from .dedupe import assess_downstream_lookup_result, remember_duplicate_resolution
 from .enrichment import (
@@ -171,6 +172,12 @@ _SUPPORTED_CHILD_REVIEW_ACTIONS = {
     "approve_child_for_routing",
     "keep_needs_review",
     "reject_child_contact",
+}
+
+_SUPPORTED_SIDE_PAIR_REVIEW_ACTIONS = {
+    "approve_side_pair_merge",
+    "keep_needs_review",
+    "reject_side_pair",
 }
 
 _ROUTE_ARTIFACT_FILES = {
@@ -3754,6 +3761,201 @@ class BusinessCardService:
             "writes_attempted": 0,
             "network_calls_made": 0,
         }
+
+    def side_pair_review_queue(
+        self,
+        *,
+        run_id: str | None = None,
+        state: str = "proposed",
+    ) -> list[dict[str, Any]]:
+        run_ids = [run_id] if run_id is not None else [str(run["run_id"]) for run in self.list_runs()]
+        queue: list[dict[str, Any]] = []
+        for current_run_id in run_ids:
+            if current_run_id is None:
+                continue
+            artifacts = self.list_artifacts(str(current_run_id))
+            jobs_by_id = {str(job["job_id"]): job for job in self.list_jobs(str(current_run_id))}
+            review_results: dict[str, dict[str, Any]] = {}
+            for artifact in artifacts:
+                if artifact.get("kind") != "side_pair_review_result":
+                    continue
+                result = _read_json_file(Path(str(artifact.get("path") or ""))) or {}
+                proposal_id = str(result.get("proposal_id") or "")
+                if proposal_id:
+                    review_results[proposal_id] = result
+            for artifact in artifacts:
+                if artifact.get("kind") != "card_side_pair_proposals":
+                    continue
+                payload = _read_json_file(Path(str(artifact.get("path") or ""))) or {}
+                for proposal in payload.get("proposals") or []:
+                    if not isinstance(proposal, dict):
+                        continue
+                    proposal_id = str(proposal.get("proposal_id") or "")
+                    review_result = review_results.get(proposal_id)
+                    current_state = str((review_result or {}).get("state") or proposal.get("state") or "")
+                    if state != "all" and current_state != state:
+                        continue
+                    front_job_id = str(proposal.get("front_job_id") or "")
+                    back_job_id = str(proposal.get("back_job_id") or "")
+                    queue.append(
+                        {
+                            "schema": "business-card-watchdog.side-pair-review-queue-entry.v1",
+                            "run_id": str(current_run_id),
+                            "proposal_id": proposal_id,
+                            "state": current_state,
+                            "proposal": proposal,
+                            "front_job": jobs_by_id.get(front_job_id),
+                            "back_job": jobs_by_id.get(back_job_id),
+                            "review_result": review_result,
+                            "next_action": {
+                                "action": "review_side_pair",
+                                "safe_to_auto_continue": False,
+                                "requires_explicit_operator_action": True,
+                                "reason": "front/back pair proposal requires explicit review before merge",
+                                "command": (
+                                    "reviews side-pair-review "
+                                    f"{shlex.quote(proposal_id)} --run-id {current_run_id} "
+                                    "--action approve_side_pair_merge --json"
+                                ),
+                            },
+                        }
+                    )
+        return sorted(queue, key=lambda row: (str(row.get("run_id") or ""), str(row.get("proposal_id") or "")))
+
+    def submit_side_pair_review(
+        self,
+        *,
+        run_id: str,
+        proposal_id: str,
+        reviewer: str,
+        action: str,
+        field_corrections: dict[str, Any] | None = None,
+        notes: str = "",
+    ) -> dict[str, Any]:
+        if action not in _SUPPORTED_SIDE_PAIR_REVIEW_ACTIONS:
+            raise ValueError(f"unsupported side pair review action: {action}")
+        queue = self.side_pair_review_queue(run_id=run_id, state="all")
+        entry = next((row for row in queue if str(row.get("proposal_id") or "") == proposal_id), None)
+        if entry is None:
+            raise FileNotFoundError(f"side pair proposal not found: {proposal_id}")
+        proposal = dict(entry.get("proposal") or {})
+        review_dir = self.config.runs_dir / run_id / "side_pair_reviews" / proposal_id
+        review_dir.mkdir(parents=True, exist_ok=True)
+        created_at = utc_now()
+        submission = {
+            "schema": "business-card-watchdog.side-pair-review-submission.v1",
+            "run_id": run_id,
+            "proposal_id": proposal_id,
+            "reviewer": reviewer,
+            "action": action,
+            "field_corrections": dict(field_corrections or {}),
+            "notes": notes,
+            "submitted_at": created_at,
+        }
+        submission_path = review_dir / "side_pair_review_submission.json"
+        submission_path.write_text(json.dumps(submission, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+        reviewed_contact = None
+        reviewed_contact_path = None
+        state = "needs_review"
+        if action == "approve_side_pair_merge":
+            front_candidate = self._job_contact_candidate(run_id, str(proposal.get("front_job_id") or ""))
+            back_candidate = self._job_contact_candidate(run_id, str(proposal.get("back_job_id") or ""))
+            reviewed_contact = merge_side_pair_contacts(
+                front_candidate=front_candidate,
+                back_candidate=back_candidate,
+                proposal=proposal,
+                reviewer=reviewer,
+                reviewed_at=created_at,
+                field_corrections=field_corrections or {},
+            )
+            reviewed_contact["lineage"] = {
+                "side_pair_review_submission_path": str(submission_path),
+                "front_job_id": proposal.get("front_job_id"),
+                "back_job_id": proposal.get("back_job_id"),
+                "proposal_id": proposal_id,
+            }
+            reviewed_contact_path = review_dir / "reviewed_side_pair_contact.json"
+            reviewed_contact_path.write_text(
+                json.dumps(reviewed_contact, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            state = "merged_for_review"
+        elif action == "reject_side_pair":
+            state = "rejected"
+
+        result = {
+            "schema": "business-card-watchdog.side-pair-review-result.v1",
+            "run_id": run_id,
+            "proposal_id": proposal_id,
+            "state": state,
+            "action": action,
+            "reviewer": reviewer,
+            "reviewed_at": created_at,
+            "notes": notes,
+            "proposal": proposal,
+            "side_pair_review_submission_path": str(submission_path),
+            "reviewed_side_pair_contact_path": str(reviewed_contact_path) if reviewed_contact_path else None,
+            "routing_allowed": False,
+            "enrichment_allowed": False,
+            "sink_write_allowed": False,
+            "next_action": {
+                "action": "review_merged_side_pair_contact" if reviewed_contact_path else "review_side_pair",
+                "safe_to_auto_continue": False,
+                "requires_explicit_operator_action": True,
+                "reason": (
+                    "merged front/back contact requires final contact review before routing"
+                    if reviewed_contact_path
+                    else "side pair remains out of routing"
+                ),
+            },
+        }
+        result_path = review_dir / "side_pair_review_result.json"
+        result_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+        ledger = RunLedger(self.config.runs_dir / run_id)
+        ledger.record_artifact(job_id="__run__", kind="side_pair_review_submission", path=submission_path)
+        if reviewed_contact_path is not None:
+            ledger.record_artifact(job_id="__run__", kind="reviewed_side_pair_contact", path=reviewed_contact_path)
+        ledger.record_artifact(job_id="__run__", kind="side_pair_review_result", path=result_path)
+        ledger.record_event(
+            "side_pair_review_submitted",
+            {
+                "run_id": run_id,
+                "proposal_id": proposal_id,
+                "action": action,
+                "state": state,
+                "reviewer": reviewer,
+                "submission_path": str(submission_path),
+                "result_path": str(result_path),
+                "reviewed_side_pair_contact_path": str(reviewed_contact_path) if reviewed_contact_path else None,
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        return {
+            "schema": "business-card-watchdog.side-pair-review-submission-result.v1",
+            "run_id": run_id,
+            "proposal_id": proposal_id,
+            "state": state,
+            "submission": submission,
+            "submission_path": str(submission_path),
+            "result": result,
+            "result_path": str(result_path),
+            "reviewed_contact": reviewed_contact,
+            "reviewed_side_pair_contact_path": str(reviewed_contact_path) if reviewed_contact_path else None,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+
+    def _job_contact_candidate(self, run_id: str, job_id: str) -> dict[str, Any]:
+        job = self.get_job(job_id, run_id=run_id)
+        artifact_dir = Path(str(job.get("artifact_dir") or ""))
+        for name in ("reviewed_contact.json", "contact_candidate.json"):
+            payload = _read_json_file(artifact_dir / name)
+            if payload:
+                return payload
+        raise FileNotFoundError(f"contact candidate not found for job: {job_id}")
 
     def child_route_prep_queue(
         self,
