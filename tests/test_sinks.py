@@ -34,10 +34,12 @@ def test_fingerprint_is_stable_across_whitespace() -> None:
 
 
 def test_dry_run_readiness_does_not_require_credentials() -> None:
-    readiness = check_sink_readiness("google_contacts", dry_run=True)
+    readiness = check_sink_readiness("google_contacts", dry_run=True, google_contacts_profile="ecochran76")
 
     assert readiness.ready
     assert "dry-run" in readiness.reason
+    assert readiness.details["target_account"] == "ecochran76"
+    assert readiness.details["live_apply_requires_selected_target"] is True
 
 
 def test_live_readiness_blocks_when_apply_disabled() -> None:
@@ -182,12 +184,15 @@ def test_build_sink_plan_is_dry_run_and_action_oriented() -> None:
         spec={"full_name": "Ada Lovelace", "email": "ada@example.test"},
         dry_run=True,
         reason="matched email_domain=*",
+        google_contacts_profile="ecochran76",
     )
 
     assert plan["schema"] == "business-card-watchdog.sink-plan.v1"
     assert plan["state"] == "dry_run"
     assert [action["sink"] for action in plan["actions"]] == ["google_contacts", "odoo"]
     assert all(action["action"] == "plan_upsert" for action in plan["actions"])
+    assert plan["actions"][0]["readiness"]["details"]["target_account"] == "ecochran76"
+    assert plan["actions"][0]["readiness"]["details"]["live_apply_requires_selected_target"] is True
 
 
 def test_build_sink_lookup_plan_is_zero_network_and_keyed() -> None:
@@ -196,6 +201,7 @@ def test_build_sink_lookup_plan_is_zero_network_and_keyed() -> None:
         spec={"full_name": "Ada Lovelace", "email": "ada@example.test", "phone": "+15550101234"},
         dry_run=True,
         reason="matched email_domain=*",
+        google_contacts_profile="ecochran76",
     )
 
     assert plan["schema"] == "business-card-watchdog.sink-lookup-plan.v1"
@@ -205,6 +211,9 @@ def test_build_sink_lookup_plan_is_zero_network_and_keyed() -> None:
     assert all(lookup["readiness"]["status"] == "ready" for lookup in plan["lookups"])
     assert plan["lookups"][0]["match_keys"]["email"] == "ada@example.test"
     assert any(query["field"] == "email" for query in plan["lookups"][0]["queries"])
+    google_lookup = next(lookup for lookup in plan["lookups"] if lookup["sink"] == "google_contacts")
+    assert google_lookup["readiness"]["details"]["target_account"] == "ecochran76"
+    assert google_lookup["readiness"]["details"]["live_lookup_requires_selected_target"] is True
 
 
 def test_build_sink_adapter_request_prepares_lookup_write_and_readback_contracts() -> None:

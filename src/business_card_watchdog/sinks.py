@@ -76,6 +76,8 @@ def build_sink_payloads(
     spec: dict[str, Any],
     dry_run: bool,
     apply_enabled: dict[str, bool] | None = None,
+    google_contacts_profile: str = "",
+    odollo_tenant: str = "",
 ) -> list[SinkPayload]:
     fingerprint = canonical_contact_fingerprint(spec)
     apply_enabled = apply_enabled or {}
@@ -90,7 +92,15 @@ def build_sink_payloads(
             readiness=readiness,
         )
         for sink in sinks
-        for readiness in [check_sink_readiness(sink, dry_run=dry_run, apply_enabled=apply_enabled.get(sink, False))]
+        for readiness in [
+            check_sink_readiness(
+                sink,
+                dry_run=dry_run,
+                apply_enabled=apply_enabled.get(sink, False),
+                google_contacts_profile=google_contacts_profile,
+                odollo_tenant=odollo_tenant,
+            )
+        ]
     ]
 
 
@@ -118,8 +128,17 @@ def build_sink_plan(
     dry_run: bool,
     reason: str,
     apply_enabled: dict[str, bool] | None = None,
+    google_contacts_profile: str = "",
+    odollo_tenant: str = "",
 ) -> dict[str, Any]:
-    payloads = build_sink_payloads(sinks=sinks, spec=spec, dry_run=dry_run, apply_enabled=apply_enabled)
+    payloads = build_sink_payloads(
+        sinks=sinks,
+        spec=spec,
+        dry_run=dry_run,
+        apply_enabled=apply_enabled,
+        google_contacts_profile=google_contacts_profile,
+        odollo_tenant=odollo_tenant,
+    )
     return {
         "schema": SINK_PLAN_SCHEMA,
         "state": "dry_run" if dry_run else ("ready" if all(payload.readiness.ready for payload in payloads) else "blocked"),
@@ -146,6 +165,8 @@ def build_sink_lookup_plan(
     spec: dict[str, Any],
     dry_run: bool,
     reason: str,
+    google_contacts_profile: str = "",
+    odollo_tenant: str = "",
 ) -> dict[str, Any]:
     fingerprint = canonical_contact_fingerprint(spec)
     match_keys = _match_keys(spec, fingerprint)
@@ -153,7 +174,12 @@ def build_sink_lookup_plan(
         {
             "sink": sink,
             "state": "dry_run" if dry_run else "blocked",
-            "readiness": check_sink_lookup_readiness(sink, dry_run=dry_run).to_dict(),
+            "readiness": check_sink_lookup_readiness(
+                sink,
+                dry_run=dry_run,
+                google_contacts_profile=google_contacts_profile,
+                odollo_tenant=odollo_tenant,
+            ).to_dict(),
             "match_keys": match_keys,
             "queries": _lookup_queries_for_sink(sink, match_keys),
         }
@@ -487,10 +513,29 @@ def check_sink_readiness(
     odollo_tenant: str = "",
 ) -> SinkReadiness:
     if dry_run:
+        details: dict[str, Any] = {"apply_enabled": apply_enabled}
+        if sink == "google_contacts" and google_contacts_profile.strip():
+            details.update(
+                {
+                    "profile": google_contacts_profile,
+                    "target_account": google_contacts_profile,
+                    "config_key": "sink.google_contacts_profile",
+                    "live_apply_requires_selected_target": True,
+                }
+            )
+        elif sink == "odoo" and odollo_tenant.strip():
+            details.update(
+                {
+                    "tenant": odollo_tenant,
+                    "config_key": "sink.odollo_tenant",
+                    "live_apply_requires_selected_target": True,
+                }
+            )
         return SinkReadiness(
             sink=sink,
             status="ready",
             reason="dry-run payload generation does not require external credentials",
+            details=details,
         )
     if not apply_enabled:
         return SinkReadiness(
@@ -650,10 +695,29 @@ def check_sink_lookup_readiness(
     odollo_tenant: str = "",
 ) -> SinkReadiness:
     if dry_run:
+        details: dict[str, Any] = {}
+        if sink == "google_contacts" and google_contacts_profile.strip():
+            details.update(
+                {
+                    "profile": google_contacts_profile,
+                    "target_account": google_contacts_profile,
+                    "config_key": "sink.google_contacts_profile",
+                    "live_lookup_requires_selected_target": True,
+                }
+            )
+        elif sink == "odoo" and odollo_tenant.strip():
+            details.update(
+                {
+                    "tenant": odollo_tenant,
+                    "config_key": "sink.odollo_tenant",
+                    "live_lookup_requires_selected_target": True,
+                }
+            )
         return SinkReadiness(
             sink=sink,
             status="ready",
             reason="dry-run lookup planning does not call downstream sinks",
+            details=details,
         )
     if sink == "google_contacts":
         if not google_contacts_profile.strip():

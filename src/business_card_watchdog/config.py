@@ -251,8 +251,8 @@ base_url = "https://api.peopledatalabs.com/v5/person/enrich"
 
 [sink]
 dry_run = true
-google_contacts = false
-google_contacts_profile = ""
+google_contacts = true
+google_contacts_profile = "ecochran76"
 google_contacts_apply_enabled = false
 odoo = false
 odollo_tenant = ""

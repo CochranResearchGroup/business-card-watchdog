@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from business_card_watchdog.config import AppConfig, SinkConfig
+from business_card_watchdog.config import AppConfig, SinkConfig, load_config, write_default_config
 from business_card_watchdog.routing import decide_sinks
 
 
@@ -10,6 +10,22 @@ def test_no_enabled_sinks_is_review_only() -> None:
     assert "no sinks" in decision.reason
     assert decision.metadata["route_explanation"]["schema"] == "business-card-watchdog.route-explanation.v1"
     assert decision.metadata["sink_eligibility"] == []
+
+
+def test_generated_default_config_routes_to_ecochran76_google_contacts(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    write_default_config(config_path)
+    config = load_config(config_path)
+
+    decision = decide_sinks(config, {"email": "ada@example.test"})
+
+    assert decision.sinks == ["google_contacts"]
+    assert decision.dry_run is True
+    assert decision.state == "dry_run"
+    assert decision.matched_rule == {"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}
+    assert decision.metadata["sink_eligibility"][0]["route_eligible"] is True
+    assert config.sink.google_contacts_profile == "ecochran76"
+    assert config.sink.google_contacts_apply_enabled is False
 
 
 def test_email_domain_rule_filters_enabled_sinks() -> None:

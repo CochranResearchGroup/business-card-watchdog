@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from business_card_watchdog.config import AppConfig, load_config, resolve_input_path
+from business_card_watchdog.config import AppConfig, load_config, resolve_input_path, write_default_config
 
 
 def test_resolve_fsr_alias() -> None:
@@ -102,3 +102,17 @@ odoo_apply_enabled = false
     assert config.sink.odoo is True
     assert config.sink.odollo_tenant == "saber"
     assert config.sink.odoo_apply_enabled is False
+
+
+def test_default_config_installs_dry_run_ecochran76_gws_route(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+
+    write_default_config(config_path)
+    config = load_config(config_path)
+
+    assert config.sink.dry_run is True
+    assert config.sink.google_contacts is True
+    assert config.sink.google_contacts_profile == "ecochran76"
+    assert config.sink.google_contacts_apply_enabled is False
+    assert config.sink.odoo is False
+    assert config.routing_rules == [{"match": "email_domain", "value": "*", "sinks": ["google_contacts"]}]

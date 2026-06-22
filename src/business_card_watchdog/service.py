@@ -4235,6 +4235,8 @@ class BusinessCardService:
             spec=spec,
             dry_run=dry_run,
             reason=decision.reason,
+            google_contacts_profile=self.config.sink.google_contacts_profile,
+            odollo_tenant=self.config.sink.odollo_tenant,
         )
         lookup_plan["run_id"] = run_id
         lookup_plan["job_id"] = entry.get("job_id")
@@ -4249,6 +4251,8 @@ class BusinessCardService:
             dry_run=dry_run,
             reason=decision.reason,
             apply_enabled={sink: self._sink_apply_enabled(sink) for sink in decision.sinks},
+            google_contacts_profile=self.config.sink.google_contacts_profile,
+            odollo_tenant=self.config.sink.odollo_tenant,
         )
         sink_plan["run_id"] = run_id
         sink_plan["job_id"] = entry.get("job_id")
@@ -7850,6 +7854,8 @@ class BusinessCardService:
             dry_run=dry_run or decision.dry_run,
             reason=decision.reason,
             apply_enabled={sink: self._sink_apply_enabled(sink) for sink in decision.sinks},
+            google_contacts_profile=self.config.sink.google_contacts_profile,
+            odollo_tenant=self.config.sink.odollo_tenant,
         )
         plan["job_id"] = job_id
         plan["run_id"] = run_id
@@ -7892,6 +7898,8 @@ class BusinessCardService:
             spec=spec,
             dry_run=dry_run or decision.dry_run,
             reason=decision.reason,
+            google_contacts_profile=self.config.sink.google_contacts_profile,
+            odollo_tenant=self.config.sink.odollo_tenant,
         )
         plan["job_id"] = job_id
         plan["run_id"] = run_id

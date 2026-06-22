@@ -533,6 +533,8 @@ class BatchOrchestrator:
             sinks=decision.sinks,
             spec=contact_spec,
             dry_run=dry_run or decision.dry_run,
+            google_contacts_profile=self.config.sink.google_contacts_profile,
+            odollo_tenant=self.config.sink.odollo_tenant,
         )
         if payloads:
             sink_payload_path = write_sink_payloads(result.artifact_dir / "sink_payloads.json", payloads)
