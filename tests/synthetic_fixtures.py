@@ -99,6 +99,7 @@ def _normalize_value(value: Any) -> Any:
 @dataclass
 class SyntheticSkillAdapter:
     specs_by_stem: dict[str, dict[str, Any]] = field(default_factory=dict)
+    ocr_by_stem: dict[str, str] = field(default_factory=dict)
     apply_google_calls: list[bool] = field(default_factory=list)
 
     def run_pipeline(self, image_path: Path, artifact_dir: Path, *, apply_google: bool) -> SkillRunResult:
@@ -134,7 +135,10 @@ class SyntheticSkillAdapter:
             encoding="utf-8",
         )
         ocr_path.write_text(
-            "Synthetic Fixture\nFixture Labs\nfixture@example.test\n+1-555-0100\n",
+            self.ocr_by_stem.get(
+                image_path.stem,
+                "Synthetic Fixture\nFixture Labs\nfixture@example.test\n+1-555-0100\n",
+            ),
             encoding="utf-8",
         )
 

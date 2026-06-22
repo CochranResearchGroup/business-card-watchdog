@@ -242,8 +242,9 @@ def test_pdf_document_intake_materializes_page_jobs_and_side_candidates(
         side = json.loads((artifact_dir / "card_side_candidate.json").read_text(encoding="utf-8"))
         assert source_page["source_document_path"] == str(source_pdf)
         assert source_page["media_kind"] == "page_image"
-        assert side["side_label"] == "unknown"
-        assert side["confidence"] == "needs_ocr"
+        assert side["side_label"] == "front"
+        assert side["classification_reason"] == "contact_identity_density"
+        assert side["ocr_text_sha256"]
 
     contacts = BusinessCardService(config).list_contacts()["contacts"]
     assert len(contacts) == 2

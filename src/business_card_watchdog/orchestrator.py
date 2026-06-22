@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
+from .card_sides import build_pair_proposals, classify_card_side
 from .config import AppConfig, ensure_runtime_dirs, resolve_input_path
 from .contact import build_contact_candidate, contact_candidate_to_spec
 from .contact_store import ContactStore
@@ -119,10 +120,33 @@ class BatchOrchestrator:
             for future in as_completed(futures):
                 future.result()
 
+        self._write_card_side_pair_proposals(ledger)
         self._project_contact_store(ledger)
         ledger.record_event("run_completed", {"job_count": len(jobs)})
         ledger.transition_run("completed")
         return run_dir
+
+    def _write_card_side_pair_proposals(self, ledger: RunLedger) -> None:
+        candidates: list[dict[str, Any]] = []
+        for side_path in sorted((ledger.run_dir / "artifacts").glob("*/card_side_candidate.json")):
+            try:
+                payload = json.loads(side_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if isinstance(payload, dict):
+                candidates.append(payload)
+        if not candidates:
+            return
+        proposals = build_pair_proposals(run_id=ledger.run_dir.name, side_candidates=candidates)
+        proposal_path = ledger.run_dir / "card_side_pair_proposals.json"
+        proposal_path.write_text(json.dumps(proposals, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger.record_artifact(
+            job_id="__run__",
+            kind="card_side_pair_proposals",
+            path=proposal_path,
+            metadata={"proposal_count": proposals["proposal_count"]},
+        )
+        ledger.record_event("card_side_pair_proposals_recorded", proposals)
 
     def _project_contact_store(self, ledger: RunLedger) -> None:
         store = ContactStore.from_config(self.config)
@@ -372,6 +396,33 @@ class BatchOrchestrator:
             ledger.record_job(job)
             ledger.record_event("job_failed", {"job": job.to_dict(), "stderr": result.stderr[-4000:]})
             return
+
+        if source_page is not None:
+            ocr_path = result.artifact_dir / "ocr.txt"
+            ocr_text = ocr_path.read_text(encoding="utf-8") if ocr_path.exists() else ""
+            side_candidate = classify_card_side(
+                job_id=job.job_id,
+                source_page=source_page,
+                ocr_text=ocr_text,
+            )
+            side_candidate_path = result.artifact_dir / "card_side_candidate.json"
+            side_candidate_path.write_text(
+                json.dumps(side_candidate, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            ledger.record_artifact(
+                job_id=job.job_id,
+                kind="card_side_classification",
+                path=side_candidate_path,
+                metadata={
+                    "side_label": side_candidate["side_label"],
+                    "confidence": side_candidate["confidence"],
+                },
+            )
+            ledger.record_event(
+                "card_side_classified",
+                {"job": job.to_dict(), "card_side_candidate": side_candidate},
+            )
 
         spec = load_contact_spec(result.spec_path)
         contact_candidate = build_contact_candidate(

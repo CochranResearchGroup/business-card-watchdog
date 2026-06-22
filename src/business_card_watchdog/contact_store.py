@@ -32,6 +32,8 @@ _PROJECTED_ASSET_KINDS = {
     "document_pages",
     "source_page",
     "card_side_candidate",
+    "card_side_classification",
+    "card_side_pair_proposals",
     "reviewed_contact",
     "review_packet",
     "duplicate_assessment",

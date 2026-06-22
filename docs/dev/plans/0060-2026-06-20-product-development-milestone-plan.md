@@ -149,7 +149,8 @@ Validation:
 ### Milestone 3 | Scanner Intake, Card Sides, And OCR Quality Loop
 
 Status: IN_PROGRESS. Scanner document-intake foundation complete via Plan 0065;
-OCR side classification and front/back pair graph remain follow-on work.
+OCR side classification and front/back pair proposals complete via Plan 0066;
+reviewed side merge and quality-gate hardening remain follow-on work.
 
 Goal-compatible objective:
 

@@ -6449,3 +6449,45 @@ Safety:
   automatic front/back pairing, or source PDF mutation.
 - Scanner PDF processing now creates runtime page-image artifacts only after an
   existing operator/runtime command processes a PDF source.
+
+## Turn 276 | 2026-06-22
+
+Executed Plan 0066 as the OCR-assisted card-side classification and pair
+proposal slice under Plan 0060 Milestone 3.
+
+Implemented:
+
+- Added `docs/dev/plans/0066-2026-06-22-ocr-side-classification-pair-proposals.md`.
+- Added `src/business_card_watchdog/card_sides.py`.
+- Classified scanner page sides as `front`, `back`, `blank`, or `unknown`
+  using deterministic OCR clues: email/phone/name/title density, URL/social/QR
+  hints, address/context words, and blank/near-blank text.
+- Rewrote per-page `card_side_candidate.json` after OCR text exists, preserving
+  evidence, OCR feature counts, and OCR text hash.
+- Added run-level `card_side_pair_proposals.json` artifacts.
+- Scored pair proposals from same-document evidence, page adjacency, side-label
+  complement, and negative conflicting-domain evidence.
+- Supported reversed back/front scanner order through side labels rather than
+  sequence-only assumptions.
+- Kept blank backs skipped and conflicting pairs blocked for review rather than
+  merged automatically.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_card_sides.py tests/test_dry_run_pipeline.py::test_pdf_document_intake_materializes_page_jobs_and_side_candidates -q`
+  passed with 5 tests.
+- `.venv/bin/python -m pytest tests/test_card_sides.py tests/test_dry_run_pipeline.py tests/test_contact_store.py tests/test_watcher.py -q`
+  passed with 29 tests.
+- `.venv/bin/python -m pytest tests/test_service.py tests/test_review_surface.py tests/test_enrichment.py -q`
+  passed with 141 tests.
+- `.venv/bin/python -m pytest tests/test_api.py tests/test_cli_surfaces.py tests/test_mcp.py -q`
+  passed with 111 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `.venv/bin/python -m pytest -q` passed with 347 tests.
+
+Safety:
+
+- This slice treats OCR as evidence only. It did not automatically merge
+  front/back contacts, run enrichment providers, run public-web search, execute
+  live lookup/write/readback, or write Google Contacts, Odoo, or Odollo records.
