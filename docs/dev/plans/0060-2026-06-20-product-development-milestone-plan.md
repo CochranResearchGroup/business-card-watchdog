@@ -377,9 +377,11 @@ Status: IN_PROGRESS. Providence-context route rules can now select the `odoo`
 sink with route-scoped Odollo tenant targets such as `soylei-prod` and
 `saber-prod` via Plan 0078. Dry-run sink plans, sink payloads, and duplicate
 lookup plans now carry the selected tenant target while preserving
-`sink.odollo_tenant` as a fallback. Remaining work should add explicit
-read-only tenant readiness reports, duplicate lookup packet blockers, and
-selected-target/write-readback pilot boundaries for Odollo routes.
+`sink.odollo_tenant` as a fallback. Read-only tenant readiness reports and
+duplicate lookup gate blockers are now present in Odoo lookup plans via Plan
+0079. Remaining work should persist tenant route readiness blockers in the
+contact store and add selected-target/write-readback pilot boundaries for
+Odollo routes.
 
 Goal-compatible objective:
 

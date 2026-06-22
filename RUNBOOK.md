@@ -7002,3 +7002,38 @@ Safety:
   not inspect tenant-private runtime artifacts, process configured
   SyncThing/private watch inputs, create selected-live-target artifacts, or
   enable live sink writes.
+
+## Turn 290 | 2026-06-22
+
+Executed Plan 0079 as the next Plan 0060 Milestone 7 read-only Odollo packet
+slice.
+
+Implemented:
+
+- Added Odollo tenant readiness packets that distinguish missing config,
+  blocked tenant state, and local pilot-ready evidence.
+- Added Odoo duplicate lookup gate packets to sink lookup plans.
+- Kept dry-run lookup planning at zero network calls and zero writes while
+  making duplicate risk explicitly blocked until operator-selected read-only
+  lookup evidence exists.
+- Added temp-`ODOLLO_HOME` tests so readiness behavior is independent of the
+  operator's real tenant runtime.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_sinks.py -q` passed with 26 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/sinks.py tests/test_sinks.py`
+  passed.
+- `git diff --check` passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 382 tests.
+- `.venv/bin/ruff check .` passed.
+- `codegraph sync /home/ecochran76/workspace.local/business-card-watchdog && codegraph status /home/ecochran76/workspace.local/business-card-watchdog`
+  reported the index up to date with 60 files, 2,004 nodes, and 2,096 edges.
+
+Safety:
+
+- This slice did not run live Odollo/Odoo lookup, write, or readback. It did
+  not inspect tenant-private runtime artifacts, process configured
+  SyncThing/private watch inputs, create selected-live-target artifacts, or
+  enable live sink writes.

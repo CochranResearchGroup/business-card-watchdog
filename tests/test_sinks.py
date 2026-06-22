@@ -1,4 +1,5 @@
 from business_card_watchdog.sinks import (
+    build_odollo_tenant_readiness_packet,
     build_sink_adapter_request,
     build_sink_apply_decision,
     build_sink_apply_preflight,
@@ -230,6 +231,86 @@ def test_build_sink_lookup_plan_exposes_selected_odollo_tenant() -> None:
     assert plan["lookups"][0]["sink"] == "odoo"
     assert plan["lookups"][0]["readiness"]["details"]["tenant"] == "saber-prod"
     assert plan["lookups"][0]["readiness"]["details"]["live_lookup_requires_selected_target"] is True
+
+
+def test_odollo_tenant_readiness_reports_missing_config(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("ODOLLO_HOME", str(tmp_path / "odollo"))
+
+    packet = build_odollo_tenant_readiness_packet(tenant="saber-prod")
+
+    assert packet["schema"] == "business-card-watchdog.odollo-tenant-readiness.v1"
+    assert packet["state"] == "missing_config"
+    assert packet["pilot_ready"] is False
+    assert packet["network_calls_made"] == 0
+    assert packet["writes_attempted"] == 0
+    assert packet["blockers"][0]["category"] == "missing_config"
+    assert packet["details"]["config_present"] is False
+    assert packet["details"]["live_probe"]["network_calls_made"] == 0
+
+
+def test_odollo_tenant_readiness_distinguishes_blocked_tenant(tmp_path, monkeypatch) -> None:
+    odollo_home = tmp_path / "odollo"
+    odollo_home.mkdir()
+    (odollo_home / "odollo.yml").write_text("profiles: {}\n", encoding="utf-8")
+    monkeypatch.setenv("ODOLLO_HOME", str(odollo_home))
+
+    packet = build_odollo_tenant_readiness_packet(tenant="saber-prod")
+
+    assert packet["state"] == "blocked_tenant"
+    assert {blocker["category"] for blocker in packet["blockers"]} == {"blocked_tenant"}
+    assert {blocker["code"] for blocker in packet["blockers"]} >= {
+        "missing_tenant_home",
+        "missing_tenant_state_evidence",
+    }
+    assert packet["details"]["config_present"] is True
+    assert packet["details"]["tenant_home_present"] is False
+
+
+def test_odollo_tenant_readiness_reports_pilot_ready_without_live_call(tmp_path, monkeypatch) -> None:
+    odollo_home = tmp_path / "odollo"
+    tenant_home = odollo_home / "tenants" / "saber-prod"
+    (tenant_home / "resources").mkdir(parents=True)
+    (tenant_home / "artifacts").mkdir()
+    (tenant_home / "actions.ndjson").write_text("", encoding="utf-8")
+    (odollo_home / "odollo.yml").write_text("profiles: {}\n", encoding="utf-8")
+    (odollo_home / "saber-prod.sqlite").write_text("", encoding="utf-8")
+    monkeypatch.setenv("ODOLLO_HOME", str(odollo_home))
+
+    packet = build_odollo_tenant_readiness_packet(tenant="saber-prod")
+
+    assert packet["state"] == "pilot_ready"
+    assert packet["pilot_ready"] is True
+    assert packet["blockers"] == []
+    assert packet["details"]["state_evidence_present"] is True
+    assert packet["details"]["live_probe"]["status"] == "not_invoked_without_operator_approval"
+
+
+def test_build_sink_lookup_plan_adds_odollo_duplicate_lookup_blockers(tmp_path, monkeypatch) -> None:
+    odollo_home = tmp_path / "odollo"
+    tenant_home = odollo_home / "tenants" / "saber-prod"
+    (tenant_home / "resources").mkdir(parents=True)
+    (tenant_home / "artifacts").mkdir()
+    (tenant_home / "actions.ndjson").write_text("", encoding="utf-8")
+    (odollo_home / "odollo.yml").write_text("profiles: {}\n", encoding="utf-8")
+    (odollo_home / "saber-prod.sqlite").write_text("", encoding="utf-8")
+    monkeypatch.setenv("ODOLLO_HOME", str(odollo_home))
+
+    plan = build_sink_lookup_plan(
+        sinks=["odoo"],
+        spec={"full_name": "Ada Lovelace", "email": "ada@example.test"},
+        dry_run=True,
+        reason="matched providence_context=saber",
+        odollo_tenant="saber-prod",
+    )
+
+    lookup = plan["lookups"][0]
+    assert lookup["tenant_readiness"]["state"] == "pilot_ready"
+    assert lookup["duplicate_lookup_gate"]["schema"] == "business-card-watchdog.odollo-duplicate-lookup-gate.v1"
+    assert lookup["duplicate_lookup_gate"]["state"] == "blocked"
+    assert lookup["duplicate_lookup_gate"]["duplicate_risk"] == "unknown_until_read_only_lookup"
+    assert lookup["duplicate_lookup_gate"]["blockers"][0]["category"] == "duplicate_risk"
+    assert lookup["duplicate_lookup_gate"]["network_calls_made"] == 0
+    assert lookup["duplicate_lookup_gate"]["writes_attempted"] == 0
 
 
 def test_build_sink_plan_exposes_selected_odollo_tenant() -> None:

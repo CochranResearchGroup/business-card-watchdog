@@ -25,8 +25,9 @@ Latest completed GWS default routing plan: `docs/dev/plans/0075-2026-06-22-gws-d
 Latest completed contact-store selected-sink plan: `docs/dev/plans/0076-2026-06-22-contact-store-selected-sink-state.md`.
 Latest completed contact route-selection packet plan: `docs/dev/plans/0077-2026-06-22-contact-route-selection-packets.md`.
 Latest completed Odollo tenant route-target plan: `docs/dev/plans/0078-2026-06-22-odollo-tenant-route-targets.md`.
+Latest completed Odollo read-only readiness packet plan: `docs/dev/plans/0079-2026-06-22-odollo-read-only-readiness-packets.md`.
 Latest completed practice-corpus plan: `docs/dev/plans/0062-2026-06-21-practice-corpus-manifest.md`.
-Next refactor plan: open a bounded follow-on for the next read-only packet cluster.
+Next refactor plan: open a bounded follow-on for contact-store persistence of Odollo route readiness blockers.
 Next production plan: `docs/dev/plans/0009-2026-06-14-operator-selected-live-smoke-and-pilot-rollout.md`.
 Next offline boundary: after an operator-selected dry-run batch exists, run `bcw runs dry-run-closeout <run-id> --json`, `bcw runs dry-run-review-handoff <run-id> --json`, bounded `bcw runs dry-run-safe-loop <run-id> --limit <n> --json`, `bcw runs review-route-readiness <run-id> --json`, `bcw runs lookup-selection-packet <run-id> --operator <operator> --json`, `bcw runs close-lookup-prerequisites <run-id> --operator <operator> --json`, `bcw operator-live-pilot-readiness-packet --run-id <run-id> --sink google_contacts --no-write`, `bcw runs selected-target-approval-boundary <run-id> --operator <operator> --json`, and `bcw runs selected-target-command-copy-packet <run-id> --operator <operator> --response <operator-response> --acknowledgement <operator-acknowledgement> --json` until the run reaches explicit selected-target approval.
 Next production boundary: operator-selected live smoke/pilot rollout for one run, one job, and one sink at a time.

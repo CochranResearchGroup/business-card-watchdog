@@ -20,6 +20,8 @@ SINK_APPLY_RESULT_SCHEMA = "business-card-watchdog.sink-apply-result.v1"
 SINK_ADAPTER_REQUEST_SCHEMA = "business-card-watchdog.sink-adapter-request.v1"
 SINK_LOOKUP_PILOT_SCHEMA = "business-card-watchdog.sink-lookup-pilot.v1"
 SINK_LOOKUP_RESULT_SCHEMA = "business-card-watchdog.sink-lookup-result.v1"
+ODOLLO_TENANT_READINESS_SCHEMA = "business-card-watchdog.odollo-tenant-readiness.v1"
+ODOLLO_DUPLICATE_LOOKUP_GATE_SCHEMA = "business-card-watchdog.odollo-duplicate-lookup-gate.v1"
 
 
 FINGERPRINT_FIELDS = (
@@ -171,18 +173,13 @@ def build_sink_lookup_plan(
     fingerprint = canonical_contact_fingerprint(spec)
     match_keys = _match_keys(spec, fingerprint)
     lookups = [
-        {
-            "sink": sink,
-            "state": "dry_run" if dry_run else "blocked",
-            "readiness": check_sink_lookup_readiness(
-                sink,
-                dry_run=dry_run,
-                google_contacts_profile=google_contacts_profile,
-                odollo_tenant=odollo_tenant,
-            ).to_dict(),
-            "match_keys": match_keys,
-            "queries": _lookup_queries_for_sink(sink, match_keys),
-        }
+        _lookup_plan_entry(
+            sink=sink,
+            match_keys=match_keys,
+            dry_run=dry_run,
+            google_contacts_profile=google_contacts_profile,
+            odollo_tenant=odollo_tenant,
+        )
         for sink in sinks
     ]
     blocked = [lookup for lookup in lookups if lookup["readiness"]["status"] != "ready"]
@@ -194,6 +191,166 @@ def build_sink_lookup_plan(
         "network_calls_made": 0,
         "fingerprint": fingerprint,
         "lookups": lookups,
+    }
+
+
+def _lookup_plan_entry(
+    *,
+    sink: str,
+    match_keys: dict[str, str],
+    dry_run: bool,
+    google_contacts_profile: str,
+    odollo_tenant: str,
+) -> dict[str, Any]:
+    queries = _lookup_queries_for_sink(sink, match_keys)
+    readiness = check_sink_lookup_readiness(
+        sink,
+        dry_run=dry_run,
+        google_contacts_profile=google_contacts_profile,
+        odollo_tenant=odollo_tenant,
+    ).to_dict()
+    entry: dict[str, Any] = {
+        "sink": sink,
+        "state": "dry_run" if dry_run else ("ready" if readiness["status"] == "ready" else "blocked"),
+        "readiness": readiness,
+        "match_keys": match_keys,
+        "queries": queries,
+    }
+    if sink == "odoo":
+        tenant_readiness = build_odollo_tenant_readiness_packet(tenant=odollo_tenant)
+        entry["tenant_readiness"] = tenant_readiness
+        entry["duplicate_lookup_gate"] = _build_odollo_duplicate_lookup_gate(
+            tenant_readiness=tenant_readiness,
+            dry_run=dry_run,
+            queries=queries,
+        )
+    return entry
+
+
+def build_odollo_tenant_readiness_packet(*, tenant: str) -> dict[str, Any]:
+    tenant = tenant.strip()
+    blockers: list[dict[str, Any]] = []
+    if not tenant:
+        details = {
+            "tenant": "",
+            "config_key": "sink.odollo_tenant",
+            "live_probe": {
+                "network_calls_made": 0,
+                "status": "not_invoked_without_operator_approval",
+            },
+        }
+        blockers.append(
+            {
+                "code": "missing_odollo_tenant",
+                "category": "missing_config",
+                "reason": "missing sink.odollo_tenant or route-selected Odollo tenant target",
+            }
+        )
+    else:
+        details = _odollo_local_readiness_details(tenant=tenant)
+        if not details["config_present"]:
+            blockers.append(
+                {
+                    "code": "missing_odollo_config",
+                    "category": "missing_config",
+                    "reason": "missing Odollo user config",
+                    "config_path": details["config_path"],
+                }
+            )
+        if not details["tenant_home_present"]:
+            blockers.append(
+                {
+                    "code": "missing_tenant_home",
+                    "category": "blocked_tenant",
+                    "reason": "missing Odollo tenant home",
+                    "tenant_home": details["tenant_home"],
+                }
+            )
+        else:
+            missing_tenant_evidence = [
+                key
+                for key in (
+                    "tenant_resources_present",
+                    "tenant_artifacts_present",
+                    "tenant_actions_log_present",
+                )
+                if not details[key]
+            ]
+            if missing_tenant_evidence:
+                blockers.append(
+                    {
+                        "code": "incomplete_tenant_home",
+                        "category": "blocked_tenant",
+                        "reason": "Odollo tenant home is missing required local readiness evidence",
+                        "missing": missing_tenant_evidence,
+                    }
+                )
+        if not details["state_evidence_present"]:
+            blockers.append(
+                {
+                    "code": "missing_tenant_state_evidence",
+                    "category": "blocked_tenant",
+                    "reason": "missing Odollo tenant state evidence for read-only duplicate lookup",
+                }
+            )
+
+    categories = {str(blocker["category"]) for blocker in blockers}
+    if "missing_config" in categories:
+        state = "missing_config"
+    elif blockers:
+        state = "blocked_tenant"
+    else:
+        state = "pilot_ready"
+
+    return {
+        "schema": ODOLLO_TENANT_READINESS_SCHEMA,
+        "tenant": tenant,
+        "state": state,
+        "read_only": True,
+        "pilot_ready": state == "pilot_ready",
+        "network_calls_made": 0,
+        "writes_attempted": 0,
+        "blockers": blockers,
+        "details": details,
+    }
+
+
+def _build_odollo_duplicate_lookup_gate(
+    *,
+    tenant_readiness: dict[str, Any],
+    dry_run: bool,
+    queries: list[dict[str, Any]],
+) -> dict[str, Any]:
+    blockers = list(tenant_readiness.get("blockers") or [])
+    if not blockers and dry_run:
+        blockers.append(
+            {
+                "code": "operator_selected_read_only_lookup_required",
+                "category": "duplicate_risk",
+                "reason": "duplicate risk is unknown until an operator-selected read-only Odollo lookup runs",
+            }
+        )
+    if blockers:
+        state = "blocked"
+    else:
+        state = "pilot_ready"
+    return {
+        "schema": ODOLLO_DUPLICATE_LOOKUP_GATE_SCHEMA,
+        "state": state,
+        "read_only": True,
+        "duplicate_risk": "unknown_until_read_only_lookup",
+        "duplicate_review_required": True,
+        "tenant_state": tenant_readiness.get("state"),
+        "tenant": tenant_readiness.get("tenant", ""),
+        "query_count": len(queries),
+        "blockers": blockers,
+        "stop_conditions": [
+            "do not write to Odollo before read-only duplicate lookup evidence exists",
+            "do not merge duplicate candidates without operator review",
+            "do not run live lookup without an operator-selected tenant target",
+        ],
+        "network_calls_made": 0,
+        "writes_attempted": 0,
     }
 
 
