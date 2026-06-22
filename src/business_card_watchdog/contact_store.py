@@ -12,7 +12,7 @@ from .contact import contact_candidate_to_spec
 from .models import utc_now
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 CONTACT_STORE_SCHEMA = "business-card-watchdog.contact-store.v1"
 _PROJECTED_ASSET_KINDS = {
     "artifact_dir",
@@ -164,6 +164,10 @@ class ContactStore:
                 "SELECT * FROM external_bindings WHERE contact_id = ? ORDER BY created_at, binding_id",
                 (contact_id,),
             ).fetchall()
+            review_states = conn.execute(
+                "SELECT * FROM contact_review_states WHERE contact_id = ? ORDER BY created_at, review_state_id",
+                (contact_id,),
+            ).fetchall()
         payload = dict(row)
         payload["payload"] = _json_loads(payload.pop("payload_json"))
         payload["assets"] = [_row_with_payload(asset) for asset in assets]
@@ -172,7 +176,145 @@ class ContactStore:
         payload["routing_decisions"] = [_row_with_payload(decision) for decision in routing]
         payload["sink_attempts"] = [_row_with_payload(attempt) for attempt in sinks]
         payload["external_bindings"] = [_row_with_payload(binding) for binding in bindings]
+        payload["review_states"] = [_row_with_payload(review_state) for review_state in review_states]
         return payload
+
+    def record_review_recommendation(
+        self,
+        *,
+        contact_id: str,
+        source: str,
+        category: str,
+        recommendation: str,
+        rationale: str = "",
+        confidence: float | None = None,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        self.initialize()
+        contact = self.get_contact(contact_id)
+        payload = dict(payload or {})
+        now = utc_now()
+        review_state_id = _stable_id(
+            "review_state",
+            contact_id,
+            source,
+            category,
+            recommendation,
+            _json_dumps(payload),
+        )
+        with self._connect() as conn:
+            self._migrate(conn)
+            conn.execute(
+                """
+                INSERT INTO contact_review_states (
+                    review_state_id, contact_id, state, source, category,
+                    recommendation, rationale, confidence, payload_json,
+                    decided_by, decided_at, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', '', ?, ?)
+                ON CONFLICT(review_state_id) DO UPDATE SET
+                    contact_id = excluded.contact_id,
+                    source = excluded.source,
+                    category = excluded.category,
+                    recommendation = excluded.recommendation,
+                    rationale = excluded.rationale,
+                    confidence = excluded.confidence,
+                    payload_json = excluded.payload_json,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    review_state_id,
+                    contact_id,
+                    "proposed",
+                    source,
+                    category,
+                    recommendation,
+                    rationale,
+                    confidence,
+                    _json_dumps(
+                        {
+                            "evidence": payload,
+                            "contact_source_run_id": contact["source_run_id"],
+                            "contact_source_job_id": contact["source_job_id"],
+                        }
+                    ),
+                    now,
+                    now,
+                ),
+            )
+        return self.get_review_state(review_state_id)
+
+    def get_review_state(self, review_state_id: str) -> dict[str, Any]:
+        self.initialize()
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM contact_review_states WHERE review_state_id = ?",
+                (review_state_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError(f"review state not found: {review_state_id}")
+        return _row_with_payload(row)
+
+    def list_review_states(
+        self,
+        *,
+        contact_id: str | None = None,
+        state: str = "all",
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        self.initialize()
+        clauses: list[str] = []
+        params: list[Any] = []
+        if contact_id:
+            clauses.append("contact_id = ?")
+            params.append(contact_id)
+        if state != "all":
+            clauses.append("state = ?")
+            params.append(state)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        params.append(limit)
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT * FROM contact_review_states
+                {where}
+                ORDER BY updated_at DESC, review_state_id DESC
+                LIMIT ?
+                """,
+                params,
+            ).fetchall()
+        return [_row_with_payload(row) for row in rows]
+
+    def decide_review_state(
+        self,
+        *,
+        review_state_id: str,
+        reviewer: str,
+        decision: str,
+        notes: str = "",
+    ) -> dict[str, Any]:
+        if decision not in {"accept", "reject"}:
+            raise ValueError("review state decision must be accept or reject")
+        current = self.get_review_state(review_state_id)
+        payload = dict(current.get("payload") or {})
+        payload["decision"] = {
+            "decision": decision,
+            "reviewer": reviewer,
+            "notes": notes,
+        }
+        now = utc_now()
+        state = "accepted" if decision == "accept" else "rejected"
+        with self._connect() as conn:
+            self._migrate(conn)
+            conn.execute(
+                """
+                UPDATE contact_review_states
+                SET state = ?, payload_json = ?, decided_by = ?, decided_at = ?, updated_at = ?
+                WHERE review_state_id = ?
+                """,
+                (state, _json_dumps(payload), reviewer, now, now, review_state_id),
+            )
+        return self.get_review_state(review_state_id)
 
     def project_run(self, *, run_id: str, run_dir: Path) -> ProjectionResult:
         self.initialize()
@@ -762,10 +904,29 @@ class ContactStore:
                 FOREIGN KEY(contact_id) REFERENCES contacts(contact_id) ON DELETE CASCADE
             );
 
+            CREATE TABLE IF NOT EXISTS contact_review_states (
+                review_state_id TEXT PRIMARY KEY,
+                contact_id TEXT NOT NULL,
+                state TEXT NOT NULL,
+                source TEXT NOT NULL,
+                category TEXT NOT NULL,
+                recommendation TEXT NOT NULL,
+                rationale TEXT NOT NULL DEFAULT '',
+                confidence REAL,
+                payload_json TEXT NOT NULL,
+                decided_by TEXT NOT NULL DEFAULT '',
+                decided_at TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY(contact_id) REFERENCES contacts(contact_id) ON DELETE CASCADE
+            );
+
             CREATE INDEX IF NOT EXISTS idx_contacts_source ON contacts(source_run_id, source_job_id);
             CREATE INDEX IF NOT EXISTS idx_contacts_email ON contacts(email);
             CREATE INDEX IF NOT EXISTS idx_assets_contact ON card_assets(contact_id);
             CREATE INDEX IF NOT EXISTS idx_extraction_contact ON extraction_attempts(contact_id);
+            CREATE INDEX IF NOT EXISTS idx_review_states_contact ON contact_review_states(contact_id);
+            CREATE INDEX IF NOT EXISTS idx_review_states_state ON contact_review_states(state);
             """
         )
         conn.execute(

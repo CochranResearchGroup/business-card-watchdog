@@ -91,7 +91,7 @@ def test_contact_store_initializes_schema(tmp_path: Path) -> None:
     status = store.initialize()
 
     assert status["exists"] is True
-    assert status["schema_version"] == 1
+    assert status["schema_version"] == 2
     assert config.contact_store_path.exists()
 
 
@@ -122,6 +122,45 @@ def test_contact_store_projects_run_idempotently(tmp_path: Path) -> None:
     assert detail["enrichment_attempts"][0]["provider"] == "public_web"
     assert detail["routing_decisions"][0]["state"] == "ready_to_route"
     assert detail["sink_attempts"][0]["sink"] == "google_contacts"
+    assert detail["review_states"] == []
+
+
+def test_contact_review_recommendations_are_host_decided(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    run_id, _job_id = _write_recorded_contact_run(config)
+    service = BusinessCardService(config)
+    service.project_contacts_from_run(run_id)
+    contact_id = service.list_contacts()["contacts"][0]["contact_id"]
+
+    proposed = service.record_contact_review_recommendation(
+        contact_id=contact_id,
+        source="app_intelligence",
+        category="route_readiness",
+        recommendation="request_enrichment_before_routing",
+        rationale="missing independent organization confirmation",
+        confidence=0.82,
+        evidence={"signals": ["organization_only"]},
+    )
+    review_state_id = proposed["review_state"]["review_state_id"]
+    listing = service.list_contact_review_states(contact_id=contact_id, state="proposed")
+    decided = service.decide_contact_review_state(
+        review_state_id=review_state_id,
+        reviewer="operator",
+        decision="reject",
+        notes="card is sufficient for dry-run routing",
+    )
+    detail = service.get_contact(str(contact_id))["contact"]
+
+    assert proposed["writes_attempted"] == 0
+    assert proposed["network_calls_made"] == 0
+    assert proposed["review_state"]["state"] == "proposed"
+    assert proposed["review_state"]["payload"]["evidence"]["signals"] == ["organization_only"]
+    assert listing["count"] == 1
+    assert decided["review_state"]["state"] == "rejected"
+    assert decided["review_state"]["decided_by"] == "operator"
+    assert decided["review_state"]["payload"]["decision"]["decision"] == "reject"
+    assert detail["review_states"][0]["review_state_id"] == review_state_id
+    assert detail["review_states"][0]["state"] == "rejected"
 
 
 def test_contacts_cli_json_surfaces(tmp_path: Path, capsys) -> None:
@@ -133,7 +172,7 @@ def test_contacts_cli_json_surfaces(tmp_path: Path, capsys) -> None:
 
     assert main(["--config", str(config_path), "contacts", "init", "--json"]) == 0
     init_payload = json.loads(capsys.readouterr().out)
-    assert init_payload["schema_version"] == 1
+    assert init_payload["schema_version"] == 2
 
     assert main(["--config", str(config_path), "contacts", "project-run", run_id, "--json"]) == 0
     projection = json.loads(capsys.readouterr().out)
@@ -146,6 +185,76 @@ def test_contacts_cli_json_surfaces(tmp_path: Path, capsys) -> None:
     assert main(["--config", str(config_path), "contacts", "show", contact_id, "--json"]) == 0
     detail = json.loads(capsys.readouterr().out)
     assert detail["contact"]["display_name"] == "Ada Lovelace"
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "contacts",
+                "review-recommend",
+                contact_id,
+                "--category",
+                "extraction_quality",
+                "--recommendation",
+                "keep_needs_review",
+                "--rationale",
+                "OCR confidence needs operator confirmation",
+                "--confidence",
+                "0.7",
+                "--evidence-json",
+                '{"field":"email"}',
+                "--json",
+            ]
+        )
+        == 0
+    )
+    recommendation = json.loads(capsys.readouterr().out)
+    review_state_id = recommendation["review_state"]["review_state_id"]
+    assert recommendation["review_state"]["state"] == "proposed"
+    assert recommendation["review_state"]["payload"]["evidence"]["field"] == "email"
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "contacts",
+                "review-states",
+                "--contact-id",
+                contact_id,
+                "--state",
+                "proposed",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    review_states = json.loads(capsys.readouterr().out)
+    assert review_states["count"] == 1
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "contacts",
+                "review-decide",
+                review_state_id,
+                "--reviewer",
+                "operator",
+                "--decision",
+                "accept",
+                "--notes",
+                "confirmed",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    decision = json.loads(capsys.readouterr().out)
+    assert decision["review_state"]["state"] == "accepted"
+    assert decision["review_state"]["payload"]["decision"]["notes"] == "confirmed"
 
     assert main(["--config", str(config_path), "contacts", "drift", run_id, "--json"]) == 0
     drift = json.loads(capsys.readouterr().out)

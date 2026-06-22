@@ -16,6 +16,7 @@ Latest completed card-side plan: `docs/dev/plans/0066-2026-06-22-ocr-side-classi
 Latest completed side-merge plan: `docs/dev/plans/0067-2026-06-22-reviewed-side-pair-merge.md`.
 Latest completed extraction-quality plan: `docs/dev/plans/0068-2026-06-22-extraction-quality-gates.md`.
 Latest completed child-contact projection plan: `docs/dev/plans/0069-2026-06-22-reviewed-child-contact-projection.md`.
+Latest completed contact-review-state plan: `docs/dev/plans/0070-2026-06-22-contact-review-states.md`.
 Latest completed practice-corpus plan: `docs/dev/plans/0062-2026-06-21-practice-corpus-manifest.md`.
 Next refactor plan: open a bounded follow-on for the next read-only packet cluster.
 Next production plan: `docs/dev/plans/0009-2026-06-14-operator-selected-live-smoke-and-pilot-rollout.md`.

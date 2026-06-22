@@ -6638,3 +6638,44 @@ Safety:
 - This slice did not run production OCR/App Intelligence for child crops, run
   enrichment providers, public-web search, live lookup/write/readback, Google
   Contacts writes, Odoo/Odollo writes, or automatic child-contact routing.
+
+## Turn 281 | 2026-06-22
+
+Executed Plan 0070 as the first App Intelligence review-state slice under Plan
+0060 Milestone 4.
+
+Implemented:
+
+- Added `docs/dev/plans/0070-2026-06-22-contact-review-states.md`.
+- Added `contact_review_states` to the user-scoped contact database.
+- Stored App Intelligence recommendations as proposed contact review states
+  with source, category, recommendation, rationale, confidence, and evidence.
+- Added host-owned accept/reject decisions that preserve audit evidence without
+  mutating contact fields from model output.
+- Surfaced review states in contact detail.
+- Added service and CLI JSON flows for recording, listing, and deciding contact
+  review recommendations.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_contact_store.py -q` passed with 4
+  tests.
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py tests/test_service.py -q`
+  passed with 163 tests.
+- `.venv/bin/python -m pytest tests/test_api.py tests/test_mcp.py -q` passed
+  with 60 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/contact_store.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_contact_store.py`
+  passed.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 356 tests.
+- `codegraph sync /home/ecochran76/workspace.local/business-card-watchdog && codegraph status /home/ecochran76/workspace.local/business-card-watchdog`
+  reported the index already up to date, 60 files, 1,926 nodes, and 2,560
+  edges.
+
+Safety:
+
+- This slice did not run autonomous App Intelligence loops, mutate contact
+  fields from model output, run enrichment providers, public-web search, live
+  lookup/write/readback, Google Contacts writes, Odoo writes, or Odollo writes.

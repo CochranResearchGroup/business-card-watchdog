@@ -486,6 +486,78 @@ class BusinessCardService:
             "network_calls_made": 0,
         }
 
+    def record_contact_review_recommendation(
+        self,
+        *,
+        contact_id: str,
+        source: str,
+        category: str,
+        recommendation: str,
+        rationale: str = "",
+        confidence: float | None = None,
+        evidence: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        store = ContactStore.from_config(self.config)
+        review_state = store.record_review_recommendation(
+            contact_id=contact_id,
+            source=source,
+            category=category,
+            recommendation=recommendation,
+            rationale=rationale,
+            confidence=confidence,
+            payload=evidence or {},
+        )
+        return {
+            "schema": "business-card-watchdog.contact-review-recommendation.v1",
+            "store": store.status(),
+            "review_state": review_state,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+
+    def list_contact_review_states(
+        self,
+        *,
+        contact_id: str | None = None,
+        state: str = "all",
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        store = ContactStore.from_config(self.config)
+        review_states = store.list_review_states(contact_id=contact_id, state=state, limit=limit)
+        return {
+            "schema": "business-card-watchdog.contact-review-states.v1",
+            "store": store.status(),
+            "contact_id": contact_id or "",
+            "state": state,
+            "review_states": review_states,
+            "count": len(review_states),
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+
+    def decide_contact_review_state(
+        self,
+        *,
+        review_state_id: str,
+        reviewer: str,
+        decision: str,
+        notes: str = "",
+    ) -> dict[str, Any]:
+        store = ContactStore.from_config(self.config)
+        review_state = store.decide_review_state(
+            review_state_id=review_state_id,
+            reviewer=reviewer,
+            decision=decision,
+            notes=notes,
+        )
+        return {
+            "schema": "business-card-watchdog.contact-review-state-decision.v1",
+            "store": store.status(),
+            "review_state": review_state,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+
     def project_contacts_from_run(self, run_id: str) -> dict[str, Any]:
         run_dir = self.config.runs_dir / run_id
         if not (run_dir / "run.json").exists():

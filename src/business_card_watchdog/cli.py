@@ -3134,6 +3134,26 @@ def build_parser() -> argparse.ArgumentParser:
     contacts_show = contacts_sub.add_parser("show")
     contacts_show.add_argument("contact_id")
     contacts_show.add_argument("--json", action="store_true")
+    contacts_review_recommend = contacts_sub.add_parser("review-recommend")
+    contacts_review_recommend.add_argument("contact_id")
+    contacts_review_recommend.add_argument("--source", default="app_intelligence")
+    contacts_review_recommend.add_argument("--category", required=True)
+    contacts_review_recommend.add_argument("--recommendation", required=True)
+    contacts_review_recommend.add_argument("--rationale", default="")
+    contacts_review_recommend.add_argument("--confidence", type=float, default=None)
+    contacts_review_recommend.add_argument("--evidence-json", default="{}")
+    contacts_review_recommend.add_argument("--json", action="store_true")
+    contacts_review_states = contacts_sub.add_parser("review-states")
+    contacts_review_states.add_argument("--contact-id", default=None)
+    contacts_review_states.add_argument("--state", default="all")
+    contacts_review_states.add_argument("--limit", type=int, default=100)
+    contacts_review_states.add_argument("--json", action="store_true")
+    contacts_review_decide = contacts_sub.add_parser("review-decide")
+    contacts_review_decide.add_argument("review_state_id")
+    contacts_review_decide.add_argument("--reviewer", default="operator")
+    contacts_review_decide.add_argument("--decision", choices=["accept", "reject"], required=True)
+    contacts_review_decide.add_argument("--notes", default="")
+    contacts_review_decide.add_argument("--json", action="store_true")
     contacts_project_run = contacts_sub.add_parser("project-run")
     contacts_project_run.add_argument("run_id")
     contacts_project_run.add_argument("--json", action="store_true")
@@ -3706,6 +3726,29 @@ def main(argv: list[str] | None = None) -> int:
             payload = service.list_contacts(limit=args.limit)
         elif args.contacts_command == "show":
             payload = service.get_contact(args.contact_id)
+        elif args.contacts_command == "review-recommend":
+            payload = service.record_contact_review_recommendation(
+                contact_id=args.contact_id,
+                source=args.source,
+                category=args.category,
+                recommendation=args.recommendation,
+                rationale=args.rationale,
+                confidence=args.confidence,
+                evidence=json.loads(args.evidence_json),
+            )
+        elif args.contacts_command == "review-states":
+            payload = service.list_contact_review_states(
+                contact_id=args.contact_id,
+                state=args.state,
+                limit=args.limit,
+            )
+        elif args.contacts_command == "review-decide":
+            payload = service.decide_contact_review_state(
+                review_state_id=args.review_state_id,
+                reviewer=args.reviewer,
+                decision=args.decision,
+                notes=args.notes,
+            )
         elif args.contacts_command == "project-run":
             payload = service.project_contacts_from_run(args.run_id)
         else:
@@ -3716,6 +3759,8 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(payload, indent=2), end="")
         elif args.contacts_command == "list":
             print(_render_contacts_list_text(payload), end="")
+        elif args.contacts_command in {"review-recommend", "review-states", "review-decide"}:
+            print(json.dumps(payload, indent=2), end="")
         else:
             print(_render_contact_detail_text(payload), end="")
         return 0
