@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from business_card_watchdog.config import AppConfig, SinkConfig, load_config, write_default_config
-from business_card_watchdog.routing import decide_sinks
+from business_card_watchdog.routing import decide_sinks, selected_odollo_tenant
 
 
 def test_no_enabled_sinks_is_review_only() -> None:
@@ -83,3 +83,72 @@ def test_route_policy_can_match_organization_and_duplicate_state() -> None:
     assert routed.metadata["route_explanation"]["excluded_rules"][0]["reason"] == (
         "duplicate_state=no_match did not match strong_duplicate"
     )
+
+
+def test_providence_context_route_selects_soylei_odollo_tenant() -> None:
+    config = AppConfig(
+        config_path=Path("config.toml"),
+        sink=SinkConfig(google_contacts=True, odoo=True, dry_run=True, odollo_tenant="fallback-tenant"),
+        routing_rules=[
+            {
+                "match": "providence_context",
+                "value": "soylei",
+                "sinks": ["odoo"],
+                "odollo_tenant": "soylei-prod",
+            },
+            {
+                "match": "providence_context",
+                "value": "saber",
+                "sinks": ["odoo"],
+                "odollo_tenant": "saber-prod",
+            },
+        ],
+    )
+
+    decision = decide_sinks(config, {"providence_context": "soylei"})
+
+    assert decision.sinks == ["odoo"]
+    assert decision.reason == "matched providence_context=soylei"
+    assert selected_odollo_tenant(config, decision) == "soylei-prod"
+    assert decision.metadata["route_targets"]["odoo"] == {
+        "tenant": "soylei-prod",
+        "source": "routing.rule.odollo_tenant",
+    }
+    assert decision.metadata["route_explanation"]["route_context"]["providence_context"] == "soylei"
+
+
+def test_providence_context_route_selects_saber_odollo_tenant_from_labels() -> None:
+    config = AppConfig(
+        config_path=Path("config.toml"),
+        sink=SinkConfig(odoo=True, dry_run=True),
+        routing_rules=[
+            {
+                "match": "providence_context",
+                "value": "saber",
+                "sinks": ["odoo"],
+                "tenant": "saber-prod",
+            },
+        ],
+    )
+
+    decision = decide_sinks(config, {"labels": ["SABER"]})
+
+    assert decision.sinks == ["odoo"]
+    assert selected_odollo_tenant(config, decision) == "saber-prod"
+    assert decision.metadata["route_targets"]["odoo"]["source"] == "routing.rule.odollo_tenant"
+
+
+def test_odollo_route_target_falls_back_to_global_tenant() -> None:
+    config = AppConfig(
+        config_path=Path("config.toml"),
+        sink=SinkConfig(odoo=True, dry_run=True, odollo_tenant="saber-prod"),
+        routing_rules=[{"match": "tenant", "value": "saber-prod", "sinks": ["odoo"]}],
+    )
+
+    decision = decide_sinks(config, {"tenant": "saber-prod"})
+
+    assert selected_odollo_tenant(config, decision) == "saber-prod"
+    assert decision.metadata["route_targets"]["odoo"] == {
+        "tenant": "saber-prod",
+        "source": "sink.odollo_tenant",
+    }

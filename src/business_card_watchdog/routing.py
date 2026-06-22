@@ -9,6 +9,7 @@ from .models import SinkDecision
 from .sinks import canonical_contact_fingerprint
 
 ROUTE_EXPLANATION_SCHEMA = "business-card-watchdog.route-explanation.v1"
+TENANT_ROUTE_FIELDS = ("odollo_tenant", "tenant", "target_tenant")
 
 
 def load_contact_spec(spec_path: Path | None) -> dict[str, Any]:
@@ -49,7 +50,9 @@ def decide_sinks(config: AppConfig, spec: dict[str, Any]) -> SinkDecision:
         rule_record = _rule_record(index, rule, reason=reason)
         if matched:
             sinks = [sink for sink in rule.get("sinks", []) if sink in configured]
+            route_targets = _route_targets(config, rule=rule, sinks=sinks)
             rule_record["eligible_sinks"] = sinks
+            rule_record["route_targets"] = route_targets
             explanation["matched_rules"].append(rule_record)
             return SinkDecision(
                 sinks=sinks,
@@ -61,6 +64,7 @@ def decide_sinks(config: AppConfig, spec: dict[str, Any]) -> SinkDecision:
                 metadata={
                     "route_explanation": explanation,
                     "sink_eligibility": _sink_eligibility(config, sinks=sinks, configured=configured),
+                    "route_targets": route_targets,
                 },
             )
         explanation["excluded_rules"].append(rule_record)
@@ -74,6 +78,7 @@ def decide_sinks(config: AppConfig, spec: dict[str, Any]) -> SinkDecision:
         metadata={
             "route_explanation": explanation,
             "sink_eligibility": _sink_eligibility(config, sinks=configured, configured=configured),
+            "route_targets": _route_targets(config, rule={}, sinks=configured),
         },
     )
 
@@ -105,6 +110,16 @@ def _rule_matches(config: AppConfig, spec: dict[str, Any], rule: dict[str, Any])
         state = str(spec.get("_review_state") or "")
         matched = bool(value) and value in {state, "*"}
         return matched, f"matched review_state={value}" if matched else f"review_state={state or '<missing>'} did not match {value}"
+    if match_type == "providence_context":
+        context = _providence_context(spec)
+        allowed_values = {item.strip().lower() for item in value.split(",") if item.strip()}
+        matched = bool(allowed_values) and ("*" in allowed_values or context in allowed_values)
+        return (
+            matched,
+            f"matched providence_context={value}"
+            if matched
+            else f"providence_context={context or '<missing>'} did not match {value}",
+        )
     return False, f"unsupported route rule match={match_type}"
 
 
@@ -114,6 +129,7 @@ def _route_context(config: AppConfig, spec: dict[str, Any]) -> dict[str, Any]:
         "organization": str(spec.get("organization") or ""),
         "source_path": str(spec.get("_image_path") or spec.get("image_path") or ""),
         "tenant": str(spec.get("tenant") or config.sink.odollo_tenant or ""),
+        "providence_context": _providence_context(spec),
         "duplicate_state": str(spec.get("_duplicate_state") or ""),
         "review_state": str(spec.get("_review_state") or ""),
     }
@@ -153,6 +169,54 @@ def _sink_apply_enabled(config: AppConfig, sink: str) -> bool:
     if sink == "odoo":
         return config.sink.odoo_apply_enabled
     return False
+
+
+def selected_google_contacts_profile(config: AppConfig, decision: SinkDecision) -> str:
+    targets = dict(decision.metadata.get("route_targets") or {})
+    google_target = targets.get("google_contacts") if isinstance(targets.get("google_contacts"), dict) else {}
+    return str(google_target.get("profile") or config.sink.google_contacts_profile or "")
+
+
+def selected_odollo_tenant(config: AppConfig, decision: SinkDecision) -> str:
+    targets = dict(decision.metadata.get("route_targets") or {})
+    odoo_target = targets.get("odoo") if isinstance(targets.get("odoo"), dict) else {}
+    return str(odoo_target.get("tenant") or config.sink.odollo_tenant or "")
+
+
+def _route_targets(config: AppConfig, *, rule: dict[str, Any], sinks: list[str]) -> dict[str, dict[str, str]]:
+    targets: dict[str, dict[str, str]] = {}
+    if "google_contacts" in sinks and config.sink.google_contacts_profile:
+        targets["google_contacts"] = {
+            "profile": config.sink.google_contacts_profile,
+            "source": "sink.google_contacts_profile",
+        }
+    if "odoo" in sinks:
+        tenant = _rule_odollo_tenant(rule) or config.sink.odollo_tenant
+        if tenant:
+            source = "routing.rule.odollo_tenant" if _rule_odollo_tenant(rule) else "sink.odollo_tenant"
+            targets["odoo"] = {"tenant": tenant, "source": source}
+    return targets
+
+
+def _rule_odollo_tenant(rule: dict[str, Any]) -> str:
+    for field in TENANT_ROUTE_FIELDS:
+        value = str(rule.get(field) or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _providence_context(spec: dict[str, Any]) -> str:
+    for key in ("providence_context", "_providence_context", "tenant_context", "context", "project"):
+        value = str(spec.get(key) or "").strip().lower()
+        if value:
+            return value
+    labels = spec.get("labels") if isinstance(spec.get("labels"), list) else []
+    for label in labels:
+        value = str(label or "").strip().lower()
+        if value in {"soylei", "saber"}:
+            return value
+    return ""
 
 
 def _email_domain(spec: dict[str, Any]) -> str:

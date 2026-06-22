@@ -2752,6 +2752,43 @@ def test_service_plan_sink_lookup_for_job_writes_zero_network_plan(tmp_path: Pat
     assert any(event["event_type"] == "sink_lookup_plan_created" for event in events)
 
 
+def test_service_plans_use_route_selected_odollo_tenant(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(odoo=True, dry_run=True, odollo_tenant="fallback-tenant"),
+        routing_rules=[
+            {
+                "match": "providence_context",
+                "value": "saber",
+                "sinks": ["odoo"],
+                "odollo_tenant": "saber-prod",
+            }
+        ],
+    )
+    run_id, job_id = make_recorded_run(config)
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+    (artifact_dir / "spec.json").write_text(
+        json.dumps({"full_name": "Ada Lovelace", "email": "ada@example.test", "providence_context": "saber"}),
+        encoding="utf-8",
+    )
+
+    service = BusinessCardService(config)
+    lookup_result = service.plan_sink_lookup_for_job(job_id=job_id, run_id=run_id)
+    sink_result = service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+
+    lookup = lookup_result["lookup_plan"]["lookups"][0]
+    action = sink_result["plan"]["actions"][0]
+    assert lookup["sink"] == "odoo"
+    assert lookup["readiness"]["details"]["tenant"] == "saber-prod"
+    assert lookup_result["lookup_plan"]["decision"]["metadata"]["route_targets"]["odoo"]["tenant"] == "saber-prod"
+    assert action["sink"] == "odoo"
+    assert action["readiness"]["details"]["tenant"] == "saber-prod"
+    assert sink_result["plan"]["decision"]["metadata"]["route_targets"]["odoo"]["source"] == (
+        "routing.rule.odollo_tenant"
+    )
+
+
 def test_service_preflight_sink_apply_writes_zero_write_artifact(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",

@@ -24,6 +24,7 @@ Latest completed enrichment review-provenance plan: `docs/dev/plans/0074-2026-06
 Latest completed GWS default routing plan: `docs/dev/plans/0075-2026-06-22-gws-default-routing-profile.md`.
 Latest completed contact-store selected-sink plan: `docs/dev/plans/0076-2026-06-22-contact-store-selected-sink-state.md`.
 Latest completed contact route-selection packet plan: `docs/dev/plans/0077-2026-06-22-contact-route-selection-packets.md`.
+Latest completed Odollo tenant route-target plan: `docs/dev/plans/0078-2026-06-22-odollo-tenant-route-targets.md`.
 Latest completed practice-corpus plan: `docs/dev/plans/0062-2026-06-21-practice-corpus-manifest.md`.
 Next refactor plan: open a bounded follow-on for the next read-only packet cluster.
 Next production plan: `docs/dev/plans/0009-2026-06-14-operator-selected-live-smoke-and-pilot-rollout.md`.

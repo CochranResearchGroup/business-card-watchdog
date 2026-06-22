@@ -28,7 +28,7 @@ from .models import CardJob, utc_now
 from .preclassifier import assess_business_card_candidate, build_card_candidate_box_manifest
 from .quality import assess_extraction_quality, write_extraction_quality
 from .review import assess_contact_spec, write_review_packet
-from .routing import decide_sinks, load_contact_spec
+from .routing import decide_sinks, load_contact_spec, selected_google_contacts_profile, selected_odollo_tenant
 from .sinks import build_sink_payloads, write_sink_payloads
 from .skill_adapter import BusinessCardSkillAdapter, is_supported_image
 
@@ -533,8 +533,8 @@ class BatchOrchestrator:
             sinks=decision.sinks,
             spec=contact_spec,
             dry_run=dry_run or decision.dry_run,
-            google_contacts_profile=self.config.sink.google_contacts_profile,
-            odollo_tenant=self.config.sink.odollo_tenant,
+            google_contacts_profile=selected_google_contacts_profile(self.config, decision),
+            odollo_tenant=selected_odollo_tenant(self.config, decision),
         )
         if payloads:
             sink_payload_path = write_sink_payloads(result.artifact_dir / "sink_payloads.json", payloads)

@@ -48,7 +48,7 @@ from .practice_corpus import build_practice_corpus_manifest
 from .preclassifier import assess_business_card_candidate
 from .review import assess_contact_spec, build_review_submission, write_review_packet, write_review_submission
 from .review_route_packets import build_lookup_selection_packet, build_review_route_readiness
-from .routing import decide_sinks
+from .routing import decide_sinks, selected_google_contacts_profile, selected_odollo_tenant
 from .service_recovery import build_service_recovery_report
 from .sink_apply_adapters import execute_sink_readback_adapter, execute_sink_write_adapter
 from .sink_lookup_adapters import execute_sink_lookup_adapter
@@ -4501,8 +4501,8 @@ class BusinessCardService:
             spec=spec,
             dry_run=dry_run,
             reason=decision.reason,
-            google_contacts_profile=self.config.sink.google_contacts_profile,
-            odollo_tenant=self.config.sink.odollo_tenant,
+            google_contacts_profile=selected_google_contacts_profile(self.config, decision),
+            odollo_tenant=selected_odollo_tenant(self.config, decision),
         )
         lookup_plan["run_id"] = run_id
         lookup_plan["job_id"] = entry.get("job_id")
@@ -4517,8 +4517,8 @@ class BusinessCardService:
             dry_run=dry_run,
             reason=decision.reason,
             apply_enabled={sink: self._sink_apply_enabled(sink) for sink in decision.sinks},
-            google_contacts_profile=self.config.sink.google_contacts_profile,
-            odollo_tenant=self.config.sink.odollo_tenant,
+            google_contacts_profile=selected_google_contacts_profile(self.config, decision),
+            odollo_tenant=selected_odollo_tenant(self.config, decision),
         )
         sink_plan["run_id"] = run_id
         sink_plan["job_id"] = entry.get("job_id")
@@ -8120,8 +8120,8 @@ class BusinessCardService:
             dry_run=dry_run or decision.dry_run,
             reason=decision.reason,
             apply_enabled={sink: self._sink_apply_enabled(sink) for sink in decision.sinks},
-            google_contacts_profile=self.config.sink.google_contacts_profile,
-            odollo_tenant=self.config.sink.odollo_tenant,
+            google_contacts_profile=selected_google_contacts_profile(self.config, decision),
+            odollo_tenant=selected_odollo_tenant(self.config, decision),
         )
         plan["job_id"] = job_id
         plan["run_id"] = run_id
@@ -8164,8 +8164,8 @@ class BusinessCardService:
             spec=spec,
             dry_run=dry_run or decision.dry_run,
             reason=decision.reason,
-            google_contacts_profile=self.config.sink.google_contacts_profile,
-            odollo_tenant=self.config.sink.odollo_tenant,
+            google_contacts_profile=selected_google_contacts_profile(self.config, decision),
+            odollo_tenant=selected_odollo_tenant(self.config, decision),
         )
         plan["job_id"] = job_id
         plan["run_id"] = run_id

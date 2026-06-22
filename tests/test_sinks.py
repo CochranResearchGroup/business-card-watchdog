@@ -216,6 +216,37 @@ def test_build_sink_lookup_plan_is_zero_network_and_keyed() -> None:
     assert google_lookup["readiness"]["details"]["live_lookup_requires_selected_target"] is True
 
 
+def test_build_sink_lookup_plan_exposes_selected_odollo_tenant() -> None:
+    plan = build_sink_lookup_plan(
+        sinks=["odoo"],
+        spec={"full_name": "Ada Lovelace", "email": "ada@example.test"},
+        dry_run=True,
+        reason="matched providence_context=saber",
+        odollo_tenant="saber-prod",
+    )
+
+    assert plan["state"] == "dry_run"
+    assert plan["network_calls_made"] == 0
+    assert plan["lookups"][0]["sink"] == "odoo"
+    assert plan["lookups"][0]["readiness"]["details"]["tenant"] == "saber-prod"
+    assert plan["lookups"][0]["readiness"]["details"]["live_lookup_requires_selected_target"] is True
+
+
+def test_build_sink_plan_exposes_selected_odollo_tenant() -> None:
+    plan = build_sink_plan(
+        sinks=["odoo"],
+        spec={"full_name": "Ada Lovelace", "email": "ada@example.test"},
+        dry_run=True,
+        reason="matched providence_context=soylei",
+        odollo_tenant="soylei-prod",
+    )
+
+    assert plan["state"] == "dry_run"
+    assert plan["actions"][0]["sink"] == "odoo"
+    assert plan["actions"][0]["readiness"]["details"]["tenant"] == "soylei-prod"
+    assert plan["actions"][0]["readiness"]["details"]["live_apply_requires_selected_target"] is True
+
+
 def test_build_sink_adapter_request_prepares_lookup_write_and_readback_contracts() -> None:
     lookup_plan = build_sink_lookup_plan(
         sinks=["google_contacts", "odoo"],

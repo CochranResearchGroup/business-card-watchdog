@@ -373,6 +373,14 @@ Validation:
 
 ### Milestone 7 | Odollo SoyLei And SABER Routing
 
+Status: IN_PROGRESS. Providence-context route rules can now select the `odoo`
+sink with route-scoped Odollo tenant targets such as `soylei-prod` and
+`saber-prod` via Plan 0078. Dry-run sink plans, sink payloads, and duplicate
+lookup plans now carry the selected tenant target while preserving
+`sink.odollo_tenant` as a fallback. Remaining work should add explicit
+read-only tenant readiness reports, duplicate lookup packet blockers, and
+selected-target/write-readback pilot boundaries for Odollo routes.
+
 Goal-compatible objective:
 
 Add deterministic Providence-context routing to SoyLei or SABER through Odollo
