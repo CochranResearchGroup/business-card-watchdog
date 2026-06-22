@@ -494,6 +494,40 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_contact_route_selection_approval_boundary",
+                "description": (
+                    "Build a no-live selected-target approval boundary from a projected contact's stored route decision."
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "contact_id": {"type": "string"},
+                        "operator": {"type": "string", "default": "operator"},
+                        "sink": {"type": "string", "enum": ["google_contacts", "odoo"]},
+                        "response": {"type": "string"},
+                        "write": {"type": "boolean", "default": True},
+                    },
+                    "required": ["contact_id"],
+                },
+            },
+            {
+                "name": "business_card_watchdog_contact_route_selection_command_copy_packet",
+                "description": (
+                    "Return contact-scoped selected-target command text only after response validation and acknowledgement."
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "contact_id": {"type": "string"},
+                        "operator": {"type": "string", "default": "operator"},
+                        "response": {"type": "string"},
+                        "acknowledgement": {"type": "string"},
+                        "sink": {"type": "string", "enum": ["google_contacts", "odoo"]},
+                    },
+                    "required": ["contact_id", "response"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_offline_pilot_gap_audit",
                 "description": "Inspect offline pilot drill/documentation coverage and remaining live/operator boundaries without running live calls.",
                 "input_schema": {
@@ -1669,6 +1703,22 @@ def call_tool(
             limit=int(args.get("limit", 10)),
             reviewer=str(args.get("reviewer") or "safe-loop"),
             apply=bool(args.get("apply", False)),
+        )
+    if tool_name == "business_card_watchdog_contact_route_selection_approval_boundary":
+        return service.contact_route_selection_approval_boundary(
+            str(args["contact_id"]),
+            operator=str(args.get("operator") or "operator"),
+            sink=str(args["sink"]) if args.get("sink") else None,
+            response=str(args["response"]) if args.get("response") else None,
+            write=bool(args.get("write", True)),
+        )
+    if tool_name == "business_card_watchdog_contact_route_selection_command_copy_packet":
+        return service.contact_route_selection_command_copy_packet(
+            str(args["contact_id"]),
+            operator=str(args.get("operator") or "operator"),
+            response=str(args["response"]),
+            acknowledgement=str(args.get("acknowledgement") or ""),
+            sink=str(args["sink"]) if args.get("sink") else None,
         )
     if tool_name == "business_card_watchdog_offline_pilot_gap_audit":
         return service.offline_pilot_gap_audit(write=bool(args.get("write", True)))

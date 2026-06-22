@@ -94,6 +94,18 @@ def create_app(config_path: Path | None = None):
         reviewer: str = "safe-loop"
         apply: bool = False
 
+    class ContactRouteSelectionApprovalBoundaryRequest(BaseModel):
+        operator: str = "operator"
+        sink: str | None = None
+        response: str | None = None
+        write: bool = True
+
+    class ContactRouteSelectionCommandCopyRequest(BaseModel):
+        operator: str = "operator"
+        response: str
+        acknowledgement: str = ""
+        sink: str | None = None
+
     class ChildSelectedTargetAuditRequest(BaseModel):
         run_id: str
         sink: str | None = None
@@ -1026,6 +1038,32 @@ def create_app(config_path: Path | None = None):
             limit=request.limit,
             reviewer=request.reviewer,
             apply=request.apply,
+        )
+
+    @app.post("/contacts/{contact_id}/route-selection-approval-boundary")
+    def create_contact_route_selection_approval_boundary(
+        contact_id: str,
+        request: ContactRouteSelectionApprovalBoundaryRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().contact_route_selection_approval_boundary(
+            contact_id,
+            operator=request.operator,
+            sink=request.sink,
+            response=request.response,
+            write=request.write,
+        )
+
+    @app.post("/contacts/{contact_id}/route-selection-command-copy-packet")
+    def create_contact_route_selection_command_copy_packet(
+        contact_id: str,
+        request: ContactRouteSelectionCommandCopyRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().contact_route_selection_command_copy_packet(
+            contact_id,
+            operator=request.operator,
+            response=request.response,
+            acknowledgement=request.acknowledgement,
+            sink=request.sink,
         )
 
     @app.get("/offline-pilot-gap-audit")

@@ -3159,6 +3159,20 @@ def build_parser() -> argparse.ArgumentParser:
     contacts_review_safe_loop.add_argument("--reviewer", default="safe-loop")
     contacts_review_safe_loop.add_argument("--apply", action="store_true")
     contacts_review_safe_loop.add_argument("--json", action="store_true")
+    contacts_route_approval = contacts_sub.add_parser("route-selection-approval-boundary")
+    contacts_route_approval.add_argument("contact_id")
+    contacts_route_approval.add_argument("--operator", required=True)
+    contacts_route_approval.add_argument("--sink", choices=["google_contacts", "odoo"], default=None)
+    contacts_route_approval.add_argument("--response", default=None)
+    contacts_route_approval.add_argument("--no-write", action="store_true")
+    contacts_route_approval.add_argument("--json", action="store_true")
+    contacts_route_command_copy = contacts_sub.add_parser("route-selection-command-copy-packet")
+    contacts_route_command_copy.add_argument("contact_id")
+    contacts_route_command_copy.add_argument("--operator", required=True)
+    contacts_route_command_copy.add_argument("--response", required=True)
+    contacts_route_command_copy.add_argument("--acknowledgement", default="")
+    contacts_route_command_copy.add_argument("--sink", choices=["google_contacts", "odoo"], default=None)
+    contacts_route_command_copy.add_argument("--json", action="store_true")
     contacts_project_run = contacts_sub.add_parser("project-run")
     contacts_project_run.add_argument("run_id")
     contacts_project_run.add_argument("--json", action="store_true")
@@ -3762,6 +3776,22 @@ def main(argv: list[str] | None = None) -> int:
                 reviewer=args.reviewer,
                 apply=args.apply,
             )
+        elif args.contacts_command == "route-selection-approval-boundary":
+            payload = service.contact_route_selection_approval_boundary(
+                args.contact_id,
+                operator=args.operator,
+                sink=args.sink,
+                response=args.response,
+                write=not args.no_write,
+            )
+        elif args.contacts_command == "route-selection-command-copy-packet":
+            payload = service.contact_route_selection_command_copy_packet(
+                args.contact_id,
+                operator=args.operator,
+                response=args.response,
+                acknowledgement=args.acknowledgement,
+                sink=args.sink,
+            )
         elif args.contacts_command == "project-run":
             payload = service.project_contacts_from_run(args.run_id)
         else:
@@ -3772,7 +3802,14 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(payload, indent=2), end="")
         elif args.contacts_command == "list":
             print(_render_contacts_list_text(payload), end="")
-        elif args.contacts_command in {"review-recommend", "review-states", "review-decide", "review-safe-loop"}:
+        elif args.contacts_command in {
+            "review-recommend",
+            "review-states",
+            "review-decide",
+            "review-safe-loop",
+            "route-selection-approval-boundary",
+            "route-selection-command-copy-packet",
+        }:
             print(json.dumps(payload, indent=2), end="")
         else:
             print(_render_contact_detail_text(payload), end="")

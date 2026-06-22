@@ -55,6 +55,65 @@ def write_candidate_for_job(config: AppConfig, run_id: str, job_id: str) -> Path
     return artifact_dir
 
 
+def project_gws_route_contact(
+    config: AppConfig,
+    *,
+    stored_profile: str = "ecochran76",
+) -> tuple[BusinessCardService, str, str, str]:
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+    )
+    service.close_lookup_prerequisites(
+        run_id,
+        operator="tester",
+        sink="google_contacts",
+        limit=4,
+        write=True,
+    )
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+    sink_payload_path = artifact_dir / "sink_payloads.json"
+    sink_payload_path.write_text(
+        json.dumps(
+            {
+                "schema": "business-card-watchdog.sink-payloads.v1",
+                "payloads": [
+                    {
+                        "sink": "google_contacts",
+                        "dry_run": True,
+                        "contact": {"email": "ada@example.test"},
+                        "readiness": {
+                            "status": "ready",
+                            "details": {
+                                "profile": stored_profile,
+                                "target_account": stored_profile,
+                                "config_key": "sink.google_contacts_profile",
+                                "live_apply_requires_selected_target": True,
+                            },
+                        },
+                    }
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    RunLedger(config.runs_dir / run_id).record_artifact(
+        job_id=job_id,
+        kind="sink_payloads",
+        path=sink_payload_path,
+    )
+    service.project_contacts_from_run(run_id)
+    contact_id = str(service.list_contacts()["contacts"][0]["contact_id"])
+    return service, run_id, job_id, contact_id
+
+
 def test_service_lists_and_shows_runs_jobs_and_artifacts(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, job_id = make_recorded_run(config)
@@ -2123,6 +2182,106 @@ def test_service_selected_target_command_copy_packet_requires_acknowledgement(
     assert ready["acknowledgement_redacted"]["raw_acknowledgement_stored"] is False
     artifact_kinds = {artifact["kind"] for artifact in service.get_run(run_id)["artifacts"]}
     assert "selected_live_target" not in artifact_kinds
+
+
+def test_service_contact_route_selection_packets_use_projected_gws_route(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True, google_contacts_profile="ecochran76"),
+    )
+    service, run_id, job_id, contact_id = project_gws_route_contact(config)
+
+    awaiting = service.contact_route_selection_approval_boundary(
+        contact_id,
+        operator="tester",
+        sink="google_contacts",
+        write=False,
+    )
+
+    assert awaiting["schema"] == "business-card-watchdog.contact-route-selection-approval-boundary.v1"
+    assert awaiting["state"] == "awaiting_operator_response"
+    assert awaiting["run_id"] == run_id
+    assert awaiting["job_id"] == job_id
+    assert awaiting["sink"] == "google_contacts"
+    assert awaiting["selection"]["selected"]["selected_target_profile"] == "ecochran76"
+    assert awaiting["operator_response_template"].startswith(f"run_id={run_id} job_id={job_id}")
+    assert awaiting["creates_selected_live_target"] is False
+    assert awaiting["runtime_artifact_written"] is False
+
+    response = (
+        f"run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=tester scope=lookup safety_confirmation=fixture contact is safe for google contacts test profile"
+    )
+    ready = service.contact_route_selection_approval_boundary(
+        contact_id,
+        operator="tester",
+        sink="google_contacts",
+        response=response,
+        write=True,
+    )
+
+    assert ready["state"] == "ready_for_explicit_selected_target_creation"
+    assert ready["blocked_reasons"] == []
+    assert ready["boundary_state"] == "ready_for_explicit_selected_target_creation"
+    assert ready["would_create_selected_live_target"] is True
+    assert ready["creates_selected_live_target"] is False
+    assert ready["writes_attempted"] == 0
+    assert ready["network_calls_made"] == 0
+    assert ready["runtime_artifact_written"] is True
+    assert Path(ready["boundary_path"]).exists()
+
+    blocked_copy = service.contact_route_selection_command_copy_packet(
+        contact_id,
+        operator="tester",
+        sink="google_contacts",
+        response=response,
+    )
+    assert blocked_copy["state"] == "blocked"
+    assert blocked_copy["approval_boundary_state"] == "ready_for_explicit_selected_target_creation"
+    assert blocked_copy["command_copy_text"] is None
+    assert any("operator acknowledgement is required" in reason for reason in blocked_copy["blocked_reasons"])
+
+    ready_copy = service.contact_route_selection_command_copy_packet(
+        contact_id,
+        operator="tester",
+        sink="google_contacts",
+        response=response,
+        acknowledgement=f"acknowledge run_id={run_id} job_id={job_id} sink=google_contacts operator=tester copy command",
+    )
+    assert ready_copy["state"] == "ready_for_operator_copy"
+    assert ready_copy["command_copy_text"].startswith(f"runs selected-live-target-from-response {run_id}")
+    assert "--write-selected-target" in ready_copy["command_copy_text"]
+    assert ready_copy["creates_selected_live_target"] is False
+    artifact_kinds = {artifact["kind"] for artifact in service.get_run(run_id)["artifacts"]}
+    assert "contact_route_selection_approval_boundary" in artifact_kinds
+    assert "selected_live_target" not in artifact_kinds
+
+
+def test_service_contact_route_selection_blocks_gws_profile_mismatch(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True, google_contacts_profile="ecochran76"),
+    )
+    service, _run_id, _job_id, contact_id = project_gws_route_contact(config, stored_profile="wrong-profile")
+
+    payload = service.contact_route_selection_approval_boundary(
+        contact_id,
+        operator="tester",
+        sink="google_contacts",
+        write=False,
+    )
+
+    assert payload["state"] == "blocked"
+    assert payload["boundary"] is None
+    assert payload["creates_selected_live_target"] is False
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+    assert any(
+        "stored selected_target_profile does not match configured sink.google_contacts_profile" in reason
+        for reason in payload["blocked_reasons"]
+    )
 
 
 def test_service_live_pilot_rehearsal_drill_reaches_command_copy_gate(tmp_path: Path) -> None:

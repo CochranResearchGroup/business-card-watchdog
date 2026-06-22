@@ -14,7 +14,7 @@ from business_card_watchdog.orchestrator import BatchOrchestrator
 from business_card_watchdog.service import BusinessCardService
 
 from synthetic_fixtures import SyntheticSkillAdapter, write_multi_card_image, write_synthetic_image
-from test_service import make_recorded_run
+from test_service import make_recorded_run, project_gws_route_contact
 
 
 fastapi_testclient = pytest.importorskip("fastapi.testclient")
@@ -23,6 +23,14 @@ TestClient = fastapi_testclient.TestClient
 
 def write_config(path: Path, data_dir: Path) -> None:
     path.write_text(f'data_dir = "{data_dir}"\n[watch]\ninputs = []\n', encoding="utf-8")
+
+
+def write_gws_config(path: Path, data_dir: Path) -> None:
+    path.write_text(
+        f'data_dir = "{data_dir}"\n[watch]\ninputs = []\n[sink]\n'
+        'dry_run = true\ngoogle_contacts = true\ngoogle_contacts_profile = "ecochran76"\n',
+        encoding="utf-8",
+    )
 
 
 def test_api_health_status_runs_and_jobs(tmp_path: Path) -> None:
@@ -1391,6 +1399,57 @@ def test_api_run_selected_target_command_copy_packet_requires_ack(tmp_path: Path
     assert ready["writes_attempted"] == 0
     assert ready["network_calls_made"] == 0
     assert ready["acknowledgement_redacted"]["raw_acknowledgement_stored"] is False
+
+
+def test_api_contact_route_selection_packets_use_projected_route(tmp_path: Path) -> None:
+    from business_card_watchdog.api import create_app
+
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_gws_config(config_path, data_dir)
+    config = AppConfig(
+        config_path=config_path,
+        data_dir=data_dir,
+        sink=SinkConfig(google_contacts=True, dry_run=True, google_contacts_profile="ecochran76"),
+    )
+    service, run_id, job_id, contact_id = project_gws_route_contact(config)
+    client = TestClient(create_app(config_path))
+
+    awaiting = client.post(
+        f"/contacts/{contact_id}/route-selection-approval-boundary",
+        json={"operator": "api-test", "sink": "google_contacts", "write": False},
+    ).json()
+
+    assert awaiting["schema"] == "business-card-watchdog.contact-route-selection-approval-boundary.v1"
+    assert awaiting["state"] == "awaiting_operator_response"
+    assert awaiting["run_id"] == run_id
+    assert awaiting["job_id"] == job_id
+    assert awaiting["selection"]["selected"]["selected_target_profile"] == "ecochran76"
+    assert awaiting["creates_selected_live_target"] is False
+
+    response = (
+        f"run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=api-test scope=lookup safety_confirmation=fixture contact is safe for google contacts test profile"
+    )
+    command_copy = client.post(
+        f"/contacts/{contact_id}/route-selection-command-copy-packet",
+        json={
+            "operator": "api-test",
+            "sink": "google_contacts",
+            "response": response,
+            "acknowledgement": (
+                f"acknowledge run_id={run_id} job_id={job_id} "
+                "sink=google_contacts operator=api-test copy command"
+            ),
+        },
+    ).json()
+
+    assert command_copy["schema"] == "business-card-watchdog.contact-route-selection-command-copy-packet.v1"
+    assert command_copy["state"] == "ready_for_operator_copy"
+    assert command_copy["command_copy_text"].startswith(f"runs selected-live-target-from-response {run_id}")
+    assert command_copy["creates_selected_live_target"] is False
+    artifact_kinds = {artifact["kind"] for artifact in service.get_run(run_id)["artifacts"]}
+    assert "selected_live_target" not in artifact_kinds
 
 
 def test_api_offline_pilot_gap_audit_reports_remaining_boundaries(tmp_path: Path) -> None:

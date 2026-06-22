@@ -6923,3 +6923,43 @@ Safety:
   paid enrichment, Odoo, or Odollo calls. It did not process configured
   SyncThing/private watch inputs, create selected-live-target artifacts, or
   enable live sink writes.
+
+## Turn 288 | 2026-06-22
+
+Executed Plan 0077 as the Plan 0060 Milestone 6 database-backed route-selection
+packet slice.
+
+Implemented:
+
+- Added contact-scoped route-selection approval boundary packets backed by
+  contact-store routing decisions.
+- Added contact-scoped route-selection command-copy packets that delegate to the
+  existing selected-target acknowledgement gate.
+- Blocked missing or mismatched configured GWS target profile before
+  selected-target delegation.
+- Exposed contact route-selection packets through service, API, CLI, and MCP.
+- Marked Plan 0060 Milestone 6 complete for the no-live GWS routing scope.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_contact_route_selection_packets_use_projected_gws_route tests/test_service.py::test_service_contact_route_selection_blocks_gws_profile_mismatch tests/test_api.py::test_api_contact_route_selection_packets_use_projected_route tests/test_cli_surfaces.py::test_cli_contact_route_selection_packets_use_projected_route tests/test_mcp.py::test_mcp_contact_route_selection_packets_use_projected_route -q`
+  passed with 5 tests.
+- `.venv/bin/python -m pytest tests/test_service.py -q` passed with 114 tests.
+- `.venv/bin/python -m pytest tests/test_api.py tests/test_cli_surfaces.py tests/test_mcp.py -q`
+  passed with 119 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/api.py src/business_card_watchdog/cli.py src/business_card_watchdog/mcp.py tests/test_service.py tests/test_api.py tests/test_cli_surfaces.py tests/test_mcp.py`
+  passed.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 372 tests.
+- `codegraph sync /home/ecochran76/workspace.local/business-card-watchdog && codegraph status /home/ecochran76/workspace.local/business-card-watchdog`
+  reported the index already up to date, 60 files, 1,983 nodes, and 2,093
+  edges.
+
+Safety:
+
+- This slice did not run live Google lookup/write/readback, public-web search,
+  paid enrichment, Odoo, or Odollo calls. It did not process configured
+  SyncThing/private watch inputs, create selected-live-target artifacts, or
+  enable live sink writes.

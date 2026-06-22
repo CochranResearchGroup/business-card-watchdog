@@ -1481,6 +1481,272 @@ class BusinessCardService:
             job_id=job_id,
         )
 
+    def contact_route_selection_approval_boundary(
+        self,
+        contact_id: str,
+        *,
+        operator: str,
+        sink: str | None = None,
+        response: str | None = None,
+        write: bool = True,
+    ) -> dict[str, Any]:
+        selection = self._contact_route_selection(contact_id=contact_id, sink=sink)
+        contact = dict(selection.get("contact") or {})
+        selected_sink = str(selection.get("sink") or sink or "")
+        run_id = str(contact.get("source_run_id") or "")
+        job_id = str(contact.get("source_job_id") or "")
+        blocked_reasons = list(selection.get("blocked_reasons") or [])
+        boundary = None
+        if not blocked_reasons:
+            boundary = self.selected_target_approval_boundary(
+                run_id,
+                operator=operator,
+                sink=selected_sink,
+                job_id=job_id,
+                response=response,
+                write=False,
+            )
+            if boundary.get("state") not in {
+                "awaiting_operator_response",
+                "ready_for_explicit_selected_target_creation",
+                "selected_target_exists",
+            }:
+                blocked_reasons.extend(str(reason) for reason in list(boundary.get("blocked_reasons") or []))
+        if blocked_reasons:
+            state = "blocked"
+        elif boundary and boundary.get("state") == "awaiting_operator_response":
+            state = "awaiting_operator_response"
+        elif boundary and boundary.get("state") == "ready_for_explicit_selected_target_creation":
+            state = "ready_for_explicit_selected_target_creation"
+        elif boundary and boundary.get("state") == "selected_target_exists":
+            state = "selected_target_exists"
+        else:
+            state = "blocked"
+            blocked_reasons.append("contact route selection boundary is not ready")
+        commands = {
+            "contact_route_selection_approval_boundary": (
+                f"contacts route-selection-approval-boundary {shlex.quote(contact_id)} "
+                f"--operator {shlex.quote(operator)}"
+                + (f" --sink {shlex.quote(selected_sink)}" if selected_sink else "")
+                + (f" --response {shlex.quote(response)}" if response else "")
+                + " --json"
+            ),
+            "selected_target_approval_boundary": (
+                f"runs selected-target-approval-boundary {shlex.quote(run_id)} "
+                f"--operator {shlex.quote(operator)}"
+                + (f" --sink {shlex.quote(selected_sink)}" if selected_sink else "")
+                + (f" --job-id {shlex.quote(job_id)}" if job_id else "")
+                + (f" --response {shlex.quote(response)}" if response else "")
+                + " --json"
+            )
+            if run_id
+            else None,
+            "contact_detail": f"contacts show {shlex.quote(contact_id)} --json",
+        }
+        if boundary:
+            commands["select_target"] = dict(boundary.get("commands") or {}).get("select_target")
+        payload: dict[str, Any] = {
+            "schema": "business-card-watchdog.contact-route-selection-approval-boundary.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "contact_id": contact_id,
+            "run_id": run_id or None,
+            "job_id": job_id or None,
+            "sink": selected_sink or None,
+            "operator": operator,
+            "response_supplied": bool(response),
+            "selection": selection,
+            "boundary": boundary,
+            "boundary_state": (boundary or {}).get("state") if boundary else None,
+            "operator_response_template": (boundary or {}).get("operator_response_template") if boundary else None,
+            "blocked_reasons": blocked_reasons,
+            "would_create_selected_live_target": bool(
+                boundary and boundary.get("would_create_selected_live_target")
+            ),
+            "creates_selected_live_target": False,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "runtime_artifact_written": False,
+            "boundary_path": None,
+            "commands": commands,
+            "explicit_stop_conditions": [
+                "This contact route-selection packet reads the contact store and selected-target gates only.",
+                "This packet does not create selected_live_target.json.",
+                "Run command-copy only after explicit operator approval and tenant/profile safety confirmation.",
+                "This packet does not execute live lookup, write, or readback.",
+            ],
+        }
+        if write and run_id:
+            safe_contact_id = "".join(ch if ch.isalnum() or ch in {"_", "-"} else "_" for ch in contact_id)
+            boundary_path = self.config.runs_dir / run_id / f"contact_route_selection_approval_{safe_contact_id}.json"
+            payload["runtime_artifact_written"] = True
+            payload["boundary_path"] = str(boundary_path)
+            boundary_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            ledger = RunLedger(self.config.runs_dir / run_id)
+            ledger.record_artifact(job_id=job_id or "__run__", kind="contact_route_selection_approval_boundary", path=boundary_path)
+            ledger.record_event(
+                "contact_route_selection_approval_boundary_created",
+                {
+                    "contact_id": contact_id,
+                    "run_id": run_id,
+                    "job_id": job_id,
+                    "sink": selected_sink,
+                    "operator": operator,
+                    "state": state,
+                    "boundary_path": str(boundary_path),
+                    "writes_attempted": 0,
+                    "network_calls_made": 0,
+                },
+            )
+        return payload
+
+    def _contact_route_selection(self, *, contact_id: str, sink: str | None = None) -> dict[str, Any]:
+        store = ContactStore.from_config(self.config)
+        contact = store.get_contact(contact_id)
+        routing_decisions = [
+            decision
+            for decision in list(contact.get("routing_decisions") or [])
+            if isinstance(decision, dict) and str(decision.get("state") or "") == "ready_to_route"
+        ]
+        candidate_rows: list[dict[str, Any]] = []
+        for decision in routing_decisions:
+            selected_sinks = [str(value) for value in list(decision.get("selected_sinks") or []) if str(value)]
+            for selected_sink in selected_sinks:
+                if sink and selected_sink != sink:
+                    continue
+                candidate_rows.append(
+                    {
+                        "decision_id": decision.get("decision_id"),
+                        "sink": selected_sink,
+                        "selected_sink_state": decision.get("selected_sink_state"),
+                        "selected_target_profile": decision.get("selected_target_profile"),
+                        "selected_target_tenant": decision.get("selected_target_tenant"),
+                        "routing_decision": decision,
+                    }
+                )
+        blocked_reasons: list[str] = []
+        if not candidate_rows:
+            blocked_reasons.append("contact has no stored ready_to_route selected sink matching the requested route")
+            selected = None
+        elif len(candidate_rows) > 1 and not sink:
+            blocked_reasons.append("contact has multiple selected sinks; provide --sink before route selection")
+            selected = candidate_rows[0]
+        else:
+            selected = candidate_rows[0]
+        selected_sink = str((selected or {}).get("sink") or sink or "")
+        selected_target_profile = str((selected or {}).get("selected_target_profile") or "")
+        selected_target_tenant = str((selected or {}).get("selected_target_tenant") or "")
+        if selected_sink == "google_contacts":
+            configured_profile = str(self.config.sink.google_contacts_profile or "").strip()
+            if not configured_profile:
+                blocked_reasons.append("configured sink.google_contacts_profile is required for GWS route selection")
+            if not selected_target_profile:
+                blocked_reasons.append("stored route decision is missing selected_target_profile")
+            if configured_profile and selected_target_profile and configured_profile != selected_target_profile:
+                blocked_reasons.append(
+                    "stored selected_target_profile does not match configured sink.google_contacts_profile"
+                )
+        elif selected_sink == "odoo":
+            configured_tenant = str(self.config.sink.odollo_tenant or "").strip()
+            if configured_tenant and selected_target_tenant and configured_tenant != selected_target_tenant:
+                blocked_reasons.append("stored selected_target_tenant does not match configured sink.odollo_tenant")
+        elif selected_sink:
+            blocked_reasons.append(f"unsupported route-selection sink: {selected_sink}")
+        return {
+            "schema": "business-card-watchdog.contact-route-selection.v1",
+            "contact": {
+                "contact_id": contact.get("contact_id"),
+                "source_run_id": contact.get("source_run_id"),
+                "source_job_id": contact.get("source_job_id"),
+                "display_name": contact.get("display_name"),
+                "email": contact.get("email"),
+            },
+            "sink": selected_sink or None,
+            "selected": selected,
+            "candidate_count": len(candidate_rows),
+            "blocked_reasons": blocked_reasons,
+            "configured_targets": {
+                "google_contacts_profile": self.config.sink.google_contacts_profile,
+                "odollo_tenant": self.config.sink.odollo_tenant,
+            },
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+
+    def contact_route_selection_command_copy_packet(
+        self,
+        contact_id: str,
+        *,
+        operator: str,
+        response: str,
+        acknowledgement: str = "",
+        sink: str | None = None,
+    ) -> dict[str, Any]:
+        approval = self.contact_route_selection_approval_boundary(
+            contact_id,
+            operator=operator,
+            sink=sink,
+            response=response,
+            write=False,
+        )
+        blocked_reasons = list(approval.get("blocked_reasons") or [])
+        run_id = str(approval.get("run_id") or "")
+        job_id = str(approval.get("job_id") or "")
+        selected_sink = str(approval.get("sink") or "")
+        command_packet = None
+        if not blocked_reasons:
+            command_packet = self.selected_target_command_copy_packet(
+                run_id,
+                operator=operator,
+                response=response,
+                acknowledgement=acknowledgement,
+                sink=selected_sink,
+                job_id=job_id,
+            )
+            blocked_reasons.extend(str(reason) for reason in list(command_packet.get("blocked_reasons") or []))
+        state = "ready_for_operator_copy" if command_packet and command_packet.get("state") == "ready_for_operator_copy" else "blocked"
+        return {
+            "schema": "business-card-watchdog.contact-route-selection-command-copy-packet.v1",
+            "generated_at": utc_now(),
+            "state": state,
+            "contact_id": contact_id,
+            "run_id": run_id or None,
+            "job_id": job_id or None,
+            "sink": selected_sink or None,
+            "operator": operator,
+            "acknowledgement_required": True,
+            "acknowledgement_ok": bool(command_packet and command_packet.get("acknowledgement_ok")),
+            "approval_boundary_state": approval.get("state"),
+            "approval_boundary": approval,
+            "selected_target_command_copy_packet": command_packet,
+            "command_copy_text": (command_packet or {}).get("command_copy_text") if command_packet else None,
+            "selected_target_command": (command_packet or {}).get("selected_target_command") if command_packet else None,
+            "blocked_reasons": blocked_reasons,
+            "creates_selected_live_target": False,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "commands": {
+                "contact_route_selection_command_copy_packet": (
+                    f"contacts route-selection-command-copy-packet {shlex.quote(contact_id)} "
+                    f"--operator {shlex.quote(operator)} --response {shlex.quote(response)}"
+                    + (f" --sink {shlex.quote(selected_sink)}" if selected_sink else "")
+                    + " --json"
+                ),
+                "contact_route_selection_approval_boundary": (
+                    f"contacts route-selection-approval-boundary {shlex.quote(contact_id)} "
+                    f"--operator {shlex.quote(operator)} --response {shlex.quote(response)}"
+                    + (f" --sink {shlex.quote(selected_sink)}" if selected_sink else "")
+                    + " --json"
+                ),
+            },
+            "explicit_stop_conditions": [
+                "This packet only returns selected-target creation command text for operator copy; it never executes the command.",
+                "Do not copy command_copy_text unless state is ready_for_operator_copy.",
+                "Copying command_copy_text would create selected_live_target.json but would not execute live lookup, write, or readback.",
+                "Do not process private SyncThing images, run public-web search, or call paid enrichment from this packet.",
+            ],
+        }
+
     def phase_report(self, run_id: str) -> dict[str, Any]:
         run = self.get_run(run_id)
         jobs = run["jobs"]

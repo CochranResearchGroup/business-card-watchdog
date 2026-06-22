@@ -330,14 +330,15 @@ Validation:
 
 ### Milestone 6 | Routing Policy And GWS Default Sink
 
-Status: IN_PROGRESS. Generated user config now installs Google Contacts as the
-default dry-run sink with `google_contacts_profile = "ecochran76"` and apply
-disabled via Plan 0075. No-write sink and lookup plans now surface the
-configured GWS target profile. Contact-store routing decisions now persist
-selected sink state and configured target metadata via Plan 0076. Remaining
-work should add command-copy/approval packets for GWS route selection if
-existing selected-target packets do not fully cover the database-backed contact
-row flow.
+Status: COMPLETE for the no-live GWS routing scope. Generated user config now
+installs Google Contacts as the default dry-run sink with
+`google_contacts_profile = "ecochran76"` and apply disabled via Plan 0075.
+No-write sink and lookup plans surface the configured GWS target profile.
+Contact-store routing decisions persist selected sink state and configured
+target metadata via Plan 0076. Contact-scoped route-selection approval and
+command-copy packets now cover the database-backed contact row flow via Plan
+0077 while preserving selected-target gates and selected-live-target creation
+as an explicit operator action.
 
 Goal-compatible objective:
 

@@ -24,7 +24,7 @@ from synthetic_fixtures import (
     write_multi_card_image,
     write_synthetic_image,
 )
-from test_service import make_recorded_run
+from test_service import make_recorded_run, project_gws_route_contact
 
 
 def write_config(path: Path, data_dir: Path) -> None:
@@ -881,6 +881,76 @@ def test_cli_runs_selected_target_command_copy_packet_requires_ack(tmp_path: Pat
     assert "--write-selected-target" in text
     assert "Creates selected target: False" in text
     assert "{" not in text
+
+
+def test_cli_contact_route_selection_packets_use_projected_route(tmp_path: Path, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    config_path.write_text(
+        f'data_dir = "{data_dir}"\n[watch]\ninputs = []\n[sink]\n'
+        'dry_run = true\ngoogle_contacts = true\ngoogle_contacts_profile = "ecochran76"\n',
+        encoding="utf-8",
+    )
+    config = AppConfig(
+        config_path=config_path,
+        data_dir=data_dir,
+        sink=SinkConfig(google_contacts=True, dry_run=True, google_contacts_profile="ecochran76"),
+    )
+    _service, run_id, job_id, contact_id = project_gws_route_contact(config)
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "contacts",
+                "route-selection-approval-boundary",
+                contact_id,
+                "--operator",
+                "cli-test",
+                "--sink",
+                "google_contacts",
+                "--no-write",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    awaiting = json.loads(capsys.readouterr().out)
+    assert awaiting["state"] == "awaiting_operator_response"
+    assert awaiting["run_id"] == run_id
+    assert awaiting["job_id"] == job_id
+    assert awaiting["creates_selected_live_target"] is False
+
+    response = (
+        f"run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=cli-test scope=lookup safety_confirmation=fixture contact is safe for google contacts test profile"
+    )
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "contacts",
+                "route-selection-command-copy-packet",
+                contact_id,
+                "--operator",
+                "cli-test",
+                "--sink",
+                "google_contacts",
+                "--response",
+                response,
+                "--acknowledgement",
+                f"acknowledge run_id={run_id} job_id={job_id} sink=google_contacts operator=cli-test copy command",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    ready = json.loads(capsys.readouterr().out)
+    assert ready["state"] == "ready_for_operator_copy"
+    assert ready["command_copy_text"].startswith(f"runs selected-live-target-from-response {run_id}")
+    assert ready["creates_selected_live_target"] is False
 
 
 def test_cli_child_reviews_lists_promoted_child_candidates(

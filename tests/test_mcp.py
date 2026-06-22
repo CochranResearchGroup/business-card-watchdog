@@ -19,7 +19,7 @@ from business_card_watchdog.orchestrator import BatchOrchestrator
 from business_card_watchdog.service import BusinessCardService
 
 from synthetic_fixtures import SyntheticSkillAdapter, write_multi_card_image, write_synthetic_image
-from test_service import make_recorded_run
+from test_service import make_recorded_run, project_gws_route_contact
 
 
 def test_manifest_has_process_tool() -> None:
@@ -77,6 +77,8 @@ def test_manifest_has_process_tool() -> None:
     assert "business_card_watchdog_contact_review_states" in names
     assert "business_card_watchdog_contact_review_decide" in names
     assert "business_card_watchdog_contact_review_safe_loop" in names
+    assert "business_card_watchdog_contact_route_selection_approval_boundary" in names
+    assert "business_card_watchdog_contact_route_selection_command_copy_packet" in names
     assert "business_card_watchdog_offline_pilot_gap_audit" in names
     assert "business_card_watchdog_multi_card_preclassification_drill" in names
     assert "business_card_watchdog_watch_dry_run_selection_drill" in names
@@ -235,6 +237,51 @@ def test_mcp_contact_review_state_safe_loop_parity(tmp_path: Path) -> None:
     assert safe_loop["actions"][0]["decision"] == "reject"
     assert safe_loop["writes_attempted"] == 0
     assert safe_loop["network_calls_made"] == 0
+
+
+def test_mcp_contact_route_selection_packets_use_projected_route(tmp_path: Path) -> None:
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(google_contacts=True, dry_run=True, google_contacts_profile="ecochran76"),
+    )
+    service, run_id, job_id, contact_id = project_gws_route_contact(config)
+
+    awaiting = call_tool(
+        "business_card_watchdog_contact_route_selection_approval_boundary",
+        {"contact_id": contact_id, "operator": "mcp-test", "sink": "google_contacts", "write": False},
+        config=config,
+    )
+    assert awaiting["schema"] == "business-card-watchdog.contact-route-selection-approval-boundary.v1"
+    assert awaiting["state"] == "awaiting_operator_response"
+    assert awaiting["run_id"] == run_id
+    assert awaiting["job_id"] == job_id
+    assert awaiting["creates_selected_live_target"] is False
+
+    response = (
+        f"run_id={run_id} job_id={job_id} sink=google_contacts "
+        "operator=mcp-test scope=lookup safety_confirmation=fixture contact is safe for google contacts test profile"
+    )
+    ready = call_tool(
+        "business_card_watchdog_contact_route_selection_command_copy_packet",
+        {
+            "contact_id": contact_id,
+            "operator": "mcp-test",
+            "sink": "google_contacts",
+            "response": response,
+            "acknowledgement": (
+                f"acknowledge run_id={run_id} job_id={job_id} sink=google_contacts operator=mcp-test copy command"
+            ),
+        },
+        config=config,
+    )
+
+    assert ready["schema"] == "business-card-watchdog.contact-route-selection-command-copy-packet.v1"
+    assert ready["state"] == "ready_for_operator_copy"
+    assert ready["command_copy_text"].startswith(f"runs selected-live-target-from-response {run_id}")
+    assert ready["creates_selected_live_target"] is False
+    artifact_kinds = {artifact["kind"] for artifact in service.get_run(run_id)["artifacts"]}
+    assert "selected_live_target" not in artifact_kinds
 
 
 def test_mcp_watch_backlog_preflight_redacts_private_source_paths(tmp_path: Path) -> None:
