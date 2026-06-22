@@ -6587,6 +6587,14 @@ class BusinessCardService:
                 continue
             by_kind = artifacts_by_job.get(str(job["job_id"]), {})
             next_action = next_by_job.get(str(job["job_id"]))
+            non_card_review = self._accepted_non_card_review_for_job(
+                run_id=run_id,
+                job_id=str(job["job_id"]),
+            )
+            effective_job = dict(job)
+            if non_card_review:
+                effective_job["state"] = "rejected_not_card"
+                next_action = None
             sink_pilot_status = self._sink_pilot_status(by_kind=by_kind, next_action=next_action)
             artifact_entries = {
                 kind: self._artifact_bundle_entry(record)
@@ -6594,20 +6602,30 @@ class BusinessCardService:
             }
             child_replacement_status = self._child_replacement_bundle_status(artifact_entries)
             review_matrix = self._review_matrix_entry(
-                job=job,
+                job=effective_job,
                 artifacts=artifact_entries,
                 next_action=next_action,
                 sink_pilot_status=sink_pilot_status,
             )
+            if non_card_review:
+                review_matrix["document_classification_state"] = "rejected_not_card"
+                review_matrix["document_classification_review"] = {
+                    "review_state_id": non_card_review.get("review_state_id"),
+                    "category": non_card_review.get("category"),
+                    "recommendation": non_card_review.get("recommendation"),
+                    "decided_by": non_card_review.get("decided_by"),
+                    "decided_at": non_card_review.get("decided_at"),
+                }
             entries.append(
                 {
                     "run_id": run_id,
-                    "job_id": job["job_id"],
-                    "state": job["state"],
+                    "job_id": effective_job["job_id"],
+                    "state": effective_job["state"],
                     "image_path": job["image_path"],
                     "error": job.get("error"),
                     "artifact_dir": job.get("artifact_dir"),
                     "next_action": next_action,
+                    "non_card_review": non_card_review,
                     "sink_pilot_status": sink_pilot_status,
                     "child_replacement_status": child_replacement_status,
                     "review_matrix": review_matrix,
@@ -10056,6 +10074,8 @@ class BusinessCardService:
             current_run_id = str(run["run_id"])
             bundle = self.review_bundle(run_id=current_run_id, state="all", write=False)
             for entry in bundle["entries"]:
+                if entry.get("state") == "rejected_not_card":
+                    continue
                 candidate_sinks = self._live_candidate_sinks(entry, selected_sink=selected_sink)
                 for candidate_sink in candidate_sinks:
                     readiness = self.live_lookup_readiness_report(
@@ -14328,6 +14348,24 @@ class BusinessCardService:
             ),
         }
 
+    def _accepted_non_card_review_for_job(self, *, run_id: str, job_id: str) -> dict[str, Any] | None:
+        store = ContactStore.from_config(self.config)
+        try:
+            contacts = store.list_contacts(limit=10000)
+        except Exception:
+            return None
+        for contact_row in contacts:
+            if str(contact_row.get("source_run_id") or "") != run_id:
+                continue
+            if str(contact_row.get("source_job_id") or "") != job_id:
+                continue
+            try:
+                contact = store.get_contact(str(contact_row["contact_id"]))
+            except Exception:
+                return None
+            return _accepted_reject_not_card_review(contact)
+        return None
+
     def _live_candidate_sinks(self, entry: dict[str, Any], *, selected_sink: str = "") -> list[str]:
         if selected_sink:
             return [selected_sink]
@@ -16055,6 +16093,7 @@ def _contact_review_surface_row(contact: dict[str, Any]) -> dict[str, Any]:
     proposed_reviews = [
         row for row in review_states if isinstance(row, dict) and row.get("state") == "proposed"
     ]
+    non_card_review = _accepted_reject_not_card_review(contact)
     blocked_routes = [
         row
         for row in routing_decisions
@@ -16087,11 +16126,22 @@ def _contact_review_surface_row(contact: dict[str, Any]) -> dict[str, Any]:
         "phone": contact.get("phone"),
         "source_run_id": contact.get("source_run_id"),
         "source_job_id": contact.get("source_job_id"),
-        "review_state": "needs_operator_review"
+        "review_state": "rejected_not_card"
+        if non_card_review
+        else "needs_operator_review"
         if proposed_reviews or blocked_routes
         else "ready_for_route_review"
         if routing_decisions
         else "needs_projection_review",
+        "non_card_review": {
+            "review_state_id": non_card_review.get("review_state_id"),
+            "category": non_card_review.get("category"),
+            "recommendation": non_card_review.get("recommendation"),
+            "decided_by": non_card_review.get("decided_by"),
+            "decided_at": non_card_review.get("decided_at"),
+        }
+        if non_card_review
+        else None,
         "counts": {
             "assets": len(assets),
             "extraction_attempts": len(extraction_attempts),
@@ -16155,6 +16205,20 @@ def _contact_review_surface_row(contact: dict[str, Any]) -> dict[str, Any]:
             if isinstance(row, dict)
         ],
     }
+
+
+def _accepted_reject_not_card_review(contact: dict[str, Any]) -> dict[str, Any] | None:
+    for row in list(contact.get("review_states") or []):
+        if not isinstance(row, dict):
+            continue
+        if row.get("state") != "accepted":
+            continue
+        if row.get("category") != "document_classification":
+            continue
+        if row.get("recommendation") != "reject_not_card":
+            continue
+        return row
+    return None
 
 
 def _write_synthetic_business_card_image(path: Path) -> Path:

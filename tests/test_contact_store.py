@@ -478,6 +478,46 @@ def test_contact_review_recommendations_are_host_decided(tmp_path: Path) -> None
     assert detail["review_states"][0]["state"] == "rejected"
 
 
+def test_accepted_reject_not_card_removes_contact_from_route_review(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    run_id, job_id = _write_recorded_contact_run(config)
+    service = BusinessCardService(config)
+    service.project_contacts_from_run(run_id)
+    contact_id = service.list_contacts()["contacts"][0]["contact_id"]
+
+    proposed = service.record_contact_review_recommendation(
+        contact_id=contact_id,
+        source="operator_feedback",
+        category="document_classification",
+        recommendation="reject_not_card",
+        rationale="operator identified the scan as a handout, not a business card",
+        confidence=1.0,
+        evidence={"classification": "not_business_card"},
+    )
+    decided = service.decide_contact_review_state(
+        review_state_id=proposed["review_state"]["review_state_id"],
+        reviewer="operator",
+        decision="accept",
+        notes="not a business card",
+    )
+
+    surface = service.contact_review_surface(limit=10)
+    bundle = service.review_bundle(run_id=run_id, write=False)
+    readiness = service.review_route_readiness(run_id, write=False)
+    candidates = service.live_target_candidates(run_id=run_id, sink="google_contacts")
+
+    assert decided["review_state"]["state"] == "accepted"
+    assert surface["rows"][0]["review_state"] == "rejected_not_card"
+    assert surface["rows"][0]["non_card_review"]["recommendation"] == "reject_not_card"
+    assert bundle["entries"][0]["job_id"] == job_id
+    assert bundle["entries"][0]["state"] == "rejected_not_card"
+    assert bundle["entries"][0]["review_matrix"]["document_classification_state"] == "rejected_not_card"
+    assert readiness["counts"]["rejected_not_card"] == 1
+    assert readiness["counts"]["needs_review"] == 0
+    assert readiness["counts"]["blocked"] == 0
+    assert candidates["candidate_count"] == 0
+
+
 def test_contact_field_corrections_are_audited(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, _job_id = _write_recorded_contact_run(config)

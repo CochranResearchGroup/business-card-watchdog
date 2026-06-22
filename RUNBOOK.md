@@ -7452,6 +7452,50 @@ Safety:
   call paid enrichment, run live lookup/write/readback, or commit runtime
   manifests/private filenames.
 
+## Turn 305 | 2026-06-22
+
+Applied operator review feedback from the Previews HTML review packet for the
+three bounded scanner dry-run review jobs.
+
+Implemented:
+
+- Recorded accepted contact-store `document_classification/reject_not_card`
+  decisions for the three projected review contacts:
+  American Academy of Pediatrics handout, CDC 3-fold handout, and parent safety
+  flyer.
+- Updated the review surface to expose accepted non-card decisions as
+  `review_state = "rejected_not_card"`.
+- Updated run review bundles and route-readiness reporting so accepted
+  non-card decisions are terminal skips rather than pending route/review work.
+- Updated live-target candidate selection to omit `rejected_not_card` entries.
+
+Runtime evidence:
+
+- `contacts review-states --state accepted --limit 10 --json` reported 3
+  accepted `reject_not_card` decisions, all decided by `ecochran76`.
+- `contacts review-surface --limit 20 --json` reported the three bounded-run
+  contacts as `rejected_not_card` with no pending review states.
+- `runs review-route-readiness 2026-06-22T12-27-33+00-00 --json` reported
+  `needs_review = 0`, `rejected_not_card = 3`, `route_ready = 0`, and
+  writes/network `0/0`.
+- `live-target-candidates --run-id 2026-06-22T12-27-33+00-00 --sink google_contacts --json`
+  reported 21 remaining blocked candidates instead of 24, with writes/network
+  `0/0`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_contact_store.py::test_accepted_reject_not_card_removes_contact_from_route_review -q`
+  passed.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/review_route_packets.py tests/test_contact_store.py`
+  passed.
+
+Safety:
+
+- This was contact-store review metadata and no-live reporting only. It did not
+  create `selected_live_target.json`, run public-web search, call paid
+  enrichment, run live lookup/write/readback, or commit private card images/OCR
+  dumps.
+
 ## Turn 291 | 2026-06-22
 
 Executed Plan 0080 as the next Plan 0060 Milestone 7 contact-store persistence

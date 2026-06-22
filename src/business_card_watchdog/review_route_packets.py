@@ -23,6 +23,7 @@ def build_review_route_readiness(
     counts = {
         "needs_review": 0,
         "ready_to_route": 0,
+        "rejected_not_card": 0,
         "duplicate_risky": 0,
         "enrichment_pending": 0,
         "route_ready": 0,
@@ -41,6 +42,7 @@ def build_review_route_readiness(
         enrichment_state = str(matrix.get("enrichment_state") or "not_requested")
         route_state = str(matrix.get("route_state") or "not_planned")
         lookup_state = str(matrix.get("sink_lookup_state") or "not_started")
+        rejected_not_card = review_state == "rejected_not_card"
         duplicate_risky = duplicate_state in {
             "strong_duplicate",
             "possible_duplicate",
@@ -48,6 +50,9 @@ def build_review_route_readiness(
             "matches_found",
         }
         enrichment_pending = enrichment_state in {"requested", "proposed"}
+        if rejected_not_card:
+            duplicate_risky = False
+            enrichment_pending = False
         safe_auto = bool(next_action.get("safe_to_auto_continue"))
         explicit_operator = bool(next_action.get("requires_explicit_operator_action"))
         route_ready = (
@@ -59,6 +64,7 @@ def build_review_route_readiness(
         blocked = review_state in {"needs_review", "failed"} or duplicate_risky or enrichment_pending
         counts["needs_review"] += int(review_state == "needs_review")
         counts["ready_to_route"] += int(review_state == "ready_to_route")
+        counts["rejected_not_card"] += int(rejected_not_card)
         counts["duplicate_risky"] += int(duplicate_risky)
         counts["enrichment_pending"] += int(enrichment_pending)
         counts["route_ready"] += int(route_ready)
@@ -85,6 +91,8 @@ def build_review_route_readiness(
                 "sink_lookup_state": lookup_state,
                 "sink_lookup_match_count": matrix.get("sink_lookup_match_count", 0),
                 "route_ready": route_ready,
+                "rejected_not_card": rejected_not_card,
+                "non_card_review": entry.get("non_card_review"),
                 "safe_to_auto_continue": safe_auto,
                 "requires_explicit_operator_action": explicit_operator,
                 "next_action": next_action,
