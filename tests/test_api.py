@@ -2688,6 +2688,27 @@ def test_api_contact_review_state_safe_loop_parity(tmp_path: Path) -> None:
         kind="enrichment_result",
         path=artifact_dir / "enrichment_result.json",
     )
+    (artifact_dir / "sink_payloads.json").write_text(
+        json.dumps(
+            {
+                "schema": "business-card-watchdog.sink-payloads.v1",
+                "payloads": [
+                    {
+                        "sink": "google_contacts",
+                        "dry_run": True,
+                        "contact": {"email": "ada@example.test"},
+                    }
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    RunLedger(config.runs_dir / run_id).record_artifact(
+        job_id=job_id,
+        kind="sink_payloads",
+        path=artifact_dir / "sink_payloads.json",
+    )
     service = BusinessCardService(config)
     service.project_contacts_from_run(run_id)
     contact_id = service.list_contacts()["contacts"][0]["contact_id"]
@@ -2768,6 +2789,17 @@ def test_api_contact_review_state_safe_loop_parity(tmp_path: Path) -> None:
             "reason": "operator approved enrichment title",
         },
     ).json()
+    sink_attempt = enrichment_merge["contact"]["sink_attempts"][0]
+    sink_approval = client.post(
+        f"/contacts/{contact_id}/sink-approval",
+        json={
+            "operator": "api-test",
+            "attempt_id": sink_attempt["attempt_id"],
+            "approval_state": "approved_for_lookup",
+            "scope": "lookup",
+            "reason": "operator approved read-only lookup",
+        },
+    ).json()
     review_surface = client.get(
         "/contacts/review-surface",
         params={"contact_id": contact_id},
@@ -2793,9 +2825,12 @@ def test_api_contact_review_state_safe_loop_parity(tmp_path: Path) -> None:
     assert enrichment_merge["schema"] == "business-card-watchdog.contact-enrichment-merge.v1"
     assert enrichment_merge["mutation"]["operator"] == "api-test"
     assert enrichment_merge["contact"]["payload"]["contact_spec"]["title"] == "Principal Engineer"
+    assert sink_approval["schema"] == "business-card-watchdog.contact-sink-approval.v1"
+    assert sink_approval["mutation"]["operator"] == "api-test"
+    assert sink_approval["attempt"]["state"] == "approved_for_lookup"
     assert review_surface["schema"] == "business-card-watchdog.contact-review-surface.v1"
     assert review_surface["rows"][0]["display_name"] == "Augusta Ada Lovelace"
-    assert review_surface["rows"][0]["counts"]["mutations"] == 4
+    assert review_surface["rows"][0]["counts"]["mutations"] == 5
     assert safe_loop["action_count"] == 1
     assert safe_loop["actions"][0]["status"] == "executed"
     assert safe_loop["actions"][0]["decision"] == "reject"

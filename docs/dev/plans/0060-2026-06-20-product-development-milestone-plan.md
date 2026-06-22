@@ -441,8 +441,10 @@ API, CLI, and MCP via Plan 0082. Audited route override mutations are available
 through service, API, CLI, and MCP via Plan 0083. Audited crop decision
 mutations are available through service, API, CLI, and MCP via Plan 0085.
 Audited enrichment merge mutations are available through service, API, CLI, and
-MCP via Plan 0086. Remaining work should add sink approval mutations before
-considering a local HTML review surface.
+MCP via Plan 0086. Audited sink approval state mutations are available through
+service, API, CLI, and MCP via Plan 0087. Remaining Milestone 8 work is to
+decide whether the local HTML review surface is needed now or should remain a
+separate UI plan.
 
 Goal-compatible objective:
 

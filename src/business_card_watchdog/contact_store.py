@@ -17,6 +17,12 @@ CONTACT_STORE_SCHEMA = "business-card-watchdog.contact-store.v1"
 CONTACT_FIELD_CORRECTION_FIELDS = {"display_name", "organization", "email", "phone"}
 CONTACT_CROP_DECISIONS = {"accept", "reject", "needs_recrop", "use_alternate"}
 CONTACT_ENRICHMENT_MERGE_FIELDS = set(CONTACT_FIELDS)
+CONTACT_SINK_APPROVAL_STATES = {
+    "approved_for_lookup",
+    "approved_for_write_pilot",
+    "rejected",
+    "needs_review",
+}
 _PROJECTED_ASSET_KINDS = {
     "artifact_dir",
     "preclassification",
@@ -575,6 +581,128 @@ class ContactStore:
             ).fetchone()
         if row is None:
             raise KeyError(f"enrichment attempt not found: {attempt_id}")
+        return _row_with_payload(row)
+
+    def set_sink_approval_state(
+        self,
+        *,
+        contact_id: str,
+        operator: str,
+        attempt_id: str,
+        approval_state: str,
+        reason: str = "",
+        scope: str = "lookup",
+    ) -> dict[str, Any]:
+        if not operator.strip():
+            raise ValueError("contact sink approval requires an operator")
+        normalized_state = approval_state.strip()
+        if normalized_state not in CONTACT_SINK_APPROVAL_STATES:
+            raise ValueError(f"unsupported contact sink approval state: {normalized_state}")
+        normalized_scope = scope.strip() or "lookup"
+        if normalized_scope not in {"lookup", "write", "readback", "all"}:
+            raise ValueError(f"unsupported contact sink approval scope: {normalized_scope}")
+        self.get_contact(contact_id)
+        attempt = self.get_sink_attempt(attempt_id)
+        if str(attempt.get("contact_id") or "") != contact_id:
+            raise KeyError(f"sink attempt not found for contact: {attempt_id}")
+        previous_values = _sink_approval_snapshot(attempt)
+        now = utc_now()
+        new_values = {
+            "attempt_id": attempt_id,
+            "sink": attempt.get("sink"),
+            "previous_state": attempt.get("state"),
+            "approval_state": normalized_state,
+            "scope": normalized_scope,
+            "reason": reason,
+            "approved_by": operator,
+            "approved_at": now,
+        }
+        mutation_id = _stable_id(
+            "mutation",
+            contact_id,
+            operator,
+            "sink_approval",
+            attempt_id,
+            _json_dump_value(new_values),
+            now,
+        )
+        payload = dict(attempt.get("payload") or {})
+        payload.setdefault("review_mutations", []).append(
+            {
+                "mutation_id": mutation_id,
+                "action": "sink_approval",
+                "operator": operator,
+                "reason": reason,
+                "previous_values": previous_values,
+                "new_values": new_values,
+                "created_at": now,
+            }
+        )
+        payload["sink_approval"] = {
+            "mutation_id": mutation_id,
+            **new_values,
+        }
+        mutation_payload = {
+            "action": "sink_approval",
+            "operator": operator,
+            "reason": reason,
+            "attempt_id": attempt_id,
+            "previous_values": previous_values,
+            "new_values": new_values,
+        }
+        with self._connect() as conn:
+            self._migrate(conn)
+            conn.execute(
+                """
+                INSERT INTO contact_mutations (
+                    mutation_id, contact_id, action, operator, previous_json,
+                    new_json, payload_json, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    mutation_id,
+                    contact_id,
+                    "sink_approval",
+                    operator,
+                    _json_dump_value(previous_values),
+                    _json_dump_value(new_values),
+                    _json_dumps(mutation_payload),
+                    now,
+                    now,
+                ),
+            )
+            conn.execute(
+                """
+                UPDATE sink_attempts
+                SET state = ?,
+                    payload_json = ?,
+                    updated_at = ?
+                WHERE attempt_id = ? AND contact_id = ?
+                """,
+                (
+                    normalized_state,
+                    _json_dumps(payload),
+                    now,
+                    attempt_id,
+                    contact_id,
+                ),
+            )
+        return {
+            "mutation": self.get_mutation(mutation_id),
+            "attempt": self.get_sink_attempt(attempt_id),
+            "contact": self.get_contact(contact_id),
+        }
+
+    def get_sink_attempt(self, attempt_id: str) -> dict[str, Any]:
+        self.initialize()
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM sink_attempts WHERE attempt_id = ?",
+                (attempt_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError(f"sink attempt not found: {attempt_id}")
         return _row_with_payload(row)
 
     def override_route(
@@ -1628,6 +1756,20 @@ def _enrichment_merge_proposals(attempt: dict[str, Any]) -> list[dict[str, Any]]
             )
         return rows
     return []
+
+
+def _sink_approval_snapshot(row: dict[str, Any]) -> dict[str, Any]:
+    payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+    sink_approval = payload.get("sink_approval") if isinstance(payload.get("sink_approval"), dict) else {}
+    return {
+        "attempt_id": row.get("attempt_id"),
+        "sink": row.get("sink"),
+        "state": row.get("state"),
+        "approval_state": sink_approval.get("approval_state", ""),
+        "scope": sink_approval.get("scope", ""),
+        "approved_by": sink_approval.get("approved_by", ""),
+        "approved_at": sink_approval.get("approved_at", ""),
+    }
 
 
 def _ensure_columns(conn: sqlite3.Connection, table: str, columns: dict[str, str]) -> None:

@@ -113,6 +113,13 @@ def create_app(config_path: Path | None = None):
         approved_fields: list[str] = Field(default_factory=list)
         reason: str = ""
 
+    class ContactSinkApprovalRequest(BaseModel):
+        operator: str = "operator"
+        attempt_id: str
+        approval_state: str
+        scope: str = "lookup"
+        reason: str = ""
+
     class ContactRouteOverrideRequest(BaseModel):
         operator: str = "operator"
         selected_sinks: list[str]
@@ -1113,6 +1120,20 @@ def create_app(config_path: Path | None = None):
             operator=request.operator,
             attempt_id=request.attempt_id,
             approved_fields=list(request.approved_fields),
+            reason=request.reason,
+        )
+
+    @app.post("/contacts/{contact_id}/sink-approval")
+    def set_contact_sink_approval(
+        contact_id: str,
+        request: ContactSinkApprovalRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().set_contact_sink_approval_state(
+            contact_id=contact_id,
+            operator=request.operator,
+            attempt_id=request.attempt_id,
+            approval_state=request.approval_state,
+            scope=request.scope,
             reason=request.reason,
         )
 

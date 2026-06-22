@@ -3181,6 +3181,18 @@ def build_parser() -> argparse.ArgumentParser:
     contacts_enrichment_merge.add_argument("--approved-fields-json", required=True)
     contacts_enrichment_merge.add_argument("--reason", default="")
     contacts_enrichment_merge.add_argument("--json", action="store_true")
+    contacts_sink_approval = contacts_sub.add_parser("sink-approval")
+    contacts_sink_approval.add_argument("contact_id")
+    contacts_sink_approval.add_argument("--operator", default="operator")
+    contacts_sink_approval.add_argument("--attempt-id", required=True)
+    contacts_sink_approval.add_argument(
+        "--approval-state",
+        choices=["approved_for_lookup", "approved_for_write_pilot", "rejected", "needs_review"],
+        required=True,
+    )
+    contacts_sink_approval.add_argument("--scope", choices=["lookup", "write", "readback", "all"], default="lookup")
+    contacts_sink_approval.add_argument("--reason", default="")
+    contacts_sink_approval.add_argument("--json", action="store_true")
     contacts_route_override = contacts_sub.add_parser("route-override")
     contacts_route_override.add_argument("contact_id")
     contacts_route_override.add_argument("--operator", default="operator")
@@ -3830,6 +3842,15 @@ def main(argv: list[str] | None = None) -> int:
                 operator=args.operator,
                 attempt_id=args.attempt_id,
                 approved_fields=list(json.loads(args.approved_fields_json)),
+                reason=args.reason,
+            )
+        elif args.contacts_command == "sink-approval":
+            payload = service.set_contact_sink_approval_state(
+                contact_id=args.contact_id,
+                operator=args.operator,
+                attempt_id=args.attempt_id,
+                approval_state=args.approval_state,
+                scope=args.scope,
                 reason=args.reason,
             )
         elif args.contacts_command == "route-override":

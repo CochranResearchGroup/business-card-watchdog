@@ -619,6 +619,35 @@ class BusinessCardService:
             "network_calls_made": 0,
         }
 
+    def set_contact_sink_approval_state(
+        self,
+        *,
+        contact_id: str,
+        operator: str,
+        attempt_id: str,
+        approval_state: str,
+        reason: str = "",
+        scope: str = "lookup",
+    ) -> dict[str, Any]:
+        store = ContactStore.from_config(self.config)
+        result = store.set_sink_approval_state(
+            contact_id=contact_id,
+            operator=operator,
+            attempt_id=attempt_id,
+            approval_state=approval_state,
+            reason=reason,
+            scope=scope,
+        )
+        return {
+            "schema": "business-card-watchdog.contact-sink-approval.v1",
+            "store": store.status(),
+            "contact": result["contact"],
+            "attempt": result["attempt"],
+            "mutation": result["mutation"],
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+
     def record_contact_review_recommendation(
         self,
         *,

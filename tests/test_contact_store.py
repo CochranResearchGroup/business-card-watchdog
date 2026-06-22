@@ -610,6 +610,38 @@ def test_contact_enrichment_merge_is_audited(tmp_path: Path) -> None:
     assert surface["rows"][0]["mutation_audit"][0]["action"] == "enrichment_merge"
 
 
+def test_contact_sink_approval_is_audited(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    run_id, _job_id = _write_recorded_contact_run(config)
+    service = BusinessCardService(config)
+    service.project_contacts_from_run(run_id)
+    contact = service.get_contact(service.list_contacts()["contacts"][0]["contact_id"])["contact"]
+    attempt = contact["sink_attempts"][0]
+
+    approval = service.set_contact_sink_approval_state(
+        contact_id=contact["contact_id"],
+        operator="operator",
+        attempt_id=attempt["attempt_id"],
+        approval_state="approved_for_lookup",
+        scope="lookup",
+        reason="operator approved read-only lookup",
+    )
+    surface = service.contact_review_surface(contact_id=contact["contact_id"])
+
+    assert approval["schema"] == "business-card-watchdog.contact-sink-approval.v1"
+    assert approval["writes_attempted"] == 0
+    assert approval["network_calls_made"] == 0
+    assert approval["mutation"]["action"] == "sink_approval"
+    assert approval["mutation"]["operator"] == "operator"
+    assert approval["mutation"]["payload"]["previous_values"]["state"] == "dry_run"
+    assert approval["mutation"]["payload"]["new_values"]["approval_state"] == "approved_for_lookup"
+    assert approval["attempt"]["state"] == "approved_for_lookup"
+    assert approval["attempt"]["payload"]["sink_approval"]["scope"] == "lookup"
+    assert surface["rows"][0]["sink_states"][0]["state"] == "approved_for_lookup"
+    assert surface["rows"][0]["counts"]["mutations"] == 1
+    assert surface["rows"][0]["mutation_audit"][0]["action"] == "sink_approval"
+
+
 def test_contact_review_safe_loop_only_rejects_explicit_safe_rejections(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, _job_id = _write_recorded_contact_run(config)
@@ -795,6 +827,36 @@ def test_contacts_cli_json_surfaces(tmp_path: Path, capsys) -> None:
     assert enrichment_merge["schema"] == "business-card-watchdog.contact-enrichment-merge.v1"
     assert enrichment_merge["mutation"]["operator"] == "cli-test"
     assert enrichment_merge["contact"]["payload"]["contact_spec"]["title"] == "Principal Engineer"
+
+    latest = BusinessCardService(config).get_contact(contact_id)["contact"]
+    sink_attempt = latest["sink_attempts"][0]
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "contacts",
+                "sink-approval",
+                contact_id,
+                "--operator",
+                "cli-test",
+                "--attempt-id",
+                sink_attempt["attempt_id"],
+                "--approval-state",
+                "approved_for_lookup",
+                "--scope",
+                "lookup",
+                "--reason",
+                "operator approved read-only lookup",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    sink_approval = json.loads(capsys.readouterr().out)
+    assert sink_approval["schema"] == "business-card-watchdog.contact-sink-approval.v1"
+    assert sink_approval["mutation"]["operator"] == "cli-test"
+    assert sink_approval["attempt"]["state"] == "approved_for_lookup"
 
     assert (
         main(

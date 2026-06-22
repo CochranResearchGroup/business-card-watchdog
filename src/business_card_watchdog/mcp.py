@@ -558,6 +558,34 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_contact_sink_approval",
+                "description": "Apply an audited operator sink approval state to a projected contact sink attempt without running live sinks.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "contact_id": {"type": "string"},
+                        "operator": {"type": "string", "default": "operator"},
+                        "attempt_id": {"type": "string"},
+                        "approval_state": {
+                            "type": "string",
+                            "enum": [
+                                "approved_for_lookup",
+                                "approved_for_write_pilot",
+                                "rejected",
+                                "needs_review",
+                            ],
+                        },
+                        "scope": {
+                            "type": "string",
+                            "enum": ["lookup", "write", "readback", "all"],
+                            "default": "lookup",
+                        },
+                        "reason": {"type": "string"},
+                    },
+                    "required": ["contact_id", "attempt_id", "approval_state"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_contact_route_override",
                 "description": "Apply an audited operator override to a projected contact route decision without running live sinks.",
                 "input_schema": {
@@ -1818,6 +1846,15 @@ def call_tool(
             operator=str(args.get("operator") or "operator"),
             attempt_id=str(args["attempt_id"]),
             approved_fields=[str(field) for field in list(args.get("approved_fields") or [])],
+            reason=str(args.get("reason") or ""),
+        )
+    if tool_name == "business_card_watchdog_contact_sink_approval":
+        return service.set_contact_sink_approval_state(
+            contact_id=str(args["contact_id"]),
+            operator=str(args.get("operator") or "operator"),
+            attempt_id=str(args["attempt_id"]),
+            approval_state=str(args["approval_state"]),
+            scope=str(args.get("scope") or "lookup"),
             reason=str(args.get("reason") or ""),
         )
     if tool_name == "business_card_watchdog_contact_route_override":
