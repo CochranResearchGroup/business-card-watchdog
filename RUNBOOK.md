@@ -6336,3 +6336,40 @@ Safety:
 - Planning-only update. It did not process watched files; OCR private card
   images; rasterize PDFs; run enrichment; run live lookup/write/readback; or
   write Google Contacts, Odoo, or Odollo records.
+
+## Turn 273 | 2026-06-21
+
+Executed Plan 0063 as the first Plan 0060 Milestone 1 implementation slice.
+
+Implemented:
+
+- Added `docs/dev/plans/0063-2026-06-21-user-scoped-contact-store.md`.
+- Added a user-scoped SQLite contact store at
+  `data_dir/contacts/contacts.sqlite`.
+- Added migration/schema support for contacts, card assets, extraction
+  attempts, enrichment attempts, routing decisions, sink attempts, and external
+  tenant bindings.
+- Added deterministic idempotent projection from existing dry-run run artifacts
+  into contact rows.
+- Added service methods and `bcw contacts status|init|list|show|project-run`.
+- Added tests for schema initialization, idempotent synthetic-run projection,
+  and CLI JSON inspection/projection.
+
+Validation:
+
+- `pytest tests/test_contact_store.py -q` passed with 3 tests.
+- `pytest tests/test_contact.py tests/test_state_and_ledger.py tests/test_api.py -q`
+  passed with 9 tests and 1 skipped.
+- `.venv/bin/ruff check .` passed.
+- `.venv/bin/python -m pytest tests/test_contact_store.py tests/test_contact.py tests/test_state_and_ledger.py -q`
+  passed with 12 tests.
+- `.venv/bin/python -m pytest -q` passed with 340 tests.
+- `git diff --check` passed.
+- `python3 scripts/check_plan_drift.py` passed.
+
+Safety:
+
+- This slice only projects existing local run artifacts when explicitly invoked.
+  It did not process watched files; OCR private card images; rasterize PDFs; run
+  enrichment; run live lookup/write/readback; or write Google Contacts, Odoo, or
+  Odollo records.

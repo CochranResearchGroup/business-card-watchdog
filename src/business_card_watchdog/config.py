@@ -105,6 +105,10 @@ class AppConfig:
     def watch_dir(self) -> Path:
         return self.data_dir / "watch"
 
+    @property
+    def contact_store_path(self) -> Path:
+        return self.data_dir / "contacts" / "contacts.sqlite"
+
 
 def default_config_path() -> Path:
     return config_home() / "config.toml"

@@ -63,6 +63,9 @@ closeout evidence.
 
 ### Milestone 1 | User-Scoped Contact Store
 
+Status: BASELINE_COMPLETE via Plan 0063. Follow-on work should start at
+Milestone 2 unless it needs to expand the contact store schema.
+
 Goal-compatible objective:
 
 Implement a user-scoped contact store for extracted business-card contacts,

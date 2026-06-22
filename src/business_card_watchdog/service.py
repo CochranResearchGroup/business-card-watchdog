@@ -20,6 +20,7 @@ from .contact import (
     contact_candidate_to_spec,
     field_provenance_from_canonical,
 )
+from .contact_store import ContactStore
 from .dedupe import assess_downstream_lookup_result, remember_duplicate_resolution
 from .enrichment import (
     build_paid_api_provider_handoff,
@@ -448,6 +449,48 @@ class BusinessCardService:
         for row in _read_jsonl(index_path):
             latest[str(row["run_id"])] = row
         return sorted(latest.values(), key=lambda row: str(row.get("updated_at", "")), reverse=True)
+
+    def contact_store_status(self) -> dict[str, Any]:
+        return ContactStore.from_config(self.config).status()
+
+    def initialize_contact_store(self) -> dict[str, Any]:
+        return ContactStore.from_config(self.config).initialize()
+
+    def list_contacts(self, *, limit: int = 100) -> dict[str, Any]:
+        store = ContactStore.from_config(self.config)
+        contacts = store.list_contacts(limit=limit)
+        return {
+            "schema": "business-card-watchdog.contacts-list.v1",
+            "store": store.status(),
+            "contacts": contacts,
+            "count": len(contacts),
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+
+    def get_contact(self, contact_id: str) -> dict[str, Any]:
+        store = ContactStore.from_config(self.config)
+        contact = store.get_contact(contact_id)
+        return {
+            "schema": "business-card-watchdog.contact-detail.v1",
+            "store": store.status(),
+            "contact": contact,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+
+    def project_contacts_from_run(self, run_id: str) -> dict[str, Any]:
+        run_dir = self.config.runs_dir / run_id
+        if not (run_dir / "run.json").exists():
+            raise FileNotFoundError(f"run not found: {run_id}")
+        store = ContactStore.from_config(self.config)
+        result = store.project_run(run_id=run_id, run_dir=run_dir)
+        return {
+            **result.to_dict(),
+            "store": store.status(),
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
 
     def latest_review_routing_drill(self, *, selected_run_id: str | None = None) -> dict[str, Any]:
         summary: dict[str, Any] = {

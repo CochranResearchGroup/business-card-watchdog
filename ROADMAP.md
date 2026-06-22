@@ -9,6 +9,7 @@ Latest completed control-plane plan: `docs/dev/plans/0008-2026-06-14-runtime-ins
 Latest completed offline product-hardening plan: `docs/dev/plans/0053-2026-06-15-operator-live-pilot-readiness-packet.md`.
 Latest completed refactor plan: `docs/dev/plans/0059-2026-06-20-review-route-lookup-selection-extraction.md`.
 Active high-level development plan: `docs/dev/plans/0060-2026-06-20-product-development-milestone-plan.md`.
+Latest completed contact-store plan: `docs/dev/plans/0063-2026-06-21-user-scoped-contact-store.md`.
 Latest completed practice-corpus plan: `docs/dev/plans/0062-2026-06-21-practice-corpus-manifest.md`.
 Next refactor plan: open a bounded follow-on for the next read-only packet cluster.
 Next production plan: `docs/dev/plans/0009-2026-06-14-operator-selected-live-smoke-and-pilot-rollout.md`.

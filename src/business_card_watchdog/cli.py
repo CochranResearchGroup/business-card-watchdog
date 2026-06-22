@@ -93,6 +93,42 @@ def _render_watch_status_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_contacts_list_text(payload: dict[str, object]) -> str:
+    store = dict(payload.get("store") or {})
+    contacts = payload.get("contacts") or []
+    lines = [
+        "Contacts:",
+        f"Store: {store.get('path')}",
+        f"Schema version: {store.get('schema_version', 0)}",
+        f"Count: {payload.get('count', 0)}",
+    ]
+    for contact in contacts if isinstance(contacts, list) else []:
+        if isinstance(contact, dict):
+            lines.append(
+                " - "
+                f"{contact.get('contact_id')} "
+                f"{contact.get('display_name') or '(no name)'} "
+                f"{contact.get('email') or ''} "
+                f"run={contact.get('source_run_id')} job={contact.get('source_job_id')}"
+            )
+    return "\n".join(lines) + "\n"
+
+
+def _render_contact_detail_text(payload: dict[str, object]) -> str:
+    contact = dict(payload.get("contact") or {})
+    lines = [
+        f"Contact: {contact.get('contact_id')}",
+        f"Name: {contact.get('display_name') or ''}",
+        f"Organization: {contact.get('organization') or ''}",
+        f"Email: {contact.get('email') or ''}",
+        f"Phone: {contact.get('phone') or ''}",
+        f"Source: run={contact.get('source_run_id')} job={contact.get('source_job_id')}",
+        f"Assets: {len(contact.get('assets') or [])}",
+        f"Extraction attempts: {len(contact.get('extraction_attempts') or [])}",
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def _render_watch_dry_run_text(payload: dict[str, object]) -> str:
     assertions = dict(payload.get("assertions") or {})
     commands = dict(payload.get("commands") or {})
@@ -3052,6 +3088,22 @@ def build_parser() -> argparse.ArgumentParser:
     actions_run_next.add_argument("--limit", type=int, default=10)
     actions_run_next.add_argument("--json", action="store_true")
 
+    contacts = sub.add_parser("contacts")
+    contacts_sub = contacts.add_subparsers(dest="contacts_command", required=True)
+    contacts_status = contacts_sub.add_parser("status")
+    contacts_status.add_argument("--json", action="store_true")
+    contacts_init = contacts_sub.add_parser("init")
+    contacts_init.add_argument("--json", action="store_true")
+    contacts_list = contacts_sub.add_parser("list")
+    contacts_list.add_argument("--limit", type=int, default=100)
+    contacts_list.add_argument("--json", action="store_true")
+    contacts_show = contacts_sub.add_parser("show")
+    contacts_show.add_argument("contact_id")
+    contacts_show.add_argument("--json", action="store_true")
+    contacts_project_run = contacts_sub.add_parser("project-run")
+    contacts_project_run.add_argument("run_id")
+    contacts_project_run.add_argument("--json", action="store_true")
+
     drills = sub.add_parser("drills")
     drills_sub = drills.add_subparsers(dest="drills_command", required=True)
     drills_multi_card_preclassification = drills_sub.add_parser("multi-card-preclassification")
@@ -3606,6 +3658,27 @@ def main(argv: list[str] | None = None) -> int:
             print(_render_run_show_text(payload), end="")
             return 0
         print(json.dumps(payload, indent=2) if args.json else payload)
+        return 0
+
+    if args.command == "contacts":
+        if args.contacts_command == "status":
+            payload = service.contact_store_status()
+        elif args.contacts_command == "init":
+            payload = service.initialize_contact_store()
+        elif args.contacts_command == "list":
+            payload = service.list_contacts(limit=args.limit)
+        elif args.contacts_command == "show":
+            payload = service.get_contact(args.contact_id)
+        else:
+            payload = service.project_contacts_from_run(args.run_id)
+        if args.json:
+            print(json.dumps(payload, indent=2), end="")
+        elif args.contacts_command in {"status", "init", "project-run"}:
+            print(json.dumps(payload, indent=2), end="")
+        elif args.contacts_command == "list":
+            print(_render_contacts_list_text(payload), end="")
+        else:
+            print(_render_contact_detail_text(payload), end="")
         return 0
 
     if args.command == "reviews":
