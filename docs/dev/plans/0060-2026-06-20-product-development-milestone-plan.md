@@ -152,12 +152,13 @@ Status: IN_PROGRESS. Scanner document-intake foundation complete via Plan 0065;
 OCR side classification and baseline front/back pair proposals complete via
 Plan 0066; reviewed side-pair merge complete via Plan 0067; deterministic
 extraction quality gates complete via Plan 0068; reviewed child contacts from
-multi-card images project as distinct contact rows via Plan 0069. The next
-scanner-side follow-on should harden regular double-sided scanner workflows by
-replacing the current adjacent-page proposal pass with an OCR/contextual
-pairing graph that can score near-adjacent pages, reversed order, same-stem
-image captures, and dropped blank backs before broader App Intelligence
-review-state hardening continues.
+multi-card images project as distinct contact rows via Plan 0069. Regular
+double-sided scanner pairing has been hardened with an OCR/contextual pairing
+graph via Plan 0084: adjacency is a weighted clue only, near-adjacent candidates
+can be scored, same-stem image captures can pair outside PDFs, and missing or
+generic backs stay reviewable instead of being merged. Remaining scanner-side
+work should continue with broader App Intelligence review-state hardening or
+real-corpus pilot evidence from the configured scanner folder.
 
 Goal-compatible objective:
 

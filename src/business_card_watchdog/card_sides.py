@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from pathlib import PurePath
 import re
 from typing import Any
 
@@ -9,6 +10,30 @@ EMAIL_RE = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECAS
 PHONE_RE = re.compile(r"(?:\+?\d[\d .()/-]{6,}\d)")
 URL_RE = re.compile(r"\b(?:https?://)?(?:www\.)?[A-Z0-9.-]+\.[A-Z]{2,}(?:/[^\s]*)?\b", re.IGNORECASE)
 NAME_HINT_RE = re.compile(r"\b[A-Z][a-z]+\s+[A-Z][a-z]+\b")
+PAIR_SESSION_WINDOW = 4
+COMMON_TOKENS = {
+    "and",
+    "ave",
+    "avenue",
+    "card",
+    "city",
+    "com",
+    "directions",
+    "email",
+    "for",
+    "hours",
+    "linkedin",
+    "phone",
+    "portfolio",
+    "qr",
+    "road",
+    "scan",
+    "state",
+    "street",
+    "suite",
+    "the",
+    "www",
+}
 TITLE_WORDS = {
     "ceo",
     "founder",
@@ -96,26 +121,31 @@ def build_pair_proposals(
     run_id: str,
     side_candidates: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    by_doc: dict[str, list[dict[str, Any]]] = {}
+    by_session: dict[str, list[dict[str, Any]]] = {}
     for candidate in side_candidates:
-        by_doc.setdefault(str(candidate.get("source_document_path") or ""), []).append(candidate)
+        by_session.setdefault(_pairing_session_key(candidate), []).append(candidate)
     proposals: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
-    for document_path, candidates in by_doc.items():
-        ordered = sorted(candidates, key=lambda row: int(row.get("page_number") or 0))
-        for left, right in zip(ordered, ordered[1:]):
-            proposal = _pair_candidate(run_id=run_id, document_path=document_path, left=left, right=right)
-            if proposal is None:
-                skipped.append(
-                    {
-                        "document_path": document_path,
-                        "page_numbers": [left.get("page_number"), right.get("page_number")],
-                        "reason": "not_front_back_candidate",
-                        "side_labels": [left.get("side_label"), right.get("side_label")],
-                    }
-                )
-            else:
-                proposals.append(proposal)
+    for session_key, candidates in by_session.items():
+        ordered = sorted(candidates, key=lambda row: (_page_number(row), str(row.get("job_id") or "")))
+        skipped.extend(_adjacent_transition_skips(session_key, ordered))
+        session_proposals: list[dict[str, Any]] = []
+        for index, left in enumerate(ordered):
+            for right in ordered[index + 1 :]:
+                if not _within_pairing_window(left, right):
+                    continue
+                proposal = _pair_candidate(run_id=run_id, session_key=session_key, left=left, right=right)
+                if proposal is not None:
+                    session_proposals.append(proposal)
+        session_proposals.sort(
+            key=lambda row: (
+                0 if row.get("state") == "proposed" else 1,
+                -int(row.get("score") or 0),
+                str(row.get("proposal_id") or ""),
+            )
+        )
+        proposals.extend(session_proposals)
+        skipped.extend(_unpaired_side_skips(session_key, ordered, session_proposals))
     return {
         "schema": "business-card-watchdog.card-side-pair-proposals.v1",
         "run_id": run_id,
@@ -202,7 +232,7 @@ def merge_side_pair_contacts(
 def _pair_candidate(
     *,
     run_id: str,
-    document_path: str,
+    session_key: str,
     left: dict[str, Any],
     right: dict[str, Any],
 ) -> dict[str, Any] | None:
@@ -211,32 +241,46 @@ def _pair_candidate(
         return None
     front = left if left.get("side_label") == "front" else right
     back = right if front is left else left
+    page_distance = abs(_page_number(left) - _page_number(right))
     positive = [
-        {"kind": "same_document", "weight": 3, "value": document_path},
+        {"kind": "same_pairing_session", "weight": 2, "value": session_key},
         {
-            "kind": "page_adjacency",
-            "weight": 3,
-            "value": abs(int(left.get("page_number") or 0) - int(right.get("page_number") or 0)),
+            "kind": "page_proximity",
+            "weight": 2 if page_distance == 1 else 1,
+            "value": page_distance,
         },
-        {"kind": "side_label_complement", "weight": 4, "value": "front_back"},
+        {"kind": "side_label_complement", "weight": 3, "value": "front_back"},
     ]
+    context_evidence = _context_evidence(front, back)
+    positive.extend(context_evidence)
     negative = _negative_evidence(front, back)
     score = sum(int(item["weight"]) for item in positive) - sum(int(item["weight"]) for item in negative)
-    state = "proposed" if score >= 7 and not negative else "blocked_for_review"
+    has_required_context = _has_required_context_evidence(context_evidence)
+    state = "proposed" if score >= 7 and has_required_context and not negative else "blocked_for_review"
+    blocked_reason = ""
+    if state != "proposed":
+        blocked_reason = (
+            "conflicting OCR evidence requires review"
+            if negative
+            else "missing OCR/context evidence beyond page proximity"
+        )
     return {
         "schema": "business-card-watchdog.card-side-pair-proposal.v1",
-        "proposal_id": _stable_id(run_id, document_path, str(front.get("job_id")), str(back.get("job_id"))),
+        "proposal_id": _stable_id(run_id, session_key, str(front.get("job_id")), str(back.get("job_id"))),
         "state": state,
         "confidence": "review" if state == "proposed" else "blocked",
         "front_job_id": front.get("job_id"),
         "back_job_id": back.get("job_id"),
         "front_page_number": front.get("page_number"),
         "back_page_number": back.get("page_number"),
-        "source_document_path": document_path,
+        "source_document_path": front.get("source_document_path") or back.get("source_document_path") or session_key,
+        "pairing_session_key": session_key,
+        "pairing_window": PAIR_SESSION_WINDOW,
+        "required_context_evidence": has_required_context,
         "score": score,
         "evidence": positive,
         "negative_evidence": negative,
-        "blocked_reason": "" if state == "proposed" else "conflicting OCR evidence requires review",
+        "blocked_reason": blocked_reason,
     }
 
 
@@ -246,8 +290,11 @@ def _features(text: str) -> dict[str, Any]:
     emails = EMAIL_RE.findall(text)
     phones = PHONE_RE.findall(text)
     urls = [url for url in URL_RE.findall(text) if "@" not in url]
+    email_domains = sorted({_domain_from_email(email) for email in emails if _domain_from_email(email)})
+    url_domains = sorted({_domain_from_url(url) for url in urls if _domain_from_url(url)})
     return {
         "token_count": len(tokens),
+        "tokens": sorted(set(tokens)),
         "email_count": len(emails),
         "phone_count": len(phones),
         "url_count": len(urls),
@@ -255,7 +302,9 @@ def _features(text: str) -> dict[str, Any]:
         "title_word_count": sum(1 for token in tokens if token in TITLE_WORDS),
         "back_word_count": sum(1 for word in BACK_WORDS if word in lowered),
         "address_word_count": sum(1 for word in ADDRESS_WORDS if word in lowered),
-        "domains": sorted({_domain_from_email(email) for email in emails if _domain_from_email(email)}),
+        "email_domains": email_domains,
+        "url_domains": url_domains,
+        "domains": sorted(set(email_domains) | set(url_domains)),
         "urls": sorted(set(urls)),
     }
 
@@ -278,8 +327,8 @@ def _evidence(features: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _negative_evidence(front: dict[str, Any], back: dict[str, Any]) -> list[dict[str, Any]]:
-    front_domains = set((front.get("features") or {}).get("domains") or [])
-    back_domains = set((back.get("features") or {}).get("domains") or [])
+    front_domains = set((front.get("features") or {}).get("email_domains") or [])
+    back_domains = set((back.get("features") or {}).get("email_domains") or [])
     if front_domains and back_domains and front_domains.isdisjoint(back_domains):
         return [
             {
@@ -292,10 +341,159 @@ def _negative_evidence(front: dict[str, Any], back: dict[str, Any]) -> list[dict
     return []
 
 
+def _context_evidence(front: dict[str, Any], back: dict[str, Any]) -> list[dict[str, Any]]:
+    front_features = front.get("features") or {}
+    back_features = back.get("features") or {}
+    evidence: list[dict[str, Any]] = []
+    shared_domains = sorted(set(front_features.get("domains") or []) & set(back_features.get("domains") or []))
+    if shared_domains:
+        evidence.append({"kind": "shared_domain", "weight": 4, "domains": shared_domains})
+    front_email_domains = set(front_features.get("email_domains") or [])
+    back_url_domains = set(back_features.get("url_domains") or [])
+    email_url_domains = sorted(front_email_domains & back_url_domains)
+    if email_url_domains:
+        evidence.append({"kind": "email_domain_matches_back_url", "weight": 3, "domains": email_url_domains})
+    shared_tokens = _shared_context_tokens(front_features, back_features)
+    if shared_tokens:
+        evidence.append({"kind": "ocr_token_overlap", "weight": 2, "tokens": shared_tokens[:8]})
+    if _capture_stem(front) and _capture_stem(front) == _capture_stem(back):
+        evidence.append({"kind": "same_capture_stem", "weight": 3, "value": _capture_stem(front)})
+    if _is_front_dense(front_features) and _is_back_complementary(back_features):
+        evidence.append({"kind": "complementary_side_density", "weight": 2, "value": "front_identity_back_context"})
+    return evidence
+
+
+def _has_required_context_evidence(evidence: list[dict[str, Any]]) -> bool:
+    required_kinds = {
+        "shared_domain",
+        "email_domain_matches_back_url",
+        "ocr_token_overlap",
+        "same_capture_stem",
+    }
+    return any(str(item.get("kind") or "") in required_kinds for item in evidence)
+
+
+def _adjacent_transition_skips(session_key: str, ordered: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    skipped: list[dict[str, Any]] = []
+    for left, right in zip(ordered, ordered[1:]):
+        labels = [left.get("side_label"), right.get("side_label")]
+        if set(str(label or "") for label in labels) == {"front", "back"}:
+            continue
+        skipped.append(
+            {
+                "document_path": session_key,
+                "pairing_session_key": session_key,
+                "page_numbers": [left.get("page_number"), right.get("page_number")],
+                "reason": "not_front_back_candidate",
+                "side_labels": labels,
+            }
+        )
+    return skipped
+
+
+def _unpaired_side_skips(
+    session_key: str,
+    ordered: list[dict[str, Any]],
+    proposals: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    paired_job_ids = {
+        str(proposal.get(key) or "")
+        for proposal in proposals
+        for key in ("front_job_id", "back_job_id")
+        if proposal.get(key)
+    }
+    skipped: list[dict[str, Any]] = []
+    for candidate in ordered:
+        side_label = str(candidate.get("side_label") or "")
+        job_id = str(candidate.get("job_id") or "")
+        if side_label not in {"front", "back"} or job_id in paired_job_ids:
+            continue
+        skipped.append(
+            {
+                "document_path": session_key,
+                "pairing_session_key": session_key,
+                "page_numbers": [candidate.get("page_number")],
+                "reason": "unpaired_non_blank_side_candidate",
+                "side_labels": [side_label],
+                "job_id": candidate.get("job_id"),
+                "review_required": side_label == "back",
+            }
+        )
+    return skipped
+
+
+def _within_pairing_window(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    if _capture_stem(left) and _capture_stem(left) == _capture_stem(right):
+        return True
+    left_page = _page_number(left)
+    right_page = _page_number(right)
+    if left_page == 0 or right_page == 0:
+        return True
+    return abs(left_page - right_page) <= PAIR_SESSION_WINDOW
+
+
+def _page_number(candidate: dict[str, Any]) -> int:
+    try:
+        return int(candidate.get("page_number") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _pairing_session_key(candidate: dict[str, Any]) -> str:
+    source_document = str(candidate.get("source_document_path") or "")
+    if source_document.lower().endswith(".pdf"):
+        return source_document
+    capture_stem = _capture_stem(candidate)
+    if capture_stem:
+        return f"capture:{capture_stem}"
+    source_path = source_document or str(candidate.get("page_image_path") or "")
+    if source_path:
+        parent = str(PurePath(source_path).parent)
+        return parent if parent != "." else source_path
+    return "unknown"
+
+
+def _capture_stem(candidate: dict[str, Any]) -> str:
+    source_path = str(candidate.get("source_file_path") or candidate.get("source_document_path") or "")
+    image_path = str(candidate.get("page_image_path") or "")
+    if source_path.lower().endswith(".pdf"):
+        source_path = image_path
+    stem = PurePath(source_path or image_path).stem.lower()
+    return re.sub(r"[-_\s]?(front|back|recto|verso|side[ab]|side-[ab])$", "", stem).strip("-_ ")
+
+
+def _shared_context_tokens(front_features: dict[str, Any], back_features: dict[str, Any]) -> list[str]:
+    front_tokens = set(front_features.get("tokens") or [])
+    back_tokens = set(back_features.get("tokens") or [])
+    return sorted(
+        token
+        for token in front_tokens & back_tokens
+        if len(token) >= 4 and token not in COMMON_TOKENS and token not in TITLE_WORDS
+    )
+
+
+def _is_front_dense(features: dict[str, Any]) -> bool:
+    return (
+        int(features.get("email_count") or 0) > 0
+        or int(features.get("phone_count") or 0) > 0
+        or int(features.get("name_hint_count") or 0) > 0
+    )
+
+
+def _is_back_complementary(features: dict[str, Any]) -> bool:
+    return int(features.get("url_count") or 0) > 0 or int(features.get("back_word_count") or 0) > 0
+
+
 def _domain_from_email(email: str) -> str:
     if "@" not in email:
         return ""
     return email.rsplit("@", 1)[-1].lower()
+
+
+def _domain_from_url(url: str) -> str:
+    cleaned = re.sub(r"^https?://", "", url.strip().lower())
+    cleaned = re.sub(r"^www\.", "", cleaned)
+    return cleaned.split("/", 1)[0]
 
 
 def _candidate_spec(candidate: dict[str, Any]) -> dict[str, Any]:

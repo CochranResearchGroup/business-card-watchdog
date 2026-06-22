@@ -7134,6 +7134,42 @@ Validation:
 
 - Planning-only change; no code or private card assets changed.
 
+## Turn 296 | 2026-06-22
+
+Executed Plan 0084 as the Plan 0060 Milestone 3 OCR/contextual side-pair graph
+hardening slice.
+
+Implemented:
+
+- Replaced adjacent-page-only side-pair proposal generation with a bounded
+  pairing-session graph.
+- Required concrete OCR/capture context, such as shared domains, OCR token
+  overlap, or same capture stem, before a front/back pair can become proposed.
+- Kept adjacency and side-label complement as weighted evidence, not sufficient
+  evidence.
+- Preserved blocked pair proposals and unpaired non-blank backs for operator
+  review.
+- Added same-stem image capture support outside PDFs.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_card_sides.py -q` passed with 10
+  tests.
+- `.venv/bin/ruff check src/business_card_watchdog/card_sides.py tests/test_card_sides.py`
+  passed.
+- `.venv/bin/python -m pytest tests/test_card_sides.py tests/test_dry_run_pipeline.py tests/test_contact_store.py -q`
+  passed with 25 tests.
+- `git diff --check` passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `.venv/bin/ruff check .` passed.
+- `.venv/bin/python -m pytest -q` passed with 390 tests.
+
+Safety:
+
+- This slice did not process configured SyncThing/private scanner inputs, run
+  live lookup/write/readback, merge side pairs automatically, call enrichment
+  providers, or expose private image bytes.
+
 ## Turn 291 | 2026-06-22
 
 Executed Plan 0080 as the next Plan 0060 Milestone 7 contact-store persistence

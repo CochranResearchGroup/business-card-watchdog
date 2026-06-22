@@ -77,6 +77,87 @@ def test_pair_proposals_support_reversed_order_and_conflict_blocks() -> None:
     assert blocked["proposals"][0]["negative_evidence"][0]["kind"] == "conflicting_email_domains"
 
 
+def test_pair_graph_blocks_adjacency_without_required_context() -> None:
+    front = classify_card_side(
+        job_id="front",
+        source_page=_source_page(1),
+        ocr_text="Ada Lovelace\nPrincipal Engineer\nExample Labs\nada@example.test\n+1 555 010 1234",
+    )
+    generic_back = classify_card_side(
+        job_id="generic-back",
+        source_page=_source_page(2),
+        ocr_text="Scan QR for portfolio\nHours and directions",
+    )
+
+    result = build_pair_proposals(run_id="run", side_candidates=[front, generic_back])
+
+    assert result["proposal_count"] == 1
+    proposal = result["proposals"][0]
+    assert proposal["state"] == "blocked_for_review"
+    assert proposal["required_context_evidence"] is False
+    assert proposal["blocked_reason"] == "missing OCR/context evidence beyond page proximity"
+
+
+def test_pair_graph_prefers_non_adjacent_ocr_compatible_back() -> None:
+    front = classify_card_side(
+        job_id="front",
+        source_page=_source_page(1),
+        ocr_text="Ada Lovelace\nPrincipal Engineer\nExample Labs\nada@example.test\n+1 555 010 1234",
+    )
+    adjacent_conflict = classify_card_side(
+        job_id="adjacent-conflict",
+        source_page=_source_page(2),
+        ocr_text="Scan QR\nother.example.org\nOther Industries",
+    )
+    adjacent_conflict["side_label"] = "back"
+    adjacent_conflict["features"]["email_domains"] = ["other.example.org"]
+    adjacent_conflict["features"]["domains"] = ["other.example.org"]
+    compatible_back = classify_card_side(
+        job_id="compatible-back",
+        source_page=_source_page(3),
+        ocr_text="Scan QR\nlinkedin.com/in/ada\nexample.test/ada",
+    )
+
+    result = build_pair_proposals(run_id="run", side_candidates=[front, adjacent_conflict, compatible_back])
+
+    assert result["proposal_count"] == 2
+    assert result["proposals"][0]["back_job_id"] == "compatible-back"
+    assert result["proposals"][0]["state"] == "proposed"
+    assert any(evidence["kind"] == "shared_domain" for evidence in result["proposals"][0]["evidence"])
+    assert result["proposals"][1]["back_job_id"] == "adjacent-conflict"
+    assert result["proposals"][1]["state"] == "blocked_for_review"
+    assert result["proposals"][1]["negative_evidence"][0]["kind"] == "conflicting_email_domains"
+
+
+def test_pair_graph_supports_same_stem_image_captures() -> None:
+    front = classify_card_side(
+        job_id="front-image",
+        source_page={
+            "source_document_path": "/tmp/scanner/ada-front.jpg",
+            "page_number": 0,
+            "page_image_path": "/tmp/scanner/ada-front.jpg",
+        },
+        ocr_text="Ada Lovelace\nPrincipal Engineer\nExample Labs\nada@example.test\n+1 555 010 1234",
+    )
+    back = classify_card_side(
+        job_id="back-image",
+        source_page={
+            "source_document_path": "/tmp/scanner/ada-back.jpg",
+            "page_number": 0,
+            "page_image_path": "/tmp/scanner/ada-back.jpg",
+        },
+        ocr_text="Scan QR\nlinkedin.com/in/ada\nexample.test/ada",
+    )
+
+    result = build_pair_proposals(run_id="run", side_candidates=[front, back])
+
+    assert result["proposal_count"] == 1
+    proposal = result["proposals"][0]
+    assert proposal["state"] == "proposed"
+    assert proposal["pairing_session_key"] == "capture:ada"
+    assert any(evidence["kind"] == "same_capture_stem" for evidence in proposal["evidence"])
+
+
 def test_scanner_pdf_run_records_side_classification_and_pair_proposals(
     tmp_path: Path, monkeypatch
 ) -> None:
