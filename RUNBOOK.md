@@ -7296,6 +7296,42 @@ Safety:
   enrichment providers, process configured SyncThing/private watch inputs, or
   expose private image bytes.
 
+## Turn 301 | 2026-06-22
+
+Executed Plan 0089 as the Plan 0060 Milestone 9 target-selection audit slice.
+
+Implemented:
+
+- Audited the current no-live runtime state against Plan 0009 stop rules.
+- Confirmed runtime readiness is green and both configured watch inputs remain
+  present: `$fsr:sync_phone` and `$fsr:scanner`.
+- Confirmed the contact store is initialized at schema version 5 but currently
+  has zero contact rows.
+- Confirmed live target candidate and selection requirement surfaces are empty,
+  so no operator-selected live pilot target is currently available.
+- Marked Plan 0060 Milestone 9 as ready for operator target selection rather
+  than ready for live lookup/write/readback.
+
+Validation:
+
+- `.venv/bin/python -m business_card_watchdog.cli runtime-readiness --json`
+  returned `state = "ready"` with zero writes and zero network calls.
+- `.venv/bin/python -m business_card_watchdog.cli contacts status --json`
+  returned contact-store schema version 5.
+- `.venv/bin/python -m business_card_watchdog.cli contacts list --limit 20 --json`
+  returned `count = 0`.
+- `.venv/bin/python -m business_card_watchdog.cli live-target-candidates --json`
+  returned `state = "empty"` with zero candidates.
+- `.venv/bin/python -m business_card_watchdog.cli live-selection-requirements --json`
+  returned `state = "empty"` and preserved the required operator response
+  contract.
+
+Safety:
+
+- This audit did not process private watched-folder backlog, create
+  `selected_live_target.json`, run public-web search, call paid enrichment, run
+  live lookup/write/readback, or expose private image bytes.
+
 ## Turn 291 | 2026-06-22
 
 Executed Plan 0080 as the next Plan 0060 Milestone 7 contact-store persistence

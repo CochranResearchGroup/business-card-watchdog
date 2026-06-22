@@ -34,9 +34,10 @@ Latest completed contact review crop-decision plan: `docs/dev/plans/0085-2026-06
 Latest completed contact review enrichment-merge plan: `docs/dev/plans/0086-2026-06-22-contact-review-enrichment-merge.md`.
 Latest completed contact review sink-approval plan: `docs/dev/plans/0087-2026-06-22-contact-review-sink-approval.md`.
 Latest completed contact review surface closeout plan: `docs/dev/plans/0088-2026-06-22-contact-review-surface-closeout.md`.
+Latest completed live pilot target-selection audit plan: `docs/dev/plans/0089-2026-06-22-live-pilot-target-selection-audit.md`.
 Latest completed practice-corpus plan: `docs/dev/plans/0062-2026-06-21-practice-corpus-manifest.md`.
 Latest completed scanner side-pair graph plan: `docs/dev/plans/0084-2026-06-22-ocr-contextual-side-pair-graph.md`.
-Next refactor/development plan: Plan 0060 Milestone 9 operator-selected live pilot using Plan 0009 as the live pilot authority.
+Next refactor/development plan: Plan 0060 Milestone 9 operator-selected live pilot after an operator-selected run/contact/sink exists.
 Next production plan: `docs/dev/plans/0009-2026-06-14-operator-selected-live-smoke-and-pilot-rollout.md`.
 Next offline boundary: after an operator-selected dry-run batch exists, run `bcw runs dry-run-closeout <run-id> --json`, `bcw runs dry-run-review-handoff <run-id> --json`, bounded `bcw runs dry-run-safe-loop <run-id> --limit <n> --json`, `bcw runs review-route-readiness <run-id> --json`, `bcw runs lookup-selection-packet <run-id> --operator <operator> --json`, `bcw runs close-lookup-prerequisites <run-id> --operator <operator> --json`, `bcw operator-live-pilot-readiness-packet --run-id <run-id> --sink google_contacts --no-write`, `bcw runs selected-target-approval-boundary <run-id> --operator <operator> --json`, and `bcw runs selected-target-command-copy-packet <run-id> --operator <operator> --response <operator-response> --acknowledgement <operator-acknowledgement> --json` until the run reaches explicit selected-target approval.
 Next production boundary: operator-selected live smoke/pilot rollout for one run, one job, and one sink at a time.

@@ -486,6 +486,14 @@ Validation:
 
 ### Milestone 9 | Operator-Selected Live Pilot
 
+Status: READY_FOR_OPERATOR_SELECTION. Plan 0089 audited the current no-live
+runtime state: runtime readiness is green and the contact store is initialized,
+but there are no contact rows and no live-target candidates. Generic
+continuation must stop before processing private watched-folder backlog or
+creating `selected_live_target.json`; the next step requires an operator-selected
+run/contact/sink or an explicit safe dry-run batch selection to project into the
+contact store.
+
 Goal-compatible objective:
 
 Run the first live pilot for one run, one reviewed contact, and one selected
