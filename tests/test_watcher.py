@@ -85,6 +85,21 @@ def test_seen_files_persist_across_watcher_restart(tmp_path: Path) -> None:
     assert seen_rows[0]["key"].endswith("card.png")
 
 
+def test_watcher_processes_pdf_document_sources(tmp_path: Path) -> None:
+    source = tmp_path / "scanner"
+    source.mkdir()
+    pdf = source / "scan.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n1 0 obj << /Type /Page >> endobj\n%%EOF\n")
+    config = make_config(tmp_path, source, settle_seconds=0.0)
+    watcher = PollingWatcher(config)
+    processed: list[str] = []
+    fake_process(watcher, processed, tmp_path)
+
+    assert [path.name for path in watcher.scan_once(dry_run=True)] == ["scan.pdf"]
+    assert processed == ["scan.pdf"]
+    assert PollingWatcher(config).status().backlog_count == 0
+
+
 def test_watch_state_reset_allows_reprocessing(tmp_path: Path) -> None:
     source = tmp_path / "cards"
     write_synthetic_image(source / "card.png")

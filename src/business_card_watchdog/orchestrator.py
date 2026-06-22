@@ -3,11 +3,18 @@ from __future__ import annotations
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from typing import Any
 
 from .config import AppConfig, ensure_runtime_dirs, resolve_input_path
 from .contact import build_contact_candidate, contact_candidate_to_spec
 from .contact_store import ContactStore
 from .dedupe import assess_duplicate, remember_identity
+from .document_intake import (
+    build_card_side_candidate,
+    build_source_page_artifact,
+    is_supported_document,
+    materialize_document_pages,
+)
 from .fanout import (
     build_candidate_work_item_manifest,
     build_child_verification_request_manifest,
@@ -32,6 +39,16 @@ def discover_images(source: Path) -> list[Path]:
     return sorted(path for path in source.rglob("*") if is_supported_image(path))
 
 
+def discover_processable_sources(source: Path) -> list[Path]:
+    if source.is_file():
+        return [source] if is_supported_image(source) or is_supported_document(source) else []
+    if not source.exists():
+        raise FileNotFoundError(source)
+    return sorted(
+        path for path in source.rglob("*") if is_supported_image(path) or is_supported_document(path)
+    )
+
+
 class BatchOrchestrator:
     def __init__(self, config: AppConfig) -> None:
         self.config = config
@@ -45,7 +62,38 @@ class BatchOrchestrator:
         ledger.initialize(source=str(source), dry_run=dry_run)
         ledger.transition_run("discovering")
 
-        jobs = [CardJob.from_path(path) for path in discover_images(source)]
+        processable_sources = discover_processable_sources(source)
+        page_lineage_by_path: dict[str, dict[str, Any]] = {}
+        job_sources: list[Path] = []
+        for path in processable_sources:
+            if is_supported_document(path):
+                document_manifest = materialize_document_pages(path, run_dir / "document_intake")
+                manifest_path = Path(str(document_manifest["manifest_path"]))
+                ledger.record_artifact(
+                    job_id="__run__",
+                    kind="document_pages",
+                    path=manifest_path,
+                    metadata={
+                        "source_document_path": str(path),
+                        "page_count": document_manifest["page_count"],
+                    },
+                )
+                ledger.record_event(
+                    "document_pages_materialized",
+                    {
+                        "source_document_path": str(path),
+                        "page_count": document_manifest["page_count"],
+                        "manifest_path": str(manifest_path),
+                    },
+                )
+                for page in document_manifest["pages"]:
+                    page_image = Path(str(page["page_image_path"]))
+                    page_lineage_by_path[str(page_image)] = page
+                    job_sources.append(page_image)
+            else:
+                job_sources.append(path)
+
+        jobs = [CardJob.from_path(path) for path in job_sources]
         ledger.set_job_count(len(jobs))
         for job in jobs:
             ledger.record_job(job)
@@ -58,7 +106,16 @@ class BatchOrchestrator:
         ledger.transition_run("processing")
         max_workers = max(1, workers)
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            futures = {pool.submit(self._process_one, job, ledger, dry_run): job for job in jobs}
+            futures = {
+                pool.submit(
+                    self._process_one,
+                    job,
+                    ledger,
+                    dry_run,
+                    page_lineage_by_path.get(job.image_path),
+                ): job
+                for job in jobs
+            }
             for future in as_completed(futures):
                 future.result()
 
@@ -102,12 +159,42 @@ class BatchOrchestrator:
                 },
             )
 
-    def _process_one(self, job: CardJob, ledger: RunLedger, dry_run: bool) -> None:
+    def _process_one(
+        self,
+        job: CardJob,
+        ledger: RunLedger,
+        dry_run: bool,
+        source_page: dict[str, Any] | None = None,
+    ) -> None:
         job.transition_to("processing")
         ledger.record_job(job)
 
         artifact_dir = ledger.run_dir / "artifacts" / job.job_id
         artifact_dir.mkdir(parents=True, exist_ok=True)
+        if source_page is not None:
+            source_page_payload = build_source_page_artifact(source_page, job_id=job.job_id)
+            source_page_path = artifact_dir / "source_page.json"
+            source_page_path.write_text(
+                json.dumps(source_page_payload, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            ledger.record_artifact(job_id=job.job_id, kind="source_page", path=source_page_path)
+            side_candidate = build_card_side_candidate(source_page, job_id=job.job_id)
+            side_candidate_path = artifact_dir / "card_side_candidate.json"
+            side_candidate_path.write_text(
+                json.dumps(side_candidate, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            ledger.record_artifact(
+                job_id=job.job_id,
+                kind="card_side_candidate",
+                path=side_candidate_path,
+                metadata={"side_label": side_candidate["side_label"]},
+            )
+            ledger.record_event(
+                "card_side_candidate_recorded",
+                {"job": job.to_dict(), "card_side_candidate": side_candidate},
+            )
         if self.config.prefilter.enabled:
             assessment = assess_business_card_candidate(
                 Path(job.image_path),

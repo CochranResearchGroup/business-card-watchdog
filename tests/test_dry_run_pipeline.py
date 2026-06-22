@@ -4,8 +4,10 @@ import json
 from pathlib import Path
 
 from business_card_watchdog.config import AppConfig, PrefilterConfig, SinkConfig
+from business_card_watchdog.document_intake import is_supported_document
 from business_card_watchdog.orchestrator import BatchOrchestrator
 from business_card_watchdog.service import BusinessCardService
+from business_card_watchdog.skill_adapter import is_supported_image
 
 from synthetic_fixtures import (
     SyntheticSkillAdapter,
@@ -187,3 +189,65 @@ def test_projection_failure_is_retryable_ledger_evidence(tmp_path: Path, monkeyp
     failure = next(event for event in events if event["event_type"] == "contact_store_projection_failed")
     assert failure["payload"]["error"] == "synthetic projection failure"
     assert failure["payload"]["retry_command"] == f"contacts project-run {run_dir.name} --json"
+
+
+def test_pdf_document_intake_materializes_page_jobs_and_side_candidates(
+    tmp_path: Path, monkeypatch
+) -> None:
+    source_pdf = tmp_path / "scanner" / "batch.pdf"
+    source_pdf.parent.mkdir(parents=True)
+    source_pdf.write_bytes(
+        b"%PDF-1.4\n"
+        b"1 0 obj << /Type /Page >> endobj\n"
+        b"2 0 obj << /Type /Page >> endobj\n"
+        b"%%EOF\n"
+    )
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        cache_dir=tmp_path / "cache",
+        prefilter=PrefilterConfig(enabled=False),
+    )
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(
+        orchestrator,
+        "adapter",
+        SyntheticSkillAdapter(
+            specs_by_stem={
+                "page-0001": {"email": "front@example.test", "full_name": "Front Page"},
+                "page-0002": {"email": "back@example.test", "full_name": "Back Page"},
+            }
+        ),
+    )
+
+    run_dir = orchestrator.process_source(str(source_pdf), dry_run=True, workers=1)
+
+    assert is_supported_document(source_pdf) is True
+    assert is_supported_image(source_pdf) is False
+    run_payload = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    assert run_payload["job_count"] == 2
+    artifacts = read_jsonl(run_dir / "artifacts.jsonl")
+    assert any(artifact["kind"] == "document_pages" for artifact in artifacts)
+    document_pages_artifact = next(artifact for artifact in artifacts if artifact["kind"] == "document_pages")
+    document_pages = json.loads(Path(document_pages_artifact["path"]).read_text(encoding="utf-8"))
+    assert document_pages["source_media_kind"] == "pdf_document"
+    assert document_pages["page_count"] == 2
+    assert {Path(page["page_image_path"]).suffix for page in document_pages["pages"]} == {".png"}
+
+    jobs = latest_jobs_by_id(run_dir / "jobs.jsonl")
+    assert len(jobs) == 2
+    for job in jobs.values():
+        artifact_dir = Path(job["artifact_dir"])
+        source_page = json.loads((artifact_dir / "source_page.json").read_text(encoding="utf-8"))
+        side = json.loads((artifact_dir / "card_side_candidate.json").read_text(encoding="utf-8"))
+        assert source_page["source_document_path"] == str(source_pdf)
+        assert source_page["media_kind"] == "page_image"
+        assert side["side_label"] == "unknown"
+        assert side["confidence"] == "needs_ocr"
+
+    contacts = BusinessCardService(config).list_contacts()["contacts"]
+    assert len(contacts) == 2
+    detail = BusinessCardService(config).get_contact(str(contacts[0]["contact_id"]))["contact"]
+    asset_kinds = {asset["asset_kind"] for asset in detail["assets"]}
+    assert {"source_page", "card_side_candidate", "contact_candidate"}.issubset(asset_kinds)
+    assert BusinessCardService(config).contact_projection_drift(run_dir.name)["drift"]["state"] == "in_sync"

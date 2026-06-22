@@ -263,7 +263,7 @@ def test_service_practice_corpus_manifest_inventories_images_and_pdfs_without_pr
     assert payload["filtered_glob_scan"] is True
     assert payload["counts"]["images"] == 1
     assert payload["counts"]["pdf_documents"] == 1
-    assert payload["counts"]["current_watcher_processable"] == 1
+    assert payload["counts"]["current_watcher_processable"] == 2
     assert payload["private_paths_redacted"] is True
     assert payload["files_processed"] == 0
     assert payload["ocr_attempted"] == 0
@@ -280,8 +280,8 @@ def test_service_practice_corpus_manifest_inventories_images_and_pdfs_without_pr
     assert entries_by_kind["image"]["role_hint"] == "phone_camera_image"
     assert entries_by_kind["image"]["current_watcher_processable"] is True
     assert entries_by_kind["pdf_document"]["role_hint"] == "scanner_pdf_document"
-    assert entries_by_kind["pdf_document"]["current_watcher_processable"] is False
-    assert entries_by_kind["pdf_document"]["current_processing_note"] == "requires_future_pdf_scanner_intake"
+    assert entries_by_kind["pdf_document"]["current_watcher_processable"] is True
+    assert entries_by_kind["pdf_document"]["current_processing_note"] == "document_intake_supported"
     assert len(entries_by_kind["image"]["sha256"]) == 64
     assert len(entries_by_kind["pdf_document"]["sha256"]) == 64
 

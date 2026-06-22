@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import AppConfig, resolve_input_path
+from .document_intake import is_supported_document
 from .models import utc_now
 from .skill_adapter import is_supported_image
 
@@ -108,7 +109,7 @@ def build_practice_corpus_manifest(
         "explicit_stop_conditions": [
             "This manifest inventories configured watched files only.",
             "Do not OCR, crop, rasterize PDFs, enrich, route, or write contacts from this manifest.",
-            "PDF entries are document sources for future scanner intake, not currently processable image inputs.",
+            "PDF entries are document sources for scanner intake, not direct image inputs.",
             "Do not commit the runtime manifest or private card files to git.",
         ],
     }
@@ -179,7 +180,7 @@ def _manifest_entry(
     stat = path.stat()
     suffix = path.suffix.lower()
     media_kind = "pdf_document" if suffix in PDF_SUFFIXES else "image"
-    processable = media_kind == "image" and is_supported_image(path)
+    processable = is_supported_image(path) or is_supported_document(path)
     return {
         "schema": "business-card-watchdog.practice-corpus-entry.v1",
         "entry_id": _entry_id(path),
@@ -190,7 +191,7 @@ def _manifest_entry(
         "media_kind": media_kind,
         "role_hint": _role_hint(media_kind=media_kind, source_alias=source_alias),
         "current_watcher_processable": processable,
-        "current_processing_note": "image_input_supported" if processable else "requires_future_pdf_scanner_intake",
+        "current_processing_note": _processing_note(media_kind=media_kind, processable=processable),
         "size_bytes": stat.st_size,
         "mtime_ns": stat.st_mtime_ns,
         "mtime_epoch_seconds": stat.st_mtime_ns / 1_000_000_000,
@@ -239,6 +240,14 @@ def _role_hint(*, media_kind: str, source_alias: str | None) -> str:
     if source_alias == "sync_phone":
         return "phone_camera_image"
     return "watched_image"
+
+
+def _processing_note(*, media_kind: str, processable: bool) -> str:
+    if media_kind == "pdf_document" and processable:
+        return "document_intake_supported"
+    if processable:
+        return "image_input_supported"
+    return "unsupported_manifest_entry"
 
 
 def _settle_state(mtime_ns: int, *, settle_seconds: float) -> str:

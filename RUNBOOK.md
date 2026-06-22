@@ -6410,3 +6410,42 @@ Safety:
   rasterize PDFs, process private watched folders on its own, run enrichment
   providers, run live lookup/write/readback, or write Google Contacts, Odoo, or
   Odollo records.
+
+## Turn 275 | 2026-06-22
+
+Executed Plan 0065 as the first Plan 0060 Milestone 3 implementation slice.
+
+Implemented:
+
+- Added `docs/dev/plans/0065-2026-06-22-scanner-document-intake.md`.
+- Added `src/business_card_watchdog/document_intake.py`.
+- Kept `is_supported_image` image-only while adding PDF document-source support.
+- Added `discover_processable_sources` for image and PDF document discovery.
+- Materialized PDF pages under each run's `document_intake/` directory, using
+  local `pdftoppm` when available and deterministic placeholder page images for
+  synthetic/unsupported fixtures.
+- Added run-level `document_pages` artifacts plus per-page `source_page` and
+  initial `card_side_candidate` artifacts.
+- Fed PDF page-image child jobs through the existing dry-run image pipeline and
+  contact-store projection.
+- Updated watcher discovery/status and practice-corpus manifest semantics so
+  PDFs are processable document-intake sources, not direct image inputs.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_dry_run_pipeline.py tests/test_watcher.py tests/test_service.py::test_service_practice_corpus_manifest_inventories_images_and_pdfs_without_processing -q`
+  passed with 23 tests.
+- `.venv/bin/python -m pytest tests/test_dry_run_pipeline.py tests/test_watcher.py tests/test_service.py tests/test_contact_store.py -q`
+  passed with 137 tests.
+- `.venv/bin/python -m pytest tests/test_api.py tests/test_cli_surfaces.py tests/test_mcp.py -q`
+  passed with 111 tests.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `.venv/bin/python -m pytest -q` passed with 343 tests.
+
+Safety:
+
+- This slice did not add live sink writes, paid enrichment, public-web calls,
+  automatic front/back pairing, or source PDF mutation.
+- Scanner PDF processing now creates runtime page-image artifacts only after an
+  existing operator/runtime command processes a PDF source.

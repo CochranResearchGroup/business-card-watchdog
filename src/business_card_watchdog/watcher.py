@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from .config import AppConfig, ensure_runtime_dirs, resolve_input_path
-from .orchestrator import BatchOrchestrator, discover_images
+from .document_intake import is_supported_document
+from .orchestrator import BatchOrchestrator, discover_processable_sources
 from .skill_adapter import is_supported_image
 
 
@@ -195,7 +196,7 @@ class PollingWatcher:
         for raw_input in self.config.watch_inputs:
             try:
                 source = resolve_input_path(raw_input, self.config)
-                images = discover_images(source)
+                images = discover_processable_sources(source)
             except (FileNotFoundError, KeyError) as exc:
                 last_error = str(exc)
                 continue
@@ -308,7 +309,11 @@ def _discover_status_images(
 ) -> tuple[list[Path], bool]:
     if source.is_file():
         path = _stable_path(source)
-        return ([source] if is_supported_image(source) and str(path) not in seen else []), False
+        return (
+            [source]
+            if (is_supported_image(source) or is_supported_document(source)) and str(path) not in seen
+            else []
+        ), False
 
     images: list[Path] = []
     truncated = False
@@ -318,7 +323,7 @@ def _discover_status_images(
             continue
         if str(_stable_path(path)) in seen:
             continue
-        if not is_supported_image(path):
+        if not is_supported_image(path) and not is_supported_document(path):
             continue
         if len(images) >= limit:
             truncated = True
