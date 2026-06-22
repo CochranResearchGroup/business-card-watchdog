@@ -20,6 +20,7 @@ def _write_recorded_contact_run(config: AppConfig) -> tuple[str, str]:
     artifact_dir.mkdir(parents=True, exist_ok=True)
     candidate_path = artifact_dir / "contact_candidate.json"
     spec_path = artifact_dir / "spec.json"
+    crop_manifest_path = artifact_dir / "crop_manifest.json"
     sink_payload_path = artifact_dir / "sink_payloads.json"
     enrichment_path = artifact_dir / "enrichment_request.json"
     candidate = build_contact_candidate(
@@ -37,6 +38,18 @@ def _write_recorded_contact_run(config: AppConfig) -> tuple[str, str]:
                 "full_name": "Ada Lovelace",
                 "organization": "Example Labs",
                 "email": "ada@example.test",
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    crop_manifest_path.write_text(
+        json.dumps(
+            {
+                "schema": "business-card-watchdog.synthetic-crops.v1",
+                "crops": [{"id": "contact-photo-1", "source": "ada-card.jpg", "synthetic": True}],
             },
             indent=2,
             sort_keys=True,
@@ -92,6 +105,7 @@ def _write_recorded_contact_run(config: AppConfig) -> tuple[str, str]:
     ledger.record_job(job)
     ledger.record_artifact(job_id=job.job_id, kind="contact_candidate", path=candidate_path)
     ledger.record_artifact(job_id=job.job_id, kind="contact_spec", path=spec_path)
+    ledger.record_artifact(job_id=job.job_id, kind="crop_manifest", path=crop_manifest_path)
     ledger.record_artifact(job_id=job.job_id, kind="sink_payloads", path=sink_payload_path)
     ledger.record_artifact(job_id=job.job_id, kind="enrichment_request", path=enrichment_path)
     ledger.transition_run("discovering")
@@ -491,6 +505,40 @@ def test_contact_route_override_is_audited(tmp_path: Path) -> None:
     assert surface["rows"][0]["counts"]["mutations"] == 1
 
 
+def test_contact_crop_decision_is_audited(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    run_id, _job_id = _write_recorded_contact_run(config)
+    service = BusinessCardService(config)
+    service.project_contacts_from_run(run_id)
+    contact = service.get_contact(service.list_contacts()["contacts"][0]["contact_id"])["contact"]
+    asset = next(row for row in contact["assets"] if row["asset_kind"] == "crop_manifest")
+
+    decision = service.decide_contact_crop(
+        contact_id=contact["contact_id"],
+        operator="operator",
+        asset_id=asset["asset_id"],
+        decision="accept",
+        selected_crop_path="/tmp/reviewed-crop.jpg",
+        selected_crop_sha256="a" * 64,
+        reason="operator selected reviewed crop",
+    )
+    surface = service.contact_review_surface(contact_id=contact["contact_id"])
+    updated_asset = next(row for row in decision["contact"]["assets"] if row["asset_id"] == asset["asset_id"])
+
+    assert decision["schema"] == "business-card-watchdog.contact-crop-decision.v1"
+    assert decision["writes_attempted"] == 0
+    assert decision["network_calls_made"] == 0
+    assert decision["mutation"]["action"] == "crop_decision"
+    assert decision["mutation"]["operator"] == "operator"
+    assert decision["mutation"]["payload"]["previous_values"]["decision"] == ""
+    assert decision["mutation"]["payload"]["new_values"]["decision"] == "accept"
+    assert decision["asset"]["payload"]["crop_decision"]["selected_crop_path"] == "/tmp/reviewed-crop.jpg"
+    assert decision["asset"]["sha256"] == "a" * 64
+    assert updated_asset["payload"]["crop_decision"]["decision"] == "accept"
+    assert surface["rows"][0]["counts"]["mutations"] == 1
+    assert surface["rows"][0]["mutation_audit"][0]["action"] == "crop_decision"
+
+
 def test_contact_review_safe_loop_only_rejects_explicit_safe_rejections(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, _job_id = _write_recorded_contact_run(config)
@@ -613,6 +661,36 @@ def test_contacts_cli_json_surfaces(tmp_path: Path, capsys) -> None:
     assert route_override["schema"] == "business-card-watchdog.contact-route-override.v1"
     assert route_override["mutation"]["operator"] == "cli-test"
     assert route_override["contact"]["routing_decisions"][0]["selected_sinks"] == ["odoo"]
+
+    latest = BusinessCardService(config).get_contact(contact_id)["contact"]
+    crop_asset = next(row for row in latest["assets"] if row["asset_kind"] == "crop_manifest")
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "contacts",
+                "crop-decision",
+                contact_id,
+                "--operator",
+                "cli-test",
+                "--asset-id",
+                crop_asset["asset_id"],
+                "--decision",
+                "accept",
+                "--selected-crop-path",
+                "/tmp/cli-crop.jpg",
+                "--reason",
+                "operator accepted reviewed crop",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    crop_decision = json.loads(capsys.readouterr().out)
+    assert crop_decision["schema"] == "business-card-watchdog.contact-crop-decision.v1"
+    assert crop_decision["mutation"]["operator"] == "cli-test"
+    assert crop_decision["asset"]["payload"]["crop_decision"]["decision"] == "accept"
 
     assert (
         main(

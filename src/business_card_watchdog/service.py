@@ -561,6 +561,37 @@ class BusinessCardService:
             "network_calls_made": 0,
         }
 
+    def decide_contact_crop(
+        self,
+        *,
+        contact_id: str,
+        operator: str,
+        asset_id: str,
+        decision: str,
+        reason: str = "",
+        selected_crop_path: str = "",
+        selected_crop_sha256: str = "",
+    ) -> dict[str, Any]:
+        store = ContactStore.from_config(self.config)
+        result = store.decide_crop(
+            contact_id=contact_id,
+            operator=operator,
+            asset_id=asset_id,
+            decision=decision,
+            reason=reason,
+            selected_crop_path=selected_crop_path,
+            selected_crop_sha256=selected_crop_sha256,
+        )
+        return {
+            "schema": "business-card-watchdog.contact-crop-decision.v1",
+            "store": store.status(),
+            "contact": result["contact"],
+            "asset": result["asset"],
+            "mutation": result["mutation"],
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+
     def record_contact_review_recommendation(
         self,
         *,

@@ -3165,6 +3165,15 @@ def build_parser() -> argparse.ArgumentParser:
     contacts_field_correct.add_argument("--field-corrections-json", required=True)
     contacts_field_correct.add_argument("--reason", default="")
     contacts_field_correct.add_argument("--json", action="store_true")
+    contacts_crop_decision = contacts_sub.add_parser("crop-decision")
+    contacts_crop_decision.add_argument("contact_id")
+    contacts_crop_decision.add_argument("--operator", default="operator")
+    contacts_crop_decision.add_argument("--asset-id", required=True)
+    contacts_crop_decision.add_argument("--decision", choices=["accept", "reject", "needs_recrop", "use_alternate"], required=True)
+    contacts_crop_decision.add_argument("--reason", default="")
+    contacts_crop_decision.add_argument("--selected-crop-path", default="")
+    contacts_crop_decision.add_argument("--selected-crop-sha256", default="")
+    contacts_crop_decision.add_argument("--json", action="store_true")
     contacts_route_override = contacts_sub.add_parser("route-override")
     contacts_route_override.add_argument("contact_id")
     contacts_route_override.add_argument("--operator", default="operator")
@@ -3797,6 +3806,16 @@ def main(argv: list[str] | None = None) -> int:
                 operator=args.operator,
                 field_corrections=json.loads(args.field_corrections_json),
                 reason=args.reason,
+            )
+        elif args.contacts_command == "crop-decision":
+            payload = service.decide_contact_crop(
+                contact_id=args.contact_id,
+                operator=args.operator,
+                asset_id=args.asset_id,
+                decision=args.decision,
+                reason=args.reason,
+                selected_crop_path=args.selected_crop_path,
+                selected_crop_sha256=args.selected_crop_sha256,
             )
         elif args.contacts_command == "route-override":
             payload = service.override_contact_route(

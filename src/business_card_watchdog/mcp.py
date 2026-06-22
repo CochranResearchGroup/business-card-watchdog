@@ -519,6 +519,26 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_contact_crop_decision",
+                "description": "Apply an audited operator crop decision to a projected contact card asset without touching source images.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "contact_id": {"type": "string"},
+                        "operator": {"type": "string", "default": "operator"},
+                        "asset_id": {"type": "string"},
+                        "decision": {
+                            "type": "string",
+                            "enum": ["accept", "reject", "needs_recrop", "use_alternate"],
+                        },
+                        "reason": {"type": "string"},
+                        "selected_crop_path": {"type": "string"},
+                        "selected_crop_sha256": {"type": "string"},
+                    },
+                    "required": ["contact_id", "asset_id", "decision"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_contact_route_override",
                 "description": "Apply an audited operator override to a projected contact route decision without running live sinks.",
                 "input_schema": {
@@ -1762,6 +1782,16 @@ def call_tool(
             operator=str(args.get("operator") or "operator"),
             field_corrections=dict(args.get("field_corrections") or {}),
             reason=str(args.get("reason") or ""),
+        )
+    if tool_name == "business_card_watchdog_contact_crop_decision":
+        return service.decide_contact_crop(
+            contact_id=str(args["contact_id"]),
+            operator=str(args.get("operator") or "operator"),
+            asset_id=str(args["asset_id"]),
+            decision=str(args["decision"]),
+            reason=str(args.get("reason") or ""),
+            selected_crop_path=str(args.get("selected_crop_path") or ""),
+            selected_crop_sha256=str(args.get("selected_crop_sha256") or ""),
         )
     if tool_name == "business_card_watchdog_contact_route_override":
         return service.override_contact_route(

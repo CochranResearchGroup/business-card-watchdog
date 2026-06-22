@@ -7170,6 +7170,38 @@ Safety:
   live lookup/write/readback, merge side pairs automatically, call enrichment
   providers, or expose private image bytes.
 
+## Turn 297 | 2026-06-22
+
+Executed Plan 0085 as the Plan 0060 Milestone 8 contact review crop-decision
+mutation slice.
+
+Implemented:
+
+- Added audited contact crop decisions against projected card assets.
+- Persisted crop decision state into the selected asset payload and recorded
+  previous/new values in `contact_mutations`.
+- Exposed crop decisions through service, API, CLI, and MCP.
+- Extended review-surface parity tests to include crop decision mutation counts.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_contact_store.py::test_contact_crop_decision_is_audited tests/test_contact_store.py::test_contacts_cli_json_surfaces -q`
+  passed with 2 tests.
+- `.venv/bin/python -m pytest tests/test_api.py::test_api_contact_review_state_safe_loop_parity tests/test_mcp.py::test_mcp_contact_review_state_safe_loop_parity -q`
+  passed with 2 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/contact_store.py src/business_card_watchdog/service.py src/business_card_watchdog/api.py src/business_card_watchdog/cli.py src/business_card_watchdog/mcp.py tests/test_contact_store.py tests/test_api.py tests/test_mcp.py`
+  passed.
+- `git diff --check` passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `.venv/bin/ruff check .` passed.
+- `.venv/bin/python -m pytest -q` passed with 391 tests.
+
+Safety:
+
+- This slice did not generate or mutate image files, process configured
+  SyncThing/private watch inputs, run enrichment, perform live
+  lookup/write/readback, or expose private image bytes.
+
 ## Turn 291 | 2026-06-22
 
 Executed Plan 0080 as the next Plan 0060 Milestone 7 contact-store persistence

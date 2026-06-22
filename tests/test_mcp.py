@@ -173,6 +173,21 @@ def test_mcp_contact_review_state_safe_loop_parity(tmp_path: Path) -> None:
         kind="contact_candidate",
         path=artifact_dir / "contact_candidate.json",
     )
+    (artifact_dir / "crop_manifest.json").write_text(
+        json.dumps(
+            {
+                "schema": "business-card-watchdog.synthetic-crops.v1",
+                "crops": [{"id": "contact-photo-1", "source": "mcp-card.jpg", "synthetic": True}],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    RunLedger(config.runs_dir / run_id).record_artifact(
+        job_id=job_id,
+        kind="crop_manifest",
+        path=artifact_dir / "crop_manifest.json",
+    )
     service = BusinessCardService(config)
     service.project_contacts_from_run(run_id)
     contact_id = service.list_contacts()["contacts"][0]["contact_id"]
@@ -243,6 +258,19 @@ def test_mcp_contact_review_state_safe_loop_parity(tmp_path: Path) -> None:
         },
         config=config,
     )
+    crop_asset = next(row for row in route_override["contact"]["assets"] if row["asset_kind"] == "crop_manifest")
+    crop_decision = call_tool(
+        "business_card_watchdog_contact_crop_decision",
+        {
+            "contact_id": contact_id,
+            "operator": "mcp-test",
+            "asset_id": crop_asset["asset_id"],
+            "decision": "accept",
+            "selected_crop_path": "/tmp/mcp-crop.jpg",
+            "reason": "operator accepted reviewed crop",
+        },
+        config=config,
+    )
     review_surface = call_tool(
         "business_card_watchdog_contact_review_surface",
         {"contact_id": contact_id},
@@ -264,9 +292,12 @@ def test_mcp_contact_review_state_safe_loop_parity(tmp_path: Path) -> None:
     assert route_override["schema"] == "business-card-watchdog.contact-route-override.v1"
     assert route_override["mutation"]["operator"] == "mcp-test"
     assert route_override["contact"]["routing_decisions"][0]["selected_sinks"] == ["odoo"]
+    assert crop_decision["schema"] == "business-card-watchdog.contact-crop-decision.v1"
+    assert crop_decision["mutation"]["operator"] == "mcp-test"
+    assert crop_decision["asset"]["payload"]["crop_decision"]["decision"] == "accept"
     assert review_surface["schema"] == "business-card-watchdog.contact-review-surface.v1"
     assert review_surface["rows"][0]["display_name"] == "Augusta Ada Lovelace"
-    assert review_surface["rows"][0]["counts"]["mutations"] == 2
+    assert review_surface["rows"][0]["counts"]["mutations"] == 3
     assert safe_loop["actions"][0]["status"] == "executed"
     assert safe_loop["actions"][0]["decision"] == "reject"
     assert safe_loop["writes_attempted"] == 0

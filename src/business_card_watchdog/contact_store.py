@@ -15,6 +15,7 @@ from .models import utc_now
 SCHEMA_VERSION = 5
 CONTACT_STORE_SCHEMA = "business-card-watchdog.contact-store.v1"
 CONTACT_FIELD_CORRECTION_FIELDS = {"display_name", "organization", "email", "phone"}
+CONTACT_CROP_DECISIONS = {"accept", "reject", "needs_recrop", "use_alternate"}
 _PROJECTED_ASSET_KINDS = {
     "artifact_dir",
     "preclassification",
@@ -295,6 +296,121 @@ class ContactStore:
         mutation = self.get_mutation(mutation_id)
         return {"mutation": mutation, "contact": self.get_contact(contact_id)}
 
+    def decide_crop(
+        self,
+        *,
+        contact_id: str,
+        operator: str,
+        asset_id: str,
+        decision: str,
+        reason: str = "",
+        selected_crop_path: str = "",
+        selected_crop_sha256: str = "",
+    ) -> dict[str, Any]:
+        if not operator.strip():
+            raise ValueError("contact crop decision requires an operator")
+        normalized_decision = decision.strip()
+        if normalized_decision not in CONTACT_CROP_DECISIONS:
+            raise ValueError(f"unsupported contact crop decision: {normalized_decision}")
+        self.initialize()
+        self.get_contact(contact_id)
+        with self._connect() as conn:
+            self._migrate(conn)
+            row = conn.execute(
+                "SELECT * FROM card_assets WHERE asset_id = ? AND contact_id = ?",
+                (asset_id, contact_id),
+            ).fetchone()
+        if row is None:
+            raise KeyError(f"card asset not found for contact: {asset_id}")
+        current_asset = _row_with_payload(row)
+        previous_values = _crop_decision_snapshot(current_asset)
+        now = utc_now()
+        new_values = {
+            "asset_id": asset_id,
+            "decision": normalized_decision,
+            "selected_crop_path": selected_crop_path.strip(),
+            "selected_crop_sha256": selected_crop_sha256.strip(),
+            "reason": reason,
+            "decided_by": operator,
+            "decided_at": now,
+        }
+        mutation_id = _stable_id(
+            "mutation",
+            contact_id,
+            operator,
+            "crop_decision",
+            asset_id,
+            _json_dump_value(new_values),
+            now,
+        )
+        asset_payload = dict(current_asset.get("payload") or {})
+        asset_payload.setdefault("review_mutations", []).append(
+            {
+                "mutation_id": mutation_id,
+                "action": "crop_decision",
+                "operator": operator,
+                "reason": reason,
+                "previous_values": previous_values,
+                "new_values": new_values,
+                "created_at": now,
+            }
+        )
+        asset_payload["crop_decision"] = {
+            "mutation_id": mutation_id,
+            **new_values,
+        }
+        mutation_payload = {
+            "action": "crop_decision",
+            "operator": operator,
+            "reason": reason,
+            "asset_id": asset_id,
+            "previous_values": previous_values,
+            "new_values": new_values,
+        }
+        with self._connect() as conn:
+            self._migrate(conn)
+            conn.execute(
+                """
+                INSERT INTO contact_mutations (
+                    mutation_id, contact_id, action, operator, previous_json,
+                    new_json, payload_json, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    mutation_id,
+                    contact_id,
+                    "crop_decision",
+                    operator,
+                    _json_dump_value(previous_values),
+                    _json_dump_value(new_values),
+                    _json_dumps(mutation_payload),
+                    now,
+                    now,
+                ),
+            )
+            conn.execute(
+                """
+                UPDATE card_assets
+                SET payload_json = ?,
+                    sha256 = ?,
+                    updated_at = ?
+                WHERE asset_id = ? AND contact_id = ?
+                """,
+                (
+                    _json_dumps(asset_payload),
+                    selected_crop_sha256.strip() or current_asset.get("sha256"),
+                    now,
+                    asset_id,
+                    contact_id,
+                ),
+            )
+        return {
+            "mutation": self.get_mutation(mutation_id),
+            "asset": self.get_asset(asset_id),
+            "contact": self.get_contact(contact_id),
+        }
+
     def get_mutation(self, mutation_id: str) -> dict[str, Any]:
         self.initialize()
         with self._connect() as conn:
@@ -304,6 +420,14 @@ class ContactStore:
             ).fetchone()
         if row is None:
             raise KeyError(f"contact mutation not found: {mutation_id}")
+        return _row_with_payload(row)
+
+    def get_asset(self, asset_id: str) -> dict[str, Any]:
+        self.initialize()
+        with self._connect() as conn:
+            row = conn.execute("SELECT * FROM card_assets WHERE asset_id = ?", (asset_id,)).fetchone()
+        if row is None:
+            raise KeyError(f"card asset not found: {asset_id}")
         return _row_with_payload(row)
 
     def override_route(
@@ -1302,6 +1426,22 @@ def _route_override_snapshot(row: dict[str, Any]) -> dict[str, Any]:
         "selected_target_tenant": row.get("selected_target_tenant"),
         "route_candidate_state": row.get("route_candidate_state"),
         "readiness_blockers": list(row.get("readiness_blockers") or []),
+    }
+
+
+def _crop_decision_snapshot(row: dict[str, Any]) -> dict[str, Any]:
+    payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+    crop_decision = payload.get("crop_decision") if isinstance(payload.get("crop_decision"), dict) else {}
+    return {
+        "asset_id": row.get("asset_id"),
+        "asset_kind": row.get("asset_kind"),
+        "path_ref": row.get("path_ref"),
+        "sha256": row.get("sha256"),
+        "decision": crop_decision.get("decision", ""),
+        "selected_crop_path": crop_decision.get("selected_crop_path", ""),
+        "selected_crop_sha256": crop_decision.get("selected_crop_sha256", ""),
+        "decided_by": crop_decision.get("decided_by", ""),
+        "decided_at": crop_decision.get("decided_at", ""),
     }
 
 

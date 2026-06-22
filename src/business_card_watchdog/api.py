@@ -99,6 +99,14 @@ def create_app(config_path: Path | None = None):
         field_corrections: dict[str, object] = Field(default_factory=dict)
         reason: str = ""
 
+    class ContactCropDecisionRequest(BaseModel):
+        operator: str = "operator"
+        asset_id: str
+        decision: str
+        reason: str = ""
+        selected_crop_path: str = ""
+        selected_crop_sha256: str = ""
+
     class ContactRouteOverrideRequest(BaseModel):
         operator: str = "operator"
         selected_sinks: list[str]
@@ -1072,6 +1080,21 @@ def create_app(config_path: Path | None = None):
             operator=request.operator,
             field_corrections=dict(request.field_corrections),
             reason=request.reason,
+        )
+
+    @app.post("/contacts/{contact_id}/crop-decision")
+    def decide_contact_crop(
+        contact_id: str,
+        request: ContactCropDecisionRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().decide_contact_crop(
+            contact_id=contact_id,
+            operator=request.operator,
+            asset_id=request.asset_id,
+            decision=request.decision,
+            reason=request.reason,
+            selected_crop_path=request.selected_crop_path,
+            selected_crop_sha256=request.selected_crop_sha256,
         )
 
     @app.post("/contacts/{contact_id}/route-override")
