@@ -125,6 +125,80 @@ def test_contact_store_projects_run_idempotently(tmp_path: Path) -> None:
     assert detail["review_states"] == []
 
 
+def test_contact_store_projects_enrichment_review_provenance(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    run_id, job_id = _write_recorded_contact_run(config)
+    service = BusinessCardService(config)
+    artifact_dir = config.runs_dir / run_id / "artifacts" / job_id
+    enrichment_result_path = artifact_dir / "enrichment_result.json"
+    enrichment_result_path.write_text(
+        json.dumps(
+            {
+                "schema": "business-card-watchdog.enrichment-result.v1",
+                "provider": "public_web",
+                "merge_proposals": [
+                    {
+                        "field": "notes",
+                        "value": "Public-web corroboration candidate: https://example.test/ada",
+                        "source": "public_web",
+                        "requires_review": True,
+                    },
+                    {
+                        "field": "title",
+                        "value": "Principal Engineer",
+                        "source": "public_web",
+                        "requires_review": True,
+                    },
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    RunLedger(config.runs_dir / run_id).record_artifact(
+        job_id=job_id,
+        kind="enrichment_result",
+        path=enrichment_result_path,
+    )
+
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="operator",
+        action="approve_enrichment_merge",
+        approved_enrichment_fields=["notes"],
+    )
+    projection = service.project_contacts_from_run(run_id)
+    second_projection = service.project_contacts_from_run(run_id)
+    contact_id = service.list_contacts()["contacts"][0]["contact_id"]
+    detail = service.get_contact(str(contact_id))["contact"]
+    attempts_by_schema = {
+        attempt["payload"]["payload"].get("schema"): attempt
+        for attempt in detail["enrichment_attempts"]
+        if isinstance(attempt["payload"].get("payload"), dict)
+    }
+    proposal_review = attempts_by_schema["business-card-watchdog.enrichment-proposal-review.v1"]
+    merge_review = attempts_by_schema["business-card-watchdog.enrichment-merge-review.v1"]
+
+    assert projection["projected_contacts"] == 1
+    assert projection["projected_enrichment_attempts"] == 4
+    assert second_projection["projected_enrichment_attempts"] == 4
+    assert len(detail["enrichment_attempts"]) == 4
+    assert proposal_review["provider"] == "public_web"
+    assert proposal_review["state"] == "reviewed"
+    assert proposal_review["payload"]["review"]["reviewer"] == "operator"
+    assert proposal_review["payload"]["review"]["source_provider"] == "public_web"
+    assert proposal_review["payload"]["review"]["accepted_count"] == 1
+    assert proposal_review["payload"]["review"]["rejected_count"] == 1
+    assert proposal_review["payload"]["review"]["proposals"][0]["decision"] == "accepted"
+    assert proposal_review["payload"]["review"]["proposals"][1]["decision"] == "rejected"
+    assert merge_review["state"] == "reviewed"
+    assert merge_review["payload"]["review"]["applied_count"] == 1
+    assert merge_review["payload"]["review"]["skipped_count"] == 1
+
+
 def test_contact_review_recommendations_are_host_decided(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, _job_id = _write_recorded_contact_run(config)

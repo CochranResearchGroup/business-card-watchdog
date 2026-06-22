@@ -6800,3 +6800,42 @@ Safety:
   Contacts, Odoo, or Odollo calls. It did not run paid API enrichment, process
   configured SyncThing/private watch inputs, mutate contact fields from provider
   output, or write sink records.
+
+## Turn 285 | 2026-06-22
+
+Executed Plan 0074 as the enrichment review-provenance projection slice under
+Plan 0060 Milestone 5.
+
+Implemented:
+
+- Added `enrichment_proposal_review` to projected contact asset lineage.
+- Projected `enrichment_merge_review` and `enrichment_proposal_review` artifacts
+  as enrichment attempts with meaningful review states.
+- Added projected review summaries for reviewer, approved fields, source
+  provider, source result schema, accepted/rejected counts, and proposal
+  decisions.
+- Preserved idempotent reprojection through stable enrichment attempt IDs.
+- Updated Plan 0060 Milestone 5 to complete for the current scope.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_contact_store.py::test_contact_store_projects_enrichment_review_provenance -q`
+  passed with 1 test.
+- `.venv/bin/python -m pytest tests/test_contact_store.py -q` passed with 6
+  tests.
+- `.venv/bin/ruff check src/business_card_watchdog/contact_store.py tests/test_contact_store.py`
+  passed.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 364 tests.
+- `codegraph sync /home/ecochran76/workspace.local/business-card-watchdog && codegraph status /home/ecochran76/workspace.local/business-card-watchdog`
+  reported the index already up to date, 60 files, 1,958 nodes, and 2,212
+  edges.
+
+Safety:
+
+- This slice did not make live enrichment, public-web, paid API, Google
+  Contacts, Odoo, or Odollo calls. It did not process configured
+  SyncThing/private watch inputs, automatically merge enrichment without review,
+  or write sink records.

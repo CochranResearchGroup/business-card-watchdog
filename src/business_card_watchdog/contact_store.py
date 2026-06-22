@@ -56,6 +56,7 @@ _PROJECTED_ASSET_KINDS = {
     "enrichment_provider_result",
     "enrichment_result",
     "enrichment_merge_review",
+    "enrichment_proposal_review",
 }
 
 
@@ -659,14 +660,14 @@ class ContactStore:
             path = Path(str(artifact.get("path") or ""))
             payload = _read_json_file(path) or {}
             provider = _enrichment_provider(kind, payload)
-            state = str(payload.get("state") or payload.get("status") or "recorded")
+            state = _enrichment_state(kind, payload)
             rows.append(
                 (
                     _stable_id("enrich", run_id, job_id, kind, str(path)),
                     contact_id,
                     provider,
                     state,
-                    _json_dumps({"artifact": artifact, "payload": payload}),
+                    _json_dumps(_enrichment_projection_payload(kind, artifact, payload)),
                     now,
                     now,
                 )
@@ -1046,11 +1047,69 @@ def _enrichment_provider(kind: str, payload: dict[str, Any]) -> str:
     provider = str(payload.get("provider") or "").strip()
     if provider:
         return provider
+    source_provider = str(payload.get("source_provider") or "").strip()
+    if source_provider:
+        return source_provider
     if "public_web" in kind:
         return "public_web"
     if "provider" in kind:
         return str(payload.get("provider_name") or "paid_provider")
     return "unknown"
+
+
+def _enrichment_state(kind: str, payload: dict[str, Any]) -> str:
+    if kind == "enrichment_proposal_review":
+        accepted = int(payload.get("accepted_count") or 0)
+        rejected = int(payload.get("rejected_count") or 0)
+        if accepted and rejected:
+            return "reviewed"
+        if accepted:
+            return "accepted"
+        if rejected:
+            return "rejected"
+        return "reviewed"
+    if kind == "enrichment_merge_review":
+        applied = payload.get("applied") if isinstance(payload.get("applied"), list) else []
+        skipped = payload.get("skipped") if isinstance(payload.get("skipped"), list) else []
+        if applied and skipped:
+            return "reviewed"
+        if applied:
+            return "accepted"
+        if skipped:
+            return "rejected"
+        return "reviewed"
+    return str(payload.get("state") or payload.get("status") or "recorded")
+
+
+def _enrichment_projection_payload(
+    kind: str,
+    artifact: dict[str, Any],
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    projection = {"artifact": artifact, "payload": payload}
+    if kind == "enrichment_proposal_review":
+        projection["review"] = {
+            "reviewer": payload.get("reviewer"),
+            "source_provider": payload.get("source_provider"),
+            "source_result_schema": payload.get("source_result_schema"),
+            "approved_fields": list(payload.get("approved_fields") or []),
+            "proposal_count": int(payload.get("proposal_count") or 0),
+            "accepted_count": int(payload.get("accepted_count") or 0),
+            "rejected_count": int(payload.get("rejected_count") or 0),
+            "proposals": list(payload.get("proposals") or []),
+        }
+    elif kind == "enrichment_merge_review":
+        applied = payload.get("applied") if isinstance(payload.get("applied"), list) else []
+        skipped = payload.get("skipped") if isinstance(payload.get("skipped"), list) else []
+        projection["review"] = {
+            "reviewer": payload.get("reviewer"),
+            "approved_fields": list(payload.get("approved_fields") or []),
+            "applied_count": len(applied),
+            "skipped_count": len(skipped),
+            "applied": list(applied),
+            "skipped": list(skipped),
+        }
+    return projection
 
 
 def _media_kind(path: str) -> str:

@@ -287,12 +287,12 @@ Validation:
 
 ### Milestone 5 | Enrichment Provider Contracts
 
-Status: IN_PROGRESS. Public-web and Apollo preview/provider-result contracts
-pre-existed this milestone. People Data Labs provider config, readiness,
-preview request/handoff, explicit result import normalization, and API/CLI/MCP
-provider selection are complete via Plan 0073. Remaining work should harden
-contact-store enrichment review status/provenance around reviewed enrichment
-merges.
+Status: COMPLETE_FOR_CURRENT_SCOPE. Public-web and Apollo preview/provider-result
+contracts pre-existed this milestone. People Data Labs provider config,
+readiness, preview request/handoff, explicit result import normalization, and
+API/CLI/MCP provider selection are complete via Plan 0073. Contact-store
+enrichment review status/provenance projection is complete via Plan 0074.
+Continue with Milestone 6 routing policy and GWS default sink.
 
 Goal-compatible objective:
 

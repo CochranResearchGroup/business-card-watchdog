@@ -20,6 +20,7 @@ Latest completed contact-review-state plan: `docs/dev/plans/0070-2026-06-22-cont
 Latest completed contact-review safe-loop plan: `docs/dev/plans/0071-2026-06-22-contact-review-safe-loop.md`.
 Latest completed contact-review API/MCP parity plan: `docs/dev/plans/0072-2026-06-22-contact-review-api-mcp-parity.md`.
 Latest completed enrichment provider-contract plan: `docs/dev/plans/0073-2026-06-22-people-data-labs-provider-contract.md`.
+Latest completed enrichment review-provenance plan: `docs/dev/plans/0074-2026-06-22-enrichment-review-provenance-projection.md`.
 Latest completed practice-corpus plan: `docs/dev/plans/0062-2026-06-21-practice-corpus-manifest.md`.
 Next refactor plan: open a bounded follow-on for the next read-only packet cluster.
 Next production plan: `docs/dev/plans/0009-2026-06-14-operator-selected-live-smoke-and-pilot-rollout.md`.
