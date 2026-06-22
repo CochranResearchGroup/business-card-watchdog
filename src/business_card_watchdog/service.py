@@ -7023,6 +7023,7 @@ class BusinessCardService:
             raise ValueError(f"unsupported live lookup sink: {sink}")
         job = self.get_job(job_id, run_id=run_id)
         artifact_dir = Path(job["artifact_dir"]) if job.get("artifact_dir") else self.config.runs_dir / run_id / "artifacts" / job_id
+        target_context = self._selected_sink_target_context(artifact_dir=artifact_dir, sink=sink)
         reviewed_path = artifact_dir / "reviewed_contact.json"
         lookup_plan_path = artifact_dir / "sink_lookup_plan.json"
         adapter_request_path = artifact_dir / "sink_adapter_request_lookup.json"
@@ -7050,7 +7051,7 @@ class BusinessCardService:
             sink,
             dry_run=False,
             google_contacts_profile=self.config.sink.google_contacts_profile,
-            odollo_tenant=self.config.sink.odollo_tenant,
+            odollo_tenant=str(target_context.get("tenant") or self.config.sink.odollo_tenant),
         ).to_dict()
         requirements = [
             {
@@ -7094,6 +7095,14 @@ class BusinessCardService:
                 "detail": str(live_readiness.get("reason") or ""),
             },
         ]
+        if sink == "odoo":
+            requirements.append(
+                {
+                    "name": "selected_odollo_tenant_present",
+                    "ok": bool(str(target_context.get("tenant") or "").strip()),
+                    "detail": str(target_context.get("source") or "missing selected Odollo tenant"),
+                }
+            )
         requirement_by_name = {str(item["name"]): bool(item["ok"]) for item in requirements}
         ready = all(requirement_by_name.values())
         return {
@@ -7115,6 +7124,7 @@ class BusinessCardService:
                 str(item["name"]) for item in requirements if not item["ok"]
             ],
             "live_lookup_readiness": live_readiness,
+            "selected_target_context": target_context,
             "job_state": job.get("state"),
             "lookup_plan_state": (lookup_plan or {}).get("state", "missing"),
             "downstream_duplicate_state": (downstream_assessment or {}).get("state", "missing"),
@@ -7293,6 +7303,7 @@ class BusinessCardService:
         )
         if existing_target is not None and not existing_abandoned:
             raise ValueError("selected live target already exists; abandon it before selecting a replacement")
+        target_context = self._selected_sink_target_context(artifact_dir=artifact_dir, sink=sink)
         lookup_readiness = None
         apply_readiness = None
         if scope in {"lookup", "all"}:
@@ -7333,6 +7344,7 @@ class BusinessCardService:
             },
             "created_at": utc_now(),
             "job_state": job.get("state"),
+            "target": target_context,
             "readiness": {
                 "lookup": lookup_readiness,
                 "apply": apply_readiness,
@@ -8406,6 +8418,7 @@ class BusinessCardService:
         readback_adapter = json.loads(readback_adapter_path.read_text(encoding="utf-8")) if readback_adapter_path.exists() else None
         readiness = self.sink_readiness()
         selected_sink = str(sink or "").strip()
+        target_context = self._selected_sink_target_context(artifact_dir=artifact_dir, sink=selected_sink)
         preflight_actions = [
             action
             for action in list((preflight or {}).get("actions") or [])
@@ -8474,6 +8487,40 @@ class BusinessCardService:
                 "detail": str(readback_adapter_path),
             },
         ]
+        if selected_sink == "odoo":
+            odollo_boundary = self._odollo_write_pilot_boundary(
+                artifact_dir=artifact_dir,
+                target_context=target_context,
+            )
+            requirements.extend(
+                [
+                    {
+                        "name": "selected_odollo_tenant_present",
+                        "ok": bool(str(target_context.get("tenant") or "").strip()),
+                        "detail": str(target_context.get("source") or "missing selected Odollo tenant"),
+                    },
+                    {
+                        "name": "odollo_tenant_readiness_pilot_ready",
+                        "ok": not any(
+                            reason.startswith("odollo tenant readiness")
+                            for reason in odollo_boundary["blocked_reasons"]
+                        ),
+                        "detail": "; ".join(odollo_boundary["blocked_reasons"]) or "tenant readiness is pilot-ready",
+                    },
+                    {
+                        "name": "odollo_duplicate_evidence_cleared",
+                        "ok": not any(
+                            reason.startswith("downstream")
+                            or reason.startswith("selected_lookup_smoke")
+                            or reason.startswith("duplicate")
+                            for reason in odollo_boundary["blocked_reasons"]
+                        ),
+                        "detail": "; ".join(odollo_boundary["blocked_reasons"]) or "duplicate evidence is clear",
+                    },
+                ]
+            )
+        else:
+            odollo_boundary = None
         mock_requirements = {
             "preflight_exists",
             "selected_sink_in_preflight",
@@ -8515,6 +8562,8 @@ class BusinessCardService:
             "decision_state": decision.get("state") if decision else "missing",
             "decision": decision.get("decision") if decision else "",
             "sink_readiness": readiness,
+            "selected_target_context": target_context,
+            "odollo_write_boundary": odollo_boundary,
             "selected_sink_readiness": sink_readiness_checks,
             "selected_actions": {
                 "preflight": preflight_actions,
@@ -8909,6 +8958,16 @@ class BusinessCardService:
                 approved_by=approved_by,
                 scope="write",
             )
+            if sink == "odoo":
+                odollo_boundary = self._odollo_write_pilot_boundary(
+                    artifact_dir=artifact_dir,
+                    target_context=self._selected_sink_target_context(artifact_dir=artifact_dir, sink=sink),
+                )
+                if odollo_boundary["blocked_reasons"]:
+                    raise ValueError(
+                        "Odollo write pilot boundary blocked: "
+                        + "; ".join(odollo_boundary["blocked_reasons"])
+                    )
             selected_target_ref = {
                 "selection_id": selected_target.get("selection_id"),
                 "created_at": selected_target.get("created_at"),
@@ -8917,6 +8976,7 @@ class BusinessCardService:
                 "sink": selected_target.get("sink"),
                 "operator": selected_target.get("operator") or selected_target.get("approved_by"),
                 "scope": selected_target.get("scope"),
+                "target": selected_target.get("target"),
             }
             if self.sink_write_executor is None:
                 readiness_path = artifact_dir / "sink_apply_pilot_readiness.json"
@@ -9087,6 +9147,20 @@ class BusinessCardService:
                 approved_by=approved_by,
                 scope="readback",
             )
+            if sink == "odoo":
+                odollo_boundary = self._odollo_write_pilot_boundary(
+                    artifact_dir=artifact_dir,
+                    target_context=self._selected_sink_target_context(artifact_dir=artifact_dir, sink=sink),
+                )
+                if any(
+                    reason.startswith("odollo tenant readiness")
+                    or reason.startswith("selected Odollo tenant")
+                    for reason in odollo_boundary["blocked_reasons"]
+                ):
+                    raise ValueError(
+                        "Odollo readback pilot boundary blocked: "
+                        + "; ".join(odollo_boundary["blocked_reasons"])
+                    )
             source_selected_target = dict(source_write_pilot.get("selected_target") or {})
             if _selected_target_identity(source_selected_target) != _selected_target_identity(selected_target):
                 raise ValueError("sink readback pilot requires write pilot from current selected live target")
@@ -11611,6 +11685,7 @@ class BusinessCardService:
         duplicate_resolution = None
         apply_readiness_result = None
         apply_readiness = None
+        odollo_write_boundary = None
         blockers = list(selected_target_handoff.get("blocked_reasons") or [])
         if selected_target_handoff.get("state") not in {
             "ready_for_live_lookup_request",
@@ -11634,6 +11709,12 @@ class BusinessCardService:
             selected_lookup_smoke = _read_json_file(artifact_dir / "selected_lookup_smoke.json")
             downstream_duplicate = _read_json_file(artifact_dir / "downstream_duplicate_assessment.json")
             duplicate_resolution = _read_json_file(artifact_dir / "duplicate_resolution.json")
+            if sink == "odoo":
+                odollo_write_boundary = self._odollo_write_pilot_boundary(
+                    artifact_dir=artifact_dir,
+                    target_context=self._selected_sink_target_context(artifact_dir=artifact_dir, sink=sink),
+                )
+                blockers.extend(list(odollo_write_boundary.get("blocked_reasons") or []))
             if selected_lookup_smoke is None:
                 blockers.append("selected_lookup_smoke.json is required before write pilot")
             duplicate_state = str((downstream_duplicate or {}).get("state") or "missing")
@@ -11674,6 +11755,7 @@ class BusinessCardService:
             "selected_lookup_smoke": selected_lookup_smoke,
             "downstream_duplicate_assessment": downstream_duplicate,
             "duplicate_resolution": duplicate_resolution,
+            "odollo_write_boundary": odollo_write_boundary,
             "apply_readiness": apply_readiness,
             "apply_readiness_path": (apply_readiness_result or {}).get("readiness_path")
             if apply_readiness_result
@@ -13597,11 +13679,123 @@ class BusinessCardService:
         allows = dict(target.get("scope_allows") or {})
         if not bool(allows.get(scope)):
             mismatches.append(f"scope={target.get('scope')!r}")
+        if sink == "odoo":
+            target_context = self._selected_sink_target_context(artifact_dir=artifact_dir, sink=sink)
+            expected_tenant = str(target_context.get("tenant") or "").strip()
+            selected_tenant = str((target.get("target") or {}).get("tenant") or "").strip()
+            if expected_tenant and selected_tenant and selected_tenant != expected_tenant:
+                mismatches.append(f"target.tenant={selected_tenant!r}")
+            elif expected_tenant and not selected_tenant:
+                mismatches.append("target.tenant=missing")
         if mismatches:
             raise ValueError(
                 "non-simulated sink pilot selected target mismatch: " + ", ".join(mismatches)
             )
         return target
+
+    def _selected_sink_target_context(self, *, artifact_dir: Path, sink: str) -> dict[str, Any]:
+        if sink == "google_contacts":
+            return {
+                "sink": sink,
+                "profile": self.config.sink.google_contacts_profile,
+                "source": "sink.google_contacts_profile",
+            }
+        if sink != "odoo":
+            return {"sink": sink, "source": "unsupported"}
+        for filename, source in (
+            ("sink_lookup_plan.json", "sink_lookup_plan"),
+            ("sink_plan.json", "sink_plan"),
+        ):
+            payload = _read_json_file(artifact_dir / filename) or {}
+            tenant = self._odollo_tenant_from_plan_payload(payload)
+            if tenant:
+                return {
+                    "sink": sink,
+                    "tenant": tenant,
+                    "source": source,
+                    "plan_path": str(artifact_dir / filename),
+                }
+        return {
+            "sink": sink,
+            "tenant": self.config.sink.odollo_tenant,
+            "source": "sink.odollo_tenant" if self.config.sink.odollo_tenant else "missing",
+        }
+
+    def _odollo_tenant_from_plan_payload(self, payload: dict[str, Any]) -> str:
+        for row in list(payload.get("lookups") or []):
+            if not isinstance(row, dict) or row.get("sink") != "odoo":
+                continue
+            tenant_readiness = row.get("tenant_readiness") if isinstance(row.get("tenant_readiness"), dict) else {}
+            if tenant_readiness.get("tenant"):
+                return str(tenant_readiness["tenant"]).strip()
+            readiness = row.get("readiness") if isinstance(row.get("readiness"), dict) else {}
+            details = readiness.get("details") if isinstance(readiness.get("details"), dict) else {}
+            if details.get("tenant"):
+                return str(details["tenant"]).strip()
+        for row in list(payload.get("actions") or []):
+            if not isinstance(row, dict) or row.get("sink") != "odoo":
+                continue
+            readiness = row.get("readiness") if isinstance(row.get("readiness"), dict) else {}
+            details = readiness.get("details") if isinstance(readiness.get("details"), dict) else {}
+            if details.get("tenant"):
+                return str(details["tenant"]).strip()
+        for row in list(payload.get("payloads") or []):
+            if not isinstance(row, dict) or row.get("sink") != "odoo":
+                continue
+            readiness = row.get("readiness") if isinstance(row.get("readiness"), dict) else {}
+            details = readiness.get("details") if isinstance(readiness.get("details"), dict) else {}
+            if details.get("tenant"):
+                return str(details["tenant"]).strip()
+        return ""
+
+    def _odollo_write_pilot_boundary(
+        self,
+        *,
+        artifact_dir: Path,
+        target_context: dict[str, Any],
+    ) -> dict[str, Any]:
+        tenant = str(target_context.get("tenant") or "").strip()
+        blocked_reasons: list[str] = []
+        lookup_plan = _read_json_file(artifact_dir / "sink_lookup_plan.json") or {}
+        odoo_lookup = next(
+            (
+                row
+                for row in list(lookup_plan.get("lookups") or [])
+                if isinstance(row, dict) and row.get("sink") == "odoo"
+            ),
+            {},
+        )
+        tenant_readiness = (
+            odoo_lookup.get("tenant_readiness") if isinstance(odoo_lookup.get("tenant_readiness"), dict) else {}
+        )
+        if not tenant:
+            blocked_reasons.append("selected Odollo tenant is missing")
+        if tenant_readiness and tenant_readiness.get("state") != "pilot_ready":
+            blocked_reasons.append(f"odollo tenant readiness is {tenant_readiness.get('state')}")
+        elif not tenant_readiness:
+            blocked_reasons.append("odollo tenant readiness packet is missing")
+        selected_lookup_smoke = _read_json_file(artifact_dir / "selected_lookup_smoke.json")
+        downstream_duplicate = _read_json_file(artifact_dir / "downstream_duplicate_assessment.json")
+        duplicate_resolution = _read_json_file(artifact_dir / "duplicate_resolution.json") or {}
+        if selected_lookup_smoke is None:
+            blocked_reasons.append("selected_lookup_smoke.json is required before Odollo write pilot")
+        if downstream_duplicate is None:
+            blocked_reasons.append("downstream_duplicate_assessment.json is required before Odollo write pilot")
+        else:
+            duplicate_state = str(downstream_duplicate.get("state") or "missing")
+            resolution_decision = str(duplicate_resolution.get("decision") or "").strip()
+            if duplicate_state != "no_match" and (not resolution_decision or resolution_decision == "noop"):
+                blocked_reasons.append(f"downstream duplicate state {duplicate_state} must be resolved before Odollo write pilot")
+        return {
+            "schema": "business-card-watchdog.odollo-write-pilot-boundary.v1",
+            "state": "ready" if not blocked_reasons else "blocked",
+            "tenant": tenant,
+            "target_context": target_context,
+            "tenant_readiness": tenant_readiness,
+            "blocked_reasons": blocked_reasons,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
 
     def _enforce_downstream_duplicate_write_gate(self, artifact_dir: Path) -> None:
         assessment = _read_json_file(artifact_dir / "downstream_duplicate_assessment.json")

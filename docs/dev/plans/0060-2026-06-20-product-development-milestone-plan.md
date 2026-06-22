@@ -373,16 +373,18 @@ Validation:
 
 ### Milestone 7 | Odollo SoyLei And SABER Routing
 
-Status: IN_PROGRESS. Providence-context route rules can now select the `odoo`
-sink with route-scoped Odollo tenant targets such as `soylei-prod` and
-`saber-prod` via Plan 0078. Dry-run sink plans, sink payloads, and duplicate
-lookup plans now carry the selected tenant target while preserving
-`sink.odollo_tenant` as a fallback. Read-only tenant readiness reports and
-duplicate lookup gate blockers are now present in Odoo lookup plans via Plan
-0079. Tenant route candidate state, selected target tenant references, and
-readiness blockers now persist into the contact store via Plan 0080. Remaining
-work should add selected-target/write-readback pilot boundaries for Odollo
-routes.
+Status: COMPLETE_FOR_CURRENT_SCOPE. Providence-context route rules can now
+select the `odoo` sink with route-scoped Odollo tenant targets such as
+`soylei-prod` and `saber-prod` via Plan 0078. Dry-run sink plans, sink
+payloads, and duplicate lookup plans now carry the selected tenant target while
+preserving `sink.odollo_tenant` as a fallback. Read-only tenant readiness
+reports and duplicate lookup gate blockers are now present in Odoo lookup plans
+via Plan 0079. Tenant route candidate state, selected target tenant references,
+and readiness blockers now persist into the contact store via Plan 0080.
+Selected-target/write-readback pilot boundaries now use the route-selected
+tenant and block Odollo write pilots until selected lookup and duplicate
+evidence are clear via Plan 0081. Continue with Milestone 8 contact review
+surface work.
 
 Goal-compatible objective:
 

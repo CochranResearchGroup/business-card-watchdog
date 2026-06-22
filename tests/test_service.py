@@ -3059,6 +3059,136 @@ def test_service_apply_pilot_readiness_can_scope_to_selected_sink(tmp_path: Path
     assert "readback_adapter_available_after_apply" in payload["live_missing_requirements"]
 
 
+def test_service_odollo_live_lookup_uses_route_selected_tenant(tmp_path: Path, monkeypatch) -> None:
+    odollo_home = tmp_path / "odollo"
+    tenant_home = odollo_home / "tenants" / "saber-prod"
+    (tenant_home / "resources").mkdir(parents=True)
+    (tenant_home / "artifacts").mkdir()
+    (tenant_home / "actions.ndjson").write_text("", encoding="utf-8")
+    (odollo_home / "odollo.yml").write_text("profiles: {}\n", encoding="utf-8")
+    (odollo_home / "saber-prod.sqlite").write_text("", encoding="utf-8")
+    monkeypatch.setenv("ODOLLO_HOME", str(odollo_home))
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(odoo=True, dry_run=True),
+        routing_rules=[
+            {
+                "match": "email_domain",
+                "value": "*",
+                "sinks": ["odoo"],
+                "odollo_tenant": "saber-prod",
+            }
+        ],
+    )
+    run_id, job_id = make_recorded_run(config)
+    service = BusinessCardService(config)
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+        field_corrections={"full_name": "Ada Lovelace", "email": "ada@example.test"},
+    )
+    service.plan_sink_lookup_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
+
+    readiness = service.live_lookup_readiness_report(job_id=job_id, run_id=run_id, sink="odoo")
+
+    assert readiness["live_lookup_readiness"]["status"] == "ready"
+    assert readiness["live_lookup_readiness"]["details"]["tenant"] == "saber-prod"
+    assert readiness["selected_target_context"]["tenant"] == "saber-prod"
+    assert "selected_odollo_tenant_present" not in readiness["missing_requirements"]
+
+
+def test_service_odollo_selected_target_blocks_write_until_duplicate_evidence(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    odollo_home = tmp_path / "odollo"
+    tenant_home = odollo_home / "tenants" / "saber-prod"
+    (tenant_home / "resources").mkdir(parents=True)
+    (tenant_home / "artifacts").mkdir()
+    (tenant_home / "actions.ndjson").write_text("", encoding="utf-8")
+    (odollo_home / "odollo.yml").write_text("profiles: {}\n", encoding="utf-8")
+    (odollo_home / "saber-prod.sqlite").write_text("", encoding="utf-8")
+    monkeypatch.setenv("ODOLLO_HOME", str(odollo_home))
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        sink=SinkConfig(odoo=True, dry_run=True),
+        routing_rules=[
+            {
+                "match": "email_domain",
+                "value": "*",
+                "sinks": ["odoo"],
+                "odollo_tenant": "saber-prod",
+            }
+        ],
+    )
+    run_id, job_id = make_recorded_run(config)
+    calls: list[dict[str, object]] = []
+
+    def execute(request: dict[str, object]) -> dict[str, object]:
+        calls.append(request)
+        return {
+            "sink": "odoo",
+            "status": "live_write_completed",
+            "network_calls_made": 1,
+            "writes_attempted": 1,
+            "write": {"sink": "odoo", "resource_id": "odoo/res.partner/42"},
+        }
+
+    service = BusinessCardService(config, sink_write_executor=execute)
+    service.submit_review(
+        job_id=job_id,
+        run_id=run_id,
+        reviewer="tester",
+        action="approve_for_routing",
+        field_corrections={"full_name": "Ada Lovelace", "email": "ada@example.test"},
+    )
+    service.plan_sink_lookup_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="lookup")
+    service.plan_sinks_for_job(job_id=job_id, run_id=run_id)
+    service.build_sink_adapter_request_for_job(job_id=job_id, run_id=run_id, phase="write")
+    service.preflight_sink_apply(job_id=job_id, run_id=run_id)
+    service.decide_sink_apply(job_id=job_id, run_id=run_id, decision="approve", reviewer="tester")
+    selected = service.select_live_target_for_job(
+        job_id=job_id,
+        run_id=run_id,
+        sink="odoo",
+        operator="tester",
+        scope="all",
+        safety_confirmation="fixture contact is safe for saber tenant write pilot",
+    )
+
+    write_packet = service.selected_write_pilot_execution_packet_from_response(
+        run_id=run_id,
+        response=(
+            f"run_id={run_id} job_id={job_id} sink=odoo operator=tester scope=all "
+            "safety_confirmation=saber tenant profile account confirmed"
+        ),
+    )
+
+    assert selected["target"]["target"]["tenant"] == "saber-prod"
+    assert write_packet["state"] == "blocked"
+    assert write_packet["odollo_write_boundary"]["state"] == "blocked"
+    assert "selected_lookup_smoke.json is required before Odollo write pilot" in write_packet["blocked_reasons"]
+    try:
+        service.execute_sink_write_pilot_for_job(
+            job_id=job_id,
+            run_id=run_id,
+            sink="odoo",
+            approved_by="tester",
+            simulate=False,
+        )
+    except ValueError as exc:
+        assert "Odollo write pilot boundary blocked" in str(exc)
+    else:
+        raise AssertionError("expected Odollo write pilot to require duplicate evidence")
+    assert calls == []
+
+
 def test_service_write_pilot_uses_injected_executor(tmp_path: Path) -> None:
     config = AppConfig(
         config_path=tmp_path / "config.toml",

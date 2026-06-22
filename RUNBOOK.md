@@ -7003,6 +7003,45 @@ Safety:
   SyncThing/private watch inputs, create selected-live-target artifacts, or
   enable live sink writes.
 
+## Turn 292 | 2026-06-22
+
+Executed Plan 0081 as the Plan 0060 Milestone 7 selected-target/write-readback
+pilot-boundary slice.
+
+Implemented:
+
+- Added selected sink target-context extraction from job route artifacts.
+- Updated live lookup readiness to use the route-selected Odollo tenant target.
+- Persisted selected Odollo tenant context in `selected_live_target.json`.
+- Added an Odollo write-pilot boundary requiring tenant readiness, selected
+  lookup smoke evidence, and downstream duplicate clearance.
+- Enforced that boundary for non-simulated Odollo write pilots and surfaced it
+  in selected write-pilot execution packets.
+- Marked Plan 0060 Milestone 7 complete for the current no-broad-live-write
+  scope.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_odollo_live_lookup_uses_route_selected_tenant tests/test_service.py::test_service_odollo_selected_target_blocks_write_until_duplicate_evidence -q`
+  passed with 2 tests.
+- `.venv/bin/python -m pytest tests/test_service.py::test_service_apply_pilot_readiness_can_scope_to_selected_sink tests/test_service.py::test_service_write_pilot_uses_injected_executor tests/test_service.py::test_service_readback_pilot_writes_simulated_evidence tests/test_service.py::test_service_select_live_target_requires_abandonment_before_replacement tests/test_service.py::test_service_odollo_live_lookup_uses_route_selected_tenant tests/test_service.py::test_service_odollo_selected_target_blocks_write_until_duplicate_evidence -q`
+  passed with 6 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py tests/test_service.py`
+  passed.
+- `git diff --check` passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `.venv/bin/ruff check .` passed.
+- `.venv/bin/python -m pytest -q` passed with 385 tests.
+- `codegraph sync /home/ecochran76/workspace.local/business-card-watchdog && codegraph status /home/ecochran76/workspace.local/business-card-watchdog`
+  reported the index up to date with 60 files, 2,018 nodes, and 2,110 edges.
+
+Safety:
+
+- This slice did not run live Odollo/Odoo lookup, write, or readback. It did
+  not inspect tenant-private runtime artifacts, process configured
+  SyncThing/private watch inputs, create selected-live-target artifacts outside
+  synthetic test runs, or enable broad live sink writes.
+
 ## Turn 291 | 2026-06-22
 
 Executed Plan 0080 as the next Plan 0060 Milestone 7 contact-store persistence
