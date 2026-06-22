@@ -99,6 +99,16 @@ def create_app(config_path: Path | None = None):
         field_corrections: dict[str, object] = Field(default_factory=dict)
         reason: str = ""
 
+    class ContactRouteOverrideRequest(BaseModel):
+        operator: str = "operator"
+        selected_sinks: list[str]
+        selected_sink_state: str = "dry_run"
+        selected_target_profile: str = ""
+        selected_target_tenant: str = ""
+        route_candidate_state: str = "operator_overridden"
+        reason: str = ""
+        decision_id: str = ""
+
     class ContactRouteSelectionApprovalBoundaryRequest(BaseModel):
         operator: str = "operator"
         sink: str | None = None
@@ -1062,6 +1072,23 @@ def create_app(config_path: Path | None = None):
             operator=request.operator,
             field_corrections=dict(request.field_corrections),
             reason=request.reason,
+        )
+
+    @app.post("/contacts/{contact_id}/route-override")
+    def override_contact_route(
+        contact_id: str,
+        request: ContactRouteOverrideRequest = Body(...),
+    ) -> dict[str, object]:
+        return service().override_contact_route(
+            contact_id=contact_id,
+            operator=request.operator,
+            selected_sinks=list(request.selected_sinks),
+            selected_sink_state=request.selected_sink_state,
+            selected_target_profile=request.selected_target_profile,
+            selected_target_tenant=request.selected_target_tenant,
+            route_candidate_state=request.route_candidate_state,
+            reason=request.reason,
+            decision_id=request.decision_id,
         )
 
     @app.post("/contacts/{contact_id}/route-selection-approval-boundary")

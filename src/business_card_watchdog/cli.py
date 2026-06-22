@@ -3165,6 +3165,17 @@ def build_parser() -> argparse.ArgumentParser:
     contacts_field_correct.add_argument("--field-corrections-json", required=True)
     contacts_field_correct.add_argument("--reason", default="")
     contacts_field_correct.add_argument("--json", action="store_true")
+    contacts_route_override = contacts_sub.add_parser("route-override")
+    contacts_route_override.add_argument("contact_id")
+    contacts_route_override.add_argument("--operator", default="operator")
+    contacts_route_override.add_argument("--selected-sinks-json", required=True)
+    contacts_route_override.add_argument("--selected-sink-state", default="dry_run")
+    contacts_route_override.add_argument("--selected-target-profile", default="")
+    contacts_route_override.add_argument("--selected-target-tenant", default="")
+    contacts_route_override.add_argument("--route-candidate-state", default="operator_overridden")
+    contacts_route_override.add_argument("--decision-id", default="")
+    contacts_route_override.add_argument("--reason", default="")
+    contacts_route_override.add_argument("--json", action="store_true")
     contacts_review_recommend = contacts_sub.add_parser("review-recommend")
     contacts_review_recommend.add_argument("contact_id")
     contacts_review_recommend.add_argument("--source", default="app_intelligence")
@@ -3787,6 +3798,18 @@ def main(argv: list[str] | None = None) -> int:
                 field_corrections=json.loads(args.field_corrections_json),
                 reason=args.reason,
             )
+        elif args.contacts_command == "route-override":
+            payload = service.override_contact_route(
+                contact_id=args.contact_id,
+                operator=args.operator,
+                selected_sinks=list(json.loads(args.selected_sinks_json)),
+                selected_sink_state=args.selected_sink_state,
+                selected_target_profile=args.selected_target_profile,
+                selected_target_tenant=args.selected_target_tenant,
+                route_candidate_state=args.route_candidate_state,
+                decision_id=args.decision_id,
+                reason=args.reason,
+            )
         elif args.contacts_command == "review-recommend":
             payload = service.record_contact_review_recommendation(
                 contact_id=args.contact_id,
@@ -3846,6 +3869,7 @@ def main(argv: list[str] | None = None) -> int:
             print(_render_contact_review_surface_text(payload), end="")
         elif args.contacts_command in {
             "field-correct",
+            "route-override",
             "review-recommend",
             "review-states",
             "review-decide",

@@ -519,6 +519,28 @@ def tool_manifest() -> dict[str, object]:
                 },
             },
             {
+                "name": "business_card_watchdog_contact_route_override",
+                "description": "Apply an audited operator override to a projected contact route decision without running live sinks.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "contact_id": {"type": "string"},
+                        "operator": {"type": "string", "default": "operator"},
+                        "selected_sinks": {
+                            "type": "array",
+                            "items": {"type": "string", "enum": ["google_contacts", "odoo"]},
+                        },
+                        "selected_sink_state": {"type": "string", "default": "dry_run"},
+                        "selected_target_profile": {"type": "string"},
+                        "selected_target_tenant": {"type": "string"},
+                        "route_candidate_state": {"type": "string", "default": "operator_overridden"},
+                        "decision_id": {"type": "string"},
+                        "reason": {"type": "string"},
+                    },
+                    "required": ["contact_id", "selected_sinks"],
+                },
+            },
+            {
                 "name": "business_card_watchdog_contact_route_selection_approval_boundary",
                 "description": (
                     "Build a no-live selected-target approval boundary from a projected contact's stored route decision."
@@ -1739,6 +1761,18 @@ def call_tool(
             contact_id=str(args["contact_id"]),
             operator=str(args.get("operator") or "operator"),
             field_corrections=dict(args.get("field_corrections") or {}),
+            reason=str(args.get("reason") or ""),
+        )
+    if tool_name == "business_card_watchdog_contact_route_override":
+        return service.override_contact_route(
+            contact_id=str(args["contact_id"]),
+            operator=str(args.get("operator") or "operator"),
+            selected_sinks=[str(sink) for sink in list(args.get("selected_sinks") or [])],
+            selected_sink_state=str(args.get("selected_sink_state") or "dry_run"),
+            selected_target_profile=str(args.get("selected_target_profile") or ""),
+            selected_target_tenant=str(args.get("selected_target_tenant") or ""),
+            route_candidate_state=str(args.get("route_candidate_state") or "operator_overridden"),
+            decision_id=str(args.get("decision_id") or ""),
             reason=str(args.get("reason") or ""),
         )
     if tool_name == "business_card_watchdog_contact_route_selection_approval_boundary":

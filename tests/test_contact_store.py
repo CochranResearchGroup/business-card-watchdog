@@ -458,6 +458,39 @@ def test_contact_field_corrections_are_audited(tmp_path: Path) -> None:
     assert surface["rows"][0]["mutation_audit"][0]["operator"] == "operator"
 
 
+def test_contact_route_override_is_audited(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    run_id, _job_id = _write_recorded_contact_run(config)
+    service = BusinessCardService(config)
+    service.project_contacts_from_run(run_id)
+    contact_id = service.list_contacts()["contacts"][0]["contact_id"]
+
+    override = service.override_contact_route(
+        contact_id=contact_id,
+        operator="operator",
+        selected_sinks=["odoo"],
+        selected_sink_state="dry_run",
+        selected_target_tenant="saber-prod",
+        reason="Providence card should route to SABER",
+    )
+    route = override["contact"]["routing_decisions"][0]
+    surface = service.contact_review_surface(contact_id=contact_id)
+
+    assert override["schema"] == "business-card-watchdog.contact-route-override.v1"
+    assert override["writes_attempted"] == 0
+    assert override["network_calls_made"] == 0
+    assert override["mutation"]["action"] == "route_override"
+    assert override["mutation"]["operator"] == "operator"
+    assert override["mutation"]["payload"]["previous_values"]["selected_sinks"] == ["google_contacts"]
+    assert override["mutation"]["payload"]["new_values"]["selected_sinks"] == ["odoo"]
+    assert route["selected_sinks"] == ["odoo"]
+    assert route["selected_target_tenant"] == "saber-prod"
+    assert route["route_candidate_state"] == "operator_overridden"
+    assert route["readiness_blockers"] == []
+    assert surface["rows"][0]["route_candidates"][0]["selected_sinks"] == ["odoo"]
+    assert surface["rows"][0]["counts"]["mutations"] == 1
+
+
 def test_contact_review_safe_loop_only_rejects_explicit_safe_rejections(tmp_path: Path) -> None:
     config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
     run_id, _job_id = _write_recorded_contact_run(config)
@@ -554,6 +587,32 @@ def test_contacts_cli_json_surfaces(tmp_path: Path, capsys) -> None:
     assert review_surface["schema"] == "business-card-watchdog.contact-review-surface.v1"
     assert review_surface["rows"][0]["display_name"] == "Augusta Ada Lovelace"
     assert review_surface["rows"][0]["counts"]["mutations"] == 1
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "contacts",
+                "route-override",
+                contact_id,
+                "--operator",
+                "cli-test",
+                "--selected-sinks-json",
+                '["odoo"]',
+                "--selected-target-tenant",
+                "saber-prod",
+                "--reason",
+                "Providence card should route to SABER",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    route_override = json.loads(capsys.readouterr().out)
+    assert route_override["schema"] == "business-card-watchdog.contact-route-override.v1"
+    assert route_override["mutation"]["operator"] == "cli-test"
+    assert route_override["contact"]["routing_decisions"][0]["selected_sinks"] == ["odoo"]
 
     assert (
         main(

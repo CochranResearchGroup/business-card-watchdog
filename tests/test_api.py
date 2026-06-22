@@ -2696,6 +2696,15 @@ def test_api_contact_review_state_safe_loop_parity(tmp_path: Path) -> None:
             "reason": "verified by operator",
         },
     ).json()
+    route_override = client.post(
+        f"/contacts/{contact_id}/route-override",
+        json={
+            "operator": "api-test",
+            "selected_sinks": ["odoo"],
+            "selected_target_tenant": "saber-prod",
+            "reason": "Providence card should route to SABER",
+        },
+    ).json()
     review_surface = client.get(
         "/contacts/review-surface",
         params={"contact_id": contact_id},
@@ -2712,9 +2721,12 @@ def test_api_contact_review_state_safe_loop_parity(tmp_path: Path) -> None:
     assert safe_loop["schema"] == "business-card-watchdog.contact-review-safe-loop.v1"
     assert field_correction["schema"] == "business-card-watchdog.contact-field-correction.v1"
     assert field_correction["mutation"]["operator"] == "api-test"
+    assert route_override["schema"] == "business-card-watchdog.contact-route-override.v1"
+    assert route_override["mutation"]["operator"] == "api-test"
+    assert route_override["contact"]["routing_decisions"][0]["selected_sinks"] == ["odoo"]
     assert review_surface["schema"] == "business-card-watchdog.contact-review-surface.v1"
     assert review_surface["rows"][0]["display_name"] == "Augusta Ada Lovelace"
-    assert review_surface["rows"][0]["counts"]["mutations"] == 1
+    assert review_surface["rows"][0]["counts"]["mutations"] == 2
     assert safe_loop["action_count"] == 1
     assert safe_loop["actions"][0]["status"] == "executed"
     assert safe_loop["actions"][0]["decision"] == "reject"

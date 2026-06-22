@@ -423,9 +423,10 @@ Validation:
 
 Status: IN_PROGRESS. Database-backed contact review surface summaries and
 audited normalized field-correction mutations are available through service,
-API, CLI, and MCP via Plan 0082. Remaining work should add route override, crop
-decision, enrichment merge, and sink approval mutations before considering a
-local HTML review surface.
+API, CLI, and MCP via Plan 0082. Audited route override mutations are available
+through service, API, CLI, and MCP via Plan 0083. Remaining work should add
+crop decision, enrichment merge, and sink approval mutations before considering
+a local HTML review surface.
 
 Goal-compatible objective:
 

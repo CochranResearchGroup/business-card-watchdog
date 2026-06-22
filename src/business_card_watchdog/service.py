@@ -527,6 +527,40 @@ class BusinessCardService:
             "network_calls_made": 0,
         }
 
+    def override_contact_route(
+        self,
+        *,
+        contact_id: str,
+        operator: str,
+        selected_sinks: list[str],
+        selected_sink_state: str = "dry_run",
+        selected_target_profile: str = "",
+        selected_target_tenant: str = "",
+        route_candidate_state: str = "operator_overridden",
+        reason: str = "",
+        decision_id: str = "",
+    ) -> dict[str, Any]:
+        store = ContactStore.from_config(self.config)
+        result = store.override_route(
+            contact_id=contact_id,
+            operator=operator,
+            selected_sinks=selected_sinks,
+            selected_sink_state=selected_sink_state,
+            selected_target_profile=selected_target_profile,
+            selected_target_tenant=selected_target_tenant,
+            route_candidate_state=route_candidate_state,
+            reason=reason,
+            decision_id=decision_id,
+        )
+        return {
+            "schema": "business-card-watchdog.contact-route-override.v1",
+            "store": store.status(),
+            "contact": result["contact"],
+            "mutation": result["mutation"],
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+
     def record_contact_review_recommendation(
         self,
         *,

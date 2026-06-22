@@ -306,6 +306,140 @@ class ContactStore:
             raise KeyError(f"contact mutation not found: {mutation_id}")
         return _row_with_payload(row)
 
+    def override_route(
+        self,
+        *,
+        contact_id: str,
+        operator: str,
+        selected_sinks: list[str],
+        selected_sink_state: str = "dry_run",
+        selected_target_profile: str = "",
+        selected_target_tenant: str = "",
+        route_candidate_state: str = "operator_overridden",
+        reason: str = "",
+        decision_id: str = "",
+    ) -> dict[str, Any]:
+        if not operator.strip():
+            raise ValueError("contact route override requires an operator")
+        normalized_sinks = sorted({str(sink).strip() for sink in selected_sinks if str(sink).strip()})
+        invalid_sinks = [sink for sink in normalized_sinks if sink not in {"google_contacts", "odoo"}]
+        if invalid_sinks:
+            raise ValueError(f"unsupported route override sinks: {', '.join(invalid_sinks)}")
+        if not normalized_sinks:
+            raise ValueError("contact route override requires at least one selected sink")
+        contact = self.get_contact(contact_id)
+        routing_decisions = [
+            row
+            for row in list(contact.get("routing_decisions") or [])
+            if isinstance(row, dict)
+            and (not decision_id or str(row.get("decision_id") or "") == decision_id)
+        ]
+        if not routing_decisions:
+            raise KeyError(f"routing decision not found for contact: {contact_id}")
+        current = routing_decisions[-1]
+        decision_id = str(current.get("decision_id") or decision_id)
+        previous_values = _route_override_snapshot(current)
+        new_values = {
+            "selected_sinks": normalized_sinks,
+            "selected_sink_state": selected_sink_state,
+            "selected_target_profile": selected_target_profile.strip(),
+            "selected_target_tenant": selected_target_tenant.strip(),
+            "route_candidate_state": route_candidate_state,
+            "readiness_blockers": [],
+            "state": "ready_to_route",
+        }
+        now = utc_now()
+        mutation_id = _stable_id(
+            "mutation",
+            contact_id,
+            operator,
+            "route_override",
+            decision_id,
+            _json_dump_value(new_values),
+            now,
+        )
+        payload = dict(current.get("payload") or {})
+        payload.setdefault("review_mutations", []).append(
+            {
+                "mutation_id": mutation_id,
+                "action": "route_override",
+                "operator": operator,
+                "reason": reason,
+                "previous_values": previous_values,
+                "new_values": new_values,
+                "created_at": now,
+            }
+        )
+        payload["route_override"] = {
+            "mutation_id": mutation_id,
+            "operator": operator,
+            "reason": reason,
+            "previous_values": previous_values,
+            "new_values": new_values,
+            "created_at": now,
+        }
+        mutation_payload = {
+            "action": "route_override",
+            "operator": operator,
+            "reason": reason,
+            "decision_id": decision_id,
+            "previous_values": previous_values,
+            "new_values": new_values,
+        }
+        with self._connect() as conn:
+            self._migrate(conn)
+            conn.execute(
+                """
+                INSERT INTO contact_mutations (
+                    mutation_id, contact_id, action, operator, previous_json,
+                    new_json, payload_json, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    mutation_id,
+                    contact_id,
+                    "route_override",
+                    operator,
+                    _json_dump_value(previous_values),
+                    _json_dump_value(new_values),
+                    _json_dumps(mutation_payload),
+                    now,
+                    now,
+                ),
+            )
+            conn.execute(
+                """
+                UPDATE routing_decisions
+                SET state = ?,
+                    tenant = ?,
+                    selected_sinks_json = ?,
+                    selected_sink_state = ?,
+                    selected_target_profile = ?,
+                    selected_target_tenant = ?,
+                    route_candidate_state = ?,
+                    readiness_blockers_json = ?,
+                    payload_json = ?,
+                    updated_at = ?
+                WHERE decision_id = ? AND contact_id = ?
+                """,
+                (
+                    new_values["state"],
+                    ",".join(normalized_sinks),
+                    _json_dump_value(normalized_sinks),
+                    selected_sink_state,
+                    selected_target_profile.strip(),
+                    selected_target_tenant.strip(),
+                    route_candidate_state,
+                    _json_dump_value([]),
+                    _json_dumps(payload),
+                    now,
+                    decision_id,
+                    contact_id,
+                ),
+            )
+        return {"mutation": self.get_mutation(mutation_id), "contact": self.get_contact(contact_id)}
+
     def record_review_recommendation(
         self,
         *,
@@ -1156,6 +1290,19 @@ def _row_with_payload(row: sqlite3.Row) -> dict[str, Any]:
     if "readiness_blockers_json" in payload:
         payload["readiness_blockers"] = _json_load_list(str(payload.pop("readiness_blockers_json") or "[]"))
     return payload
+
+
+def _route_override_snapshot(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "decision_id": row.get("decision_id"),
+        "state": row.get("state"),
+        "selected_sinks": list(row.get("selected_sinks") or []),
+        "selected_sink_state": row.get("selected_sink_state"),
+        "selected_target_profile": row.get("selected_target_profile"),
+        "selected_target_tenant": row.get("selected_target_tenant"),
+        "route_candidate_state": row.get("route_candidate_state"),
+        "readiness_blockers": list(row.get("readiness_blockers") or []),
+    }
 
 
 def _ensure_columns(conn: sqlite3.Connection, table: str, columns: dict[str, str]) -> None:
