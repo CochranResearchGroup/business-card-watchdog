@@ -7496,6 +7496,50 @@ Safety:
   enrichment, run live lookup/write/readback, or commit private card images/OCR
   dumps.
 
+## Turn 306 | 2026-06-22
+
+Continued Plan 0060 Milestone 9 after the first bounded scanner source proved
+to be non-card documents.
+
+Executed:
+
+- Stopped a broad practice-corpus manifest scan after it proved too slow for the
+  interactive continuation.
+- Confirmed the focused scanner sequence at `2026_06_20_11_21_*.pdf` contains
+  eight PDFs and 14 pages total.
+- Built a cache-local practice batch directory containing only that scanner
+  sequence.
+- Ran a dry-run batch over the focused practice sequence with one worker.
+- Ran dry-run closeout, dry-run review handoff, contact projection, route
+  readiness, and contact review-surface inspection for the resulting run.
+- Published a Previews HTML review packet with the 2 reviewable jobs, copied
+  source/crop images, extracted field table, side classification, and quality
+  state.
+
+Runtime evidence:
+
+- Focused practice run id: `2026-06-22T22-36-20+00-00`.
+- The run completed in dry-run mode with 14 jobs: 12 failed prefilter jobs and
+  2 `needs_review` jobs.
+- Dry-run closeout returned `ready_for_review_and_routing` with writes/network
+  `0/0`.
+- Dry-run review handoff returned `ready_for_operator_review` with
+  `needs_review_count = 2` and `failed_count = 12`.
+- Contact projection wrote 2 projected contacts and 32 projected assets with
+  writes/network `0/0`.
+- Review-route readiness returned `operator_review_required` with
+  `needs_review = 2`, `route_ready = 0`, and writes/network `0/0`.
+- Previews review URL:
+  `https://previews.ecochran.dyndns.org/a/566ed9b788ff`.
+
+Safety:
+
+- This slice processed only the cache-local symlink batch for the intended
+  2026-06-20 scanner sequence. It did not process the full scanner backlog,
+  create `selected_live_target.json`, run public-web search, call paid
+  enrichment, run live lookup/write/readback, or commit private card images/OCR
+  dumps.
+
 ## Turn 291 | 2026-06-22
 
 Executed Plan 0080 as the next Plan 0060 Milestone 7 contact-store persistence
