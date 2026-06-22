@@ -7332,6 +7332,46 @@ Safety:
   `selected_live_target.json`, run public-web search, call paid enrichment, run
   live lookup/write/readback, or expose private image bytes.
 
+## Turn 302 | 2026-06-22
+
+Executed Plan 0090 as the Plan 0060 Milestone 9 dry-run selection handoff
+slice.
+
+Implemented:
+
+- Recorded the no-live bridge from an empty contact store to an
+  operator-selected dry-run batch.
+- Confirmed the watched-folder backlog is settled and ready for operator
+  response, but command-copy text remains withheld until explicit response
+  validation and acknowledgement.
+- Confirmed dry-run handoff entries exist for `$fsr:sync_phone` and
+  `$fsr:scanner`.
+- Confirmed the practice corpus manifest remains user-scoped runtime state and
+  is not committed because it can include private filenames.
+- Updated Plan 0060 and ROADMAP so Milestone 9 waits for operator-selected
+  dry-run processing before contact projection, review, and live target
+  selection.
+
+Validation:
+
+- `.venv/bin/python -m business_card_watchdog.cli watch-dry-run-readiness --json`
+  returned `state = "ready_for_operator_response"` with 1,833 settled backlog
+  items, zero files processed, zero OCR attempts, zero writes, and zero network
+  calls.
+- `.venv/bin/python -m business_card_watchdog.cli watch-dry-run-selection-handoff --json`
+  returned `state = "awaiting_operator_response"` and wrote
+  `~/.local/share/business-card-watchdog/watch_dry_run_selection_handoff.json`.
+- `.venv/bin/python -m business_card_watchdog.cli watch-practice-corpus-manifest --json`
+  refreshed `~/.local/share/business-card-watchdog/practice_corpus_manifest.json`
+  with zero OCR attempts, zero PDF rasterization, zero crop creation, zero
+  writes, and zero network calls.
+
+Safety:
+
+- This slice did not process configured private watched files, run OCR, rasterize
+  PDFs, create crops, create `selected_live_target.json`, run enrichment, run
+  live lookup/write/readback, or commit runtime manifests/private filenames.
+
 ## Turn 291 | 2026-06-22
 
 Executed Plan 0080 as the next Plan 0060 Milestone 7 contact-store persistence
