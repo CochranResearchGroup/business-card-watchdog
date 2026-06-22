@@ -3154,6 +3154,11 @@ def build_parser() -> argparse.ArgumentParser:
     contacts_review_decide.add_argument("--decision", choices=["accept", "reject"], required=True)
     contacts_review_decide.add_argument("--notes", default="")
     contacts_review_decide.add_argument("--json", action="store_true")
+    contacts_review_safe_loop = contacts_sub.add_parser("review-safe-loop")
+    contacts_review_safe_loop.add_argument("--limit", type=int, default=10)
+    contacts_review_safe_loop.add_argument("--reviewer", default="safe-loop")
+    contacts_review_safe_loop.add_argument("--apply", action="store_true")
+    contacts_review_safe_loop.add_argument("--json", action="store_true")
     contacts_project_run = contacts_sub.add_parser("project-run")
     contacts_project_run.add_argument("run_id")
     contacts_project_run.add_argument("--json", action="store_true")
@@ -3749,6 +3754,12 @@ def main(argv: list[str] | None = None) -> int:
                 decision=args.decision,
                 notes=args.notes,
             )
+        elif args.contacts_command == "review-safe-loop":
+            payload = service.run_contact_review_safe_loop(
+                limit=args.limit,
+                reviewer=args.reviewer,
+                apply=args.apply,
+            )
         elif args.contacts_command == "project-run":
             payload = service.project_contacts_from_run(args.run_id)
         else:
@@ -3759,7 +3770,7 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(payload, indent=2), end="")
         elif args.contacts_command == "list":
             print(_render_contacts_list_text(payload), end="")
-        elif args.contacts_command in {"review-recommend", "review-states", "review-decide"}:
+        elif args.contacts_command in {"review-recommend", "review-states", "review-decide", "review-safe-loop"}:
             print(json.dumps(payload, indent=2), end="")
         else:
             print(_render_contact_detail_text(payload), end="")

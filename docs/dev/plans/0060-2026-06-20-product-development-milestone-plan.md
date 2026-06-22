@@ -247,9 +247,10 @@ Validation:
 ### Milestone 4 | App Intelligence Quality Review State
 
 Status: IN_PROGRESS. Contact-row App Intelligence review recommendations and
-host-owned accept/reject decisions are database-backed via Plan 0070. Remaining
-work should add bounded safe-loop behavior over those contact review states and
-expand API/MCP parity where needed.
+host-owned accept/reject decisions are database-backed via Plan 0070. Bounded
+safe-loop behavior over contact review states is complete via Plan 0071.
+Remaining work should expand API/MCP parity where needed and continue toward
+enrichment provider contracts.
 
 Goal-compatible objective:
 

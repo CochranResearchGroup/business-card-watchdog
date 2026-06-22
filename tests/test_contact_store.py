@@ -163,6 +163,51 @@ def test_contact_review_recommendations_are_host_decided(tmp_path: Path) -> None
     assert detail["review_states"][0]["state"] == "rejected"
 
 
+def test_contact_review_safe_loop_only_rejects_explicit_safe_rejections(tmp_path: Path) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    run_id, _job_id = _write_recorded_contact_run(config)
+    service = BusinessCardService(config)
+    service.project_contacts_from_run(run_id)
+    contact_id = service.list_contacts()["contacts"][0]["contact_id"]
+    safe = service.record_contact_review_recommendation(
+        contact_id=contact_id,
+        source="app_intelligence",
+        category="route_readiness",
+        recommendation="ignore_low_value_hint",
+        rationale="recommendation duplicates existing route state",
+        confidence=0.91,
+        evidence={"safe_to_auto_continue": True, "safe_auto_decision": "reject"},
+    )["review_state"]
+    unsafe = service.record_contact_review_recommendation(
+        contact_id=contact_id,
+        source="app_intelligence",
+        category="enrichment_need",
+        recommendation="request_public_web_enrichment",
+        rationale="could improve organization confidence",
+        confidence=0.64,
+        evidence={"safe_to_auto_continue": True, "safe_auto_decision": "accept"},
+    )["review_state"]
+
+    preview = service.run_contact_review_safe_loop(limit=10, reviewer="tester", apply=False)
+    after_preview = service.list_contact_review_states(state="proposed")
+    applied = service.run_contact_review_safe_loop(limit=10, reviewer="tester", apply=True)
+    final_states = service.list_contact_review_states(state="all")["review_states"]
+    states_by_id = {row["review_state_id"]: row for row in final_states}
+
+    assert preview["apply"] is False
+    assert preview["action_count"] == 1
+    assert preview["actions"][0]["review_state_id"] == safe["review_state_id"]
+    assert preview["actions"][0]["status"] == "preview"
+    assert preview["skipped"][0]["review_state_id"] == unsafe["review_state_id"]
+    assert after_preview["count"] == 2
+    assert applied["apply"] is True
+    assert applied["action_count"] == 1
+    assert applied["actions"][0]["status"] == "executed"
+    assert states_by_id[safe["review_state_id"]]["state"] == "rejected"
+    assert states_by_id[safe["review_state_id"]]["decided_by"] == "tester"
+    assert states_by_id[unsafe["review_state_id"]]["state"] == "proposed"
+
+
 def test_contacts_cli_json_surfaces(tmp_path: Path, capsys) -> None:
     config_path = tmp_path / "config.toml"
     data_dir = tmp_path / "data"
@@ -255,6 +300,48 @@ def test_contacts_cli_json_surfaces(tmp_path: Path, capsys) -> None:
     decision = json.loads(capsys.readouterr().out)
     assert decision["review_state"]["state"] == "accepted"
     assert decision["review_state"]["payload"]["decision"]["notes"] == "confirmed"
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "contacts",
+                "review-recommend",
+                contact_id,
+                "--category",
+                "route_readiness",
+                "--recommendation",
+                "ignore_low_value_hint",
+                "--evidence-json",
+                '{"safe_to_auto_continue":true,"safe_auto_decision":"reject"}',
+                "--json",
+            ]
+        )
+        == 0
+    )
+    json.loads(capsys.readouterr().out)
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "contacts",
+                "review-safe-loop",
+                "--limit",
+                "5",
+                "--reviewer",
+                "operator",
+                "--apply",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    safe_loop = json.loads(capsys.readouterr().out)
+    assert safe_loop["action_count"] == 1
+    assert safe_loop["actions"][0]["status"] == "executed"
 
     assert main(["--config", str(config_path), "contacts", "drift", run_id, "--json"]) == 0
     drift = json.loads(capsys.readouterr().out)

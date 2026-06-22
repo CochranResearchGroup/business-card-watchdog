@@ -6679,3 +6679,42 @@ Safety:
 - This slice did not run autonomous App Intelligence loops, mutate contact
   fields from model output, run enrichment providers, public-web search, live
   lookup/write/readback, Google Contacts writes, Odoo writes, or Odollo writes.
+
+## Turn 282 | 2026-06-22
+
+Executed Plan 0071 as the bounded contact review-state safe-loop slice under
+Plan 0060 Milestone 4.
+
+Implemented:
+
+- Added `docs/dev/plans/0071-2026-06-22-contact-review-safe-loop.md`.
+- Added a bounded safe-loop service method over proposed contact review states.
+- Previewed actions by default and applied decisions only when requested.
+- Limited automatic action to explicit safe auto-rejection evidence:
+  `safe_to_auto_continue=true` and `safe_auto_decision=reject`.
+- Preserved explicit operator control for recommendation acceptance.
+- Added `bcw contacts review-safe-loop` CLI JSON support.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_contact_store.py -q` passed with 5
+  tests.
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py tests/test_service.py tests/test_contact_store.py -q`
+  passed with 168 tests.
+- `.venv/bin/python -m pytest tests/test_api.py tests/test_mcp.py -q` passed
+  with 60 tests.
+- `.venv/bin/ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_contact_store.py`
+  passed.
+- `.venv/bin/ruff check .` passed.
+- `git diff --check` passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `.venv/bin/python -m pytest -q` passed with 357 tests.
+- `codegraph sync /home/ecochran76/workspace.local/business-card-watchdog && codegraph status /home/ecochran76/workspace.local/business-card-watchdog`
+  reported the index already up to date, 60 files, 1,928 nodes, and 2,562
+  edges.
+
+Safety:
+
+- This slice did not accept recommendations automatically, mutate contact
+  fields, run enrichment providers, public-web search, live lookup/write/readback,
+  Google Contacts writes, Odoo writes, or Odollo writes.

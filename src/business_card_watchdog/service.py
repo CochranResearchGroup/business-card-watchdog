@@ -558,6 +558,80 @@ class BusinessCardService:
             "network_calls_made": 0,
         }
 
+    def run_contact_review_safe_loop(
+        self,
+        *,
+        limit: int = 10,
+        reviewer: str = "safe-loop",
+        apply: bool = False,
+    ) -> dict[str, Any]:
+        store = ContactStore.from_config(self.config)
+        proposed = store.list_review_states(state="proposed", limit=max(0, limit))
+        actions: list[dict[str, Any]] = []
+        skipped: list[dict[str, Any]] = []
+        for review_state in proposed:
+            payload = review_state.get("payload") if isinstance(review_state.get("payload"), dict) else {}
+            evidence = payload.get("evidence") if isinstance(payload.get("evidence"), dict) else {}
+            review_state_id = str(review_state.get("review_state_id") or "")
+            safe_decision = str(evidence.get("safe_auto_decision") or "").strip()
+            safe_to_auto = bool(evidence.get("safe_to_auto_continue"))
+            if safe_to_auto and safe_decision == "reject":
+                action = {
+                    "review_state_id": review_state_id,
+                    "contact_id": review_state.get("contact_id"),
+                    "category": review_state.get("category"),
+                    "recommendation": review_state.get("recommendation"),
+                    "decision": "reject",
+                    "reason": "evidence explicitly marked rejection safe to auto-continue",
+                    "safe_to_auto_continue": True,
+                    "requires_explicit_operator_action": False,
+                }
+                if apply:
+                    decision = store.decide_review_state(
+                        review_state_id=review_state_id,
+                        reviewer=reviewer,
+                        decision="reject",
+                        notes="safe-loop auto-rejected recommendation marked safe_to_auto_continue",
+                    )
+                    action["result"] = decision
+                    action["status"] = "executed"
+                else:
+                    action["status"] = "preview"
+                actions.append(action)
+                continue
+            skipped.append(
+                {
+                    "review_state_id": review_state_id,
+                    "contact_id": review_state.get("contact_id"),
+                    "category": review_state.get("category"),
+                    "recommendation": review_state.get("recommendation"),
+                    "status": "skipped",
+                    "safe_to_auto_continue": False,
+                    "requires_explicit_operator_action": True,
+                    "skip_reason": (
+                        "contact review recommendations require explicit operator action unless "
+                        "evidence.safe_to_auto_continue is true and evidence.safe_auto_decision is reject"
+                    ),
+                }
+            )
+        return {
+            "schema": "business-card-watchdog.contact-review-safe-loop.v1",
+            "limit": limit,
+            "apply": apply,
+            "reviewer": reviewer,
+            "actions": actions,
+            "skipped": skipped,
+            "action_count": len(actions),
+            "skipped_count": len(skipped),
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "operator_stop_conditions": [
+                "The safe loop can only reject recommendations explicitly marked safe for auto-rejection.",
+                "Accepting recommendations requires contacts review-decide with an operator.",
+                "The safe loop must not mutate contact fields, run enrichment, perform web search, or write sinks.",
+            ],
+        }
+
     def project_contacts_from_run(self, run_id: str) -> dict[str, Any]:
         run_dir = self.config.runs_dir / run_id
         if not (run_dir / "run.json").exists():
