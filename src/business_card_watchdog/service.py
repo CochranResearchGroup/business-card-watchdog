@@ -46,6 +46,7 @@ from .operator_dashboard import build_operator_dashboard
 from .pilot_readiness import build_pilot_readiness_report
 from .practice_corpus import build_practice_corpus_manifest
 from .preclassifier import assess_business_card_candidate
+from .qr_evidence import redacted_qr_summary
 from .review import assess_contact_spec, build_review_submission, write_review_packet, write_review_submission
 from .review_route_packets import build_lookup_selection_packet, build_review_route_readiness
 from .routing import decide_sinks, selected_google_contacts_profile, selected_odollo_tenant
@@ -313,6 +314,7 @@ _ROUTE_REFRESH_STEPS = [
 _REVIEW_BUNDLE_ARTIFACT_KINDS = {
     "preclassification",
     "review_packet",
+    "qr_evidence",
     "contact_spec",
     "contact_candidate",
     "reviewed_contact",
@@ -1444,6 +1446,178 @@ class BusinessCardService:
                 },
             )
         return payload
+
+    def agent_review_loop(
+        self,
+        run_id: str,
+        *,
+        limit: int = 5,
+        dry_run: bool = True,
+        apply_safe: bool = False,
+        write: bool = True,
+    ) -> dict[str, Any]:
+        bundle = self.review_bundle(run_id=run_id, state="all", write=False)
+        review_notes = self._accepted_review_notes_by_job(run_id)
+        selected_entries = [
+            entry
+            for entry in list(bundle.get("entries") or [])
+            if isinstance(entry, dict)
+            and str(entry.get("state") or "") in {"needs_review", "failed"}
+        ][: max(0, limit)]
+        planned_actions: list[dict[str, Any]] = []
+        app_intelligence_requests: list[dict[str, Any]] = []
+        training_candidates: list[dict[str, Any]] = []
+        blocked_contacts: list[dict[str, Any]] = []
+        for entry in selected_entries:
+            job_id = str(entry.get("job_id") or "")
+            matrix = dict(entry.get("review_matrix") or {})
+            qr_summary = dict(matrix.get("qr_evidence") or {})
+            notes = review_notes.get(job_id, [])
+            reasons = _agent_review_reasons(qr_summary=qr_summary, review_notes=notes, entry=entry)
+            if qr_summary.get("qr_found"):
+                planned_actions.append(
+                    {
+                        "job_id": job_id,
+                        "action": "inspect_qr_evidence",
+                        "status": "planned" if dry_run or not apply_safe else "skipped_no_safe_apply_handler",
+                        "reason": "QR evidence is present; use payload type and side context before route readiness.",
+                        "qr_evidence": qr_summary,
+                    }
+                )
+            if _review_notes_request_orientation(notes):
+                app_intelligence_requests.append(
+                    _agent_review_request(
+                        job_id=job_id,
+                        request_type="resolve_orientation",
+                        reason="accepted review evidence says the card side has wrong orientation",
+                        qr_summary=qr_summary,
+                    )
+                )
+            if _review_notes_request_crop_quality(notes):
+                app_intelligence_requests.append(
+                    _agent_review_request(
+                        job_id=job_id,
+                        request_type="assess_crop_quality",
+                        reason="accepted review evidence says the crop is bad",
+                        qr_summary=qr_summary,
+                    )
+                )
+            if qr_summary.get("qr_found") or _review_notes_request_side_pairing(notes):
+                app_intelligence_requests.append(
+                    _agent_review_request(
+                        job_id=job_id,
+                        request_type="pair_card_sides",
+                        reason="QR/card-side evidence indicates this may be the back or QR-only side of a card",
+                        qr_summary=qr_summary,
+                    )
+                )
+            if notes:
+                training_candidates.append(
+                    {
+                        "job_id": job_id,
+                        "source": "accepted_contact_review_state",
+                        "categories": sorted({str(note.get("category") or "") for note in notes}),
+                        "recommendations": sorted({str(note.get("recommendation") or "") for note in notes}),
+                        "suggested_fixture": "qr_orientation_crop_side_pairing_case",
+                        "deterministic_rule_targets": [
+                            "qr_evidence",
+                            "orientation_normalization",
+                            "crop_quality",
+                            "scanner_side_pairing",
+                        ],
+                    }
+                )
+            blocked_contacts.append(
+                {
+                    "job_id": job_id,
+                    "state": entry.get("state"),
+                    "contact_source": matrix.get("contact_source"),
+                    "blocked_reasons": reasons,
+                    "next_action": (entry.get("next_action") or {}).get("action")
+                    if isinstance(entry.get("next_action"), dict)
+                    else None,
+                }
+            )
+        payload: dict[str, Any] = {
+            "schema": "business-card-watchdog.agent-review-loop.v1",
+            "generated_at": utc_now(),
+            "state": "planned" if dry_run else "safe_apply_noop" if apply_safe else "planned",
+            "run_id": run_id,
+            "limit": limit,
+            "dry_run": dry_run,
+            "apply_safe": apply_safe,
+            "selected_job_count": len(selected_entries),
+            "planned_action_count": len(planned_actions),
+            "planned_actions": planned_actions,
+            "deterministic_improvements": [
+                "qr_evidence_summary_available",
+                "agent_loop_identifies_qr_orientation_crop_side_pairing_blockers",
+            ],
+            "app_intelligence_request_count": len(app_intelligence_requests),
+            "app_intelligence_requests": app_intelligence_requests,
+            "training_candidate_count": len(training_candidates),
+            "training_candidates": training_candidates,
+            "blocked_contacts": blocked_contacts,
+            "applied_count": 0,
+            "applied": [],
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "live_sink_calls_made": False,
+            "public_web_search_used": False,
+            "paid_enrichment_used": False,
+            "runtime_artifact_written": False,
+            "agent_loop_path": None,
+            "commands": {
+                "dry_run": f"runs agent-review-loop {run_id} --limit {limit} --dry-run --json",
+                "apply_safe": f"runs agent-review-loop {run_id} --limit {limit} --apply-safe --json",
+                "review_bundle": f"reviews bundle --run-id {run_id} --state all --json",
+            },
+            "explicit_stop_conditions": [
+                "This loop may not run live lookup, live write, readback, public-web search, or paid enrichment.",
+                "App Intelligence requests are request artifacts and do not change route readiness by themselves.",
+                "Safe apply is a no-op until deterministic QR/orientation/crop/pair handlers have acceptance tests.",
+            ],
+        }
+        if write:
+            agent_loop_path = self.config.runs_dir / run_id / "agent_review_loop.json"
+            payload["runtime_artifact_written"] = True
+            payload["agent_loop_path"] = str(agent_loop_path)
+            agent_loop_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            ledger = RunLedger(self.config.runs_dir / run_id)
+            ledger.record_artifact(job_id="__run__", kind="agent_review_loop", path=agent_loop_path)
+            ledger.record_event(
+                "agent_review_loop_planned",
+                {
+                    "run_id": run_id,
+                    "selected_job_count": len(selected_entries),
+                    "planned_action_count": len(planned_actions),
+                    "app_intelligence_request_count": len(app_intelligence_requests),
+                    "training_candidate_count": len(training_candidates),
+                    "writes_attempted": 0,
+                    "network_calls_made": 0,
+                },
+            )
+        return payload
+
+    def _accepted_review_notes_by_job(self, run_id: str) -> dict[str, list[dict[str, Any]]]:
+        store = ContactStore.from_config(self.config)
+        try:
+            contacts = store.list_contacts(limit=10000)
+        except Exception:
+            return {}
+        by_job: dict[str, list[dict[str, Any]]] = {}
+        for contact_row in contacts:
+            if str(contact_row.get("source_run_id") or "") != run_id:
+                continue
+            try:
+                contact = store.get_contact(str(contact_row["contact_id"]))
+            except Exception:
+                continue
+            job_id = str(contact.get("source_job_id") or "")
+            for state in list(contact.get("review_states") or []):
+                if isinstance(state, dict) and state.get("state") == "accepted":
+                    by_job.setdefault(job_id, []).append(state)
+        return by_job
 
     def review_route_readiness(self, run_id: str, *, write: bool = True) -> dict[str, Any]:
         return build_review_route_readiness(
@@ -14294,6 +14468,7 @@ class BusinessCardService:
         sink_plan = (artifacts.get("sink_plan") or {}).get("payload") or {}
         sink_lookup = (artifacts.get("sink_lookup_result") or {}).get("payload") or {}
         route_refresh = (artifacts.get("route_refresh") or {}).get("payload") or {}
+        qr_summary = redacted_qr_summary((artifacts.get("qr_evidence") or {}).get("payload") or {})
         normalized = contact.get("normalized") if isinstance(contact.get("normalized"), dict) else {}
         review_warnings = [
             field
@@ -14330,6 +14505,7 @@ class BusinessCardService:
             },
             "normalization_warning_fields": review_warnings,
             "normalization_warning_count": len(review_warnings),
+            "qr_evidence": qr_summary,
             "duplicate_state": duplicate_state,
             "duplicate_match_count": _int(duplicate.get("match_count") or len(duplicate.get("matches") or [])),
             "enrichment_state": enrichment_state,
@@ -16086,6 +16262,7 @@ def _contact_review_surface_row(contact: dict[str, Any]) -> dict[str, Any]:
     review_states = list(contact.get("review_states") or [])
     routing_decisions = list(contact.get("routing_decisions") or [])
     assets = list(contact.get("assets") or [])
+    qr_evidence = _contact_qr_evidence_summary(assets)
     extraction_attempts = list(contact.get("extraction_attempts") or [])
     enrichment_attempts = list(contact.get("enrichment_attempts") or [])
     sink_attempts = list(contact.get("sink_attempts") or [])
@@ -16152,6 +16329,7 @@ def _contact_review_surface_row(contact: dict[str, Any]) -> dict[str, Any]:
             "proposed_review_states": len(proposed_reviews),
             "mutations": len(mutations),
         },
+        "qr_evidence": qr_evidence,
         "asset_refs": [
             {
                 "asset_id": asset.get("asset_id"),
@@ -16205,6 +16383,108 @@ def _contact_review_surface_row(contact: dict[str, Any]) -> dict[str, Any]:
             if isinstance(row, dict)
         ],
     }
+
+
+def _contact_qr_evidence_summary(assets: list[Any]) -> dict[str, Any]:
+    summaries: list[dict[str, Any]] = []
+    for asset in assets:
+        if not isinstance(asset, dict):
+            continue
+        if asset.get("asset_kind") != "qr_evidence":
+            continue
+        path = Path(str(asset.get("path_ref") or ""))
+        payload = _read_json_file(path) or {}
+        summary = redacted_qr_summary(payload)
+        summary["asset_id"] = asset.get("asset_id")
+        summary["path_ref"] = str(path)
+        summaries.append(summary)
+    return {
+        "asset_count": len(summaries),
+        "qr_found": any(bool(summary.get("qr_found")) for summary in summaries),
+        "decode_count": sum(_int(summary.get("decode_count")) for summary in summaries),
+        "payload_types": sorted(
+            {
+                str(payload_type)
+                for summary in summaries
+                for payload_type in list(summary.get("payload_types") or [])
+                if str(payload_type)
+            }
+        ),
+        "decoder_states": sorted({str(summary.get("decoder_state") or "unknown") for summary in summaries}),
+        "items": summaries,
+    }
+
+
+def _agent_review_reasons(
+    *,
+    qr_summary: dict[str, Any],
+    review_notes: list[dict[str, Any]],
+    entry: dict[str, Any],
+) -> list[str]:
+    reasons: list[str] = []
+    if qr_summary.get("qr_found"):
+        reasons.append("qr_evidence_present")
+    if _int(qr_summary.get("decode_count")) <= 0 and qr_summary.get("qr_found"):
+        reasons.append("qr_detected_not_decoded")
+    if _review_notes_request_orientation(review_notes):
+        reasons.append("orientation_needs_deterministic_resolution")
+    if _review_notes_request_crop_quality(review_notes):
+        reasons.append("crop_quality_needs_deterministic_assessment")
+    if _review_notes_request_side_pairing(review_notes):
+        reasons.append("front_back_side_pairing_required")
+    if not reasons:
+        next_action = entry.get("next_action") if isinstance(entry.get("next_action"), dict) else {}
+        reasons.append(str(next_action.get("reason") or "needs_review_without_agent_specific_blocker"))
+    return reasons
+
+
+def _agent_review_request(
+    *,
+    job_id: str,
+    request_type: str,
+    reason: str,
+    qr_summary: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "job_id": job_id,
+        "request_type": request_type,
+        "status": "planned",
+        "reason": reason,
+        "allowed_answer_shape": "evidence_only_no_state_transition",
+        "deterministic_evidence": {
+            "qr_evidence": qr_summary,
+        },
+        "writes_attempted": 0,
+        "network_calls_made": 0,
+    }
+
+
+def _review_notes_request_orientation(review_notes: list[dict[str, Any]]) -> bool:
+    return _review_notes_contain(review_notes, "orientation")
+
+
+def _review_notes_request_crop_quality(review_notes: list[dict[str, Any]]) -> bool:
+    return _review_notes_contain(review_notes, "crop")
+
+
+def _review_notes_request_side_pairing(review_notes: list[dict[str, Any]]) -> bool:
+    return _review_notes_contain(review_notes, "side") or _review_notes_contain(review_notes, "backside")
+
+
+def _review_notes_contain(review_notes: list[dict[str, Any]], needle: str) -> bool:
+    for note in review_notes:
+        if not isinstance(note, dict):
+            continue
+        haystack = " ".join(
+            str(note.get(field) or "")
+            for field in ("category", "recommendation", "rationale")
+        ).lower()
+        payload = note.get("payload")
+        if isinstance(payload, dict):
+            haystack += " " + json.dumps(payload, sort_keys=True).lower()
+        if needle in haystack:
+            return True
+    return False
 
 
 def _accepted_reject_not_card_review(contact: dict[str, Any]) -> dict[str, Any] | None:

@@ -1,5 +1,39 @@
 # Runbook
 
+## Turn 308 | 2026-06-23
+
+Executed Plan 0093 Slice 1 for the agent review loop.
+
+Implemented:
+
+- Added deterministic QR evidence artifacts for source images and candidate
+  crops.
+- Projected `qr_evidence` into the contact store and exposed redacted QR
+  summaries in review bundles and contact review surfaces.
+- Added `runs agent-review-loop <run-id> --limit <n> --dry-run --json` as a
+  no-live planner for QR side, orientation, crop, and side-pairing blockers.
+- Kept `--apply-safe` as a no-op boundary until deterministic handlers are
+  implemented and tested.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_qr_evidence.py tests/test_cli_surfaces.py::test_cli_runs_agent_review_loop_plans_qr_side_followup tests/test_preclassifier.py::test_orchestrator_records_multi_card_candidate_manifest -q`
+  passed with 4 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/qr_evidence.py src/business_card_watchdog/orchestrator.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_qr_evidence.py tests/test_cli_surfaces.py`
+  passed.
+- Focused scanner dry-run `2026-06-23T02-27-30+00-00` completed from the
+  cache-local 2026-06-20 scanner sequence with 14 jobs and 2 `needs_review`
+  jobs.
+- `runs agent-review-loop 2026-06-23T02-27-30+00-00 --limit 14 --dry-run --json`
+  planned 2 QR follow-ups and 2 App Intelligence request candidates with
+  `writes_attempted = 0` and `network_calls_made = 0`.
+
+Safety:
+
+- This slice did not run live Google/Odoo/Odollo lookup, write, or readback. It
+  did not run public-web search, paid enrichment, selected-target creation, or a
+  broad scanner backlog.
+
 ## Turn 1 | 2026-06-10
 
 Bootstrapped the repo as a product/runtime platform rather than a simple library. Installed local policy docs, package skeleton, deterministic batch ledger, config paths, business-card skill adapter, routing stubs, CLI/API/MCP surfaces, and initial tests.

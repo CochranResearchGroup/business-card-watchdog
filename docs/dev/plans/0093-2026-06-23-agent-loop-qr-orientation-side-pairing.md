@@ -1,6 +1,6 @@
 # Plan 0093 | Agent Loop QR Orientation And Side Pairing
 
-State: READY
+State: IN_PROGRESS
 Date: 2026-06-23
 
 Parent: Plan 0060 Milestone 9
@@ -305,3 +305,45 @@ Start with Milestone 1 plus the smallest part of Milestone 6:
 - Add `agent-review-loop --dry-run` planning output that can recognize QR-only
   side/crop/orientation blockers but does not apply changes yet.
 - Validate on synthetic QR fixtures and the focused Gallagher run.
+
+## Slice 1 Closeout | 2026-06-23
+
+Implemented:
+
+- Added deterministic local QR evidence extraction for source images and
+  candidate crops using OpenCV when available.
+- Wrote `qr_evidence.json` for QR-found, QR-not-found, and decoder-unavailable
+  cases with writes/network counters at zero.
+- Projected QR evidence into the contact store and exposed redacted QR summaries
+  in review bundles, review matrices, and contact review surface rows.
+- Added `runs agent-review-loop <run-id> --limit <n> --dry-run --json` as a
+  no-live planner that identifies QR-bearing review jobs, planned App
+  Intelligence request types, training candidates, and blocked contacts.
+- Kept `--apply-safe` as a no-op boundary until deterministic
+  orientation/crop/pair handlers have acceptance tests.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_qr_evidence.py tests/test_cli_surfaces.py::test_cli_runs_agent_review_loop_plans_qr_side_followup tests/test_preclassifier.py::test_orchestrator_records_multi_card_candidate_manifest -q`
+  passed with 4 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/qr_evidence.py src/business_card_watchdog/orchestrator.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_qr_evidence.py tests/test_cli_surfaces.py`
+  passed.
+- Focused scanner run `2026-06-23T02-27-30+00-00` from the cache-local
+  2026-06-20 scanner sequence completed dry-run with 14 jobs and 2
+  `needs_review` jobs.
+- The focused scanner run wrote `qr_evidence` artifacts for all jobs; the agent
+  loop planned 2 QR follow-ups, including one reviewable QR-detected Gallagher
+  side with `decode_count = 0`.
+- `runs agent-review-loop 2026-06-23T02-27-30+00-00 --limit 14 --dry-run --json`
+  reported `planned_action_count = 2`, `app_intelligence_request_count = 2`,
+  `writes_attempted = 0`, and `network_calls_made = 0`.
+
+Remaining:
+
+- Milestone 2 orientation normalization.
+- Milestone 3 crop quality and recrop proposals.
+- Milestone 4 scanner front/back pairing.
+- Milestone 5 concrete App Intelligence request artifact creation and training
+  fixture promotion.
+- Milestone 6 `--apply-safe` deterministic handlers once each handler has
+  passing tests.

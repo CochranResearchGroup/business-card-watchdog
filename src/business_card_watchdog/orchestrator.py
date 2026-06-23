@@ -27,6 +27,7 @@ from .ledger import RunLedger
 from .models import CardJob, utc_now
 from .preclassifier import assess_business_card_candidate, build_card_candidate_box_manifest
 from .quality import assess_extraction_quality, write_extraction_quality
+from .qr_evidence import build_qr_evidence
 from .review import assess_contact_spec, write_review_packet
 from .routing import decide_sinks, load_contact_spec, selected_google_contacts_profile, selected_odollo_tenant
 from .sinks import build_sink_payloads, write_sink_payloads
@@ -363,9 +364,22 @@ class BatchOrchestrator:
                     "candidate_work_items_recorded",
                     {"job": job.to_dict(), "work_item_manifest": work_item_manifest},
                 )
+                self._write_qr_evidence(
+                    ledger=ledger,
+                    job=job,
+                    artifact_dir=artifact_dir,
+                    crop_manifest=crop_manifest,
+                )
             if assessment.decision == "not_business_card" or (
                 assessment.decision == "uncertain" and not self.config.prefilter.process_uncertain
             ):
+                if not (artifact_dir / "qr_evidence.json").exists():
+                    self._write_qr_evidence(
+                        ledger=ledger,
+                        job=job,
+                        artifact_dir=artifact_dir,
+                        crop_manifest=None,
+                    )
                 job.artifact_dir = str(artifact_dir)
                 job.transition_to(
                     "failed",
@@ -377,6 +391,14 @@ class BatchOrchestrator:
                     {"job": job.to_dict(), "assessment": assessment.to_dict()},
                 )
                 return
+
+        if not (artifact_dir / "qr_evidence.json").exists():
+            self._write_qr_evidence(
+                ledger=ledger,
+                job=job,
+                artifact_dir=artifact_dir,
+                crop_manifest=None,
+            )
 
         result = self.adapter.run_pipeline(
             Path(job.image_path),
@@ -567,6 +589,50 @@ class BatchOrchestrator:
             image_path=job.image_path,
         )
         ledger.record_job(job)
+
+    def _write_qr_evidence(
+        self,
+        *,
+        ledger: RunLedger,
+        job: CardJob,
+        artifact_dir: Path,
+        crop_manifest: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        qr_evidence = build_qr_evidence(
+            run_id=ledger.run_dir.name,
+            job_id=job.job_id,
+            source_image_path=Path(job.image_path),
+            crop_manifest=crop_manifest,
+        )
+        qr_evidence_path = artifact_dir / "qr_evidence.json"
+        qr_evidence_path.write_text(
+            json.dumps(qr_evidence, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        ledger.record_artifact(
+            job_id=job.job_id,
+            kind="qr_evidence",
+            path=qr_evidence_path,
+            metadata={
+                "state": qr_evidence["state"],
+                "qr_found": qr_evidence["qr_found"],
+                "decode_count": qr_evidence["decode_count"],
+                "payload_types": qr_evidence["payload_types"],
+            },
+        )
+        ledger.record_event(
+            "qr_evidence_recorded",
+            {
+                "job": job.to_dict(),
+                "state": qr_evidence["state"],
+                "qr_found": qr_evidence["qr_found"],
+                "decode_count": qr_evidence["decode_count"],
+                "payload_types": qr_evidence["payload_types"],
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        return qr_evidence
 
 
 def _optional_adapter_artifacts(artifact_dir: Path) -> dict[str, Path]:

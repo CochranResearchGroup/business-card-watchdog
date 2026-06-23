@@ -31,6 +31,18 @@ def write_config(path: Path, data_dir: Path) -> None:
     path.write_text(f'data_dir = "{data_dir}"\n[watch]\ninputs = []\n', encoding="utf-8")
 
 
+def write_qr_image(path: Path, payload: str) -> Path:
+    pytest = __import__("pytest")
+    cv2 = pytest.importorskip("cv2")
+    encoder = cv2.QRCodeEncoder_create()
+    image = encoder.encode(payload)
+    image = cv2.resize(image, (290, 290), interpolation=cv2.INTER_NEAREST)
+    image = cv2.copyMakeBorder(image, 40, 40, 40, 40, cv2.BORDER_CONSTANT, value=255)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    assert cv2.imwrite(str(path), image)
+    return path
+
+
 def test_cli_has_mcp_stdio_command() -> None:
     args = build_parser().parse_args(["mcp-stdio"])
 
@@ -528,6 +540,93 @@ def test_cli_runs_dry_run_safe_loop_executes_bounded_safe_actions(tmp_path: Path
     assert "Observed: writes=0 network=0 live_sinks=False" in text
     assert "Safe loop: runs dry-run-safe-loop" in text
     assert "Stop conditions: 5" in text
+    assert "{" not in text
+
+
+def test_cli_runs_agent_review_loop_plans_qr_side_followup(tmp_path: Path, monkeypatch, capsys) -> None:
+    config_path = tmp_path / "config.toml"
+    data_dir = tmp_path / "data"
+    write_config(config_path, data_dir)
+    source_dir = tmp_path / "cards"
+    write_qr_image(source_dir / "qr-side.png", "https://example.test/gallagher")
+    config = AppConfig(
+        config_path=config_path,
+        data_dir=data_dir,
+        prefilter=PrefilterConfig(enabled=False),
+        sink=SinkConfig(dry_run=True),
+        routing_rules=[],
+    )
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", SyntheticSkillAdapter())
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+    service = BusinessCardService(config)
+    surface = service.contact_review_surface(limit=10)
+    contact_id = surface["rows"][0]["contact_id"]
+    review_state = service.record_contact_review_recommendation(
+        contact_id=contact_id,
+        source="cli-test",
+        category="card_side_and_crop_quality",
+        recommendation="keep_needs_review_require_qr_orientation_crop_and_backside_pairing",
+        rationale="QR side requires orientation, crop, and backside pairing review",
+        confidence=0.9,
+    )["review_state"]
+    service.decide_contact_review_state(
+        review_state_id=review_state["review_state_id"],
+        reviewer="cli-test",
+        decision="accept",
+        notes="fixture acceptance",
+    )
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "agent-review-loop",
+                run_dir.name,
+                "--limit",
+                "1",
+                "--dry-run",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["schema"] == "business-card-watchdog.agent-review-loop.v1"
+    assert payload["selected_job_count"] == 1
+    assert payload["planned_actions"][0]["action"] == "inspect_qr_evidence"
+    assert payload["planned_actions"][0]["qr_evidence"]["payload_types"] == ["url"]
+    assert {request["request_type"] for request in payload["app_intelligence_requests"]} == {
+        "resolve_orientation",
+        "assess_crop_quality",
+        "pair_card_sides",
+    }
+    assert payload["training_candidate_count"] == 1
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "agent-review-loop",
+                run_dir.name,
+                "--limit",
+                "1",
+                "--no-write",
+            ]
+        )
+        == 0
+    )
+    text = capsys.readouterr().out
+    assert "Agent review loop:" in text
+    assert "App Intelligence requests: 3" in text
+    assert "Observed: writes=0 network=0 live_sinks=False" in text
     assert "{" not in text
 
 

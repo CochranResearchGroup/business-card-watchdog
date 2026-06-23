@@ -138,6 +138,7 @@ def _render_contact_review_surface_text(payload: dict[str, object]) -> str:
     for row in rows if isinstance(rows, list) else []:
         if isinstance(row, dict):
             counts = dict(row.get("counts") or {})
+            qr_evidence = dict(row.get("qr_evidence") or {})
             lines.append(
                 " - "
                 f"{row.get('contact_id')} "
@@ -145,8 +146,32 @@ def _render_contact_review_surface_text(payload: dict[str, object]) -> str:
                 f"review={row.get('review_state')} "
                 f"routes={counts.get('routing_decisions', 0)} "
                 f"pending={counts.get('proposed_review_states', 0)} "
-                f"mutations={counts.get('mutations', 0)}"
+                f"mutations={counts.get('mutations', 0)} "
+                f"qr={qr_evidence.get('qr_found', False)} "
+                f"qr_decodes={qr_evidence.get('decode_count', 0)}"
             )
+    return "\n".join(lines) + "\n"
+
+
+def _render_agent_review_loop_text(payload: dict[str, object]) -> str:
+    lines = [
+        f"Agent review loop: {payload.get('state')}",
+        f"Selected jobs: {payload.get('selected_job_count', 0)}",
+        f"Planned actions: {payload.get('planned_action_count', 0)}",
+        f"App Intelligence requests: {payload.get('app_intelligence_request_count', 0)}",
+        f"Training candidates: {payload.get('training_candidate_count', 0)}",
+        f"Applied: {payload.get('applied_count', 0)}",
+        f"Observed: writes={payload.get('writes_attempted', 0)} network={payload.get('network_calls_made', 0)} live_sinks={payload.get('live_sink_calls_made', False)}",
+    ]
+    commands = dict(payload.get("commands") or {})
+    if commands:
+        lines.append("Commands:")
+        for key, command in sorted(commands.items()):
+            lines.append(f" - {key}: {command}")
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    lines.append(f"Stop conditions: {len(stop_conditions)}")
+    for condition in stop_conditions if isinstance(stop_conditions, list) else []:
+        lines.append(f" - {condition}")
     return "\n".join(lines) + "\n"
 
 
@@ -2779,6 +2804,13 @@ def build_parser() -> argparse.ArgumentParser:
     runs_dry_run_safe_loop.add_argument("--limit", type=int, default=5)
     runs_dry_run_safe_loop.add_argument("--no-write", action="store_true")
     runs_dry_run_safe_loop.add_argument("--json", action="store_true")
+    runs_agent_review_loop = runs_sub.add_parser("agent-review-loop")
+    runs_agent_review_loop.add_argument("run_id")
+    runs_agent_review_loop.add_argument("--limit", type=int, default=5)
+    runs_agent_review_loop.add_argument("--dry-run", action="store_true", default=True)
+    runs_agent_review_loop.add_argument("--apply-safe", action="store_true")
+    runs_agent_review_loop.add_argument("--no-write", action="store_true")
+    runs_agent_review_loop.add_argument("--json", action="store_true")
     add_review_route_runs_parsers(runs_sub)
     runs_close_lookup_prerequisites = runs_sub.add_parser("close-lookup-prerequisites")
     runs_close_lookup_prerequisites.add_argument("run_id")
@@ -3613,6 +3645,14 @@ def main(argv: list[str] | None = None) -> int:
             payload = service.dry_run_review_handoff(args.run_id, write=not args.no_write)
         elif args.runs_command == "dry-run-safe-loop":
             payload = service.dry_run_safe_loop(args.run_id, limit=args.limit, write=not args.no_write)
+        elif args.runs_command == "agent-review-loop":
+            payload = service.agent_review_loop(
+                args.run_id,
+                limit=args.limit,
+                dry_run=args.dry_run and not args.apply_safe,
+                apply_safe=args.apply_safe,
+                write=not args.no_write,
+            )
         elif args.runs_command in {
             REVIEW_ROUTE_READINESS_COMMAND,
             LOOKUP_SELECTION_PACKET_COMMAND,
@@ -3786,6 +3826,9 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.runs_command == "dry-run-safe-loop" and not args.json:
             print(_render_dry_run_safe_loop_text(payload), end="")
+            return 0
+        if args.runs_command == "agent-review-loop" and not args.json:
+            print(_render_agent_review_loop_text(payload), end="")
             return 0
         if args.runs_command == REVIEW_ROUTE_READINESS_COMMAND and not args.json:
             print(render_review_route_readiness_text(payload), end="")
