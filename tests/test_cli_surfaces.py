@@ -672,6 +672,63 @@ def test_cli_runs_agent_review_loop_plans_qr_side_followup(tmp_path: Path, monke
                 run_dir.name,
                 "--limit",
                 "1",
+                "--apply-safe",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    apply_payload = json.loads(capsys.readouterr().out)
+    assert apply_payload["state"] == "safe_apply_applied"
+    assert apply_payload["applied_count"] == 1
+    assert apply_payload["applied"][0]["action"] == "inspect_qr_evidence"
+    assert apply_payload["applied"][0]["deterministic_improvement"] == "qr_side_context_gate_applied"
+    assert apply_payload["planned_actions"][0]["status"] == "applied"
+    safe_apply_path = Path(apply_payload["applied"][0]["safe_apply_result_path"])
+    safe_apply_payload = json.loads(safe_apply_path.read_text(encoding="utf-8"))
+    assert safe_apply_payload["schema"] == "business-card-watchdog.agent-safe-apply-result.v1"
+    assert safe_apply_payload["effect_boundary"]["route_ready_created"] is False
+    assert safe_apply_payload["effect_boundary"]["sink_write_executed"] is False
+    assert safe_apply_payload["writes_attempted"] == 0
+    assert safe_apply_payload["network_calls_made"] == 0
+    artifact_rows = [
+        json.loads(line)
+        for line in (config.runs_dir / run_dir.name / "artifacts.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert sum(row["kind"] == "agent_safe_apply_result" for row in artifact_rows) == 1
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "agent-review-loop",
+                run_dir.name,
+                "--limit",
+                "1",
+                "--apply-safe",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    repeat_payload = json.loads(capsys.readouterr().out)
+    assert repeat_payload["state"] == "safe_apply_noop"
+    assert repeat_payload["applied_count"] == 0
+    assert repeat_payload["planned_actions"][0]["status"] == "already_applied"
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "agent-review-loop",
+                run_dir.name,
+                "--limit",
+                "1",
                 "--no-write",
             ]
         )

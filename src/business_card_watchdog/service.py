@@ -1474,12 +1474,13 @@ class BusinessCardService:
         app_intelligence_requests: list[dict[str, Any]] = []
         training_candidates: list[dict[str, Any]] = []
         blocked_contacts: list[dict[str, Any]] = []
+        applied: list[dict[str, Any]] = []
         if _int(side_pair_graph.get("pair_proposal_count")) > 0:
             planned_actions.append(
                 {
                     "job_id": "__run__",
                     "action": "inspect_side_pair_graph",
-                    "status": "planned" if dry_run or not apply_safe else "skipped_no_safe_apply_handler",
+                    "status": "planned",
                     "reason": "deterministic side-pair graph contains pair candidates",
                     "side_pair_graph": side_pair_graph,
                 }
@@ -1505,7 +1506,7 @@ class BusinessCardService:
                     {
                         "job_id": job_id,
                         "action": "inspect_crop_quality",
-                        "status": "planned" if dry_run or not apply_safe else "skipped_no_safe_apply_handler",
+                        "status": "planned",
                         "reason": "deterministic crop quality evidence found bad or QR-only crop evidence",
                         "crop_quality": crop_summary,
                         "recrop_proposals": recrop_summary,
@@ -1516,7 +1517,7 @@ class BusinessCardService:
                     {
                         "job_id": job_id,
                         "action": "inspect_orientation_normalization",
-                        "status": "planned" if dry_run or not apply_safe else "skipped_no_safe_apply_handler",
+                        "status": "planned",
                         "reason": "deterministic orientation evidence created a normalized derivative",
                         "orientation_evidence": orientation_summary,
                     }
@@ -1526,7 +1527,7 @@ class BusinessCardService:
                     {
                         "job_id": job_id,
                         "action": "inspect_qr_evidence",
-                        "status": "planned" if dry_run or not apply_safe else "skipped_no_safe_apply_handler",
+                        "status": "planned",
                         "reason": "QR evidence is present; use payload type and side context before route readiness.",
                         "qr_evidence": qr_summary,
                     }
@@ -1605,10 +1606,24 @@ class BusinessCardService:
                     else None,
                 }
             )
+        if apply_safe and not dry_run:
+            if write:
+                ledger = RunLedger(self.config.runs_dir / run_id)
+                applied = _write_agent_safe_apply_results(
+                    ledger=ledger,
+                    run_id=run_id,
+                    planned_actions=planned_actions,
+                )
+            else:
+                for action in planned_actions:
+                    if _agent_safe_apply_decision(action) is None:
+                        action["status"] = "skipped_no_safe_apply_handler"
+                    else:
+                        action["status"] = "skipped_no_write"
         payload: dict[str, Any] = {
             "schema": "business-card-watchdog.agent-review-loop.v1",
             "generated_at": utc_now(),
-            "state": "planned" if dry_run else "safe_apply_noop" if apply_safe else "planned",
+            "state": "planned" if dry_run else "safe_apply_applied" if applied else "safe_apply_noop" if apply_safe else "planned",
             "run_id": run_id,
             "limit": limit,
             "dry_run": dry_run,
@@ -1622,6 +1637,7 @@ class BusinessCardService:
                 "crop_quality_summary_available",
                 "side_pair_graph_summary_available",
                 "agent_loop_identifies_qr_orientation_crop_side_pairing_blockers",
+                *[str(row.get("deterministic_improvement") or "") for row in applied if row.get("deterministic_improvement")],
             ],
             "app_intelligence_request_count": len(app_intelligence_requests),
             "app_intelligence_requests": app_intelligence_requests,
@@ -1633,8 +1649,8 @@ class BusinessCardService:
             "training_candidate_paths": [],
             "blocked_contacts": blocked_contacts,
             "side_pair_graph": side_pair_graph,
-            "applied_count": 0,
-            "applied": [],
+            "applied_count": len(applied),
+            "applied": applied,
             "writes_attempted": 0,
             "network_calls_made": 0,
             "live_sink_calls_made": False,
@@ -1650,7 +1666,7 @@ class BusinessCardService:
             "explicit_stop_conditions": [
                 "This loop may not run live lookup, live write, readback, public-web search, or paid enrichment.",
                 "App Intelligence requests are request artifacts and do not change route readiness by themselves.",
-                "Safe apply is a no-op until deterministic QR/orientation/crop/pair handlers have acceptance tests.",
+                "Safe apply records only tested deterministic evidence actions; it does not route, enrich, or write contacts.",
             ],
         }
         if write:
@@ -1680,6 +1696,7 @@ class BusinessCardService:
                     "run_id": run_id,
                     "selected_job_count": len(selected_entries),
                     "planned_action_count": len(planned_actions),
+                    "applied_count": len(applied),
                     "app_intelligence_request_count": len(app_intelligence_requests),
                     "training_candidate_count": len(training_candidates),
                     "app_intelligence_request_artifact_count": artifact_summary[
@@ -16785,6 +16802,171 @@ def _write_agent_review_loop_artifacts(
         "app_intelligence_request_artifact_count": len(request_paths),
         "training_candidate_artifact_count": len(training_paths),
     }
+
+
+def _write_agent_safe_apply_results(
+    *,
+    ledger: RunLedger,
+    run_id: str,
+    planned_actions: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    existing = _existing_agent_safe_apply_keys(ledger)
+    applied: list[dict[str, Any]] = []
+    for action in planned_actions:
+        decision = _agent_safe_apply_decision(action)
+        if decision is None:
+            action["status"] = "skipped_no_safe_apply_handler"
+            continue
+        action_key = _agent_safe_apply_key(action)
+        if action_key in existing:
+            action["status"] = "already_applied"
+            action["safe_apply_key"] = action_key
+            continue
+        job_id = str(action.get("job_id") or "__run__")
+        action_name = str(action.get("action") or "action")
+        result_dir = ledger.run_dir / "artifacts" / _safe_path_part(job_id) / "agent_safe_apply"
+        result_dir.mkdir(parents=True, exist_ok=True)
+        result_path = result_dir / f"agent_safe_apply_{_safe_path_part(action_name)}_{action_key}.json"
+        payload = {
+            "schema": "business-card-watchdog.agent-safe-apply-result.v1",
+            "run_id": run_id,
+            "job_id": job_id,
+            "action": action_name,
+            "action_key": action_key,
+            "state": "applied",
+            "created_at": utc_now(),
+            "decision": decision,
+            "source_action": action,
+            "effect_boundary": {
+                "contact_state_changed": False,
+                "route_ready_created": False,
+                "reviewed_contact_written": False,
+                "sink_lookup_executed": False,
+                "sink_write_executed": False,
+                "sink_readback_executed": False,
+                "public_web_search_used": False,
+                "paid_enrichment_used": False,
+            },
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+        result_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger.record_artifact(
+            job_id=job_id,
+            kind="agent_safe_apply_result",
+            path=result_path,
+            metadata={
+                "action": action_name,
+                "action_key": action_key,
+                "state": "applied",
+                "deterministic_improvement": decision["deterministic_improvement"],
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        ledger.record_event(
+            "agent_safe_apply_result_recorded",
+            {
+                "run_id": run_id,
+                "job_id": job_id,
+                "action": action_name,
+                "action_key": action_key,
+                "state": "applied",
+                "result_path": str(result_path),
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        result = {
+            "job_id": job_id,
+            "action": action_name,
+            "action_key": action_key,
+            "state": "applied",
+            "safe_apply_result_path": str(result_path),
+            "deterministic_improvement": decision["deterministic_improvement"],
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+        action["status"] = "applied"
+        action["safe_apply_key"] = action_key
+        action["safe_apply_result_path"] = str(result_path)
+        applied.append(result)
+        existing.add(action_key)
+    return applied
+
+
+def _existing_agent_safe_apply_keys(ledger: RunLedger) -> set[str]:
+    if not ledger.artifacts_path.exists():
+        return set()
+    keys: set[str] = set()
+    for artifact in _read_jsonl(ledger.artifacts_path):
+        if artifact.get("kind") != "agent_safe_apply_result":
+            continue
+        metadata = dict(artifact.get("metadata") or {})
+        action_key = str(metadata.get("action_key") or "")
+        if not action_key:
+            payload = _read_json_file(Path(str(artifact.get("path") or ""))) or {}
+            action_key = str(payload.get("action_key") or "")
+        if action_key:
+            keys.add(action_key)
+    return keys
+
+
+def _agent_safe_apply_decision(action: dict[str, Any]) -> dict[str, Any] | None:
+    action_name = str(action.get("action") or "")
+    if action_name == "inspect_qr_evidence":
+        qr = dict(action.get("qr_evidence") or {})
+        if not qr.get("qr_found"):
+            return None
+        return {
+            "decision": "record_qr_side_context_required",
+            "reason": "QR evidence is deterministic but does not make the side route-ready without text or pair context",
+            "deterministic_improvement": "qr_side_context_gate_applied",
+            "routing_allowed": False,
+        }
+    if action_name == "inspect_orientation_normalization":
+        orientation = dict(action.get("orientation_evidence") or {})
+        if _int(orientation.get("normalized_count")) <= 0:
+            return None
+        return {
+            "decision": "record_normalized_orientation_derivative",
+            "reason": "deterministic orientation produced a normalized derivative for downstream review inputs",
+            "deterministic_improvement": "orientation_normalized_derivative_recorded",
+            "routing_allowed": False,
+        }
+    if action_name == "inspect_crop_quality":
+        crop = dict(action.get("crop_quality") or {})
+        recrop = dict(action.get("recrop_proposals") or {})
+        if not _crop_quality_needs_review(crop):
+            return None
+        return {
+            "decision": "record_crop_not_route_ready",
+            "reason": "bad or QR-only crop evidence blocks route readiness until recrop or side-pair context is reviewed",
+            "deterministic_improvement": "crop_quality_route_gate_applied",
+            "recrop_proposal_count": _int(recrop.get("proposal_count")),
+            "routing_allowed": False,
+        }
+    if action_name == "inspect_side_pair_graph":
+        graph = dict(action.get("side_pair_graph") or {})
+        if _int(graph.get("pair_proposal_count")) <= 0:
+            return None
+        return {
+            "decision": "record_side_pair_review_required",
+            "reason": "side-pair graph has candidate edges but safe apply does not merge sides without a deterministic threshold",
+            "deterministic_improvement": "side_pair_graph_review_gate_applied",
+            "pair_proposal_count": _int(graph.get("pair_proposal_count")),
+            "routing_allowed": False,
+        }
+    return None
+
+
+def _agent_safe_apply_key(action: dict[str, Any]) -> str:
+    return _stable_short_id(
+        "agent-safe-apply",
+        action.get("job_id"),
+        action.get("action"),
+        action.get("reason"),
+    )
 
 
 def _agent_review_allowed_response_schema(request_type: str) -> dict[str, Any]:

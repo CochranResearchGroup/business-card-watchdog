@@ -1,6 +1,6 @@
 # Plan 0093 | Agent Loop QR Orientation And Side Pairing
 
-State: IN_PROGRESS
+State: COMPLETE
 Date: 2026-06-23
 
 Parent: Plan 0060 Milestone 9
@@ -510,3 +510,40 @@ Remaining:
 
 - Milestone 6 `--apply-safe` deterministic handlers once each handler has
   passing tests.
+
+## Slice 6 Closeout | 2026-06-23
+
+Implemented:
+
+- Added tested `--apply-safe` handlers for deterministic local evidence
+  actions.
+- Added `agent_safe_apply_result` artifacts with effect-boundary flags proving
+  no contact-state, route-ready, reviewed-contact, sink lookup/write/readback,
+  public-web, or paid-enrichment side effects.
+- Added handlers for QR side-context gating, crop-quality route gating,
+  orientation normalized-derivative evidence, and side-pair graph review
+  gating.
+- Made repeated `--apply-safe` iterations idempotent by reusing stable action
+  keys and reporting already-applied actions instead of writing duplicate
+  results.
+- Projected `agent_safe_apply_result` as a contact-store asset kind.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_runs_agent_review_loop_plans_qr_side_followup -q`
+  passed.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/service.py src/business_card_watchdog/contact_store.py tests/test_cli_surfaces.py`
+  passed.
+- `runs agent-review-loop 2026-06-23T02-50-18+00-00 --limit 14 --apply-safe --json`
+  applied 5 local evidence actions and reported `writes_attempted = 0`,
+  `network_calls_made = 0`, and `live_sink_calls_made = false`.
+- A repeat `--apply-safe` pass reported `state = safe_apply_noop`,
+  `applied_count = 0`, and all 5 planned actions as `already_applied`.
+- The focused scanner run now has 5 private `agent_safe_apply_result`
+  artifacts. A sampled artifact had schema
+  `business-card-watchdog.agent-safe-apply-result.v1`, `state = applied`, and
+  all route/sink/enrichment effect-boundary flags false.
+
+Remaining:
+
+- No Plan 0093 milestones remain.

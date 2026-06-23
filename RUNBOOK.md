@@ -1,5 +1,44 @@
 # Runbook
 
+## Turn 313 | 2026-06-23
+
+Executed Plan 0093 Slice 6 for tested `--apply-safe` deterministic agent-loop
+handlers.
+
+Implemented:
+
+- Added local `agent_safe_apply_result` artifacts for tested deterministic
+  actions.
+- Added safe handlers for QR side-context gating, crop-quality route gating,
+  orientation normalized-derivative evidence, and side-pair graph review gating.
+- Made `--apply-safe` idempotent by keying prior safe-apply results and marking
+  repeated actions `already_applied`.
+- Kept safe apply evidence-only: no reviewed contact is written, no route-ready
+  state is created, and no sink lookup/write/readback is executed.
+- Projected `agent_safe_apply_result` as a contact-store asset kind.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_runs_agent_review_loop_plans_qr_side_followup -q`
+  passed.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/service.py src/business_card_watchdog/contact_store.py tests/test_cli_surfaces.py`
+  passed.
+- `runs agent-review-loop 2026-06-23T02-50-18+00-00 --limit 14 --apply-safe --json`
+  applied 5 local evidence actions with `writes_attempted = 0`,
+  `network_calls_made = 0`, and `live_sink_calls_made = false`.
+- A repeat `--apply-safe` pass reported `state = safe_apply_noop`,
+  `applied_count = 0`, and all 5 planned actions as `already_applied`.
+- A sampled safe-apply result artifact reported schema
+  `business-card-watchdog.agent-safe-apply-result.v1`, `state = applied`, and
+  effect-boundary flags showing no contact state, route-ready, reviewed-contact,
+  sink lookup/write/readback, public-web, or paid-enrichment effects.
+
+Safety:
+
+- This slice did not run live Google/Odoo/Odollo lookup, write, or readback. It
+  did not run public-web search, paid enrichment, selected-target creation, or a
+  broad scanner backlog.
+
 ## Turn 312 | 2026-06-23
 
 Executed Plan 0093 Slice 5 for App Intelligence escalation artifacts and

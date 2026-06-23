@@ -50,6 +50,7 @@ _PROJECTED_ASSET_KINDS = {
     "side_pair_graph",
     "app_intelligence_review_request",
     "agent_training_candidate",
+    "agent_safe_apply_result",
     "side_pair_review_submission",
     "side_pair_review_result",
     "reviewed_side_pair_contact",
