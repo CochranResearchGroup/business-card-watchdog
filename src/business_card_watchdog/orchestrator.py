@@ -25,6 +25,7 @@ from .fanout import (
 )
 from .ledger import RunLedger
 from .models import CardJob, utc_now
+from .orientation_evidence import build_orientation_evidence
 from .preclassifier import assess_business_card_candidate, build_card_candidate_box_manifest
 from .quality import assess_extraction_quality, write_extraction_quality
 from .qr_evidence import build_qr_evidence
@@ -364,6 +365,12 @@ class BatchOrchestrator:
                     "candidate_work_items_recorded",
                     {"job": job.to_dict(), "work_item_manifest": work_item_manifest},
                 )
+                self._write_orientation_evidence(
+                    ledger=ledger,
+                    job=job,
+                    artifact_dir=artifact_dir,
+                    crop_manifest=crop_manifest,
+                )
                 self._write_qr_evidence(
                     ledger=ledger,
                     job=job,
@@ -373,6 +380,13 @@ class BatchOrchestrator:
             if assessment.decision == "not_business_card" or (
                 assessment.decision == "uncertain" and not self.config.prefilter.process_uncertain
             ):
+                if not (artifact_dir / "orientation_evidence.json").exists():
+                    self._write_orientation_evidence(
+                        ledger=ledger,
+                        job=job,
+                        artifact_dir=artifact_dir,
+                        crop_manifest=None,
+                    )
                 if not (artifact_dir / "qr_evidence.json").exists():
                     self._write_qr_evidence(
                         ledger=ledger,
@@ -392,6 +406,13 @@ class BatchOrchestrator:
                 )
                 return
 
+        if not (artifact_dir / "orientation_evidence.json").exists():
+            self._write_orientation_evidence(
+                ledger=ledger,
+                job=job,
+                artifact_dir=artifact_dir,
+                crop_manifest=None,
+            )
         if not (artifact_dir / "qr_evidence.json").exists():
             self._write_qr_evidence(
                 ledger=ledger,
@@ -589,6 +610,49 @@ class BatchOrchestrator:
             image_path=job.image_path,
         )
         ledger.record_job(job)
+
+    def _write_orientation_evidence(
+        self,
+        *,
+        ledger: RunLedger,
+        job: CardJob,
+        artifact_dir: Path,
+        crop_manifest: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        orientation_evidence = build_orientation_evidence(
+            run_id=ledger.run_dir.name,
+            job_id=job.job_id,
+            source_image_path=Path(job.image_path),
+            output_dir=artifact_dir,
+            crop_manifest=crop_manifest,
+        )
+        orientation_evidence_path = artifact_dir / "orientation_evidence.json"
+        orientation_evidence_path.write_text(
+            json.dumps(orientation_evidence, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        ledger.record_artifact(
+            job_id=job.job_id,
+            kind="orientation_evidence",
+            path=orientation_evidence_path,
+            metadata={
+                "state": orientation_evidence["state"],
+                "normalized_count": orientation_evidence["normalized_count"],
+                "needs_review_count": orientation_evidence["needs_review_count"],
+            },
+        )
+        ledger.record_event(
+            "orientation_evidence_recorded",
+            {
+                "job": job.to_dict(),
+                "state": orientation_evidence["state"],
+                "normalized_count": orientation_evidence["normalized_count"],
+                "needs_review_count": orientation_evidence["needs_review_count"],
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        return orientation_evidence
 
     def _write_qr_evidence(
         self,

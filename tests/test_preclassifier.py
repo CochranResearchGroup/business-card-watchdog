@@ -72,6 +72,7 @@ def test_orchestrator_records_multi_card_candidate_manifest(tmp_path: Path, monk
     results = json.loads((artifact_dir / "child_verification_results.json").read_text(encoding="utf-8"))
     promotions = json.loads((artifact_dir / "child_contact_promotions.json").read_text(encoding="utf-8"))
     work_items = json.loads((artifact_dir / "candidate_work_items.json").read_text(encoding="utf-8"))
+    orientation = json.loads((artifact_dir / "orientation_evidence.json").read_text(encoding="utf-8"))
     artifact_kinds = [record["kind"] for record in read_jsonl(run_dir / "artifacts.jsonl")]
     events = read_jsonl(run_dir / "events.jsonl")
 
@@ -131,8 +132,11 @@ def test_orchestrator_records_multi_card_candidate_manifest(tmp_path: Path, monk
     assert child_candidate["lineage"]["parent_job_id"] == job["job_id"]
     assert child_candidate["review"]["state"] == "needs_review"
     assert child_candidate["routing_allowed"] is False
+    assert orientation["schema"] == "business-card-watchdog.orientation-evidence.v1"
+    assert orientation["image_count"] == crops["crop_count"] + 1
     assert "card_candidates" in artifact_kinds
     assert "candidate_crops" in artifact_kinds
+    assert "orientation_evidence" in artifact_kinds
     assert "child_verification_requests" in artifact_kinds
     assert "child_verification_results" in artifact_kinds
     assert "child_contact_promotions" in artifact_kinds

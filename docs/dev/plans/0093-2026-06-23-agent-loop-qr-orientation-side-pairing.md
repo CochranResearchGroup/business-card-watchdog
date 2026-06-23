@@ -340,7 +340,50 @@ Validation:
 
 Remaining:
 
-- Milestone 2 orientation normalization.
+- Milestone 3 crop quality and recrop proposals.
+- Milestone 4 scanner front/back pairing.
+- Milestone 5 concrete App Intelligence request artifact creation and training
+  fixture promotion.
+- Milestone 6 `--apply-safe` deterministic handlers once each handler has
+  passing tests.
+
+## Slice 2 Closeout | 2026-06-23
+
+Implemented:
+
+- Added deterministic local orientation scoring for 0, 90, 180, and 270 degree
+  rotations using OpenCV image heuristics.
+- Wrote `orientation_evidence.json` for every processed job, including
+  per-image scores, selected rotation, confidence, and normalized derivative
+  paths when confidence is high.
+- Preserved 180-degree corrections as review-only for this slice because they
+  need stronger OCR/upright-text evidence before safe automatic normalization.
+- Projected `orientation_evidence` into the contact store and exposed redacted
+  orientation summaries in review bundles, review matrices, contact review
+  surfaces, and CLI text output.
+- Updated the agent review loop to plan orientation-normalization inspection
+  when a normalized derivative exists and to create bounded
+  `resolve_orientation` request candidates only for reviewable, QR-bearing, or
+  accepted-evidence jobs.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_orientation_evidence.py tests/test_qr_evidence.py tests/test_cli_surfaces.py::test_cli_runs_agent_review_loop_plans_qr_side_followup tests/test_preclassifier.py::test_orchestrator_records_multi_card_candidate_manifest -q`
+  passed with 6 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/orientation_evidence.py src/business_card_watchdog/orchestrator.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/contact_store.py tests/test_orientation_evidence.py tests/test_qr_evidence.py tests/test_cli_surfaces.py tests/test_preclassifier.py`
+  passed.
+- Focused scanner run `2026-06-23T02-35-26+00-00` from the cache-local
+  2026-06-20 scanner sequence completed dry-run with 14 jobs.
+- The focused scanner run wrote 14 `orientation_evidence` artifacts:
+  2 already normalized and 12 requiring App Intelligence review, with no
+  automatic 180-degree derivatives.
+- `runs agent-review-loop 2026-06-23T02-35-26+00-00 --limit 14 --dry-run --json`
+  reported `planned_action_count = 2`, `app_intelligence_request_count = 5`,
+  request types `pair_card_sides` and `resolve_orientation`,
+  `writes_attempted = 0`, and `network_calls_made = 0`.
+
+Remaining:
+
 - Milestone 3 crop quality and recrop proposals.
 - Milestone 4 scanner front/back pairing.
 - Milestone 5 concrete App Intelligence request artifact creation and training
