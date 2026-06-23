@@ -38,12 +38,13 @@ Latest completed live pilot target-selection audit plan: `docs/dev/plans/0089-20
 Latest completed Milestone 9 dry-run selection handoff plan: `docs/dev/plans/0090-2026-06-22-milestone-9-dry-run-selection-handoff.md`.
 Latest completed Milestone 9 operator checklist plan: `docs/dev/plans/0091-2026-06-22-milestone-9-operator-checklist.md`.
 Latest completed Milestone 9 scoped scanner dry-run plan: `docs/dev/plans/0092-2026-06-22-scoped-scanner-dry-run-unblock.md`.
-Active Milestone 9 agent-loop plan: `docs/dev/plans/0093-2026-06-23-agent-loop-qr-orientation-side-pairing.md`.
+Latest completed Milestone 9 agent-loop plan: `docs/dev/plans/0093-2026-06-23-agent-loop-qr-orientation-side-pairing.md`.
+Active classifier-training plan: `docs/dev/plans/0094-2026-06-23-scanner-pdf-business-card-classifier-training.md`.
 Latest completed practice-corpus plan: `docs/dev/plans/0062-2026-06-21-practice-corpus-manifest.md`.
 Latest completed scanner side-pair graph plan: `docs/dev/plans/0084-2026-06-22-ocr-contextual-side-pair-graph.md`.
-Next refactor/development plan: Plan 0093 Milestone 1 QR evidence plus the first dry-run agent-review-loop planner for QR/orientation/crop/side-pair blockers.
+Next refactor/development plan: Plan 0094 scanner PDF business-card classifier training loop.
 Next production plan: `docs/dev/plans/0009-2026-06-14-operator-selected-live-smoke-and-pilot-rollout.md`.
-Next offline boundary: improve the deterministic review loop on the focused Gallagher scanner run; do not proceed to lookup prerequisite closure or live target selection until QR/orientation/crop/side-pair evidence produces a reviewed text-bearing contact.
+Next offline boundary: train and tune the business-card-versus-other-document framework on scanner PDFs one source document at a time; do not proceed to card cropping, OCR, AI vision quality assurance, lookup prerequisite closure, or live target selection until deterministic/card-or-not routing has explicit App Intelligence escalation criteria and fixture-backed validation.
 Next production boundary: operator-selected live smoke/pilot rollout for one run, one job, and one sink at a time.
 
 ## Milestones

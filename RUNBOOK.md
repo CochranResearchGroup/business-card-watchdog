@@ -1,5 +1,34 @@
 # Runbook
 
+## Turn 314 | 2026-06-23
+
+Ran the post-Plan-0093 roadmap cleanup and wrote the next training plan.
+
+Implemented:
+
+- Updated `ROADMAP.md` to mark Plan 0093 as completed.
+- Added Plan 0094 as the active classifier-training plan.
+- Changed the next offline boundary away from crop/OCR/QA and toward
+  scanner-PDF business-card-versus-other-document training.
+- Added
+  `docs/dev/plans/0094-2026-06-23-scanner-pdf-business-card-classifier-training.md`.
+
+Plan 0094 scope:
+
+- Codex proceeds through scanner PDFs one source document at a time.
+- BCW deterministic routines classify pages/documents as high-confidence
+  business card, high-confidence non-card, or indeterminate.
+- Indeterminate cases are routed to bounded `classify_document_type` App
+  Intelligence requests.
+- Deterministic tuning must be supported by one-PDF evidence and fixture-backed
+  tests before moving on to cropping, OCR, or AI vision QA.
+
+Safety:
+
+- This was planning/documentation only. It did not process scanner inputs,
+  inspect private PDFs, run public-web search, call paid enrichment, create
+  selected targets, or run live lookup/write/readback.
+
 ## Turn 313 | 2026-06-23
 
 Executed Plan 0093 Slice 6 for tested `--apply-safe` deterministic agent-loop
