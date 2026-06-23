@@ -38,11 +38,12 @@ Latest completed live pilot target-selection audit plan: `docs/dev/plans/0089-20
 Latest completed Milestone 9 dry-run selection handoff plan: `docs/dev/plans/0090-2026-06-22-milestone-9-dry-run-selection-handoff.md`.
 Latest completed Milestone 9 operator checklist plan: `docs/dev/plans/0091-2026-06-22-milestone-9-operator-checklist.md`.
 Latest completed Milestone 9 scoped scanner dry-run plan: `docs/dev/plans/0092-2026-06-22-scoped-scanner-dry-run-unblock.md`.
+Active Milestone 9 agent-loop plan: `docs/dev/plans/0093-2026-06-23-agent-loop-qr-orientation-side-pairing.md`.
 Latest completed practice-corpus plan: `docs/dev/plans/0062-2026-06-21-practice-corpus-manifest.md`.
 Latest completed scanner side-pair graph plan: `docs/dev/plans/0084-2026-06-22-ocr-contextual-side-pair-graph.md`.
-Next refactor/development plan: Plan 0060 Milestone 9 operator review of the bounded scanner dry-run contacts, followed by route readiness and lookup prerequisite closure before live target selection.
+Next refactor/development plan: Plan 0093 Milestone 1 QR evidence plus the first dry-run agent-review-loop planner for QR/orientation/crop/side-pair blockers.
 Next production plan: `docs/dev/plans/0009-2026-06-14-operator-selected-live-smoke-and-pilot-rollout.md`.
-Next offline boundary: use the bounded scanner dry-run run for contact review; continue with `bcw contacts review-surface --limit <n> --json`, bounded `bcw contacts review-safe-loop --limit <n> --json`, `bcw runs review-route-readiness <run-id> --json`, `bcw runs lookup-selection-packet <run-id> --operator <operator> --json`, `bcw runs close-lookup-prerequisites <run-id> --operator <operator> --json`, `bcw operator-live-pilot-readiness-packet --run-id <run-id> --sink google_contacts --no-write`, `bcw runs selected-target-approval-boundary <run-id> --operator <operator> --json`, and `bcw runs selected-target-command-copy-packet <run-id> --operator <operator> --response <operator-response> --acknowledgement <operator-acknowledgement> --json` until the run reaches explicit selected-target approval.
+Next offline boundary: improve the deterministic review loop on the focused Gallagher scanner run; do not proceed to lookup prerequisite closure or live target selection until QR/orientation/crop/side-pair evidence produces a reviewed text-bearing contact.
 Next production boundary: operator-selected live smoke/pilot rollout for one run, one job, and one sink at a time.
 
 ## Milestones

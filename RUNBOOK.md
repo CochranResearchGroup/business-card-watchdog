@@ -7540,6 +7540,30 @@ Safety:
   enrichment, run live lookup/write/readback, or commit private card images/OCR
   dumps.
 
+## Turn 307 | 2026-06-23
+
+Wrote Plan 0093 for the Gallagher scanner feedback and the requested agent
+review loop.
+
+Implemented:
+
+- Added `docs/dev/plans/0093-2026-06-23-agent-loop-qr-orientation-side-pairing.md`.
+- Defined self-contained milestones for QR evidence extraction, orientation
+  normalization, crop quality/recrop proposals, scanner front/back pairing, App
+  Intelligence escalation, and a bounded agent review loop.
+- Defined the loop contract: agents improve deterministic gates first, request
+  App Intelligence only for deterministic uncertainty, import responses as
+  evidence, and add fixtures/rules from accepted corrections.
+- Updated ROADMAP so the next development slice is Plan 0093 Milestone 1 plus
+  the first dry-run agent-review-loop planner.
+
+Safety:
+
+- This was planning/documentation only. It did not process private backlog,
+  create `selected_live_target.json`, run public-web search, call paid
+  enrichment, run live lookup/write/readback, or commit private card images/OCR
+  dumps.
+
 ## Turn 291 | 2026-06-22
 
 Executed Plan 0080 as the next Plan 0060 Milestone 7 contact-store persistence
