@@ -47,6 +47,7 @@ _PROJECTED_ASSET_KINDS = {
     "card_side_candidate",
     "card_side_classification",
     "card_side_pair_proposals",
+    "side_pair_graph",
     "side_pair_review_submission",
     "side_pair_review_result",
     "reviewed_side_pair_contact",

@@ -1,5 +1,40 @@
 # Runbook
 
+## Turn 311 | 2026-06-23
+
+Executed Plan 0093 Slice 4 for scanner front/back side-pair graph evidence.
+
+Implemented:
+
+- Added `side_pair_graph.json` as a run-level scanner sequence graph.
+- Captured page adjacency, side labels, QR evidence, crop state, orientation
+  state, blank-back candidates, blocked edges, and pair-review candidates.
+- Preserved existing stricter `card_side_pair_proposals.json` behavior for the
+  side-pair review queue.
+- Exposed a redacted side-pair graph summary in review bundles and the agent
+  review loop.
+- Updated the agent loop to plan side-pair graph inspection and include graph
+  evidence in `pair_card_sides` request candidates.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_card_sides.py tests/test_crop_quality.py tests/test_orientation_evidence.py tests/test_qr_evidence.py tests/test_cli_surfaces.py::test_cli_runs_agent_review_loop_plans_qr_side_followup tests/test_preclassifier.py::test_orchestrator_records_multi_card_candidate_manifest -q`
+  passed with 22 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/card_sides.py src/business_card_watchdog/orchestrator.py src/business_card_watchdog/service.py src/business_card_watchdog/contact_store.py tests/test_card_sides.py`
+  passed.
+- Focused scanner dry-run `2026-06-23T02-50-18+00-00` completed from the
+  cache-local 2026-06-20 scanner sequence with `side_pair_graph.json` containing
+  14 nodes, 6 adjacent edges, and 2 pair-review candidates.
+- `runs agent-review-loop 2026-06-23T02-50-18+00-00 --limit 14 --dry-run --json`
+  planned 5 review actions and 7 bounded App Intelligence request candidates
+  with `writes_attempted = 0` and `network_calls_made = 0`.
+
+Safety:
+
+- This slice did not run live Google/Odoo/Odollo lookup, write, or readback. It
+  did not run public-web search, paid enrichment, selected-target creation, or a
+  broad scanner backlog.
+
 ## Turn 310 | 2026-06-23
 
 Executed Plan 0093 Slice 3 for crop quality and recrop proposals.

@@ -424,8 +424,49 @@ Validation:
 
 Remaining:
 
-- Milestone 3 crop quality and recrop proposals.
 - Milestone 4 scanner front/back pairing.
+- Milestone 5 concrete App Intelligence request artifact creation and training
+  fixture promotion.
+- Milestone 6 `--apply-safe` deterministic handlers once each handler has
+  passing tests.
+
+## Slice 4 Closeout | 2026-06-23
+
+Implemented:
+
+- Added deterministic `side_pair_graph.json` as a run-level scanner sequence
+  graph.
+- Graph nodes include page order, side labels, QR presence, crop state, and
+  orientation state.
+- Graph edges include adjacent-page evidence, side-label complement evidence,
+  QR-side adjacency evidence, blank-back candidates, blocked review edges, and
+  routing-disabled pair-review candidates.
+- Preserved existing `card_side_pair_proposals.json` behavior for stricter
+  front/back review queue proposals.
+- Exposed a redacted side-pair graph summary in review bundles and the agent
+  review loop.
+- Updated the agent review loop to plan `inspect_side_pair_graph` when graph
+  pair candidates exist and to include graph evidence in `pair_card_sides`
+  request candidates.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_card_sides.py tests/test_crop_quality.py tests/test_orientation_evidence.py tests/test_qr_evidence.py tests/test_cli_surfaces.py::test_cli_runs_agent_review_loop_plans_qr_side_followup tests/test_preclassifier.py::test_orchestrator_records_multi_card_candidate_manifest -q`
+  passed with 22 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/card_sides.py src/business_card_watchdog/orchestrator.py src/business_card_watchdog/service.py src/business_card_watchdog/contact_store.py tests/test_card_sides.py`
+  passed.
+- Focused scanner run `2026-06-23T02-50-18+00-00` from the cache-local
+  2026-06-20 scanner sequence completed dry-run with 14 jobs.
+- The focused scanner run wrote `side_pair_graph.json` with 14 nodes, 6
+  adjacent edges, 2 `pair_review_required` edges, 1 blank-back edge, and 3
+  blocked review edges.
+- `runs agent-review-loop 2026-06-23T02-50-18+00-00 --limit 14 --dry-run --json`
+  reported `planned_action_count = 5`, `app_intelligence_request_count = 7`,
+  graph `pair_proposal_count = 2`, `writes_attempted = 0`, and
+  `network_calls_made = 0`.
+
+Remaining:
+
 - Milestone 5 concrete App Intelligence request artifact creation and training
   fixture promotion.
 - Milestone 6 `--apply-safe` deterministic handlers once each handler has

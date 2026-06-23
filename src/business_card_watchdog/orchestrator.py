@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-from .card_sides import build_pair_proposals, classify_card_side
+from .card_sides import build_pair_proposals, build_side_pair_graph, classify_card_side
 from .config import AppConfig, ensure_runtime_dirs, resolve_input_path
 from .contact import build_contact_candidate, contact_candidate_to_spec
 from .contact_store import ContactStore
@@ -125,6 +125,7 @@ class BatchOrchestrator:
                 future.result()
 
         self._write_card_side_pair_proposals(ledger)
+        self._write_side_pair_graph(ledger)
         self._project_contact_store(ledger)
         ledger.record_event("run_completed", {"job_count": len(jobs)})
         ledger.transition_run("completed")
@@ -151,6 +152,47 @@ class BatchOrchestrator:
             metadata={"proposal_count": proposals["proposal_count"]},
         )
         ledger.record_event("card_side_pair_proposals_recorded", proposals)
+
+    def _write_side_pair_graph(self, ledger: RunLedger) -> None:
+        candidates: list[dict[str, Any]] = []
+        evidence_by_job: dict[str, dict[str, Any]] = {}
+        for artifact_dir in sorted((ledger.run_dir / "artifacts").glob("*")):
+            if not artifact_dir.is_dir():
+                continue
+            job_id = artifact_dir.name
+            side_path = artifact_dir / "card_side_candidate.json"
+            try:
+                side_payload = json.loads(side_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if isinstance(side_payload, dict):
+                candidates.append(side_payload)
+            evidence_by_job[job_id] = {
+                "qr_evidence": _read_artifact_json(artifact_dir / "qr_evidence.json"),
+                "orientation_evidence": _read_artifact_json(artifact_dir / "orientation_evidence.json"),
+                "crop_quality": _read_artifact_json(artifact_dir / "crop_quality.json"),
+                "recrop_proposals": _read_artifact_json(artifact_dir / "recrop_proposals.json"),
+            }
+        if not candidates:
+            return
+        graph = build_side_pair_graph(
+            run_id=ledger.run_dir.name,
+            side_candidates=candidates,
+            evidence_by_job=evidence_by_job,
+        )
+        graph_path = ledger.run_dir / "side_pair_graph.json"
+        graph_path.write_text(json.dumps(graph, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger.record_artifact(
+            job_id="__run__",
+            kind="side_pair_graph",
+            path=graph_path,
+            metadata={
+                "node_count": graph["node_count"],
+                "edge_count": graph["edge_count"],
+                "pair_proposal_count": graph["pair_proposal_count"],
+            },
+        )
+        ledger.record_event("side_pair_graph_recorded", graph)
 
     def _project_contact_store(self, ledger: RunLedger) -> None:
         store = ContactStore.from_config(self.config)
@@ -813,3 +855,11 @@ def _optional_adapter_artifacts(artifact_dir: Path) -> dict[str, Path]:
         if kind not in artifacts and path.exists():
             artifacts[kind] = path
     return artifacts
+
+
+def _read_artifact_json(path: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}

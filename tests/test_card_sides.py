@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from business_card_watchdog.card_sides import build_pair_proposals, classify_card_side
+from business_card_watchdog.card_sides import build_pair_proposals, build_side_pair_graph, classify_card_side
 from business_card_watchdog.cli import main
 from business_card_watchdog.config import AppConfig, PrefilterConfig
 from business_card_watchdog.orchestrator import BatchOrchestrator
@@ -96,6 +96,57 @@ def test_pair_graph_blocks_adjacency_without_required_context() -> None:
     assert proposal["state"] == "blocked_for_review"
     assert proposal["required_context_evidence"] is False
     assert proposal["blocked_reason"] == "missing OCR/context evidence beyond page proximity"
+
+
+def test_side_pair_graph_records_qr_only_adjacency_for_review() -> None:
+    qr_side = classify_card_side(
+        job_id="qr-side",
+        source_page=_source_page(1),
+        ocr_text="",
+    )
+    text_side = classify_card_side(
+        job_id="text-side",
+        source_page=_source_page(2),
+        ocr_text="Ada Lovelace\nPrincipal Engineer\nada@example.test\n+1 555 010 1234",
+    )
+    graph = build_side_pair_graph(
+        run_id="run",
+        side_candidates=[qr_side, text_side],
+        evidence_by_job={
+            "qr-side": {"qr_evidence": {"qr_found": True, "decode_count": 1}},
+            "text-side": {"crop_quality": {"state": "good", "crop_count": 1}},
+        },
+    )
+
+    assert graph["schema"] == "business-card-watchdog.side-pair-graph.v1"
+    assert graph["node_count"] == 2
+    assert graph["edge_count"] == 1
+    assert graph["pair_proposal_count"] == 1
+    edge = graph["edges"][0]
+    assert edge["state"] == "pair_review_required"
+    assert edge["requires_app_intelligence_review"] is True
+    assert any(evidence["kind"] == "qr_side_adjacency" for evidence in edge["evidence"])
+
+
+def test_side_pair_graph_tracks_blank_back_without_pairing_unrelated_card() -> None:
+    front = classify_card_side(
+        job_id="front",
+        source_page=_source_page(1),
+        ocr_text="Ada Lovelace\nPrincipal Engineer\nada@example.test\n+1 555 010 1234",
+    )
+    blank = classify_card_side(job_id="blank", source_page=_source_page(2), ocr_text="")
+    unrelated = classify_card_side(
+        job_id="unrelated",
+        source_page=_source_page(3),
+        ocr_text="Grace Hopper\nManager\ngrace@other.example\n+1 555 010 9999",
+    )
+
+    graph = build_side_pair_graph(run_id="run", side_candidates=[front, blank, unrelated])
+
+    assert graph["edge_count"] == 2
+    assert graph["edges"][0]["state"] == "blank_back_candidate"
+    assert graph["edges"][1]["state"] == "blank_back_candidate"
+    assert graph["pair_proposal_count"] == 0
 
 
 def test_pair_graph_prefers_non_adjacent_ocr_compatible_back() -> None:
@@ -199,9 +250,15 @@ def test_scanner_pdf_run_records_side_classification_and_pair_proposals(
     pair_artifact = next(
         artifact for artifact in read_jsonl(run_dir / "artifacts.jsonl") if artifact["kind"] == "card_side_pair_proposals"
     )
+    graph_artifact = next(
+        artifact for artifact in read_jsonl(run_dir / "artifacts.jsonl") if artifact["kind"] == "side_pair_graph"
+    )
     pairs = json.loads(Path(pair_artifact["path"]).read_text(encoding="utf-8"))
+    graph = json.loads(Path(graph_artifact["path"]).read_text(encoding="utf-8"))
     assert pairs["proposal_count"] == 1
     assert pairs["proposals"][0]["state"] == "proposed"
+    assert graph["edge_count"] == 1
+    assert graph["pair_proposal_count"] == 1
     labels = set()
     for job in latest_jobs_by_id(run_dir / "jobs.jsonl").values():
         side = json.loads((Path(job["artifact_dir"]) / "card_side_candidate.json").read_text(encoding="utf-8"))

@@ -157,6 +157,64 @@ def build_pair_proposals(
     }
 
 
+def build_side_pair_graph(
+    *,
+    run_id: str,
+    side_candidates: list[dict[str, Any]],
+    evidence_by_job: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    evidence_by_job = evidence_by_job or {}
+    by_session: dict[str, list[dict[str, Any]]] = {}
+    for candidate in side_candidates:
+        by_session.setdefault(_pairing_session_key(candidate), []).append(candidate)
+    nodes: list[dict[str, Any]] = []
+    edges: list[dict[str, Any]] = []
+    pair_proposals: list[dict[str, Any]] = []
+    for session_key, candidates in sorted(by_session.items()):
+        ordered = sorted(candidates, key=lambda row: (_page_number(row), str(row.get("job_id") or "")))
+        for candidate in ordered:
+            nodes.append(_side_pair_node(candidate, evidence_by_job.get(str(candidate.get("job_id") or ""), {})))
+        for left, right in zip(ordered, ordered[1:]):
+            edge = _side_pair_edge(
+                run_id=run_id,
+                session_key=session_key,
+                left=left,
+                right=right,
+                left_evidence=evidence_by_job.get(str(left.get("job_id") or ""), {}),
+                right_evidence=evidence_by_job.get(str(right.get("job_id") or ""), {}),
+            )
+            edges.append(edge)
+            if edge["state"] in {"pair_proposed", "pair_review_required"}:
+                pair_proposals.append(edge)
+    return {
+        "schema": "business-card-watchdog.side-pair-graph.v1",
+        "run_id": run_id,
+        "node_count": len(nodes),
+        "edge_count": len(edges),
+        "pair_proposal_count": len(pair_proposals),
+        "nodes": nodes,
+        "edges": edges,
+        "pair_proposals": pair_proposals,
+        "writes_attempted": 0,
+        "network_calls_made": 0,
+    }
+
+
+def redacted_side_pair_graph_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    edges = [edge for edge in list(payload.get("edges") or []) if isinstance(edge, dict)]
+    states: dict[str, int] = {}
+    for edge in edges:
+        state = str(edge.get("state") or "unknown")
+        states[state] = states.get(state, 0) + 1
+    return {
+        "state": "has_pair_candidates" if payload.get("pair_proposal_count") else "no_pair_candidates",
+        "node_count": int(payload.get("node_count") or 0),
+        "edge_count": int(payload.get("edge_count") or 0),
+        "pair_proposal_count": int(payload.get("pair_proposal_count") or 0),
+        "edge_states": dict(sorted(states.items())),
+    }
+
+
 def merge_side_pair_contacts(
     *,
     front_candidate: dict[str, Any],
@@ -227,6 +285,102 @@ def merge_side_pair_contacts(
     reviewed["enrichment_allowed"] = False
     reviewed["sink_write_allowed"] = False
     return reviewed
+
+
+def _side_pair_node(candidate: dict[str, Any], evidence: dict[str, Any]) -> dict[str, Any]:
+    qr = dict(evidence.get("qr_evidence") or {})
+    crop = dict(evidence.get("crop_quality") or {})
+    orientation = dict(evidence.get("orientation_evidence") or {})
+    features = dict(candidate.get("features") or {})
+    return {
+        "job_id": candidate.get("job_id"),
+        "source_document_path": candidate.get("source_document_path"),
+        "page_number": candidate.get("page_number"),
+        "page_image_path": candidate.get("page_image_path"),
+        "pairing_session_key": _pairing_session_key(candidate),
+        "side_label": candidate.get("side_label"),
+        "side_confidence": candidate.get("confidence"),
+        "domain_count": len(features.get("domains") or []),
+        "token_count": int(features.get("token_count") or 0),
+        "qr_found": bool(qr.get("qr_found")),
+        "qr_decode_count": int(qr.get("decode_count") or 0),
+        "crop_state": crop.get("state") or "unknown",
+        "crop_bad_count": int(crop.get("bad_count") or 0),
+        "orientation_state": orientation.get("state") or "unknown",
+    }
+
+
+def _side_pair_edge(
+    *,
+    run_id: str,
+    session_key: str,
+    left: dict[str, Any],
+    right: dict[str, Any],
+    left_evidence: dict[str, Any],
+    right_evidence: dict[str, Any],
+) -> dict[str, Any]:
+    page_distance = abs(_page_number(left) - _page_number(right))
+    labels = {str(left.get("side_label") or ""), str(right.get("side_label") or "")}
+    positive = [
+        {"kind": "same_pairing_session", "weight": 2, "value": session_key},
+        {"kind": "adjacent_pages", "weight": 3 if page_distance == 1 else 1, "value": page_distance},
+    ]
+    negative: list[dict[str, Any]] = []
+    state = "blocked_for_review"
+    reason = "adjacent pages need side-pair review"
+    if _qr_side_pair_candidate(left_evidence, right_evidence):
+        positive.append({"kind": "qr_side_adjacency", "weight": 3, "value": "qr_adjacent_to_possible_text_side"})
+        state = "pair_review_required"
+        reason = "QR-bearing side adjacent to possible text or crop-evidence side"
+    elif "blank" in labels:
+        state = "blank_back_candidate"
+        reason = "adjacent blank side may be a dropped or blank card back"
+    elif labels == {"front", "back"}:
+        positive.append({"kind": "side_label_complement", "weight": 3, "value": "front_back"})
+        state = "pair_proposed"
+        reason = "adjacent front/back side labels"
+    elif labels == {"unknown"}:
+        reason = "adjacent unknown sides lack enough deterministic context"
+    context = _context_evidence(left, right) + _context_evidence(right, left)
+    positive.extend(context)
+    negative.extend(_negative_evidence(left, right))
+    score = sum(int(item.get("weight") or 0) for item in positive) - sum(
+        int(item.get("weight") or 0) for item in negative
+    )
+    if negative:
+        state = "blocked_for_review"
+        reason = "conflicting OCR/domain evidence"
+    return {
+        "edge_id": _stable_id(run_id, session_key, str(left.get("job_id")), str(right.get("job_id")), "graph"),
+        "state": state,
+        "reason": reason,
+        "left_job_id": left.get("job_id"),
+        "right_job_id": right.get("job_id"),
+        "page_numbers": [left.get("page_number"), right.get("page_number")],
+        "side_labels": [left.get("side_label"), right.get("side_label")],
+        "pairing_session_key": session_key,
+        "page_distance": page_distance,
+        "score": score,
+        "evidence": positive,
+        "negative_evidence": negative,
+        "requires_app_intelligence_review": state in {"pair_review_required", "blocked_for_review"},
+        "routing_allowed": False,
+    }
+
+
+def _qr_side_pair_candidate(left_evidence: dict[str, Any], right_evidence: dict[str, Any]) -> bool:
+    left_qr = bool((left_evidence.get("qr_evidence") or {}).get("qr_found"))
+    right_qr = bool((right_evidence.get("qr_evidence") or {}).get("qr_found"))
+    if left_qr == right_qr:
+        return False
+    other = right_evidence if left_qr else left_evidence
+    crop = dict(other.get("crop_quality") or {})
+    orientation = dict(other.get("orientation_evidence") or {})
+    return (
+        str(crop.get("state") or "") in {"good", "bad", "qr_only"}
+        or int(crop.get("crop_count") or 0) > 0
+        or str(orientation.get("state") or "") != "unknown"
+    )
 
 
 def _pair_candidate(

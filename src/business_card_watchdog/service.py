@@ -20,7 +20,7 @@ from .contact import (
     contact_candidate_to_spec,
     field_provenance_from_canonical,
 )
-from .card_sides import merge_side_pair_contacts
+from .card_sides import merge_side_pair_contacts, redacted_side_pair_graph_summary
 from .contact_store import ContactStore
 from .crop_quality import redacted_crop_quality_summary, redacted_recrop_summary
 from .dedupe import assess_downstream_lookup_result, remember_duplicate_resolution
@@ -1462,6 +1462,7 @@ class BusinessCardService:
         write: bool = True,
     ) -> dict[str, Any]:
         bundle = self.review_bundle(run_id=run_id, state="all", write=False)
+        side_pair_graph = dict(bundle.get("side_pair_graph") or {})
         review_notes = self._accepted_review_notes_by_job(run_id)
         selected_entries = [
             entry
@@ -1473,6 +1474,16 @@ class BusinessCardService:
         app_intelligence_requests: list[dict[str, Any]] = []
         training_candidates: list[dict[str, Any]] = []
         blocked_contacts: list[dict[str, Any]] = []
+        if _int(side_pair_graph.get("pair_proposal_count")) > 0:
+            planned_actions.append(
+                {
+                    "job_id": "__run__",
+                    "action": "inspect_side_pair_graph",
+                    "status": "planned" if dry_run or not apply_safe else "skipped_no_safe_apply_handler",
+                    "reason": "deterministic side-pair graph contains pair candidates",
+                    "side_pair_graph": side_pair_graph,
+                }
+            )
         for entry in selected_entries:
             job_id = str(entry.get("job_id") or "")
             matrix = dict(entry.get("review_matrix") or {})
@@ -1564,6 +1575,7 @@ class BusinessCardService:
                         qr_summary=qr_summary,
                         orientation_summary=orientation_summary,
                         crop_summary=crop_summary,
+                        side_pair_graph=side_pair_graph,
                     )
                 )
             if notes:
@@ -1608,6 +1620,7 @@ class BusinessCardService:
                 "qr_evidence_summary_available",
                 "orientation_evidence_summary_available",
                 "crop_quality_summary_available",
+                "side_pair_graph_summary_available",
                 "agent_loop_identifies_qr_orientation_crop_side_pairing_blockers",
             ],
             "app_intelligence_request_count": len(app_intelligence_requests),
@@ -1615,6 +1628,7 @@ class BusinessCardService:
             "training_candidate_count": len(training_candidates),
             "training_candidates": training_candidates,
             "blocked_contacts": blocked_contacts,
+            "side_pair_graph": side_pair_graph,
             "applied_count": 0,
             "applied": [],
             "writes_attempted": 0,
@@ -6802,6 +6816,7 @@ class BusinessCardService:
     def review_bundle(self, *, run_id: str, state: str = "all", write: bool = True) -> dict[str, Any]:
         run = self.get_run(run_id)
         artifacts = self.list_artifacts(run_id)
+        side_pair_graph = self._side_pair_graph_summary(run_id)
         artifacts_by_job: dict[str, dict[str, dict[str, Any]]] = {}
         for artifact in artifacts:
             job_id = str(artifact.get("job_id") or "")
@@ -6887,6 +6902,7 @@ class BusinessCardService:
             "job_count": len(entries),
             "run_state": run.get("state"),
             "summary": self.run_summary(run_id),
+            "side_pair_graph": side_pair_graph,
             "groups": groups,
             "decision_import_template": [entry["decision_template"] for entry in entries],
             "entries": entries,
@@ -6924,6 +6940,23 @@ class BusinessCardService:
             )
             payload["review_bundle_path"] = str(bundle_path)
         return payload
+
+    def _side_pair_graph_summary(self, run_id: str) -> dict[str, Any]:
+        for artifact in self.list_artifacts(run_id):
+            if artifact.get("kind") != "side_pair_graph":
+                continue
+            payload = _read_json_file(Path(str(artifact.get("path") or ""))) or {}
+            summary = redacted_side_pair_graph_summary(payload)
+            summary["path"] = artifact.get("path")
+            return summary
+        return {
+            "state": "missing",
+            "node_count": 0,
+            "edge_count": 0,
+            "pair_proposal_count": 0,
+            "edge_states": {},
+            "path": None,
+        }
 
     def review_html(self, *, run_id: str, state: str = "all", write: bool = True) -> dict[str, Any]:
         bundle = self.review_bundle(run_id=run_id, state=state, write=write)
@@ -16598,6 +16631,7 @@ def _agent_review_request(
     qr_summary: dict[str, Any],
     orientation_summary: dict[str, Any] | None = None,
     crop_summary: dict[str, Any] | None = None,
+    side_pair_graph: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
         "job_id": job_id,
@@ -16609,6 +16643,7 @@ def _agent_review_request(
             "crop_quality": crop_summary or {},
             "orientation_evidence": orientation_summary or {},
             "qr_evidence": qr_summary,
+            "side_pair_graph": side_pair_graph or {},
         },
         "writes_attempted": 0,
         "network_calls_made": 0,
