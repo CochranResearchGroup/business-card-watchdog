@@ -588,6 +588,31 @@ def test_cli_runs_agent_review_loop_plans_qr_side_followup(tmp_path: Path, monke
                 "--limit",
                 "1",
                 "--dry-run",
+                "--no-write",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    no_write_payload = json.loads(capsys.readouterr().out)
+    assert no_write_payload["app_intelligence_request_count"] == 3
+    assert no_write_payload["app_intelligence_request_artifact_count"] == 0
+    assert no_write_payload["training_candidate_artifact_count"] == 0
+    assert no_write_payload["app_intelligence_request_paths"] == []
+    assert no_write_payload["training_candidate_paths"] == []
+    assert no_write_payload["runtime_artifact_written"] is False
+
+    assert (
+        main(
+            [
+                "--config",
+                str(config_path),
+                "runs",
+                "agent-review-loop",
+                run_dir.name,
+                "--limit",
+                "1",
+                "--dry-run",
                 "--json",
             ]
         )
@@ -604,9 +629,38 @@ def test_cli_runs_agent_review_loop_plans_qr_side_followup(tmp_path: Path, monke
         "assess_crop_quality",
         "pair_card_sides",
     }
+    assert payload["app_intelligence_request_artifact_count"] == 3
+    assert len(payload["app_intelligence_request_paths"]) == 3
+    request_path = Path(payload["app_intelligence_request_paths"][0])
+    request_payload = json.loads(request_path.read_text(encoding="utf-8"))
+    assert request_payload["schema"] == "business-card-watchdog.app-intelligence-review-request.v1"
+    assert request_payload["allowed_answer_shape"] == "evidence_only_no_state_transition"
+    assert request_payload["response_import_contract"]["direct_route_ready_transition_allowed"] is False
+    assert request_payload["response_import_contract"]["direct_sink_action_allowed"] is False
+    assert request_payload["stop_rules"]
+    assert request_payload["allowed_response_schema"]["forbidden_actions"] == [
+        "route_contact",
+        "write_sink",
+        "readback_sink",
+        "run_enrichment",
+        "select_live_target",
+    ]
     assert payload["training_candidate_count"] == 1
+    assert payload["training_candidate_artifact_count"] == 1
+    training_path = Path(payload["training_candidate_paths"][0])
+    training_payload = json.loads(training_path.read_text(encoding="utf-8"))
+    assert training_payload["schema"] == "business-card-watchdog.agent-training-candidate.v1"
+    assert training_payload["promotion_state"] == "requires_fixture_or_rule_test_before_apply_safe"
+    assert training_payload["response_import_contract"]["direct_route_ready_transition_allowed"] is False
     assert payload["writes_attempted"] == 0
     assert payload["network_calls_made"] == 0
+    artifact_rows = [
+        json.loads(line)
+        for line in (config.runs_dir / run_dir.name / "artifacts.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert sum(row["kind"] == "app_intelligence_review_request" for row in artifact_rows) == 3
+    assert sum(row["kind"] == "agent_training_candidate" for row in artifact_rows) == 1
 
     assert (
         main(

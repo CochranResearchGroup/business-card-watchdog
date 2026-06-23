@@ -471,3 +471,42 @@ Remaining:
   fixture promotion.
 - Milestone 6 `--apply-safe` deterministic handlers once each handler has
   passing tests.
+
+## Slice 5 Closeout | 2026-06-23
+
+Implemented:
+
+- Added durable evidence-only `app_intelligence_review_request` artifacts for
+  bounded agent-loop escalation requests.
+- Added `agent_training_candidate` artifacts for accepted-review evidence that
+  should become deterministic fixtures or rule tests before safe apply.
+- Added stable request IDs, deterministic evidence, candidate choices, stop
+  rules, allowed response schemas, forbidden action lists, and response-import
+  contracts to App Intelligence request payloads.
+- Made `--no-write` agent-loop output keep the same schema while writing no
+  request or training artifacts.
+- Projected `app_intelligence_review_request` and `agent_training_candidate`
+  artifact kinds into the contact store allowlist.
+- Strengthened the contact-review evidence test to prove accepted App
+  Intelligence evidence does not mutate contact state, add route decisions, or
+  add sink attempts by itself.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_cli_surfaces.py::test_cli_runs_agent_review_loop_plans_qr_side_followup tests/test_contact_store.py::test_contact_review_recommendations_are_host_decided -q`
+  passed with 2 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/service.py src/business_card_watchdog/contact_store.py tests/test_cli_surfaces.py tests/test_contact_store.py`
+  passed.
+- `runs agent-review-loop 2026-06-23T02-50-18+00-00 --limit 14 --dry-run --json`
+  wrote 7 private request artifacts for the focused scanner run, planned 5
+  actions, and reported `writes_attempted = 0` and `network_calls_made = 0`.
+- A sampled request artifact had schema
+  `business-card-watchdog.app-intelligence-review-request.v1`, answer shape
+  `evidence_only_no_state_transition`, `direct_route_ready_transition_allowed =
+  false`, and forbidden actions for routing, sink write/readback, enrichment,
+  and selected-target creation.
+
+Remaining:
+
+- Milestone 6 `--apply-safe` deterministic handlers once each handler has
+  passing tests.

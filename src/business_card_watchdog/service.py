@@ -1625,8 +1625,12 @@ class BusinessCardService:
             ],
             "app_intelligence_request_count": len(app_intelligence_requests),
             "app_intelligence_requests": app_intelligence_requests,
+            "app_intelligence_request_artifact_count": 0,
+            "app_intelligence_request_paths": [],
             "training_candidate_count": len(training_candidates),
             "training_candidates": training_candidates,
+            "training_candidate_artifact_count": 0,
+            "training_candidate_paths": [],
             "blocked_contacts": blocked_contacts,
             "side_pair_graph": side_pair_graph,
             "applied_count": 0,
@@ -1651,10 +1655,24 @@ class BusinessCardService:
         }
         if write:
             agent_loop_path = self.config.runs_dir / run_id / "agent_review_loop.json"
+            ledger = RunLedger(self.config.runs_dir / run_id)
+            artifact_summary = _write_agent_review_loop_artifacts(
+                ledger=ledger,
+                run_id=run_id,
+                requests=app_intelligence_requests,
+                training_candidates=training_candidates,
+            )
+            payload["app_intelligence_request_paths"] = artifact_summary["app_intelligence_request_paths"]
+            payload["training_candidate_paths"] = artifact_summary["training_candidate_paths"]
+            payload["app_intelligence_request_artifact_count"] = artifact_summary[
+                "app_intelligence_request_artifact_count"
+            ]
+            payload["training_candidate_artifact_count"] = artifact_summary[
+                "training_candidate_artifact_count"
+            ]
             payload["runtime_artifact_written"] = True
             payload["agent_loop_path"] = str(agent_loop_path)
             agent_loop_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-            ledger = RunLedger(self.config.runs_dir / run_id)
             ledger.record_artifact(job_id="__run__", kind="agent_review_loop", path=agent_loop_path)
             ledger.record_event(
                 "agent_review_loop_planned",
@@ -1664,6 +1682,12 @@ class BusinessCardService:
                     "planned_action_count": len(planned_actions),
                     "app_intelligence_request_count": len(app_intelligence_requests),
                     "training_candidate_count": len(training_candidates),
+                    "app_intelligence_request_artifact_count": artifact_summary[
+                        "app_intelligence_request_artifact_count"
+                    ],
+                    "training_candidate_artifact_count": artifact_summary[
+                        "training_candidate_artifact_count"
+                    ],
                     "writes_attempted": 0,
                     "network_calls_made": 0,
                 },
@@ -16633,21 +16657,214 @@ def _agent_review_request(
     crop_summary: dict[str, Any] | None = None,
     side_pair_graph: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    deterministic_evidence = {
+        "crop_quality": crop_summary or {},
+        "orientation_evidence": orientation_summary or {},
+        "qr_evidence": qr_summary,
+        "side_pair_graph": side_pair_graph or {},
+    }
+    request_id = _stable_short_id(
+        "app-intelligence",
+        job_id,
+        request_type,
+        reason,
+        json.dumps(deterministic_evidence, sort_keys=True, default=str),
+    )
     return {
+        "schema": "business-card-watchdog.app-intelligence-review-request.v1",
+        "request_id": request_id,
         "job_id": job_id,
         "request_type": request_type,
         "status": "planned",
         "reason": reason,
         "allowed_answer_shape": "evidence_only_no_state_transition",
-        "deterministic_evidence": {
-            "crop_quality": crop_summary or {},
-            "orientation_evidence": orientation_summary or {},
-            "qr_evidence": qr_summary,
-            "side_pair_graph": side_pair_graph or {},
+        "allowed_response_schema": _agent_review_allowed_response_schema(request_type),
+        "candidate_choices": _agent_review_candidate_choices(
+            request_type=request_type,
+            orientation_summary=orientation_summary or {},
+            crop_summary=crop_summary or {},
+            side_pair_graph=side_pair_graph or {},
+        ),
+        "stop_rules": [
+            "Return evidence and recommendation only; do not change contact state.",
+            "Do not route, enrich, write, read back, or select a live sink target.",
+            "Do not use public-web search, paid enrichment, or external connector calls.",
+            "If deterministic evidence is insufficient, return needs_more_deterministic_evidence.",
+        ],
+        "deterministic_evidence": deterministic_evidence,
+        "training_promotion": {
+            "mode": "candidate_only",
+            "accepted_response_creates_contact_state": False,
+            "expected_followup": "add_or_update_deterministic_fixture_before_safe_apply",
         },
         "writes_attempted": 0,
         "network_calls_made": 0,
     }
+
+
+def _write_agent_review_loop_artifacts(
+    *,
+    ledger: RunLedger,
+    run_id: str,
+    requests: list[dict[str, Any]],
+    training_candidates: list[dict[str, Any]],
+) -> dict[str, Any]:
+    request_paths: list[str] = []
+    training_paths: list[str] = []
+    for request in requests:
+        job_id = _safe_path_part(str(request.get("job_id") or "__run__"))
+        request_type = _safe_path_part(str(request.get("request_type") or "review"))
+        request_id = _safe_path_part(str(request.get("request_id") or _stable_short_id(run_id, job_id, request_type)))
+        request_dir = ledger.run_dir / "artifacts" / job_id / "app_intelligence_requests"
+        request_dir.mkdir(parents=True, exist_ok=True)
+        request_path = request_dir / f"app_intelligence_review_request_{request_type}_{request_id}.json"
+        payload = {
+            **request,
+            "run_id": run_id,
+            "created_at": utc_now(),
+            "response_import_contract": {
+                "response_is_evidence_only": True,
+                "direct_route_ready_transition_allowed": False,
+                "direct_sink_action_allowed": False,
+                "training_candidate_required_for_accepted_correction": True,
+            },
+        }
+        request_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        request_paths.append(str(request_path))
+        ledger.record_artifact(
+            job_id=str(request.get("job_id") or "__run__"),
+            kind="app_intelligence_review_request",
+            path=request_path,
+            metadata={
+                "request_id": request.get("request_id"),
+                "request_type": request.get("request_type"),
+                "status": request.get("status"),
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+    for index, candidate in enumerate(training_candidates, start=1):
+        job_id = _safe_path_part(str(candidate.get("job_id") or "__run__"))
+        candidate_id = _safe_path_part(str(candidate.get("candidate_id") or _stable_short_id(run_id, job_id, index)))
+        candidate_dir = ledger.run_dir / "artifacts" / job_id / "training_candidates"
+        candidate_dir.mkdir(parents=True, exist_ok=True)
+        candidate_path = candidate_dir / f"agent_training_candidate_{candidate_id}.json"
+        payload = {
+            "schema": "business-card-watchdog.agent-training-candidate.v1",
+            "candidate_id": candidate_id,
+            "run_id": run_id,
+            "created_at": utc_now(),
+            "state": "candidate",
+            "promotion_state": "requires_fixture_or_rule_test_before_apply_safe",
+            "response_import_contract": {
+                "response_is_evidence_only": True,
+                "direct_route_ready_transition_allowed": False,
+                "direct_sink_action_allowed": False,
+            },
+            "candidate": candidate,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+        candidate_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        training_paths.append(str(candidate_path))
+        ledger.record_artifact(
+            job_id=str(candidate.get("job_id") or "__run__"),
+            kind="agent_training_candidate",
+            path=candidate_path,
+            metadata={
+                "candidate_id": candidate_id,
+                "source": candidate.get("source"),
+                "promotion_state": payload["promotion_state"],
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+    return {
+        "app_intelligence_request_paths": request_paths,
+        "training_candidate_paths": training_paths,
+        "app_intelligence_request_artifact_count": len(request_paths),
+        "training_candidate_artifact_count": len(training_paths),
+    }
+
+
+def _agent_review_allowed_response_schema(request_type: str) -> dict[str, Any]:
+    allowed_recommendations = {
+        "classify_document_type": ["business_card", "not_business_card", "needs_more_deterministic_evidence"],
+        "resolve_orientation": ["rotate_0", "rotate_90", "rotate_180", "rotate_270", "needs_more_deterministic_evidence"],
+        "assess_crop_quality": ["crop_good", "crop_bad", "use_recrop_candidate", "needs_more_deterministic_evidence"],
+        "pair_card_sides": ["same_card_pair", "not_same_card", "blank_back", "needs_more_deterministic_evidence"],
+        "verify_contact_fields": ["fields_verified", "fields_need_correction", "needs_more_deterministic_evidence"],
+    }
+    return {
+        "type": "object",
+        "required": ["recommendation", "confidence", "rationale", "evidence"],
+        "properties": {
+            "recommendation": {
+                "type": "string",
+                "enum": allowed_recommendations.get(
+                    request_type,
+                    ["needs_more_deterministic_evidence"],
+                ),
+            },
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+            "rationale": {"type": "string"},
+            "evidence": {"type": "object"},
+            "training_hint": {"type": "string"},
+        },
+        "forbidden_actions": [
+            "route_contact",
+            "write_sink",
+            "readback_sink",
+            "run_enrichment",
+            "select_live_target",
+        ],
+    }
+
+
+def _agent_review_candidate_choices(
+    *,
+    request_type: str,
+    orientation_summary: dict[str, Any],
+    crop_summary: dict[str, Any],
+    side_pair_graph: dict[str, Any],
+) -> list[dict[str, Any]]:
+    if request_type == "resolve_orientation":
+        rotations = list(orientation_summary.get("selected_rotations") or [])
+        if not rotations:
+            rotations = [0, 90, 180, 270]
+        return [{"choice": f"rotate_{int(rotation)}"} for rotation in rotations]
+    if request_type == "assess_crop_quality":
+        choices = [{"choice": "keep_existing_crop"}, {"choice": "mark_bad_crop"}]
+        if _int(crop_summary.get("bad_count")) > 0 or str(crop_summary.get("state") or "") in {"bad", "qr_only"}:
+            choices.append({"choice": "request_recrop_candidate"})
+        return choices
+    if request_type == "pair_card_sides":
+        proposals = [
+            {
+                "choice": str(edge.get("edge_id") or ""),
+                "state": edge.get("state"),
+                "reason": edge.get("reason"),
+                "job_ids": [edge.get("left_job_id"), edge.get("right_job_id")],
+            }
+            for edge in list(side_pair_graph.get("pair_proposals") or [])
+            if isinstance(edge, dict)
+        ]
+        return proposals or [{"choice": "needs_side_pair_graph_context"}]
+    if request_type == "classify_document_type":
+        return [{"choice": "business_card"}, {"choice": "not_business_card"}]
+    if request_type == "verify_contact_fields":
+        return [{"choice": "fields_verified"}, {"choice": "fields_need_correction"}]
+    return [{"choice": "needs_more_deterministic_evidence"}]
+
+
+def _safe_path_part(value: str) -> str:
+    cleaned = "".join(ch if ch.isalnum() or ch in {"_", "-"} else "_" for ch in value)
+    return cleaned[:96] or "item"
+
+
+def _stable_short_id(*parts: object) -> str:
+    digest = hashlib.sha256("\0".join(str(part) for part in parts).encode("utf-8")).hexdigest()
+    return digest[:16]
 
 
 def _orientation_has_normalized_derivative(orientation_summary: dict[str, Any]) -> bool:

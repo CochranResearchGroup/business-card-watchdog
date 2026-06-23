@@ -464,6 +464,22 @@ def test_contact_review_recommendations_are_host_decided(tmp_path: Path) -> None
         decision="reject",
         notes="card is sufficient for dry-run routing",
     )
+    before_accept = service.get_contact(str(contact_id))["contact"]
+    accepted = service.record_contact_review_recommendation(
+        contact_id=contact_id,
+        source="app_intelligence",
+        category="verify_contact_fields",
+        recommendation="fields_verified",
+        rationale="visible fields match deterministic OCR",
+        confidence=0.91,
+        evidence={"answer_shape": "evidence_only_no_state_transition"},
+    )
+    service.decide_contact_review_state(
+        review_state_id=accepted["review_state"]["review_state_id"],
+        reviewer="operator",
+        decision="accept",
+        notes="store evidence only",
+    )
     detail = service.get_contact(str(contact_id))["contact"]
 
     assert proposed["writes_attempted"] == 0
@@ -474,8 +490,15 @@ def test_contact_review_recommendations_are_host_decided(tmp_path: Path) -> None
     assert decided["review_state"]["state"] == "rejected"
     assert decided["review_state"]["decided_by"] == "operator"
     assert decided["review_state"]["payload"]["decision"]["decision"] == "reject"
-    assert detail["review_states"][0]["review_state_id"] == review_state_id
-    assert detail["review_states"][0]["state"] == "rejected"
+    assert detail["state"] == before_accept["state"]
+    assert len(detail["routing_decisions"]) == len(before_accept["routing_decisions"])
+    assert len(detail["sink_attempts"]) == len(before_accept["sink_attempts"])
+    assert {row["review_state_id"]: row["state"] for row in detail["review_states"]}[
+        review_state_id
+    ] == "rejected"
+    assert {row["review_state_id"]: row["state"] for row in detail["review_states"]}[
+        accepted["review_state"]["review_state_id"]
+    ] == "accepted"
 
 
 def test_accepted_reject_not_card_removes_contact_from_route_review(tmp_path: Path) -> None:
