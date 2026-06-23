@@ -340,7 +340,47 @@ Validation:
 
 Remaining:
 
-- Milestone 3 crop quality and recrop proposals.
+- Milestone 4 scanner front/back pairing.
+- Milestone 5 concrete App Intelligence request artifact creation and training
+  fixture promotion.
+- Milestone 6 `--apply-safe` deterministic handlers once each handler has
+  passing tests.
+
+## Slice 3 Closeout | 2026-06-23
+
+Implemented:
+
+- Added deterministic `crop_quality.json` artifacts for source pages with and
+  without candidate crops.
+- Added crop metrics for boundary coverage, text density, QR density, blank
+  fraction, clipping risk, edge margin, aspect ratio, and text-line count.
+- Added `recrop_proposals.json` artifacts with expanded source-page bounds for
+  bad or QR-only crops.
+- Projected crop quality and recrop proposal artifacts into the contact store.
+- Exposed redacted crop and recrop summaries in review bundles, review matrices,
+  contact review surfaces, and CLI text output.
+- Updated the agent review loop to plan crop-quality inspection and bounded
+  `assess_crop_quality` request candidates when deterministic crop evidence is
+  bad or QR-only.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_crop_quality.py tests/test_orientation_evidence.py tests/test_qr_evidence.py tests/test_cli_surfaces.py::test_cli_runs_agent_review_loop_plans_qr_side_followup tests/test_preclassifier.py::test_orchestrator_records_multi_card_candidate_manifest -q`
+  passed with 10 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/crop_quality.py src/business_card_watchdog/orchestrator.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/contact_store.py tests/test_crop_quality.py tests/test_preclassifier.py`
+  passed.
+- Focused scanner run `2026-06-23T02-44-36+00-00` from the cache-local
+  2026-06-20 scanner sequence completed dry-run with 14 jobs.
+- The focused scanner run wrote 14 `crop_quality` artifacts and 14
+  `recrop_proposals` artifacts, detected 2 bad crops, and produced 2 recrop
+  proposals.
+- `runs agent-review-loop 2026-06-23T02-44-36+00-00 --limit 14 --dry-run --json`
+  reported `planned_action_count = 4`, `app_intelligence_request_count = 7`,
+  request types `assess_crop_quality`, `pair_card_sides`, and
+  `resolve_orientation`, `writes_attempted = 0`, and `network_calls_made = 0`.
+
+Remaining:
+
 - Milestone 4 scanner front/back pairing.
 - Milestone 5 concrete App Intelligence request artifact creation and training
   fixture promotion.

@@ -9,6 +9,7 @@ from .card_sides import build_pair_proposals, classify_card_side
 from .config import AppConfig, ensure_runtime_dirs, resolve_input_path
 from .contact import build_contact_candidate, contact_candidate_to_spec
 from .contact_store import ContactStore
+from .crop_quality import build_crop_quality, build_recrop_proposals
 from .dedupe import assess_duplicate, remember_identity
 from .document_intake import (
     build_card_side_candidate,
@@ -377,6 +378,12 @@ class BatchOrchestrator:
                     artifact_dir=artifact_dir,
                     crop_manifest=crop_manifest,
                 )
+                self._write_crop_quality(
+                    ledger=ledger,
+                    job=job,
+                    artifact_dir=artifact_dir,
+                    crop_manifest=crop_manifest,
+                )
             if assessment.decision == "not_business_card" or (
                 assessment.decision == "uncertain" and not self.config.prefilter.process_uncertain
             ):
@@ -389,6 +396,13 @@ class BatchOrchestrator:
                     )
                 if not (artifact_dir / "qr_evidence.json").exists():
                     self._write_qr_evidence(
+                        ledger=ledger,
+                        job=job,
+                        artifact_dir=artifact_dir,
+                        crop_manifest=None,
+                    )
+                if not (artifact_dir / "crop_quality.json").exists():
+                    self._write_crop_quality(
                         ledger=ledger,
                         job=job,
                         artifact_dir=artifact_dir,
@@ -415,6 +429,13 @@ class BatchOrchestrator:
             )
         if not (artifact_dir / "qr_evidence.json").exists():
             self._write_qr_evidence(
+                ledger=ledger,
+                job=job,
+                artifact_dir=artifact_dir,
+                crop_manifest=None,
+            )
+        if not (artifact_dir / "crop_quality.json").exists():
+            self._write_crop_quality(
                 ledger=ledger,
                 job=job,
                 artifact_dir=artifact_dir,
@@ -653,6 +674,87 @@ class BatchOrchestrator:
             },
         )
         return orientation_evidence
+
+    def _write_crop_quality(
+        self,
+        *,
+        ledger: RunLedger,
+        job: CardJob,
+        artifact_dir: Path,
+        crop_manifest: dict[str, Any] | None,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        qr_evidence_path = artifact_dir / "qr_evidence.json"
+        qr_evidence = (
+            json.loads(qr_evidence_path.read_text(encoding="utf-8"))
+            if qr_evidence_path.exists()
+            else {}
+        )
+        crop_quality = build_crop_quality(
+            run_id=ledger.run_dir.name,
+            job_id=job.job_id,
+            source_image_path=Path(job.image_path),
+            crop_manifest=crop_manifest,
+            qr_evidence=qr_evidence,
+        )
+        crop_quality_path = artifact_dir / "crop_quality.json"
+        crop_quality_path.write_text(
+            json.dumps(crop_quality, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        ledger.record_artifact(
+            job_id=job.job_id,
+            kind="crop_quality",
+            path=crop_quality_path,
+            metadata={
+                "state": crop_quality["state"],
+                "crop_count": crop_quality["crop_count"],
+                "bad_count": crop_quality["bad_count"],
+                "qr_only_count": crop_quality["qr_only_count"],
+            },
+        )
+        ledger.record_event(
+            "crop_quality_recorded",
+            {
+                "job": job.to_dict(),
+                "state": crop_quality["state"],
+                "crop_count": crop_quality["crop_count"],
+                "bad_count": crop_quality["bad_count"],
+                "qr_only_count": crop_quality["qr_only_count"],
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        recrop_proposals = build_recrop_proposals(
+            run_id=ledger.run_dir.name,
+            job_id=job.job_id,
+            source_image_path=Path(job.image_path),
+            crop_quality=crop_quality,
+        )
+        recrop_path = artifact_dir / "recrop_proposals.json"
+        recrop_path.write_text(
+            json.dumps(recrop_proposals, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        ledger.record_artifact(
+            job_id=job.job_id,
+            kind="recrop_proposals",
+            path=recrop_path,
+            metadata={
+                "state": recrop_proposals["state"],
+                "proposal_count": recrop_proposals["proposal_count"],
+            },
+        )
+        ledger.record_event(
+            "recrop_proposals_recorded",
+            {
+                "job": job.to_dict(),
+                "state": recrop_proposals["state"],
+                "proposal_count": recrop_proposals["proposal_count"],
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        return crop_quality, recrop_proposals
 
     def _write_qr_evidence(
         self,

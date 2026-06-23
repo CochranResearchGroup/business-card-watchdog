@@ -28,6 +28,8 @@ _PROJECTED_ASSET_KINDS = {
     "preclassification",
     "card_candidates",
     "candidate_crops",
+    "crop_quality",
+    "recrop_proposals",
     "orientation_evidence",
     "qr_evidence",
     "child_verification_requests",

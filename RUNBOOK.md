@@ -1,5 +1,40 @@
 # Runbook
 
+## Turn 310 | 2026-06-23
+
+Executed Plan 0093 Slice 3 for crop quality and recrop proposals.
+
+Implemented:
+
+- Added `crop_quality.json` artifacts with deterministic crop metrics for
+  boundary coverage, text density, QR density, blank fraction, clipping risk,
+  edge margin, aspect ratio, and text-line count.
+- Added `recrop_proposals.json` artifacts for bad or QR-only crops.
+- Projected crop quality and recrop proposal artifacts into the contact store
+  and exposed redacted summaries in review bundles, contact review surfaces,
+  and the agent review loop.
+- Updated the agent loop to plan crop-quality inspection and bounded
+  `assess_crop_quality` request candidates from deterministic evidence.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_crop_quality.py tests/test_orientation_evidence.py tests/test_qr_evidence.py tests/test_cli_surfaces.py::test_cli_runs_agent_review_loop_plans_qr_side_followup tests/test_preclassifier.py::test_orchestrator_records_multi_card_candidate_manifest -q`
+  passed with 10 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/crop_quality.py src/business_card_watchdog/orchestrator.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/contact_store.py tests/test_crop_quality.py tests/test_preclassifier.py`
+  passed.
+- Focused scanner dry-run `2026-06-23T02-44-36+00-00` completed from the
+  cache-local 2026-06-20 scanner sequence with 14 crop quality artifacts, 14
+  recrop proposal artifacts, 2 bad crops, and 2 recrop proposals.
+- `runs agent-review-loop 2026-06-23T02-44-36+00-00 --limit 14 --dry-run --json`
+  planned 4 review actions and 7 bounded App Intelligence request candidates
+  with `writes_attempted = 0` and `network_calls_made = 0`.
+
+Safety:
+
+- This slice did not run live Google/Odoo/Odollo lookup, write, or readback. It
+  did not run public-web search, paid enrichment, selected-target creation, or a
+  broad scanner backlog.
+
 ## Turn 309 | 2026-06-23
 
 Executed Plan 0093 Slice 2 for deterministic orientation evidence.

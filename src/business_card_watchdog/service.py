@@ -22,6 +22,7 @@ from .contact import (
 )
 from .card_sides import merge_side_pair_contacts
 from .contact_store import ContactStore
+from .crop_quality import redacted_crop_quality_summary, redacted_recrop_summary
 from .dedupe import assess_downstream_lookup_result, remember_duplicate_resolution
 from .enrichment import (
     build_paid_api_provider_handoff,
@@ -315,6 +316,8 @@ _ROUTE_REFRESH_STEPS = [
 _REVIEW_BUNDLE_ARTIFACT_KINDS = {
     "preclassification",
     "review_packet",
+    "crop_quality",
+    "recrop_proposals",
     "orientation_evidence",
     "qr_evidence",
     "contact_spec",
@@ -1475,13 +1478,28 @@ class BusinessCardService:
             matrix = dict(entry.get("review_matrix") or {})
             qr_summary = dict(matrix.get("qr_evidence") or {})
             orientation_summary = dict(matrix.get("orientation_evidence") or {})
+            crop_summary = dict(matrix.get("crop_quality") or {})
+            recrop_summary = dict(matrix.get("recrop_proposals") or {})
             notes = review_notes.get(job_id, [])
             reasons = _agent_review_reasons(
                 qr_summary=qr_summary,
                 orientation_summary=orientation_summary,
+                crop_summary=crop_summary,
+                recrop_summary=recrop_summary,
                 review_notes=notes,
                 entry=entry,
             )
+            if _crop_quality_needs_review(crop_summary):
+                planned_actions.append(
+                    {
+                        "job_id": job_id,
+                        "action": "inspect_crop_quality",
+                        "status": "planned" if dry_run or not apply_safe else "skipped_no_safe_apply_handler",
+                        "reason": "deterministic crop quality evidence found bad or QR-only crop evidence",
+                        "crop_quality": crop_summary,
+                        "recrop_proposals": recrop_summary,
+                    }
+                )
             if _orientation_has_normalized_derivative(orientation_summary):
                 planned_actions.append(
                     {
@@ -1510,6 +1528,7 @@ class BusinessCardService:
                         reason="accepted review evidence says the card side has wrong orientation",
                         qr_summary=qr_summary,
                         orientation_summary=orientation_summary,
+                        crop_summary=crop_summary,
                     )
                 )
             elif _orientation_needs_app_intelligence(orientation_summary) and (
@@ -1522,16 +1541,18 @@ class BusinessCardService:
                         reason="deterministic orientation evidence is ambiguous",
                         qr_summary=qr_summary,
                         orientation_summary=orientation_summary,
+                        crop_summary=crop_summary,
                     )
                 )
-            if _review_notes_request_crop_quality(notes):
+            if _review_notes_request_crop_quality(notes) or _crop_quality_needs_review(crop_summary):
                 app_intelligence_requests.append(
                     _agent_review_request(
                         job_id=job_id,
                         request_type="assess_crop_quality",
-                        reason="accepted review evidence says the crop is bad",
+                        reason="accepted review evidence or deterministic crop quality says the crop needs review",
                         qr_summary=qr_summary,
                         orientation_summary=orientation_summary,
+                        crop_summary=crop_summary,
                     )
                 )
             if qr_summary.get("qr_found") or _review_notes_request_side_pairing(notes):
@@ -1542,6 +1563,7 @@ class BusinessCardService:
                         reason="QR/card-side evidence indicates this may be the back or QR-only side of a card",
                         qr_summary=qr_summary,
                         orientation_summary=orientation_summary,
+                        crop_summary=crop_summary,
                     )
                 )
             if notes:
@@ -1585,6 +1607,7 @@ class BusinessCardService:
             "deterministic_improvements": [
                 "qr_evidence_summary_available",
                 "orientation_evidence_summary_available",
+                "crop_quality_summary_available",
                 "agent_loop_identifies_qr_orientation_crop_side_pairing_blockers",
             ],
             "app_intelligence_request_count": len(app_intelligence_requests),
@@ -14505,6 +14528,12 @@ class BusinessCardService:
         orientation_summary = redacted_orientation_summary(
             (artifacts.get("orientation_evidence") or {}).get("payload") or {}
         )
+        crop_summary = redacted_crop_quality_summary(
+            (artifacts.get("crop_quality") or {}).get("payload") or {}
+        )
+        recrop_summary = redacted_recrop_summary(
+            (artifacts.get("recrop_proposals") or {}).get("payload") or {}
+        )
         qr_summary = redacted_qr_summary((artifacts.get("qr_evidence") or {}).get("payload") or {})
         normalized = contact.get("normalized") if isinstance(contact.get("normalized"), dict) else {}
         review_warnings = [
@@ -14543,6 +14572,8 @@ class BusinessCardService:
             "normalization_warning_fields": review_warnings,
             "normalization_warning_count": len(review_warnings),
             "orientation_evidence": orientation_summary,
+            "crop_quality": crop_summary,
+            "recrop_proposals": recrop_summary,
             "qr_evidence": qr_summary,
             "duplicate_state": duplicate_state,
             "duplicate_match_count": _int(duplicate.get("match_count") or len(duplicate.get("matches") or [])),
@@ -16300,6 +16331,7 @@ def _contact_review_surface_row(contact: dict[str, Any]) -> dict[str, Any]:
     review_states = list(contact.get("review_states") or [])
     routing_decisions = list(contact.get("routing_decisions") or [])
     assets = list(contact.get("assets") or [])
+    crop_evidence = _contact_crop_evidence_summary(assets)
     orientation_evidence = _contact_orientation_evidence_summary(assets)
     qr_evidence = _contact_qr_evidence_summary(assets)
     extraction_attempts = list(contact.get("extraction_attempts") or [])
@@ -16368,6 +16400,8 @@ def _contact_review_surface_row(contact: dict[str, Any]) -> dict[str, Any]:
             "proposed_review_states": len(proposed_reviews),
             "mutations": len(mutations),
         },
+        "crop_quality": crop_evidence["crop_quality"],
+        "recrop_proposals": crop_evidence["recrop_proposals"],
         "orientation_evidence": orientation_evidence,
         "qr_evidence": qr_evidence,
         "asset_refs": [
@@ -16422,6 +16456,44 @@ def _contact_review_surface_row(contact: dict[str, Any]) -> dict[str, Any]:
             for row in mutations
             if isinstance(row, dict)
         ],
+    }
+
+
+def _contact_crop_evidence_summary(assets: list[Any]) -> dict[str, Any]:
+    crop_summaries: list[dict[str, Any]] = []
+    recrop_summaries: list[dict[str, Any]] = []
+    for asset in assets:
+        if not isinstance(asset, dict):
+            continue
+        path = Path(str(asset.get("path_ref") or ""))
+        if asset.get("asset_kind") == "crop_quality":
+            payload = _read_json_file(path) or {}
+            summary = redacted_crop_quality_summary(payload)
+            summary["asset_id"] = asset.get("asset_id")
+            summary["path_ref"] = str(path)
+            crop_summaries.append(summary)
+        if asset.get("asset_kind") == "recrop_proposals":
+            payload = _read_json_file(path) or {}
+            summary = redacted_recrop_summary(payload)
+            summary["asset_id"] = asset.get("asset_id")
+            summary["path_ref"] = str(path)
+            recrop_summaries.append(summary)
+    return {
+        "crop_quality": {
+            "asset_count": len(crop_summaries),
+            "crop_count": sum(_int(summary.get("crop_count")) for summary in crop_summaries),
+            "good_count": sum(_int(summary.get("good_count")) for summary in crop_summaries),
+            "bad_count": sum(_int(summary.get("bad_count")) for summary in crop_summaries),
+            "qr_only_count": sum(_int(summary.get("qr_only_count")) for summary in crop_summaries),
+            "states": sorted({str(summary.get("state") or "unknown") for summary in crop_summaries}),
+            "items": crop_summaries,
+        },
+        "recrop_proposals": {
+            "asset_count": len(recrop_summaries),
+            "proposal_count": sum(_int(summary.get("proposal_count")) for summary in recrop_summaries),
+            "states": sorted({str(summary.get("state") or "unknown") for summary in recrop_summaries}),
+            "items": recrop_summaries,
+        },
     }
 
 
@@ -16488,10 +16560,16 @@ def _agent_review_reasons(
     *,
     qr_summary: dict[str, Any],
     orientation_summary: dict[str, Any],
+    crop_summary: dict[str, Any],
+    recrop_summary: dict[str, Any],
     review_notes: list[dict[str, Any]],
     entry: dict[str, Any],
 ) -> list[str]:
     reasons: list[str] = []
+    if _crop_quality_needs_review(crop_summary):
+        reasons.append(f"crop_quality_{crop_summary.get('state') or 'needs_review'}")
+    if _int(recrop_summary.get("proposal_count")) > 0:
+        reasons.append("recrop_proposal_available")
     if _orientation_has_normalized_derivative(orientation_summary):
         reasons.append("orientation_normalized_derivative_available")
     if _orientation_needs_app_intelligence(orientation_summary):
@@ -16519,6 +16597,7 @@ def _agent_review_request(
     reason: str,
     qr_summary: dict[str, Any],
     orientation_summary: dict[str, Any] | None = None,
+    crop_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
         "job_id": job_id,
@@ -16527,6 +16606,7 @@ def _agent_review_request(
         "reason": reason,
         "allowed_answer_shape": "evidence_only_no_state_transition",
         "deterministic_evidence": {
+            "crop_quality": crop_summary or {},
             "orientation_evidence": orientation_summary or {},
             "qr_evidence": qr_summary,
         },
@@ -16541,6 +16621,10 @@ def _orientation_has_normalized_derivative(orientation_summary: dict[str, Any]) 
 
 def _orientation_needs_app_intelligence(orientation_summary: dict[str, Any]) -> bool:
     return _int(orientation_summary.get("needs_review_count")) > 0
+
+
+def _crop_quality_needs_review(crop_summary: dict[str, Any]) -> bool:
+    return str(crop_summary.get("state") or "") in {"bad", "qr_only"} or _int(crop_summary.get("bad_count")) > 0
 
 
 def _review_notes_request_orientation(review_notes: list[dict[str, Any]]) -> bool:
