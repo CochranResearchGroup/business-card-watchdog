@@ -1,5 +1,39 @@
 # Runbook
 
+## Turn 323 | 2026-06-24
+
+Executed Plan 0096 Milestone 2 for side-pair graph scoring.
+
+Implemented:
+
+- Extended `build_side_pair_graph` to include compatible non-adjacent
+  front/back pairs within the pairing window, not only adjacent edges.
+- Kept adjacency as strong evidence but required deterministic context before
+  front/back graph edges become `pair_proposed`.
+- Added conflicting contact-domain evidence so adjacent cross-card boundaries
+  with different domains are blocked.
+- Added tests using synthesized positive-control scenario manifests for
+  interleaved non-card and multi-card no-cross-merge cases.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_card_sides.py tests/test_positive_controls.py -q`
+  passed with 17 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/card_sides.py src/business_card_watchdog/positive_controls.py tests/test_card_sides.py tests/test_positive_controls.py`
+  passed.
+
+Safety:
+
+- This slice used privacy-safe synthetic fixtures only. It did not process
+  configured scanner/watch folders, commit private or derived card artifacts,
+  rasterize PDFs, call public-web or paid enrichment, create selected targets,
+  or perform live sink lookup/write/readback.
+
+Remaining:
+
+- Plan 0096 remains in progress. Next milestone is OCR merge completeness for
+  front/back card data.
+
 ## Turn 322 | 2026-06-24
 
 Executed Plan 0096 Milestone 1 for runtime positive-control synthesis.

@@ -5,7 +5,8 @@ from pathlib import Path
 
 from business_card_watchdog.card_sides import build_pair_proposals, build_side_pair_graph, classify_card_side
 from business_card_watchdog.cli import main
-from business_card_watchdog.config import AppConfig, PrefilterConfig
+from business_card_watchdog.config import AppConfig, PrefilterConfig, WatchConfig
+from business_card_watchdog.positive_controls import build_positive_control_manifest
 from business_card_watchdog.orchestrator import BatchOrchestrator
 from business_card_watchdog.service import BusinessCardService
 
@@ -21,6 +22,43 @@ def _source_page(page_number: int) -> dict[str, object]:
         "rasterization_mode": "fixture",
         "sha256": "0" * 64,
     }
+
+
+def _write_seed(path: Path, content: bytes) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content)
+    return path
+
+
+def _candidate_for_positive_control_page(page: dict[str, object], *, scenario_id: str) -> dict[str, object]:
+    page_id = str(page["page_id"])
+    page_number = int(page_id.rsplit("_", 1)[-1])
+    role = str(page.get("expected_role") or "")
+    card_ref = str(page.get("card_ref") or "card_001")
+    if role == "front" and card_ref == "card_002":
+        ocr_text = "Grace Hopper\nOperations Manager\nSecond Labs\ngrace@other.test\n+1 555 010 9999"
+    elif role == "back" and card_ref == "card_002":
+        ocr_text = "Scan QR\nother.test/grace\nSecond Labs portfolio"
+    elif role == "front":
+        ocr_text = "Ada Lovelace\nPrincipal Engineer\nExample Labs\nada@example.test\n+1 555 010 1234"
+    elif role == "back":
+        ocr_text = "Scan QR\nlinkedin.com/in/ada\nexample.test/ada\nExample Labs portfolio"
+    elif role == "inserted_non_card":
+        ocr_text = "School flyer\nLunch menu\nWednesday notes"
+    else:
+        ocr_text = ""
+    return classify_card_side(
+        job_id=f"{scenario_id}-{page_id}",
+        source_page={
+            "source_document_path": f"/tmp/{scenario_id}.pdf",
+            "page_number": page_number,
+            "page_image_path": f"/tmp/{scenario_id}/{page_id}.png",
+            "media_kind": "page_image",
+            "rasterization_mode": "positive_control_fixture",
+            "sha256": "0" * 64,
+        },
+        ocr_text=ocr_text,
+    )
 
 
 def test_card_side_classifier_uses_ocr_contextual_clues() -> None:
@@ -147,6 +185,75 @@ def test_side_pair_graph_tracks_blank_back_without_pairing_unrelated_card() -> N
     assert graph["edges"][0]["state"] == "blank_back_candidate"
     assert graph["edges"][1]["state"] == "blank_back_candidate"
     assert graph["pair_proposal_count"] == 0
+
+
+def test_side_pair_graph_scores_interleaved_positive_control_pair(tmp_path: Path) -> None:
+    seed_dir = tmp_path / "seeds"
+    _write_seed(seed_dir / "front.png", b"front")
+    _write_seed(seed_dir / "back.png", b"back")
+    _write_seed(seed_dir / "insert.png", b"insert")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        cache_dir=tmp_path / "cache",
+        watch=WatchConfig(
+            inputs=[str(seed_dir)],
+            status_recursive=True,
+        ),
+    )
+    manifest = build_positive_control_manifest(config, write=False)
+    scenario = next(row for row in manifest["scenarios"] if row["scenario_id"] == "interleaved_non_card_page")
+    candidates = [
+        _candidate_for_positive_control_page(page, scenario_id=str(scenario["scenario_id"]))
+        for page in scenario["pages"]
+    ]
+
+    graph = build_side_pair_graph(run_id="run", side_candidates=candidates)
+
+    proposed_edges = [edge for edge in graph["edges"] if edge["state"] == "pair_proposed"]
+    assert [[f"page_{number:03d}" for number in edge["page_numbers"]] for edge in proposed_edges] == (
+        scenario["expected_pair_groups"]
+    )
+    assert graph["pair_proposal_count"] == 1
+    assert graph["edges"][0]["state"] == "blocked_for_review"
+    assert graph["edges"][1]["state"] == "pair_proposed"
+    assert graph["edges"][2]["state"] == "blocked_for_review"
+
+
+def test_side_pair_graph_blocks_multi_card_cross_merge_boundary(tmp_path: Path) -> None:
+    seed_dir = tmp_path / "seeds"
+    _write_seed(seed_dir / "front-a.png", b"front-a")
+    _write_seed(seed_dir / "back-a.png", b"back-a")
+    _write_seed(seed_dir / "front-b.png", b"front-b")
+    _write_seed(seed_dir / "back-b.png", b"back-b")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        cache_dir=tmp_path / "cache",
+        watch=WatchConfig(
+            inputs=[str(seed_dir)],
+            status_recursive=True,
+        ),
+    )
+    manifest = build_positive_control_manifest(config, write=False)
+    scenario = next(row for row in manifest["scenarios"] if row["scenario_id"] == "multi_card_no_cross_merge")
+    candidates = [
+        _candidate_for_positive_control_page(page, scenario_id=str(scenario["scenario_id"]))
+        for page in scenario["pages"]
+    ]
+
+    graph = build_side_pair_graph(run_id="run", side_candidates=candidates)
+    proposed_pairs = [
+        [f"page_{number:03d}" for number in edge["page_numbers"]]
+        for edge in graph["edges"]
+        if edge["state"] == "pair_proposed"
+    ]
+    cross_boundary = next(edge for edge in graph["edges"] if edge["page_numbers"] == [2, 3])
+
+    assert proposed_pairs == scenario["expected_pair_groups"]
+    assert cross_boundary["state"] == "blocked_for_review"
+    assert cross_boundary["negative_evidence"][0]["kind"] == "conflicting_contact_domains"
+    assert graph["pair_proposal_count"] == 2
 
 
 def test_pair_graph_prefers_non_adjacent_ocr_compatible_back() -> None:

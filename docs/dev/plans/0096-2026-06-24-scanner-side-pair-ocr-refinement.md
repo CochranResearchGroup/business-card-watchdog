@@ -130,6 +130,35 @@ Validation:
 - Side-pair graph tests over synthesized controls.
 - Review-bundle evidence shows side-pair reasoning without raw OCR leakage.
 
+## Execution Update | 2026-06-24 | Milestone 2
+
+Milestone 2 is implemented.
+
+Implemented:
+
+- Extended the side-pair graph beyond adjacent-only edges so compatible
+  non-adjacent front/back pairs inside the pairing window can be represented.
+- Kept adjacency as strong evidence while requiring deterministic context
+  before a front/back edge becomes `pair_proposed`.
+- Added broader conflicting-domain evidence so cross-card boundaries with
+  different email/URL domains are blocked instead of proposed.
+- Preserved blank-back and QR-adjacency review states.
+- Added tests that consume synthesized positive-control scenario manifests for
+  interleaved non-card and multi-card no-cross-merge cases.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_card_sides.py tests/test_positive_controls.py -q`
+  passed with 17 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/card_sides.py src/business_card_watchdog/positive_controls.py tests/test_card_sides.py tests/test_positive_controls.py`
+  passed.
+
+Remaining work:
+
+- Milestone 3 OCR merge completeness.
+- Milestone 4 App Intelligence escalation criteria.
+- Milestone 5 exit gate.
+
 ## Milestone 3 | OCR Merge Completeness
 
 Objective:

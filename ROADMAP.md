@@ -44,7 +44,7 @@ Latest completed gated crop/OCR resume plan: `docs/dev/plans/0095-2026-06-24-gat
 Active scanner side-pair/OCR refinement plan: `docs/dev/plans/0096-2026-06-24-scanner-side-pair-ocr-refinement.md`.
 Latest completed practice-corpus plan: `docs/dev/plans/0062-2026-06-21-practice-corpus-manifest.md`.
 Latest completed scanner side-pair graph plan: `docs/dev/plans/0084-2026-06-22-ocr-contextual-side-pair-graph.md`.
-Next refactor/development plan: Plan 0096 Milestone 2, side-pair graph scoring against synthesized positive controls.
+Next refactor/development plan: Plan 0096 Milestone 3, OCR merge completeness for front/back card data.
 Next production plan: `docs/dev/plans/0009-2026-06-14-operator-selected-live-smoke-and-pilot-rollout.md`.
 Next offline boundary: refine OCR and scanner front/back side-pairing only for pages classified as `business_card_high_confidence`; keep `not_business_card_high_confidence` and `indeterminate_needs_app_intelligence` blocked from contact extraction unless later bounded evidence changes the page state.
 Next production boundary: operator-selected live smoke/pilot rollout for one run, one job, and one sink at a time.

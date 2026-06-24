@@ -174,18 +174,21 @@ def build_side_pair_graph(
         ordered = sorted(candidates, key=lambda row: (_page_number(row), str(row.get("job_id") or "")))
         for candidate in ordered:
             nodes.append(_side_pair_node(candidate, evidence_by_job.get(str(candidate.get("job_id") or ""), {})))
-        for left, right in zip(ordered, ordered[1:]):
-            edge = _side_pair_edge(
-                run_id=run_id,
-                session_key=session_key,
-                left=left,
-                right=right,
-                left_evidence=evidence_by_job.get(str(left.get("job_id") or ""), {}),
-                right_evidence=evidence_by_job.get(str(right.get("job_id") or ""), {}),
-            )
-            edges.append(edge)
-            if edge["state"] in {"pair_proposed", "pair_review_required"}:
-                pair_proposals.append(edge)
+        for index, left in enumerate(ordered):
+            for right in ordered[index + 1 :]:
+                if not _graph_edge_candidate(left, right, evidence_by_job=evidence_by_job):
+                    continue
+                edge = _side_pair_edge(
+                    run_id=run_id,
+                    session_key=session_key,
+                    left=left,
+                    right=right,
+                    left_evidence=evidence_by_job.get(str(left.get("job_id") or ""), {}),
+                    right_evidence=evidence_by_job.get(str(right.get("job_id") or ""), {}),
+                )
+                edges.append(edge)
+                if edge["state"] in {"pair_proposed", "pair_review_required"}:
+                    pair_proposals.append(edge)
     return {
         "schema": "business-card-watchdog.side-pair-graph.v1",
         "run_id": run_id,
@@ -337,8 +340,8 @@ def _side_pair_edge(
         reason = "adjacent blank side may be a dropped or blank card back"
     elif labels == {"front", "back"}:
         positive.append({"kind": "side_label_complement", "weight": 3, "value": "front_back"})
-        state = "pair_proposed"
-        reason = "adjacent front/back side labels"
+        state = "pair_review_required"
+        reason = "front/back side labels need contextual confirmation"
     elif labels == {"unknown"}:
         reason = "adjacent unknown sides lack enough deterministic context"
     context = _context_evidence(left, right) + _context_evidence(right, left)
@@ -350,6 +353,9 @@ def _side_pair_edge(
     if negative:
         state = "blocked_for_review"
         reason = "conflicting OCR/domain evidence"
+    elif labels == {"front", "back"} and _has_required_context_evidence(context) and score >= 7:
+        state = "pair_proposed"
+        reason = "front/back side labels with deterministic context"
     return {
         "edge_id": _stable_id(run_id, session_key, str(left.get("job_id")), str(right.get("job_id")), "graph"),
         "state": state,
@@ -366,6 +372,25 @@ def _side_pair_edge(
         "requires_app_intelligence_review": state in {"pair_review_required", "blocked_for_review"},
         "routing_allowed": False,
     }
+
+
+def _graph_edge_candidate(
+    left: dict[str, Any],
+    right: dict[str, Any],
+    *,
+    evidence_by_job: dict[str, dict[str, Any]],
+) -> bool:
+    page_distance = abs(_page_number(left) - _page_number(right))
+    if page_distance <= 1:
+        return True
+    if not _within_pairing_window(left, right):
+        return False
+    labels = {str(left.get("side_label") or ""), str(right.get("side_label") or "")}
+    if labels == {"front", "back"}:
+        return True
+    left_evidence = evidence_by_job.get(str(left.get("job_id") or ""), {})
+    right_evidence = evidence_by_job.get(str(right.get("job_id") or ""), {})
+    return _qr_side_pair_candidate(left_evidence, right_evidence)
 
 
 def _qr_side_pair_candidate(left_evidence: dict[str, Any], right_evidence: dict[str, Any]) -> bool:
@@ -483,6 +508,8 @@ def _evidence(features: dict[str, Any]) -> list[dict[str, Any]]:
 def _negative_evidence(front: dict[str, Any], back: dict[str, Any]) -> list[dict[str, Any]]:
     front_domains = set((front.get("features") or {}).get("email_domains") or [])
     back_domains = set((back.get("features") or {}).get("email_domains") or [])
+    front_all_domains = set((front.get("features") or {}).get("domains") or [])
+    back_all_domains = set((back.get("features") or {}).get("domains") or [])
     if front_domains and back_domains and front_domains.isdisjoint(back_domains):
         return [
             {
@@ -490,6 +517,15 @@ def _negative_evidence(front: dict[str, Any], back: dict[str, Any]) -> list[dict
                 "weight": 5,
                 "front_domains": sorted(front_domains),
                 "back_domains": sorted(back_domains),
+            }
+        ]
+    if front_all_domains and back_all_domains and front_all_domains.isdisjoint(back_all_domains):
+        return [
+            {
+                "kind": "conflicting_contact_domains",
+                "weight": 4,
+                "front_domains": sorted(front_all_domains),
+                "back_domains": sorted(back_all_domains),
             }
         ]
     return []
