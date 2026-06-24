@@ -1722,13 +1722,13 @@ class BusinessCardService:
         training_candidates: list[dict[str, Any]] = []
         blocked_contacts: list[dict[str, Any]] = []
         applied: list[dict[str, Any]] = []
-        if _int(side_pair_graph.get("pair_proposal_count")) > 0:
+        if _side_pair_graph_needs_app_intelligence(side_pair_graph):
             planned_actions.append(
                 {
                     "job_id": "__run__",
                     "action": "inspect_side_pair_graph",
                     "status": "planned",
-                    "reason": "deterministic side-pair graph contains pair candidates",
+                    "reason": "deterministic side-pair graph contains ambiguous side-pair evidence",
                     "side_pair_graph": side_pair_graph,
                 }
             )
@@ -5017,6 +5017,18 @@ class BusinessCardService:
         elif action == "reject_side_pair":
             state = "rejected"
 
+        merge_quality = dict((reviewed_contact or {}).get("ocr_merge_quality") or {})
+        app_intelligence_requests = (
+            [
+                _side_pair_ocr_merge_conflict_request(
+                    run_id=run_id,
+                    proposal_id=proposal_id,
+                    merge_quality=merge_quality,
+                )
+            ]
+            if reviewed_contact and str(merge_quality.get("status") or "") == "needs_review"
+            else []
+        )
         result = {
             "schema": "business-card-watchdog.side-pair-review-result.v1",
             "run_id": run_id,
@@ -5029,6 +5041,8 @@ class BusinessCardService:
             "proposal": proposal,
             "side_pair_review_submission_path": str(submission_path),
             "reviewed_side_pair_contact_path": str(reviewed_contact_path) if reviewed_contact_path else None,
+            "app_intelligence_request_count": len(app_intelligence_requests),
+            "app_intelligence_requests": app_intelligence_requests,
             "routing_allowed": False,
             "enrichment_allowed": False,
             "sink_write_allowed": False,
@@ -17101,6 +17115,56 @@ def _agent_review_reasons(
     return reasons
 
 
+def _side_pair_graph_needs_app_intelligence(side_pair_graph: dict[str, Any]) -> bool:
+    edge_states = dict(side_pair_graph.get("edge_states") or {})
+    return any(_int(edge_states.get(state)) > 0 for state in ("pair_review_required", "blocked_for_review"))
+
+
+def _side_pair_ocr_merge_conflict_request(
+    *,
+    run_id: str,
+    proposal_id: str,
+    merge_quality: dict[str, Any],
+) -> dict[str, Any]:
+    request_id = _stable_short_id(
+        "app-intelligence",
+        run_id,
+        proposal_id,
+        "resolve_ocr_merge_conflict",
+        json.dumps(merge_quality, sort_keys=True, default=str),
+    )
+    return {
+        "schema": "business-card-watchdog.app-intelligence-review-request.v1",
+        "request_id": request_id,
+        "job_id": "__run__",
+        "request_type": "resolve_ocr_merge_conflict",
+        "status": "planned",
+        "reason": "front/back OCR merge has missing required fields or conflicting contact fields",
+        "allowed_answer_shape": "evidence_only_no_state_transition",
+        "allowed_response_schema": _agent_review_allowed_response_schema("resolve_ocr_merge_conflict"),
+        "candidate_choices": [
+            {"choice": "front_value"},
+            {"choice": "back_value"},
+            {"choice": "needs_more_deterministic_evidence"},
+        ],
+        "stop_rules": [
+            "Return evidence and recommendation only; do not change contact state.",
+            "Do not route, enrich, write, read back, or select a live sink target.",
+            "Accepted OCR merge corrections must become deterministic fixture or rule candidates before safe apply.",
+        ],
+        "deterministic_evidence": {
+            "ocr_merge_quality": merge_quality,
+        },
+        "training_promotion": {
+            "mode": "candidate_only",
+            "accepted_response_creates_contact_state": False,
+            "expected_followup": "add_or_update_deterministic_side_pair_ocr_fixture_before_safe_apply",
+        },
+        "writes_attempted": 0,
+        "network_calls_made": 0,
+    }
+
+
 def _agent_review_request(
     *,
     job_id: str,
@@ -17412,6 +17476,12 @@ def _agent_review_allowed_response_schema(request_type: str) -> dict[str, Any]:
         "resolve_orientation": ["rotate_0", "rotate_90", "rotate_180", "rotate_270", "needs_more_deterministic_evidence"],
         "assess_crop_quality": ["crop_good", "crop_bad", "use_recrop_candidate", "needs_more_deterministic_evidence"],
         "pair_card_sides": ["same_card_pair", "not_same_card", "blank_back", "needs_more_deterministic_evidence"],
+        "resolve_ocr_merge_conflict": [
+            "use_front_value",
+            "use_back_value",
+            "fields_need_correction",
+            "needs_more_deterministic_evidence",
+        ],
         "verify_contact_fields": ["fields_verified", "fields_need_correction", "needs_more_deterministic_evidence"],
     }
     return {

@@ -241,6 +241,34 @@ Validation:
 - Agent-loop tests for side-pair/OCR requests.
 - Review-surface tests for escalation status.
 
+## Execution Update | 2026-06-24 | Milestone 4
+
+Milestone 4 is implemented.
+
+Implemented:
+
+- Changed the agent review loop so deterministic `pair_proposed` graph edges do
+  not by themselves request App Intelligence.
+- Kept App Intelligence escalation for ambiguous side-pair graph states such as
+  `pair_review_required` and `blocked_for_review`.
+- Added bounded `resolve_ocr_merge_conflict` request payloads when reviewed
+  front/back OCR merge quality is incomplete or conflicting.
+- Reused the evidence-only App Intelligence contract: no route, enrich, sink
+  write, readback, public-web search, paid enrichment, or live target selection.
+- Required accepted OCR merge conflict responses to become deterministic
+  fixture/rule candidates before safe apply.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_card_sides.py tests/test_cli_surfaces.py::test_cli_runs_agent_review_loop_plans_qr_side_followup -q`
+  passed with 19 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/service.py src/business_card_watchdog/card_sides.py tests/test_card_sides.py tests/test_cli_surfaces.py`
+  passed.
+
+Remaining work:
+
+- Milestone 5 exit gate.
+
 ## Milestone 5 | Exit Gate
 
 Objective:

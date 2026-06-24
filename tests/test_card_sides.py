@@ -607,6 +607,77 @@ def test_side_pair_review_approval_writes_merged_contact_with_side_provenance(
     assert reviewed_queue[0]["state"] == "merged_for_review"
 
 
+def test_agent_loop_does_not_escalate_deterministic_side_pair_proposal(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config, run_dir, _proposal_id = _front_back_run(tmp_path, monkeypatch)
+
+    payload = BusinessCardService(config).agent_review_loop(
+        run_dir.name,
+        limit=5,
+        dry_run=True,
+        write=False,
+    )
+
+    assert "pair_card_sides" not in {
+        request["request_type"] for request in payload["app_intelligence_requests"]
+    }
+    assert not any(action["action"] == "inspect_side_pair_graph" for action in payload["planned_actions"])
+    assert payload["writes_attempted"] == 0
+    assert payload["network_calls_made"] == 0
+
+
+def test_side_pair_review_conflict_creates_evidence_only_app_intelligence_request(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config, run_dir, proposal_id = _front_back_run(tmp_path, monkeypatch)
+    service = BusinessCardService(config)
+    proposal = service.side_pair_review_queue(run_id=run_dir.name)[0]["proposal"]
+    back_job = latest_jobs_by_id(run_dir / "jobs.jsonl")[proposal["back_job_id"]]
+    back_candidate_path = Path(back_job["artifact_dir"]) / "contact_candidate.json"
+    back_candidate_path.write_text(
+        json.dumps(
+            build_contact_candidate(
+                {
+                    "full_name": "Grace Hopper",
+                    "email": "grace@other.test",
+                    "website": "other.test/grace",
+                }
+            ),
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = service.submit_side_pair_review(
+        run_id=run_dir.name,
+        proposal_id=proposal_id,
+        reviewer="operator",
+        action="approve_side_pair_merge",
+        notes="conflict requires evidence-only review",
+    )
+
+    assert result["result"]["app_intelligence_request_count"] == 1
+    request = result["result"]["app_intelligence_requests"][0]
+    assert request["request_type"] == "resolve_ocr_merge_conflict"
+    assert request["allowed_answer_shape"] == "evidence_only_no_state_transition"
+    assert request["allowed_response_schema"]["forbidden_actions"] == [
+        "route_contact",
+        "write_sink",
+        "readback_sink",
+        "run_enrichment",
+        "select_live_target",
+    ]
+    assert request["training_promotion"]["accepted_response_creates_contact_state"] is False
+    assert result["reviewed_contact"]["ocr_merge_quality"]["status"] == "needs_review"
+    assert result["result"]["routing_allowed"] is False
+    assert result["result"]["sink_write_allowed"] is False
+
+
 def test_side_pair_review_rejection_does_not_write_merged_contact(tmp_path: Path, monkeypatch) -> None:
     config, run_dir, proposal_id = _front_back_run(tmp_path, monkeypatch)
     service = BusinessCardService(config)

@@ -1,5 +1,38 @@
 # Runbook
 
+## Turn 325 | 2026-06-24
+
+Executed Plan 0096 Milestone 4 for App Intelligence escalation criteria.
+
+Implemented:
+
+- Changed the agent review loop so deterministic `pair_proposed` side-pair
+  graph edges do not by themselves request App Intelligence.
+- Preserved App Intelligence escalation for ambiguous side-pair graph states
+  such as `pair_review_required` and `blocked_for_review`.
+- Added bounded `resolve_ocr_merge_conflict` request payloads when reviewed
+  side-pair OCR merge quality is incomplete or conflicting.
+- Kept all App Intelligence requests evidence-only with no route, enrich, sink
+  write, readback, public-web, paid enrichment, or selected-target authority.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_card_sides.py tests/test_cli_surfaces.py::test_cli_runs_agent_review_loop_plans_qr_side_followup -q`
+  passed with 19 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/service.py src/business_card_watchdog/card_sides.py tests/test_card_sides.py tests/test_cli_surfaces.py`
+  passed.
+
+Safety:
+
+- This slice used privacy-safe synthetic fixtures only. It did not process
+  configured scanner/watch folders, commit private or derived card artifacts,
+  rasterize PDFs, call public-web or paid enrichment, create selected targets,
+  or perform live sink lookup/write/readback.
+
+Remaining:
+
+- Plan 0096 remains in progress. Next milestone is the final exit gate.
+
 ## Turn 324 | 2026-06-24
 
 Executed Plan 0096 Milestone 3 for OCR merge completeness.
