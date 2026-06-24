@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from copy import deepcopy
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -55,6 +56,57 @@ def discover_processable_sources(source: Path) -> list[Path]:
     )
 
 
+def positive_control_page_lineage(source: Path) -> dict[str, dict[str, Any]]:
+    if not source.is_dir():
+        return {}
+    manifest_path = source / "positive_control_scenario.json"
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if payload.get("schema") != "business-card-watchdog.positive-control-scenario.v1":
+        return {}
+    lineage: dict[str, dict[str, Any]] = {}
+    for index, page in enumerate(list(payload.get("pages") or []), start=1):
+        if not isinstance(page, dict):
+            continue
+        page_image = Path(str(page.get("generated_path") or ""))
+        if not page_image.is_file():
+            continue
+        page_number = _positive_control_page_number(page, fallback=index)
+        lineage[str(page_image)] = {
+            "schema": "business-card-watchdog.document-page.v1",
+            "source_document_path": str(manifest_path),
+            "page_number": page_number,
+            "page_image_path": str(page_image),
+            "media_kind": "page_image",
+            "rasterization_mode": "positive_control_scenario",
+            "sha256": _sha256_file(page_image),
+            "positive_control": {
+                "scenario_id": payload.get("scenario_id"),
+                "page_id": page.get("page_id"),
+                "expected_role": page.get("expected_role"),
+                "card_ref": page.get("card_ref"),
+                "transform": page.get("transform"),
+            },
+        }
+    return lineage
+
+
+def _positive_control_page_number(page: dict[str, Any], *, fallback: int) -> int:
+    page_id = str(page.get("page_id") or "")
+    digits = "".join(char for char in page_id if char.isdigit())
+    return int(digits) if digits else fallback
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 class BatchOrchestrator:
     def __init__(self, config: AppConfig) -> None:
         self.config = config
@@ -70,6 +122,7 @@ class BatchOrchestrator:
 
         processable_sources = discover_processable_sources(source)
         page_lineage_by_path: dict[str, dict[str, Any]] = {}
+        page_lineage_by_path.update(positive_control_page_lineage(source))
         job_sources: list[Path] = []
         for path in processable_sources:
             if is_supported_document(path):

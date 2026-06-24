@@ -1,5 +1,44 @@
 # Runbook
 
+## Turn 326 | 2026-06-24
+
+Closed Plan 0096 with the Milestone 5 exit gate.
+
+Implemented:
+
+- Added a scenario-local positive-control manifest so generated front/back
+  controls can be replayed as scanner-like page lineage during dry-run tests.
+- Added orchestrator support for that generated-control lineage without
+  changing normal watched image folder behavior.
+- Added a bounded dry-run replay from generated `front_then_back` controls that
+  emits a side-pair graph with one deterministic `pair_proposed` edge.
+- Proved the generated-control dry-run closeout has zero sink payloads, zero
+  writes, zero network calls, zero live sink calls, zero public-web search, and
+  zero paid enrichment.
+- Marked Plan 0096 complete and updated the roadmap to point at the next
+  bounded scanner practice replay plan.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_positive_controls.py tests/test_card_sides.py tests/test_cli_surfaces.py::test_cli_runs_agent_review_loop_plans_qr_side_followup tests/test_classifier_training.py -q`
+  passed with 27 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/positive_controls.py src/business_card_watchdog/card_sides.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/orchestrator.py tests/test_positive_controls.py tests/test_card_sides.py tests/test_cli_surfaces.py tests/test_classifier_training.py`
+  passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `git diff --check` passed.
+
+Safety:
+
+- This slice used privacy-safe synthetic fixtures only. It did not process
+  configured scanner/watch folders, commit private or derived card artifacts,
+  rasterize private PDFs, call public-web or paid enrichment, create selected
+  targets, or perform live sink lookup/write/readback.
+
+Next:
+
+- Write a bounded scanner practice replay plan before processing the configured
+  scanner source again.
+
 ## Turn 325 | 2026-06-24
 
 Executed Plan 0096 Milestone 4 for App Intelligence escalation criteria.

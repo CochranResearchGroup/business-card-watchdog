@@ -4,8 +4,11 @@ import json
 from pathlib import Path
 
 from business_card_watchdog.cli import main
-from business_card_watchdog.config import AppConfig, WatchConfig
+from business_card_watchdog.config import AppConfig, PrefilterConfig, WatchConfig
+from business_card_watchdog.orchestrator import BatchOrchestrator
 from business_card_watchdog.service import BusinessCardService
+
+from synthetic_fixtures import SyntheticSkillAdapter, read_jsonl, write_synthetic_image
 
 
 def write_seed(path: Path, content: bytes) -> Path:
@@ -126,3 +129,65 @@ def test_positive_controls_cli_preview_json(tmp_path: Path, capsys) -> None:
     assert payload["state"] == "ready_for_side_pair_ocr_training"
     assert payload["scenario_count"] == 4
     assert payload["runtime_artifact_written"] is False
+
+
+def test_generated_positive_control_front_back_dry_run_has_zero_live_side_effects(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    seed_dir = tmp_path / "seeds"
+    write_synthetic_image(seed_dir / "front.png")
+    write_synthetic_image(seed_dir / "back.png")
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        cache_dir=tmp_path / "cache",
+        prefilter=PrefilterConfig(enabled=False),
+        watch=WatchConfig(inputs=[str(seed_dir)], status_recursive=True),
+    )
+    manifest = BusinessCardService(config).watch_positive_controls(write=True)
+    scenario = next(row for row in manifest["scenarios"] if row["scenario_id"] == "front_then_back")
+    scenario_dir = Path(str(scenario["pages"][0]["generated_path"])).parent
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(
+        orchestrator,
+        "adapter",
+        SyntheticSkillAdapter(
+            specs_by_stem={
+                "page_001": {
+                    "full_name": "Ada Lovelace",
+                    "organization": "Example Labs",
+                    "title": "Principal Engineer",
+                    "email": "ada@example.test",
+                    "phone": "+1 555 010 1234",
+                },
+                "page_002": {
+                    "full_name": "",
+                    "organization": "",
+                    "title": "",
+                    "email": "",
+                    "phone": "",
+                    "website": "example.test/ada",
+                },
+            },
+            ocr_by_stem={
+                "page_001": "Ada Lovelace\nPrincipal Engineer\nExample Labs\nada@example.test\n+1 555 010 1234\n",
+                "page_002": "Scan QR\nlinkedin.com/in/ada\nexample.test/ada\n",
+            },
+        ),
+    )
+
+    run_dir = orchestrator.process_source(str(scenario_dir), dry_run=True, workers=1)
+    closeout = BusinessCardService(config).dry_run_closeout(run_dir.name, write=False)
+    artifacts = read_jsonl(run_dir / "artifacts.jsonl")
+    graph_path = next(row["path"] for row in artifacts if row["kind"] == "side_pair_graph")
+    graph = json.loads(Path(graph_path).read_text(encoding="utf-8"))
+
+    assert graph["pair_proposal_count"] == 1
+    assert graph["pair_proposals"][0]["state"] == "pair_proposed"
+    assert closeout["sink_payload_count"] == 0
+    assert closeout["writes_attempted"] == 0
+    assert closeout["network_calls_made"] == 0
+    assert closeout["live_sink_calls_made"] is False
+    assert closeout["public_web_search_used"] is False
+    assert closeout["paid_enrichment_used"] is False

@@ -1,6 +1,6 @@
 # Plan 0096 | Scanner Side-Pair OCR Refinement
 
-State: IN_PROGRESS
+State: COMPLETE
 Date: 2026-06-24
 
 Parent: Plan 0060 Milestone 9
@@ -291,3 +291,36 @@ Validation:
 - Full targeted suite for positive-control synthesis, side-pair graph, OCR
   merge, App Intelligence escalation, and review surfaces.
 - One bounded dry-run replay from runtime-only generated controls.
+
+## Execution Update | 2026-06-24 | Milestone 5
+
+Milestone 5 is implemented. Plan 0096 is complete.
+
+Implemented:
+
+- Added a scenario-local positive-control manifest so runtime-only generated
+  front/back controls can be replayed as scanner-like page lineage in dry-run
+  tests.
+- Added a bounded dry-run replay from generated `front_then_back` controls that
+  emits a side-pair graph and produces one deterministic `pair_proposed` edge.
+- Proved the generated-control dry-run exit gate keeps zero sink payloads, zero
+  writes, zero network calls, zero live sink calls, zero public-web search, and
+  zero paid enrichment.
+- Preserved the Plan 0095 boundary: non-card and indeterminate scanner pages
+  remain blocked by classifier gates before crop/OCR/contact extraction.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_positive_controls.py tests/test_card_sides.py tests/test_cli_surfaces.py::test_cli_runs_agent_review_loop_plans_qr_side_followup tests/test_classifier_training.py -q`
+  passed with 27 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/positive_controls.py src/business_card_watchdog/card_sides.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/orchestrator.py tests/test_positive_controls.py tests/test_card_sides.py tests/test_cli_surfaces.py tests/test_classifier_training.py`
+  passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `git diff --check` passed.
+
+Safety:
+
+- This slice used privacy-safe synthetic fixtures only. It did not process
+  configured scanner/watch folders, commit private or derived card artifacts,
+  rasterize private PDFs, call public-web or paid enrichment, create selected
+  targets, or perform live sink lookup/write/readback.

@@ -41,12 +41,12 @@ Latest completed Milestone 9 scoped scanner dry-run plan: `docs/dev/plans/0092-2
 Latest completed Milestone 9 agent-loop plan: `docs/dev/plans/0093-2026-06-23-agent-loop-qr-orientation-side-pairing.md`.
 Latest completed classifier-training plan: `docs/dev/plans/0094-2026-06-23-scanner-pdf-business-card-classifier-training.md`.
 Latest completed gated crop/OCR resume plan: `docs/dev/plans/0095-2026-06-24-gated-crop-ocr-resume.md`.
-Active scanner side-pair/OCR refinement plan: `docs/dev/plans/0096-2026-06-24-scanner-side-pair-ocr-refinement.md`.
+Latest completed scanner side-pair/OCR refinement plan: `docs/dev/plans/0096-2026-06-24-scanner-side-pair-ocr-refinement.md`.
 Latest completed practice-corpus plan: `docs/dev/plans/0062-2026-06-21-practice-corpus-manifest.md`.
 Latest completed scanner side-pair graph plan: `docs/dev/plans/0084-2026-06-22-ocr-contextual-side-pair-graph.md`.
-Next refactor/development plan: Plan 0096 Milestone 5, exit gate and bounded generated-control dry-run proof.
+Next refactor/development plan: write a bounded scanner practice replay plan using runtime-only generated controls and the configured scanner source, still dry-run only.
 Next production plan: `docs/dev/plans/0009-2026-06-14-operator-selected-live-smoke-and-pilot-rollout.md`.
-Next offline boundary: refine OCR and scanner front/back side-pairing only for pages classified as `business_card_high_confidence`; keep `not_business_card_high_confidence` and `indeterminate_needs_app_intelligence` blocked from contact extraction unless later bounded evidence changes the page state.
+Next offline boundary: run only bounded dry-run scanner practice replay against admitted `business_card_high_confidence` pages and generated positive controls; keep `not_business_card_high_confidence` and `indeterminate_needs_app_intelligence` blocked from contact extraction unless later bounded evidence changes the page state.
 Next production boundary: operator-selected live smoke/pilot rollout for one run, one job, and one sink at a time.
 
 ## Milestones

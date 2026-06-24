@@ -325,6 +325,13 @@ def _write_scenarios(scenarios: list[dict[str, Any]], *, output_root: Path) -> i
             output = scenario_dir / f"{page['page_id']}{page.get('output_suffix') or '.png'}"
             _write_transformed_image(source, output, transform=str(page.get("transform") or "copy"))
             count += 1
+        scenario_manifest_path = scenario_dir / "positive_control_scenario.json"
+        scenario_manifest_path.write_text(
+            json.dumps(_scenario_manifest(scenario, output_root=output_root, write=True), indent=2, sort_keys=True)
+            + "\n",
+            encoding="utf-8",
+        )
+        count += 1
     return count
 
 
