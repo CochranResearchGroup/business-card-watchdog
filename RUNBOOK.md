@@ -1,5 +1,42 @@
 # Runbook
 
+## Turn 320 | 2026-06-24
+
+Closed Plan 0095 with the Milestone 5 exit gate.
+
+Implemented:
+
+- Strengthened the synthetic scanner PDF proof to assert one reviewable contact
+  candidate from the admitted `business_card_high_confidence` page and no
+  contact candidate from the blocked indeterminate scanner page.
+- Added closeout assertions for zero sink payloads, zero writes, zero network
+  calls, zero live sink calls, zero public-web search, and zero paid
+  enrichment.
+- Marked `docs/dev/plans/0095-2026-06-24-gated-crop-ocr-resume.md` complete.
+- Updated `ROADMAP.md` so the next offline slice is side-pair/OCR refinement
+  inside the Plan 0095 gate boundary.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_dry_run_pipeline.py::test_scanner_pdf_pages_must_pass_classifier_gate_before_ocr tests/test_dry_run_pipeline.py::test_short_ocr_quality_creates_review_packet_before_routing tests/test_preclassifier.py tests/test_crop_quality.py tests/test_classifier_training.py tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service tests/test_cli_surfaces.py::test_cli_runs_agent_review_loop_plans_qr_side_followup -q`
+  passed with 27 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/orchestrator.py src/business_card_watchdog/crop_quality.py src/business_card_watchdog/contact_store.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_dry_run_pipeline.py tests/test_preclassifier.py tests/test_crop_quality.py tests/test_classifier_training.py tests/test_api.py tests/test_mcp.py tests/test_cli_surfaces.py tests/synthetic_fixtures.py`
+  passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `git diff --check` passed.
+
+Safety:
+
+- This closeout used privacy-safe synthetic scanner PDF fixtures only. It did
+  not process configured scanner/watch folders, commit private OCR/contact
+  data, call public-web or paid enrichment, create selected targets, or perform
+  live sink lookup/write/readback.
+
+Next:
+
+- Write the next side-pair/OCR refinement plan for scanner-admitted
+  `business_card_high_confidence` pages.
+
 ## Turn 319 | 2026-06-24
 
 Executed Plan 0095 Milestone 4 for review-surface resume.
@@ -1008,7 +1045,7 @@ Implemented:
 
 Validation:
 
-- `.venv/bin/python -m pytest tests/test_enrichment.py tests/test_cli_surfaces.py tests/test_mcp.py -q` passed with 30 tests.
+- `.venv/bin/python -m pytest tests/test_enrichment.py tests/test_cli_surfaces.py tests/test_mcp.py -q` passed with 27 tests.
 
 ## Turn 33 | 2026-06-13
 
@@ -7437,7 +7474,7 @@ Validation:
 - `.venv/bin/python -m pytest tests/test_routing.py::test_providence_context_route_selects_soylei_odollo_tenant tests/test_routing.py::test_providence_context_route_selects_saber_odollo_tenant_from_labels tests/test_routing.py::test_odollo_route_target_falls_back_to_global_tenant tests/test_sinks.py::test_build_sink_lookup_plan_exposes_selected_odollo_tenant tests/test_sinks.py::test_build_sink_plan_exposes_selected_odollo_tenant tests/test_service.py::test_service_plans_use_route_selected_odollo_tenant -q`
   passed with 6 tests.
 - `.venv/bin/python -m pytest tests/test_routing.py tests/test_sinks.py -q`
-  passed with 30 tests.
+  passed with 27 tests.
 - `.venv/bin/python -m pytest tests/test_service.py -q` passed with 115 tests.
 - `.venv/bin/ruff check src/business_card_watchdog/routing.py src/business_card_watchdog/service.py src/business_card_watchdog/orchestrator.py tests/test_routing.py tests/test_sinks.py tests/test_service.py`
   passed.

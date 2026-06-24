@@ -358,6 +358,15 @@ def test_scanner_pdf_pages_must_pass_classifier_gate_before_ocr(
     assert row["ocr_quality_gate"]["states"] == ["passed"]
     assert row["app_intelligence_status"]["request_count"] == 0
 
+    summary = service.dry_run_closeout(run_dir.name, write=False)
+    assert summary["contact_candidate_count"] == 1
+    assert summary["sink_payload_count"] == 0
+    assert summary["writes_attempted"] == 0
+    assert summary["network_calls_made"] == 0
+    assert summary["live_sink_calls_made"] is False
+    assert summary["public_web_search_used"] is False
+    assert summary["paid_enrichment_used"] is False
+
 
 def test_short_ocr_quality_creates_review_packet_before_routing(tmp_path: Path, monkeypatch) -> None:
     source_dir = tmp_path / "synthetic-cards"

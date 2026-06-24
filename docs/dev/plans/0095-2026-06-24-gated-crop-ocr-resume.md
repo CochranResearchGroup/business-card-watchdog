@@ -1,6 +1,6 @@
 # Plan 0095 | Gated Crop OCR Resume
 
-State: IN_PROGRESS
+State: COMPLETE
 Date: 2026-06-24
 
 Parent: Plan 0060 Milestone 9
@@ -292,6 +292,44 @@ Validation:
 - `.venv/bin/python -m ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_dry_run_pipeline.py tests/test_api.py tests/test_mcp.py`
   passed.
 
-Remaining work:
+Remaining work before Milestone 5:
 
 - Milestone 5 exit gate and dry-run scanner PDF proof.
+
+## Execution Update | 2026-06-24 | Milestone 5
+
+Milestone 5 is implemented and Plan 0095 is complete.
+
+Implemented:
+
+- Strengthened the synthetic scanner PDF proof so it asserts exactly one
+  contact candidate from the admitted `business_card_high_confidence` page and
+  no contact candidate from the blocked indeterminate page.
+- Added dry-run closeout assertions for zero sink payloads, zero writes, zero
+  network calls, zero live sink calls, zero public-web search, and zero paid
+  enrichment.
+- Updated `ROADMAP.md` so the next offline slice is side-pair/OCR refinement
+  only after the Plan 0095 classifier, crop, OCR, and review-surface gates are
+  fixture-backed.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_dry_run_pipeline.py::test_scanner_pdf_pages_must_pass_classifier_gate_before_ocr tests/test_dry_run_pipeline.py::test_short_ocr_quality_creates_review_packet_before_routing tests/test_preclassifier.py tests/test_crop_quality.py tests/test_classifier_training.py tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service tests/test_cli_surfaces.py::test_cli_runs_agent_review_loop_plans_qr_side_followup -q`
+  passed with 27 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/orchestrator.py src/business_card_watchdog/crop_quality.py src/business_card_watchdog/contact_store.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_dry_run_pipeline.py tests/test_preclassifier.py tests/test_crop_quality.py tests/test_classifier_training.py tests/test_api.py tests/test_mcp.py tests/test_cli_surfaces.py tests/synthetic_fixtures.py`
+  passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `git diff --check` passed.
+
+Closeout:
+
+- Scanner pages with `business_card_high_confidence` can produce reviewable
+  contact candidates.
+- Scanner pages with non-card or indeterminate classifier states cannot produce
+  contact candidates.
+- Admitted-page review evidence includes classifier gate, crop quality, OCR
+  quality, and review-surface summaries.
+- Blocked-page evidence remains inspectable through the run review bundle
+  without creating a contact row.
+- Next offline work should refine OCR and scanner front/back side-pairing,
+  still inside the Plan 0095 gate boundary.
