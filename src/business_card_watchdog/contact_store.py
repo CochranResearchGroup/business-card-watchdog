@@ -46,6 +46,7 @@ _PROJECTED_ASSET_KINDS = {
     "crop_manifest",
     "contact_sheet",
     "contact_candidate",
+    "ocr_quality_gate",
     "document_pages",
     "source_page",
     "card_side_candidate",

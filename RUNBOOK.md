@@ -1,5 +1,39 @@
 # Runbook
 
+## Turn 318 | 2026-06-24
+
+Executed Plan 0095 Milestone 3 for OCR lineage and vision QA gating.
+
+Implemented:
+
+- Added `ocr_quality_gate.json` artifacts after OCR/contact normalization and
+  before route/review decisions.
+- Attached upstream scanner classifier gate and crop acceptance lineage to OCR
+  quality evidence.
+- Added bounded planned `verify_contact_fields` App Intelligence request
+  payloads for OCR/extraction quality failures.
+- Preserved existing route blocking: low-quality OCR creates review evidence
+  and no sink payloads.
+- Added `ocr_quality_gate` to projected asset kinds.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_preclassifier.py tests/test_crop_quality.py tests/test_dry_run_pipeline.py::test_scanner_pdf_pages_must_pass_classifier_gate_before_ocr tests/test_dry_run_pipeline.py::test_short_ocr_quality_creates_review_packet_before_routing tests/test_classifier_training.py -q`
+  passed with 24 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/crop_quality.py src/business_card_watchdog/orchestrator.py src/business_card_watchdog/contact_store.py tests/test_preclassifier.py tests/test_crop_quality.py tests/test_dry_run_pipeline.py tests/synthetic_fixtures.py`
+  passed.
+
+Safety:
+
+- This slice used privacy-safe fixtures only. It did not process the scanner
+  backlog, commit private OCR/contact data, call public-web or paid enrichment,
+  create selected targets, or perform live sink lookup/write/readback.
+
+Remaining:
+
+- Plan 0095 remains in progress. Next milestone is review-surface resume for
+  classifier, crop, OCR, and App Intelligence gate evidence.
+
 ## Turn 317 | 2026-06-24
 
 Executed Plan 0095 Milestone 2 for crop acceptance evidence.

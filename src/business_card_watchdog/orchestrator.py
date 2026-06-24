@@ -638,6 +638,12 @@ class BatchOrchestrator:
             "extraction_quality_assessed",
             {"job": job.to_dict(), "assessment": extraction_quality.to_dict()},
         )
+        self._write_ocr_quality_gate(
+            ledger=ledger,
+            job=job,
+            artifact_dir=result.artifact_dir,
+            extraction_quality=extraction_quality.to_dict(),
+        )
         if extraction_quality.needs_review:
             review_packet = write_review_packet(
                 packet_path=result.artifact_dir / "review_packet.json",
@@ -1011,6 +1017,125 @@ class BatchOrchestrator:
                 "job": job.to_dict(),
                 "classifier_training_state": classifier_training_state,
                 "admitted_to_crop_ocr": admitted,
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        return payload
+
+    def _write_ocr_quality_gate(
+        self,
+        *,
+        ledger: RunLedger,
+        job: CardJob,
+        artifact_dir: Path,
+        extraction_quality: dict[str, Any],
+    ) -> dict[str, Any]:
+        classifier_gate = _read_artifact_json(artifact_dir / "scanner_page_classifier_gate.json")
+        crop_acceptance = _read_artifact_json(artifact_dir / "crop_acceptance.json")
+        needs_review = str(extraction_quality.get("status") or "") == "needs_review"
+        request = (
+            {
+                "request_id": f"{job.job_id}-ocr-quality-review",
+                "request_type": "verify_contact_fields",
+                "status": "planned",
+                "job_id": job.job_id,
+                "reason": "OCR or extraction quality is not route-ready",
+                "deterministic_evidence": {
+                    "extraction_quality": extraction_quality,
+                    "classifier_gate": classifier_gate,
+                    "crop_acceptance": crop_acceptance,
+                },
+                "allowed_response_schema": {
+                    "type": "object",
+                    "required": ["recommendation", "confidence", "rationale", "evidence"],
+                    "properties": {
+                        "recommendation": {
+                            "type": "string",
+                            "enum": [
+                                "fields_verified",
+                                "fields_need_correction",
+                                "needs_more_deterministic_evidence",
+                            ],
+                        },
+                        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                        "rationale": {"type": "string"},
+                        "evidence": {"type": "object"},
+                        "training_hint": {"type": "string"},
+                    },
+                    "forbidden_actions": [
+                        "route_contact",
+                        "write_sink",
+                        "readback_sink",
+                        "run_enrichment",
+                        "select_live_target",
+                    ],
+                },
+                "stop_rules": [
+                    "Return OCR/contact-field evidence only; do not route, enrich, write, or read back.",
+                    "Accepted App Intelligence evidence must become reviewed deterministic field evidence before routing.",
+                ],
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            }
+            if needs_review
+            else None
+        )
+        payload = {
+            "schema": "business-card-watchdog.ocr-quality-gate.v1",
+            "run_id": ledger.run_dir.name,
+            "job_id": job.job_id,
+            "state": "needs_app_intelligence_review" if needs_review else "passed",
+            "route_ready_allowed": bool(extraction_quality.get("route_ready_allowed")) and not needs_review,
+            "classifier_training_state": classifier_gate.get("classifier_training_state") or "",
+            "classifier_gate_admitted": classifier_gate.get("admitted_to_crop_ocr"),
+            "crop_acceptance_state": crop_acceptance.get("state") or "",
+            "crop_accepted_count": int(crop_acceptance.get("accepted_count") or 0),
+            "extraction_quality_status": extraction_quality.get("status"),
+            "extraction_quality_reasons": list(extraction_quality.get("reasons") or []),
+            "lineage": {
+                "ocr_text_path": str(artifact_dir / "ocr.txt"),
+                "extraction_quality_path": str(artifact_dir / "extraction_quality.json"),
+                "scanner_page_classifier_gate_path": str(artifact_dir / "scanner_page_classifier_gate.json")
+                if classifier_gate
+                else "",
+                "crop_acceptance_path": str(artifact_dir / "crop_acceptance.json") if crop_acceptance else "",
+            },
+            "app_intelligence_request_count": 1 if request else 0,
+            "app_intelligence_requests": [request] if request else [],
+            "routing_allowed": False,
+            "enrichment_allowed": False,
+            "sink_write_allowed": False,
+            "explicit_stop_conditions": [
+                "OCR quality gates produce evidence only.",
+                "Do not route, enrich, write, or read back contacts from OCR quality evidence.",
+                "Contacts remain review-required until extraction and field quality gates pass.",
+            ],
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "live_sink_calls_made": False,
+            "public_web_search_used": False,
+            "paid_enrichment_used": False,
+        }
+        gate_path = artifact_dir / "ocr_quality_gate.json"
+        gate_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger.record_artifact(
+            job_id=job.job_id,
+            kind="ocr_quality_gate",
+            path=gate_path,
+            metadata={
+                "state": payload["state"],
+                "route_ready_allowed": payload["route_ready_allowed"],
+                "app_intelligence_request_count": payload["app_intelligence_request_count"],
+            },
+        )
+        ledger.record_event(
+            "ocr_quality_gate_recorded",
+            {
+                "job": job.to_dict(),
+                "state": payload["state"],
+                "route_ready_allowed": payload["route_ready_allowed"],
+                "app_intelligence_request_count": payload["app_intelligence_request_count"],
                 "writes_attempted": 0,
                 "network_calls_made": 0,
             },

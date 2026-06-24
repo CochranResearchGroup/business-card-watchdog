@@ -236,3 +236,31 @@ Remaining work:
 - Milestone 3 OCR and vision QA gate.
 - Milestone 4 review surface resume.
 - Milestone 5 exit gate and dry-run scanner PDF proof.
+
+## Execution Update | 2026-06-24 | Milestone 3
+
+Milestone 3 is implemented.
+
+Implemented:
+
+- Added `ocr_quality_gate.json` artifacts after OCR/contact normalization and
+  before route/review decisions.
+- Attached scanner classifier gate lineage and crop acceptance lineage to OCR
+  quality evidence when those upstream artifacts exist.
+- Added bounded `verify_contact_fields` App Intelligence request payloads for
+  OCR/extraction quality failures.
+- Preserved the existing route block: low-quality OCR still creates a review
+  packet and cannot create sink payloads or route-ready contacts.
+- Added `ocr_quality_gate` to projected asset kinds.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_preclassifier.py tests/test_crop_quality.py tests/test_dry_run_pipeline.py::test_scanner_pdf_pages_must_pass_classifier_gate_before_ocr tests/test_dry_run_pipeline.py::test_short_ocr_quality_creates_review_packet_before_routing tests/test_classifier_training.py -q`
+  passed with 24 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/crop_quality.py src/business_card_watchdog/orchestrator.py src/business_card_watchdog/contact_store.py tests/test_preclassifier.py tests/test_crop_quality.py tests/test_dry_run_pipeline.py tests/synthetic_fixtures.py`
+  passed.
+
+Remaining work:
+
+- Milestone 4 review surface resume.
+- Milestone 5 exit gate and dry-run scanner PDF proof.

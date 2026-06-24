@@ -312,12 +312,17 @@ def test_scanner_pdf_pages_must_pass_classifier_gate_before_ocr(
     admitted_dir = Path(by_page["page-0001"]["artifact_dir"])
     blocked_dir = Path(by_page["page-0002"]["artifact_dir"])
     admitted_gate = json.loads((admitted_dir / "scanner_page_classifier_gate.json").read_text(encoding="utf-8"))
+    admitted_ocr_gate = json.loads((admitted_dir / "ocr_quality_gate.json").read_text(encoding="utf-8"))
     blocked_gate = json.loads((blocked_dir / "scanner_page_classifier_gate.json").read_text(encoding="utf-8"))
     blocked_preclassification = json.loads((blocked_dir / "preclassification.json").read_text(encoding="utf-8"))
     events = read_jsonl(run_dir / "events.jsonl")
 
     assert admitted_gate["classifier_training_state"] == "business_card_high_confidence"
     assert admitted_gate["admitted_to_crop_ocr"] is True
+    assert admitted_ocr_gate["classifier_training_state"] == "business_card_high_confidence"
+    assert admitted_ocr_gate["lineage"]["scanner_page_classifier_gate_path"].endswith(
+        "scanner_page_classifier_gate.json"
+    )
     assert (admitted_dir / "contact_candidate.json").exists()
     assert blocked_gate["classifier_training_state"] == "indeterminate_needs_app_intelligence"
     assert blocked_gate["admitted_to_crop_ocr"] is False
@@ -325,8 +330,10 @@ def test_scanner_pdf_pages_must_pass_classifier_gate_before_ocr(
     assert not (blocked_dir / "contact_candidate.json").exists()
     assert not (blocked_dir / "spec.json").exists()
     assert any(event["event_type"] == "scanner_page_classifier_gate_blocked" for event in events)
+    assert any(event["event_type"] == "ocr_quality_gate_recorded" for event in events)
     artifact_kinds = [record["kind"] for record in read_jsonl(run_dir / "artifacts.jsonl")]
     assert artifact_kinds.count("scanner_page_classifier_gate") == 2
+    assert artifact_kinds.count("ocr_quality_gate") == 1
 
 
 def test_short_ocr_quality_creates_review_packet_before_routing(tmp_path: Path, monkeypatch) -> None:
@@ -351,12 +358,17 @@ def test_short_ocr_quality_creates_review_packet_before_routing(tmp_path: Path, 
     final_job = next(iter(latest_jobs_by_id(run_dir / "jobs.jsonl").values()))
     artifact_dir = Path(final_job["artifact_dir"])
     quality = json.loads((artifact_dir / "extraction_quality.json").read_text(encoding="utf-8"))
+    ocr_gate = json.loads((artifact_dir / "ocr_quality_gate.json").read_text(encoding="utf-8"))
     review_packet = json.loads((artifact_dir / "review_packet.json").read_text(encoding="utf-8"))
     events = read_jsonl(run_dir / "events.jsonl")
 
     assert final_job["state"] == "needs_review"
     assert quality["status"] == "needs_review"
     assert quality["reasons"] == ["ocr_text_too_short"]
+    assert ocr_gate["state"] == "needs_app_intelligence_review"
+    assert ocr_gate["route_ready_allowed"] is False
+    assert ocr_gate["app_intelligence_request_count"] == 1
+    assert ocr_gate["app_intelligence_requests"][0]["request_type"] == "verify_contact_fields"
     assert review_packet["extraction_quality"]["reasons"] == ["ocr_text_too_short"]
     assert not (artifact_dir / "sink_payloads.json").exists()
     assert any(event["event_type"] == "job_quality_needs_review" for event in events)
