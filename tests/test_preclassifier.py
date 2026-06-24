@@ -77,19 +77,19 @@ def test_preclassifier_routes_dense_document_like_text_to_review(tmp_path: Path)
     pytest = __import__("pytest")
     cv2 = pytest.importorskip("cv2")
     np = __import__("numpy")
-    image = np.full((1200, 700, 3), 255, dtype=np.uint8)
+    image = np.full((420, 720, 3), 255, dtype=np.uint8)
     for index in range(24):
-        y = 60 + (index * 42)
+        y = 24 + (index * 16)
         cv2.putText(
             image,
             f"Dense scanner document line {index:02d}",
-            (45, y),
+            (24, y),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.65,
+            0.38,
             (0, 0, 0),
-            2,
+            1,
         )
-    path = tmp_path / "dense-scanner-document.png"
+    path = tmp_path / "ambiguous-card-shaped-dense-document.png"
     assert cv2.imwrite(str(path), image)
 
     assessment = assess_business_card_candidate(path)
@@ -97,7 +97,70 @@ def test_preclassifier_routes_dense_document_like_text_to_review(tmp_path: Path)
     assert assessment.decision == "uncertain"
     assert assessment.score < 0.55
     assert assessment.analyzers["opencv_text_layout"]["document_like"] is True
+    assert assessment.analyzers["opencv_text_layout"]["full_page_document_like"] is False
     assert "document-like dense text layout requires App Intelligence review" in assessment.reasons
+
+
+def test_preclassifier_rejects_full_page_handout_flyer_and_brochure_layouts(tmp_path: Path) -> None:
+    pytest = __import__("pytest")
+    cv2 = pytest.importorskip("cv2")
+    np = __import__("numpy")
+    fixtures = {
+        "handout": np.full((1400, 900, 3), 255, dtype=np.uint8),
+        "flyer": np.full((1500, 950, 3), 255, dtype=np.uint8),
+        "brochure": np.full((900, 1500, 3), 255, dtype=np.uint8),
+    }
+    for label, image in fixtures.items():
+        columns = 3 if label == "brochure" else 1
+        for column in range(columns):
+            x = 50 + column * 470
+            for index in range(18):
+                y = 80 + (index * 42)
+                cv2.putText(
+                    image,
+                    f"{label} content line {index:02d}",
+                    (x, y),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.62,
+                    (0, 0, 0),
+                    2,
+                )
+        path = tmp_path / f"{label}.png"
+        assert cv2.imwrite(str(path), image)
+
+        assessment = assess_business_card_candidate(path)
+
+        assert assessment.decision == "not_business_card"
+        assert assessment.score == 0.0
+        assert assessment.analyzers["opencv_text_layout"]["full_page_document_like"] is True
+        assert "full-page document-like layout is not a business card" in assessment.reasons
+
+
+def test_preclassifier_rejects_full_page_document_with_single_large_rectangle(tmp_path: Path) -> None:
+    pytest = __import__("pytest")
+    cv2 = pytest.importorskip("cv2")
+    np = __import__("numpy")
+    image = np.full((1700, 1100, 3), 255, dtype=np.uint8)
+    cv2.rectangle(image, (120, 180), (940, 690), (0, 0, 0), thickness=4)
+    for index in range(18):
+        cv2.putText(
+            image,
+            f"Document text line {index:02d}",
+            (160, 760 + index * 42),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.65,
+            (0, 0, 0),
+            2,
+        )
+    path = tmp_path / "full-page-single-rectangle-document.png"
+    assert cv2.imwrite(str(path), image)
+
+    assessment = assess_business_card_candidate(path)
+
+    assert assessment.decision == "not_business_card"
+    assert assessment.score == 0.0
+    assert assessment.analyzers["opencv_rectangle"]["card_like_count"] == 1
+    assert assessment.analyzers["opencv_text_layout"]["full_page_document_like"] is True
 
 
 def test_preclassifier_does_not_promote_tiny_single_rectangle(tmp_path: Path) -> None:
@@ -114,6 +177,28 @@ def test_preclassifier_does_not_promote_tiny_single_rectangle(tmp_path: Path) ->
     assert assessment.decision != "likely_business_card"
     assert assessment.score < 0.55
     assert assessment.analyzers["opencv_rectangle"]["card_like_count"] == 1
+
+
+def test_preclassifier_rejects_form_with_small_card_like_region(tmp_path: Path) -> None:
+    pytest = __import__("pytest")
+    cv2 = pytest.importorskip("cv2")
+    np = __import__("numpy")
+    image = np.full((1100, 1100, 3), 255, dtype=np.uint8)
+    cv2.rectangle(image, (70, 90), (460, 290), (0, 0, 0), thickness=3)
+    for y in range(145, 300, 55):
+        cv2.line(image, (80, y), (450, y), (0, 0, 0), thickness=2)
+    for x in range(210, 460, 120):
+        cv2.line(image, (x, 90), (x, 290), (0, 0, 0), thickness=2)
+    cv2.putText(image, "DONATION RECEIPT FORM", (80, 760), cv2.FONT_HERSHEY_SIMPLEX, 1.1, (0, 0, 0), 3)
+    cv2.putText(image, "Address Phone City State Zip", (80, 840), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
+    path = tmp_path / "receipt-form.png"
+    assert cv2.imwrite(str(path), image)
+
+    assessment = assess_business_card_candidate(path)
+
+    assert assessment.decision == "not_business_card"
+    assert assessment.score == 0.0
+    assert "single small card-like rectangle in non-card-shaped page is insufficient" in assessment.reasons
 
 
 def test_orchestrator_records_multi_card_candidate_manifest(tmp_path: Path, monkeypatch) -> None:

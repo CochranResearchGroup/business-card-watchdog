@@ -1,6 +1,6 @@
 # Plan 0094 | Scanner PDF Business Card Classifier Training
 
-State: IN_PROGRESS
+State: CLOSED
 Date: 2026-06-23
 
 Parent: Plan 0060 Milestone 9
@@ -300,3 +300,59 @@ Remaining work:
   ambiguous card-like document cases.
 - Continue one-PDF iterations until the exit gate can confidently return the
   project to crop/OCR and App Intelligence quality-assurance work.
+
+## Closeout | 2026-06-24
+
+Plan 0094 is closed.
+
+Completed:
+
+- Added a redacted `runs classifier-training-report` surface that summarizes
+  the latest unique scanner classifier-training source documents, includes the
+  supplied positive-control PDF even when targeted replay runs exist, and writes
+  report artifacts only under user-scoped runtime state.
+- Added the final crop/OCR exit gate:
+  - crop/OCR/side-pair/vision-QA may resume only for page-level
+    `business_card_high_confidence`;
+  - `not_business_card_high_confidence` remains blocked from contact
+    extraction;
+  - `indeterminate_needs_app_intelligence` remains blocked until bounded
+    `classify_document_type` evidence changes the page state.
+- Added fixture-backed coverage for business-card positives, dense handout-like
+  pages, flyer/full-page document layouts, tri-fold/brochure-like layouts,
+  small ambiguous card-shaped dense documents, small card-like regions inside
+  forms, and single large rectangles inside full-page dense documents.
+- Repeated the scanner training exercise with the current classifier on ten
+  unique source PDFs: one supplied positive-control business-card PDF plus nine
+  queued scanner PDFs.
+
+Runtime evidence:
+
+- Final report artifact:
+  `classifier-training-report-2026-06-24T11-19-36+00-00.json` in user-scoped
+  runtime state.
+- Report window: 10 unique source PDFs, 96 pages.
+- Aggregate counts:
+  - `business_card_high_confidence = 1`
+  - `not_business_card_high_confidence = 93`
+  - `indeterminate_needs_app_intelligence = 2`
+- Outcomes:
+  - `contains_business_card_candidates = 1`
+  - `not_business_card_document = 7`
+  - `needs_app_intelligence_document_type_review = 2`
+- Positive control passed as `contains_business_card_candidates`.
+- Exit gate returned `ready_for_crop_ocr_business_card_candidates`.
+- Side-effect counters stayed at writes/network/live-sink/public-web/paid
+  enrichment `0/0/false/false/false`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_preclassifier.py tests/test_classifier_training.py -q`
+  passed with 17 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/preclassifier.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_preclassifier.py tests/test_classifier_training.py`
+  passed.
+
+Next recommended offline slice:
+
+- Resume card crop/OCR/vision-QA work only for pages whose
+  `classifier_training_state` is `business_card_high_confidence`.

@@ -1,5 +1,66 @@
 # Runbook
 
+## Turn 315 | 2026-06-24
+
+Closed Plan 0094 after completing the scanner PDF classifier-training exercise.
+
+Implemented:
+
+- Added `runs classifier-training-report` to summarize the latest unique
+  classifier-training source PDFs without committing private scanner artifacts.
+- Made the report include the supplied positive-control source even when
+  targeted replay runs exist in the runtime history.
+- Added the explicit crop/OCR exit gate:
+  - only `business_card_high_confidence` pages may proceed to crop/OCR,
+    side-pairing, or vision QA;
+  - `not_business_card_high_confidence` pages remain blocked from contact
+    extraction;
+  - `indeterminate_needs_app_intelligence` pages require bounded
+    `classify_document_type` evidence before downstream card work.
+- Tuned the deterministic classifier for scanner false positives:
+  full-page dense document layouts override single-rectangle promotion, and a
+  single small card-like rectangle inside a non-card-shaped form is
+  insufficient evidence.
+- Added privacy-safe fixtures for the Plan 0094 gate: business-card positives,
+  handout/flyer/brochure-like layouts, ambiguous dense card-shaped documents,
+  forms with small card-like regions, and full-page documents with a single
+  large rectangle.
+- Updated `ROADMAP.md` to mark Plan 0094 complete and return the next offline
+  slice to crop/OCR only under the classifier gate.
+
+Runtime evidence:
+
+- Repeated the training exercise on ten unique source PDFs: the supplied
+  positive-control business-card PDF plus nine queued scanner PDFs.
+- Final report artifact:
+  `classifier-training-report-2026-06-24T11-19-36+00-00.json` in user-scoped
+  runtime state.
+- Final report summarized 10 unique PDFs and 96 pages:
+  `business_card_high_confidence = 1`,
+  `not_business_card_high_confidence = 93`, and
+  `indeterminate_needs_app_intelligence = 2`.
+- Outcomes were 1 business-card-candidate document, 7 non-card documents, and
+  2 App Intelligence document-type review documents.
+- Positive control passed as `contains_business_card_candidates`.
+- Exit gate returned `ready_for_crop_ocr_business_card_candidates`.
+- Observed side effects stayed at writes/network/live-sink/public-web/paid
+  enrichment `0/0/false/false/false`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_preclassifier.py tests/test_classifier_training.py -q`
+  passed with 17 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/preclassifier.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_preclassifier.py tests/test_classifier_training.py`
+  passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `git diff --check` passed.
+
+Safety:
+
+- This slice did not commit scanner PDFs, rendered page images, raw OCR, raw
+  contact data, private paths, tenant secrets, selected targets, public-web
+  results, paid enrichment results, or live sink logs.
+
 ## Turn 314 | 2026-06-23
 
 Ran the post-Plan-0093 roadmap cleanup and wrote the next training plan.

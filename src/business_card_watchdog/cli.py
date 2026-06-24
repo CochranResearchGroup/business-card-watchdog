@@ -203,6 +203,34 @@ def _render_classifier_training_iteration_text(payload: dict[str, object]) -> st
     return "\n".join(lines) + "\n"
 
 
+def _render_classifier_training_report_text(payload: dict[str, object]) -> str:
+    aggregate = dict(payload.get("aggregate") or {})
+    counts = dict(aggregate.get("counts") or {})
+    exit_gate = dict(payload.get("exit_gate") or {})
+    lines = [
+        f"Classifier training report: {exit_gate.get('state')}",
+        f"Iterations: {payload.get('iteration_count', 0)}",
+        f"Sources: {payload.get('source_count', 0)}",
+        "Counts: "
+        + " ".join(f"{key}={value}" for key, value in sorted(counts.items()))
+        if counts
+        else "Counts: none",
+        f"App Intelligence requests: {aggregate.get('app_intelligence_request_count', 0)}",
+        f"Observed: writes={aggregate.get('writes_attempted', 0)} network={aggregate.get('network_calls_made', 0)} live_sinks={aggregate.get('live_sink_calls_made', False)}",
+        f"Crop/OCR ready: {exit_gate.get('ready_to_resume_crop_ocr', False)}",
+        f"Downstream precondition: {exit_gate.get('downstream_precondition')}",
+    ]
+    missing = exit_gate.get("missing") or []
+    lines.append(f"Missing gates: {len(missing)}")
+    for item in missing if isinstance(missing, list) else []:
+        lines.append(f" - {item}")
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    lines.append(f"Stop conditions: {len(stop_conditions)}")
+    for condition in stop_conditions if isinstance(stop_conditions, list) else []:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_watch_dry_run_text(payload: dict[str, object]) -> str:
     assertions = dict(payload.get("assertions") or {})
     commands = dict(payload.get("commands") or {})
@@ -2843,6 +2871,11 @@ def build_parser() -> argparse.ArgumentParser:
     runs_classifier_training.add_argument("--source", default=None)
     runs_classifier_training.add_argument("--no-write", action="store_true")
     runs_classifier_training.add_argument("--json", action="store_true")
+    runs_classifier_training_report = runs_sub.add_parser("classifier-training-report")
+    runs_classifier_training_report.add_argument("--limit", type=int, default=10)
+    runs_classifier_training_report.add_argument("--positive-control-source", default=None)
+    runs_classifier_training_report.add_argument("--no-write", action="store_true")
+    runs_classifier_training_report.add_argument("--json", action="store_true")
     add_review_route_runs_parsers(runs_sub)
     runs_close_lookup_prerequisites = runs_sub.add_parser("close-lookup-prerequisites")
     runs_close_lookup_prerequisites.add_argument("run_id")
@@ -3690,6 +3723,12 @@ def main(argv: list[str] | None = None) -> int:
                 source=args.source,
                 write=not args.no_write,
             )
+        elif args.runs_command == "classifier-training-report":
+            payload = service.classifier_training_report(
+                limit=args.limit,
+                positive_control_source=args.positive_control_source,
+                write=not args.no_write,
+            )
         elif args.runs_command in {
             REVIEW_ROUTE_READINESS_COMMAND,
             LOOKUP_SELECTION_PACKET_COMMAND,
@@ -3869,6 +3908,9 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.runs_command == "classifier-training-iteration" and not args.json:
             print(_render_classifier_training_iteration_text(payload), end="")
+            return 0
+        if args.runs_command == "classifier-training-report" and not args.json:
+            print(_render_classifier_training_report_text(payload), end="")
             return 0
         if args.runs_command == REVIEW_ROUTE_READINESS_COMMAND and not args.json:
             print(render_review_route_readiness_text(payload), end="")

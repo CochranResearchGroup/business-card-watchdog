@@ -72,6 +72,10 @@ def assess_business_card_candidate(path: Path, *, min_score: float = 0.55) -> Ca
     rectangle = _opencv_rectangle_hint(path)
     analyzers["opencv_rectangle"] = rectangle
     rectangle_score = float(rectangle.get("score", 0.0))
+    rectangle_area_total = float(rectangle.get("area_fraction_total") or 0.0)
+    if aspect_score == 0 and int(rectangle.get("card_like_count") or 0) == 1 and rectangle_area_total < 0.08:
+        rectangle_score = 0.0
+        reasons.append("single small card-like rectangle in non-card-shaped page is insufficient")
     if rectangle_score > 0:
         count = int(rectangle.get("card_like_count", 1))
         if count > 1:
@@ -91,8 +95,16 @@ def assess_business_card_candidate(path: Path, *, min_score: float = 0.55) -> Ca
         reasons.append("card-like aspect ratio with multiple horizontal text-line regions")
 
     score = max(rectangle_score, text_layout_score)
+    if (
+        text_layout.get("full_page_document_like") is True
+        and int(rectangle.get("card_like_count") or 0) <= 1
+    ):
+        score = 0.0
+        reasons.append("full-page document-like layout is not a business card")
     if score < min_score:
         score = min(aspect_score, 0.45)
+        if text_layout.get("full_page_document_like") is True:
+            score = 0.0
     if score >= min_score:
         decision: CardCandidateDecision = "likely_business_card"
     elif score <= 0.05:
@@ -302,6 +314,7 @@ def _opencv_text_layout_hint(path: Path) -> dict[str, Any]:
     text_area_fraction = text_area / max(width * height, 1)
     score = 0.0
     document_like = text_lines > 10 or text_area_fraction > 0.24
+    full_page_document_like = document_like and max(width, height) >= 1000 and min(width, height) >= 650
     if text_lines >= 3 and 0.01 <= foreground_density <= 0.45 and not document_like:
         score = min(0.82, 0.56 + (0.035 * min(text_lines, 6)) + min(text_area_fraction, 0.05))
     return {
@@ -311,6 +324,7 @@ def _opencv_text_layout_hint(path: Path) -> dict[str, Any]:
         "foreground_density": round(foreground_density, 4),
         "text_area_fraction": round(text_area_fraction, 4),
         "document_like": document_like,
+        "full_page_document_like": full_page_document_like,
     }
 
 

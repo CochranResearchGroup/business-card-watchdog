@@ -39,12 +39,12 @@ Latest completed Milestone 9 dry-run selection handoff plan: `docs/dev/plans/009
 Latest completed Milestone 9 operator checklist plan: `docs/dev/plans/0091-2026-06-22-milestone-9-operator-checklist.md`.
 Latest completed Milestone 9 scoped scanner dry-run plan: `docs/dev/plans/0092-2026-06-22-scoped-scanner-dry-run-unblock.md`.
 Latest completed Milestone 9 agent-loop plan: `docs/dev/plans/0093-2026-06-23-agent-loop-qr-orientation-side-pairing.md`.
-Active classifier-training plan: `docs/dev/plans/0094-2026-06-23-scanner-pdf-business-card-classifier-training.md`.
+Latest completed classifier-training plan: `docs/dev/plans/0094-2026-06-23-scanner-pdf-business-card-classifier-training.md`.
 Latest completed practice-corpus plan: `docs/dev/plans/0062-2026-06-21-practice-corpus-manifest.md`.
 Latest completed scanner side-pair graph plan: `docs/dev/plans/0084-2026-06-22-ocr-contextual-side-pair-graph.md`.
-Next refactor/development plan: Plan 0094 scanner PDF business-card classifier training loop.
+Next refactor/development plan: crop/OCR/vision-QA resume plan for `business_card_high_confidence` scanner pages.
 Next production plan: `docs/dev/plans/0009-2026-06-14-operator-selected-live-smoke-and-pilot-rollout.md`.
-Next offline boundary: train and tune the business-card-versus-other-document framework on scanner PDFs one source document at a time; do not proceed to card cropping, OCR, AI vision quality assurance, lookup prerequisite closure, or live target selection until deterministic/card-or-not routing has explicit App Intelligence escalation criteria and fixture-backed validation.
+Next offline boundary: resume card crop/OCR/side-pair/vision-QA only for pages classified as `business_card_high_confidence`; keep `not_business_card_high_confidence` and `indeterminate_needs_app_intelligence` blocked from contact extraction unless later bounded evidence changes the page state.
 Next production boundary: operator-selected live smoke/pilot rollout for one run, one job, and one sink at a time.
 
 ## Milestones

@@ -641,6 +641,62 @@ class BusinessCardService:
         ledger.transition_run("completed")
         return payload
 
+    def classifier_training_report(
+        self,
+        *,
+        limit: int = 10,
+        positive_control_source: str | None = None,
+        write: bool = True,
+    ) -> dict[str, Any]:
+        ensure_runtime_dirs(self.config)
+        all_iterations = _classifier_training_iteration_payloads(self.config.runs_dir)
+        iterations = _classifier_training_report_window(
+            self.config,
+            all_iterations=all_iterations,
+            limit=max(1, limit),
+            positive_control_source=positive_control_source,
+        )
+        positive_control = _classifier_training_positive_control(
+            self.config,
+            iterations=iterations,
+            source=positive_control_source,
+        )
+        rows = [_classifier_training_report_row(iteration) for iteration in iterations]
+        aggregate = _classifier_training_report_aggregate(rows)
+        exit_gate = _classifier_training_exit_gate(aggregate, positive_control=positive_control)
+        report_dir = self.config.data_dir / "classifier_training" / "reports"
+        report_path = report_dir / f"classifier-training-report-{utc_now().replace(':', '-')}.json"
+        payload: dict[str, Any] = {
+            "schema": "business-card-watchdog.classifier-training-report.v1",
+            "generated_at": utc_now(),
+            "limit": max(1, limit),
+            "iteration_count": len(rows),
+            "source_count": _classifier_training_report_source_count(rows),
+            "rows": rows,
+            "aggregate": aggregate,
+            "positive_control": positive_control,
+            "exit_gate": exit_gate,
+            "runtime_artifact_written": False,
+            "report_path": str(report_path) if write else None,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "live_sink_calls_made": False,
+            "public_web_search_used": False,
+            "paid_enrichment_used": False,
+            "explicit_stop_conditions": [
+                "This report summarizes classifier-training artifacts only.",
+                "It does not read private scanner images into git or copy runtime artifacts into the repo.",
+                "Crop/OCR may resume only for pages classified as business_card_high_confidence.",
+                "Indeterminate pages require App Intelligence document-type evidence before downstream card work.",
+                "Non-card pages remain blocked from contact extraction unless later evidence overrides them.",
+            ],
+        }
+        if write:
+            report_dir.mkdir(parents=True, exist_ok=True)
+            report_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            payload["runtime_artifact_written"] = True
+        return payload
+
     def list_runs(self) -> list[dict[str, Any]]:
         ensure_runtime_dirs(self.config)
         index_path = self.config.runs_dir / "index.jsonl"
@@ -17278,6 +17334,238 @@ def _record_classifier_training_seen(path: Path, *, selected: Path, payload: dic
     }
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(row, sort_keys=True) + "\n")
+
+
+def _classifier_training_iteration_payloads(runs_dir: Path) -> list[dict[str, Any]]:
+    payloads: list[dict[str, Any]] = []
+    for path in runs_dir.glob("classifier-training-*/classifier_training_iteration.json"):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if isinstance(payload, dict):
+            payloads.append(payload)
+    payloads.sort(key=lambda row: str(row.get("generated_at") or ""), reverse=True)
+    return payloads
+
+
+def _classifier_training_report_window(
+    config: AppConfig,
+    *,
+    all_iterations: list[dict[str, Any]],
+    limit: int,
+    positive_control_source: str | None,
+) -> list[dict[str, Any]]:
+    unique_iterations = _classifier_training_latest_unique_iterations(all_iterations)
+    iterations = list(unique_iterations[:limit])
+    if not positive_control_source:
+        return iterations
+    try:
+        positive_digest = _file_sha256(resolve_input_path(positive_control_source, config))
+    except Exception:
+        return iterations
+    if any(str(iteration.get("source_document_sha256") or "") == positive_digest for iteration in iterations):
+        return iterations
+    positive_iteration = next(
+        (
+            iteration
+            for iteration in unique_iterations
+            if str(iteration.get("source_document_sha256") or "") == positive_digest
+        ),
+        None,
+    )
+    if positive_iteration is None:
+        return iterations
+    return [
+        positive_iteration,
+        *[
+            iteration
+            for iteration in unique_iterations
+            if str(iteration.get("source_document_sha256") or "") != positive_digest
+        ][: max(0, limit - 1)],
+    ]
+
+
+def _classifier_training_latest_unique_iterations(all_iterations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[str] = set()
+    unique: list[dict[str, Any]] = []
+    for iteration in all_iterations:
+        digest = str(iteration.get("source_document_sha256") or "")
+        key = digest or str(iteration.get("run_id") or "")
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(iteration)
+    return unique
+
+
+def _classifier_training_report_row(iteration: dict[str, Any]) -> dict[str, Any]:
+    counts = dict(iteration.get("counts") or {})
+    return {
+        "run_id": iteration.get("run_id"),
+        "generated_at": iteration.get("generated_at"),
+        "source_document_name": iteration.get("source_document_name"),
+        "source_document_sha256_prefix": str(iteration.get("source_document_sha256") or "")[:12],
+        "page_count": _int(iteration.get("page_count")),
+        "counts": {
+            "business_card_high_confidence": _int(counts.get("business_card_high_confidence")),
+            "indeterminate_needs_app_intelligence": _int(counts.get("indeterminate_needs_app_intelligence")),
+            "not_business_card_high_confidence": _int(counts.get("not_business_card_high_confidence")),
+            "page_count": _int(counts.get("page_count")),
+        },
+        "training_outcome": iteration.get("training_outcome"),
+        "app_intelligence_request_count": _int(iteration.get("app_intelligence_request_count")),
+        "writes_attempted": _int(iteration.get("writes_attempted")),
+        "network_calls_made": _int(iteration.get("network_calls_made")),
+        "live_sink_calls_made": bool(iteration.get("live_sink_calls_made")),
+        "public_web_search_used": bool(iteration.get("public_web_search_used")),
+        "paid_enrichment_used": bool(iteration.get("paid_enrichment_used")),
+    }
+
+
+def _classifier_training_report_aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    counts = {
+        "business_card_high_confidence": 0,
+        "indeterminate_needs_app_intelligence": 0,
+        "not_business_card_high_confidence": 0,
+        "page_count": 0,
+    }
+    outcomes: dict[str, int] = {}
+    app_requests = 0
+    writes = 0
+    network = 0
+    live_sink_calls = False
+    public_web = False
+    paid_enrichment = False
+    for row in rows:
+        row_counts = dict(row.get("counts") or {})
+        for key in counts:
+            counts[key] += _int(row_counts.get(key))
+        outcome = str(row.get("training_outcome") or "unknown")
+        outcomes[outcome] = outcomes.get(outcome, 0) + 1
+        app_requests += _int(row.get("app_intelligence_request_count"))
+        writes += _int(row.get("writes_attempted"))
+        network += _int(row.get("network_calls_made"))
+        live_sink_calls = live_sink_calls or bool(row.get("live_sink_calls_made"))
+        public_web = public_web or bool(row.get("public_web_search_used"))
+        paid_enrichment = paid_enrichment or bool(row.get("paid_enrichment_used"))
+    return {
+        "document_count": len(rows),
+        "source_count": _classifier_training_report_source_count(rows),
+        "counts": counts,
+        "outcomes": outcomes,
+        "app_intelligence_request_count": app_requests,
+        "writes_attempted": writes,
+        "network_calls_made": network,
+        "live_sink_calls_made": live_sink_calls,
+        "public_web_search_used": public_web,
+        "paid_enrichment_used": paid_enrichment,
+        "coverage": {
+            "has_business_card_positive": counts["business_card_high_confidence"] > 0,
+            "has_not_business_card_documents": counts["not_business_card_high_confidence"] > 0,
+            "has_app_intelligence_escalations": counts["indeterminate_needs_app_intelligence"] > 0,
+            "has_zero_live_side_effects": writes == 0 and network == 0 and not live_sink_calls and not public_web and not paid_enrichment,
+        },
+    }
+
+
+def _classifier_training_report_source_count(rows: list[dict[str, Any]]) -> int:
+    return len(
+        {
+            (
+                str(row.get("source_document_sha256_prefix") or ""),
+                str(row.get("source_document_name") or ""),
+            )
+            for row in rows
+        }
+    )
+
+
+def _classifier_training_positive_control(
+    config: AppConfig,
+    *,
+    iterations: list[dict[str, Any]],
+    source: str | None,
+) -> dict[str, Any]:
+    if not source:
+        return {
+            "provided": False,
+            "matched_iteration": False,
+            "state": "not_configured",
+            "reason": "no positive-control source was provided",
+        }
+    selected = resolve_input_path(source, config)
+    digest = _file_sha256(selected)
+    for iteration in iterations:
+        if str(iteration.get("source_document_sha256") or "") != digest:
+            continue
+        counts = dict(iteration.get("counts") or {})
+        passed = _int(counts.get("business_card_high_confidence")) > 0 and _int(
+            counts.get("indeterminate_needs_app_intelligence")
+        ) == 0
+        return {
+            "provided": True,
+            "matched_iteration": True,
+            "source_document_name": selected.name,
+            "source_document_sha256_prefix": digest[:12],
+            "run_id": iteration.get("run_id"),
+            "training_outcome": iteration.get("training_outcome"),
+            "passed": passed,
+            "state": "business_card_positive_control_passed" if passed else "business_card_positive_control_failed",
+        }
+    return {
+        "provided": True,
+        "matched_iteration": False,
+        "source_document_name": selected.name,
+        "source_document_sha256_prefix": digest[:12],
+        "passed": False,
+        "state": "positive_control_not_in_report_window",
+    }
+
+
+def _classifier_training_exit_gate(
+    aggregate: dict[str, Any],
+    *,
+    positive_control: dict[str, Any],
+) -> dict[str, Any]:
+    coverage = dict(aggregate.get("coverage") or {})
+    positive_ok = not positive_control.get("provided") or positive_control.get("passed") is True
+    ready = (
+        aggregate.get("document_count", 0) >= 10
+        and coverage.get("has_business_card_positive") is True
+        and coverage.get("has_not_business_card_documents") is True
+        and coverage.get("has_app_intelligence_escalations") is True
+        and coverage.get("has_zero_live_side_effects") is True
+        and positive_ok
+    )
+    missing: list[str] = []
+    if aggregate.get("document_count", 0) < 10:
+        missing.append("ten_recent_classifier_training_iterations")
+    for key, label in [
+        ("has_business_card_positive", "business_card_positive_coverage"),
+        ("has_not_business_card_documents", "not_business_card_coverage"),
+        ("has_app_intelligence_escalations", "app_intelligence_escalation_coverage"),
+        ("has_zero_live_side_effects", "zero_write_network_sink_boundary"),
+    ]:
+        if coverage.get(key) is not True:
+            missing.append(label)
+    if not positive_ok:
+        missing.append("positive_control_pass")
+    return {
+        "state": "ready_for_crop_ocr_business_card_candidates" if ready else "needs_more_classifier_training",
+        "ready_to_resume_crop_ocr": ready,
+        "missing": missing,
+        "crop_ocr_allowed_for_classifier_states": ["business_card_high_confidence"],
+        "crop_ocr_blocked_for_classifier_states": [
+            "not_business_card_high_confidence",
+            "indeterminate_needs_app_intelligence",
+        ],
+        "app_intelligence_required_for_classifier_states": ["indeterminate_needs_app_intelligence"],
+        "downstream_precondition": (
+            "Run crop/OCR/side-pair/vision-QA only for page-level classifier_training_state "
+            "business_card_high_confidence; all other states remain blocked until evidence changes them."
+        ),
+    }
 
 
 def _classifier_training_state(assessment: dict[str, Any]) -> str:
