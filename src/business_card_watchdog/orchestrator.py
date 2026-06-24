@@ -271,20 +271,78 @@ class BatchOrchestrator:
                 min_score=self.config.prefilter.min_score,
             )
             prefilter_path = artifact_dir / "preclassification.json"
+            assessment_payload = assessment.to_dict()
+            classifier_training_state = _classifier_training_state(assessment_payload)
+            assessment_payload["classifier_training_state"] = classifier_training_state
             prefilter_path.write_text(
-                json.dumps(assessment.to_dict(), indent=2, sort_keys=True) + "\n",
+                json.dumps(assessment_payload, indent=2, sort_keys=True) + "\n",
                 encoding="utf-8",
             )
             ledger.record_artifact(job_id=job.job_id, kind="preclassification", path=prefilter_path)
             ledger.record_event(
                 "image_preclassified",
-                {"job": job.to_dict(), "assessment": assessment.to_dict()},
+                {"job": job.to_dict(), "assessment": assessment_payload},
             )
             candidate_manifest = build_card_candidate_box_manifest(
                 assessment=assessment,
                 source_image_path=Path(job.image_path),
                 job_id=job.job_id,
             )
+            if source_page is not None and classifier_training_state != "business_card_high_confidence":
+                if not (artifact_dir / "orientation_evidence.json").exists():
+                    self._write_orientation_evidence(
+                        ledger=ledger,
+                        job=job,
+                        artifact_dir=artifact_dir,
+                        crop_manifest=None,
+                    )
+                if not (artifact_dir / "qr_evidence.json").exists():
+                    self._write_qr_evidence(
+                        ledger=ledger,
+                        job=job,
+                        artifact_dir=artifact_dir,
+                        crop_manifest=None,
+                    )
+                if not (artifact_dir / "crop_quality.json").exists():
+                    self._write_crop_quality(
+                        ledger=ledger,
+                        job=job,
+                        artifact_dir=artifact_dir,
+                        crop_manifest=None,
+                    )
+                self._write_classifier_gate(
+                    ledger=ledger,
+                    job=job,
+                    artifact_dir=artifact_dir,
+                    classifier_training_state=classifier_training_state,
+                    assessment=assessment_payload,
+                    admitted=False,
+                )
+                job.artifact_dir = str(artifact_dir)
+                job.transition_to(
+                    "failed",
+                    error=f"classifier gate blocked scanner page: {classifier_training_state}",
+                )
+                ledger.record_job(job)
+                ledger.record_event(
+                    "scanner_page_classifier_gate_blocked",
+                    {
+                        "job": job.to_dict(),
+                        "classifier_training_state": classifier_training_state,
+                        "writes_attempted": 0,
+                        "network_calls_made": 0,
+                    },
+                )
+                return
+            if source_page is not None:
+                self._write_classifier_gate(
+                    ledger=ledger,
+                    job=job,
+                    artifact_dir=artifact_dir,
+                    classifier_training_state=classifier_training_state,
+                    assessment=assessment_payload,
+                    admitted=True,
+                )
             if candidate_manifest["candidate_count"]:
                 candidate_manifest_path = artifact_dir / "card_candidates.json"
                 candidate_manifest_path.write_text(
@@ -458,7 +516,7 @@ class BatchOrchestrator:
                 ledger.record_job(job)
                 ledger.record_event(
                     "job_prefilter_rejected",
-                    {"job": job.to_dict(), "assessment": assessment.to_dict()},
+                    {"job": job.to_dict(), "assessment": assessment_payload},
                 )
                 return
 
@@ -798,6 +856,74 @@ class BatchOrchestrator:
         )
         return crop_quality, recrop_proposals
 
+    def _write_classifier_gate(
+        self,
+        *,
+        ledger: RunLedger,
+        job: CardJob,
+        artifact_dir: Path,
+        classifier_training_state: str,
+        assessment: dict[str, Any],
+        admitted: bool,
+    ) -> dict[str, Any]:
+        payload = {
+            "schema": "business-card-watchdog.scanner-page-classifier-gate.v1",
+            "run_id": ledger.run_dir.name,
+            "job_id": job.job_id,
+            "source_image_path": job.image_path,
+            "classifier_training_state": classifier_training_state,
+            "admitted_to_crop_ocr": admitted,
+            "downstream_allowed": admitted,
+            "crop_ocr_allowed_for_classifier_states": ["business_card_high_confidence"],
+            "crop_ocr_blocked_for_classifier_states": [
+                "not_business_card_high_confidence",
+                "indeterminate_needs_app_intelligence",
+            ],
+            "app_intelligence_required_for_classifier_states": ["indeterminate_needs_app_intelligence"],
+            "reason": (
+                "scanner page passed classifier gate"
+                if admitted
+                else "scanner page blocked before crop/OCR/contact extraction"
+            ),
+            "deterministic_evidence": {
+                "preclassification": assessment,
+            },
+            "stop_rules": [
+                "Do not crop, OCR, side-pair, normalize contacts, route, enrich, or write scanner pages unless admitted_to_crop_ocr is true.",
+                "Non-card pages remain blocked from contact extraction.",
+                "Indeterminate pages require bounded classify_document_type evidence before downstream card work.",
+            ],
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "live_sink_calls_made": False,
+            "public_web_search_used": False,
+            "paid_enrichment_used": False,
+        }
+        gate_path = artifact_dir / "scanner_page_classifier_gate.json"
+        gate_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        ledger.record_artifact(
+            job_id=job.job_id,
+            kind="scanner_page_classifier_gate",
+            path=gate_path,
+            metadata={
+                "classifier_training_state": classifier_training_state,
+                "admitted_to_crop_ocr": admitted,
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        ledger.record_event(
+            "scanner_page_classifier_gate_recorded",
+            {
+                "job": job.to_dict(),
+                "classifier_training_state": classifier_training_state,
+                "admitted_to_crop_ocr": admitted,
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        return payload
+
     def _write_qr_evidence(
         self,
         *,
@@ -855,6 +981,16 @@ def _optional_adapter_artifacts(artifact_dir: Path) -> dict[str, Path]:
         if kind not in artifacts and path.exists():
             artifacts[kind] = path
     return artifacts
+
+
+def _classifier_training_state(assessment: dict[str, Any]) -> str:
+    decision = str(assessment.get("decision") or "")
+    score = float(assessment.get("score") or 0.0)
+    if decision == "likely_business_card" and score >= 0.55:
+        return "business_card_high_confidence"
+    if decision == "not_business_card" and score <= 0.05:
+        return "not_business_card_high_confidence"
+    return "indeterminate_needs_app_intelligence"
 
 
 def _read_artifact_json(path: Path) -> dict[str, Any]:

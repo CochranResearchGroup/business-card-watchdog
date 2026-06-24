@@ -1,5 +1,43 @@
 # Runbook
 
+## Turn 316 | 2026-06-24
+
+Wrote Plan 0095 and executed Milestone 1 for the gated crop/OCR resume.
+
+Implemented:
+
+- Added `docs/dev/plans/0095-2026-06-24-gated-crop-ocr-resume.md`.
+- Updated `ROADMAP.md` to make Plan 0095 the active gated crop/OCR resume
+  plan.
+- Added scanner page classifier gate artifacts to the batch orchestrator:
+  `scanner_page_classifier_gate.json`.
+- Added `classifier_training_state` to normal scanner page
+  `preclassification.json` artifacts.
+- Blocked rendered scanner PDF page jobs from OCR/contact extraction unless
+  they are `business_card_high_confidence`.
+- Kept blocked page evidence local and reviewable by still writing
+  orientation, QR, crop-quality, and recrop artifacts before stopping.
+- Added `scanner_page_classifier_gate` to projected asset kinds.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_dry_run_pipeline.py::test_scanner_pdf_pages_must_pass_classifier_gate_before_ocr tests/test_preclassifier.py tests/test_classifier_training.py -q`
+  passed with 18 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/orchestrator.py src/business_card_watchdog/contact_store.py tests/test_dry_run_pipeline.py`
+  passed.
+
+Safety:
+
+- This slice used synthetic PDF/page fixtures only. It did not run a broad
+  scanner backlog, commit private scanner PDFs/rendered pages/OCR, create
+  contacts from blocked pages, call public-web or paid enrichment, create a
+  selected target, or perform live sink lookup/write/readback.
+
+Remaining:
+
+- Plan 0095 remains in progress. Next milestone is crop acceptance evidence for
+  admitted `business_card_high_confidence` scanner pages.
+
 ## Turn 315 | 2026-06-24
 
 Closed Plan 0094 after completing the scanner PDF classifier-training exercise.

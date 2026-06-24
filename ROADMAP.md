@@ -40,9 +40,10 @@ Latest completed Milestone 9 operator checklist plan: `docs/dev/plans/0091-2026-
 Latest completed Milestone 9 scoped scanner dry-run plan: `docs/dev/plans/0092-2026-06-22-scoped-scanner-dry-run-unblock.md`.
 Latest completed Milestone 9 agent-loop plan: `docs/dev/plans/0093-2026-06-23-agent-loop-qr-orientation-side-pairing.md`.
 Latest completed classifier-training plan: `docs/dev/plans/0094-2026-06-23-scanner-pdf-business-card-classifier-training.md`.
+Active gated crop/OCR resume plan: `docs/dev/plans/0095-2026-06-24-gated-crop-ocr-resume.md`.
 Latest completed practice-corpus plan: `docs/dev/plans/0062-2026-06-21-practice-corpus-manifest.md`.
 Latest completed scanner side-pair graph plan: `docs/dev/plans/0084-2026-06-22-ocr-contextual-side-pair-graph.md`.
-Next refactor/development plan: crop/OCR/vision-QA resume plan for `business_card_high_confidence` scanner pages.
+Next refactor/development plan: Plan 0095 gated crop/OCR resume, continuing with crop acceptance evidence after the scanner page classifier gate.
 Next production plan: `docs/dev/plans/0009-2026-06-14-operator-selected-live-smoke-and-pilot-rollout.md`.
 Next offline boundary: resume card crop/OCR/side-pair/vision-QA only for pages classified as `business_card_high_confidence`; keep `not_business_card_high_confidence` and `indeterminate_needs_app_intelligence` blocked from contact extraction unless later bounded evidence changes the page state.
 Next production boundary: operator-selected live smoke/pilot rollout for one run, one job, and one sink at a time.

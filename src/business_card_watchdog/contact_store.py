@@ -28,6 +28,7 @@ _PROJECTED_ASSET_KINDS = {
     "preclassification",
     "classifier_training_iteration",
     "document_type_app_intelligence_request",
+    "scanner_page_classifier_gate",
     "card_candidates",
     "candidate_crops",
     "crop_quality",

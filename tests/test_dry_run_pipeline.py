@@ -6,6 +6,7 @@ from pathlib import Path
 from business_card_watchdog.config import AppConfig, PrefilterConfig, SinkConfig
 from business_card_watchdog.document_intake import is_supported_document
 from business_card_watchdog.orchestrator import BatchOrchestrator
+from business_card_watchdog.preclassifier import CardCandidateAssessment
 from business_card_watchdog.service import BusinessCardService
 from business_card_watchdog.skill_adapter import is_supported_image
 
@@ -259,6 +260,73 @@ def test_pdf_document_intake_materializes_page_jobs_and_side_candidates(
     asset_kinds = {asset["asset_kind"] for asset in detail["assets"]}
     assert {"source_page", "card_side_candidate", "contact_candidate"}.issubset(asset_kinds)
     assert BusinessCardService(config).contact_projection_drift(run_dir.name)["drift"]["state"] == "in_sync"
+
+
+def test_scanner_pdf_pages_must_pass_classifier_gate_before_ocr(
+    tmp_path: Path, monkeypatch
+) -> None:
+    source_pdf = tmp_path / "scanner" / "mixed.pdf"
+    source_pdf.parent.mkdir(parents=True)
+    source_pdf.write_bytes(
+        b"%PDF-1.4\n"
+        b"1 0 obj << /Type /Page >> endobj\n"
+        b"2 0 obj << /Type /Page >> endobj\n"
+        b"%%EOF\n"
+    )
+    config = AppConfig(
+        config_path=tmp_path / "config.toml",
+        data_dir=tmp_path / "data",
+        cache_dir=tmp_path / "cache",
+        prefilter=PrefilterConfig(process_uncertain=True),
+    )
+    adapter = SyntheticSkillAdapter(
+        specs_by_stem={"page-0001": {"email": "front@example.test", "full_name": "Front Page"}}
+    )
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", adapter)
+
+    def classify(path: Path, *, min_score: float = 0.55) -> CardCandidateAssessment:
+        if path.stem == "page-0001":
+            return CardCandidateAssessment(
+                decision="likely_business_card",
+                score=min_score,
+                reasons=["synthetic high-confidence card"],
+            )
+        return CardCandidateAssessment(
+            decision="uncertain",
+            score=0.35,
+            reasons=["synthetic indeterminate scanner page"],
+        )
+
+    monkeypatch.setattr("business_card_watchdog.orchestrator.assess_business_card_candidate", classify)
+
+    run_dir = orchestrator.process_source(str(source_pdf), dry_run=True, workers=1)
+
+    assert adapter.apply_google_calls == [False]
+    jobs = latest_jobs_by_id(run_dir / "jobs.jsonl")
+    by_page = {Path(job["image_path"]).stem: job for job in jobs.values()}
+    assert by_page["page-0001"]["state"] in {"needs_review", "ready_to_route"}
+    assert by_page["page-0002"]["state"] == "failed"
+    assert "classifier gate blocked scanner page" in by_page["page-0002"]["error"]
+
+    admitted_dir = Path(by_page["page-0001"]["artifact_dir"])
+    blocked_dir = Path(by_page["page-0002"]["artifact_dir"])
+    admitted_gate = json.loads((admitted_dir / "scanner_page_classifier_gate.json").read_text(encoding="utf-8"))
+    blocked_gate = json.loads((blocked_dir / "scanner_page_classifier_gate.json").read_text(encoding="utf-8"))
+    blocked_preclassification = json.loads((blocked_dir / "preclassification.json").read_text(encoding="utf-8"))
+    events = read_jsonl(run_dir / "events.jsonl")
+
+    assert admitted_gate["classifier_training_state"] == "business_card_high_confidence"
+    assert admitted_gate["admitted_to_crop_ocr"] is True
+    assert (admitted_dir / "contact_candidate.json").exists()
+    assert blocked_gate["classifier_training_state"] == "indeterminate_needs_app_intelligence"
+    assert blocked_gate["admitted_to_crop_ocr"] is False
+    assert blocked_preclassification["classifier_training_state"] == "indeterminate_needs_app_intelligence"
+    assert not (blocked_dir / "contact_candidate.json").exists()
+    assert not (blocked_dir / "spec.json").exists()
+    assert any(event["event_type"] == "scanner_page_classifier_gate_blocked" for event in events)
+    artifact_kinds = [record["kind"] for record in read_jsonl(run_dir / "artifacts.jsonl")]
+    assert artifact_kinds.count("scanner_page_classifier_gate") == 2
 
 
 def test_short_ocr_quality_creates_review_packet_before_routing(tmp_path: Path, monkeypatch) -> None:
