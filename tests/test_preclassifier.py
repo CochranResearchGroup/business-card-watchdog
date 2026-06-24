@@ -53,6 +53,69 @@ def test_preclassifier_detects_multiple_cards_in_large_photo(tmp_path: Path) -> 
     assert len(rectangle["boxes"]) >= 3
 
 
+def test_preclassifier_promotes_text_rich_card_as_high_confidence(tmp_path: Path) -> None:
+    pytest = __import__("pytest")
+    cv2 = pytest.importorskip("cv2")
+    np = __import__("numpy")
+    image = np.full((396, 696, 3), 255, dtype=np.uint8)
+    cv2.putText(image, "MONTEITH LOGISTICS", (130, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 3)
+    cv2.putText(image, "Putting together People Projects", (130, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 0), 2)
+    cv2.putText(image, "Alan Monteith", (130, 260), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (0, 0, 0), 3)
+    cv2.putText(image, "Owner", (130, 300), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 0), 2)
+    cv2.putText(image, "(910) 200-3849", (130, 350), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 0), 2)
+    path = tmp_path / "text-rich-card.png"
+    assert cv2.imwrite(str(path), image)
+
+    assessment = assess_business_card_candidate(path)
+
+    assert assessment.decision == "likely_business_card"
+    assert assessment.score >= 0.55
+    assert assessment.analyzers["opencv_text_layout"]["text_line_count"] >= 3
+
+
+def test_preclassifier_routes_dense_document_like_text_to_review(tmp_path: Path) -> None:
+    pytest = __import__("pytest")
+    cv2 = pytest.importorskip("cv2")
+    np = __import__("numpy")
+    image = np.full((1200, 700, 3), 255, dtype=np.uint8)
+    for index in range(24):
+        y = 60 + (index * 42)
+        cv2.putText(
+            image,
+            f"Dense scanner document line {index:02d}",
+            (45, y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.65,
+            (0, 0, 0),
+            2,
+        )
+    path = tmp_path / "dense-scanner-document.png"
+    assert cv2.imwrite(str(path), image)
+
+    assessment = assess_business_card_candidate(path)
+
+    assert assessment.decision == "uncertain"
+    assert assessment.score < 0.55
+    assert assessment.analyzers["opencv_text_layout"]["document_like"] is True
+    assert "document-like dense text layout requires App Intelligence review" in assessment.reasons
+
+
+def test_preclassifier_does_not_promote_tiny_single_rectangle(tmp_path: Path) -> None:
+    pytest = __import__("pytest")
+    cv2 = pytest.importorskip("cv2")
+    np = __import__("numpy")
+    image = np.full((1600, 1000, 3), 255, dtype=np.uint8)
+    cv2.rectangle(image, (120, 120), (310, 240), (0, 0, 0), thickness=4)
+    path = tmp_path / "document-with-small-logo-box.png"
+    assert cv2.imwrite(str(path), image)
+
+    assessment = assess_business_card_candidate(path)
+
+    assert assessment.decision != "likely_business_card"
+    assert assessment.score < 0.55
+    assert assessment.analyzers["opencv_rectangle"]["card_like_count"] == 1
+
+
 def test_orchestrator_records_multi_card_candidate_manifest(tmp_path: Path, monkeypatch) -> None:
     pytest = __import__("pytest")
     pytest.importorskip("cv2")

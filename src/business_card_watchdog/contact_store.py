@@ -26,6 +26,8 @@ CONTACT_SINK_APPROVAL_STATES = {
 _PROJECTED_ASSET_KINDS = {
     "artifact_dir",
     "preclassification",
+    "classifier_training_iteration",
+    "document_type_app_intelligence_request",
     "card_candidates",
     "candidate_crops",
     "crop_quality",

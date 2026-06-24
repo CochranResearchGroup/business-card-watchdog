@@ -7787,6 +7787,54 @@ Safety:
   enrichment, run live lookup/write/readback, or commit private card images/OCR
   dumps.
 
+## Turn 308 | 2026-06-24
+
+Executed the first Plan 0094 scanner PDF classifier-training slice.
+
+Implemented:
+
+- Added a bounded `runs classifier-training-iteration` command that selects one
+  scanner PDF, materializes pages into user-scoped runtime state, records
+  per-page preclassification artifacts, and writes a run-level
+  classifier-training iteration summary.
+- Added projected asset kinds for classifier-training iteration artifacts and
+  document-type App Intelligence request artifacts.
+- Added bounded `classify_document_type` request artifact creation for
+  indeterminate card-or-not cases.
+- Tuned the deterministic preclassifier to keep promotion conservative:
+  text-layout evidence can promote card-like scans, dense document-like text
+  routes to review, and tiny isolated rectangles no longer promote full-page
+  documents as business cards.
+- Kept candidate counts actionable in the training summary: rejected or
+  indeterminate pages can retain raw analyzer evidence in `preclassification`,
+  but they do not report crop/OCR-ready candidates.
+
+Runtime evidence:
+
+- Completed one positive-control scanner PDF plus nine additional one-PDF
+  scanner iterations.
+- The positive-control business-card scan classified as
+  `business_card_high_confidence`.
+- Initial false positives from dense scanner documents were tuned into either
+  `indeterminate_needs_app_intelligence` or
+  `not_business_card_high_confidence`.
+- Dry-run counters remained at writes/network `0/0`; no live sink calls,
+  public-web search, paid enrichment, crop/OCR continuation, or contact routing
+  was performed.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_preclassifier.py tests/test_classifier_training.py -q`
+  passed with 12 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/preclassifier.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/contact_store.py tests/test_preclassifier.py tests/test_classifier_training.py`
+  passed.
+
+Remaining:
+
+- Plan 0094 remains in progress. Next work is a corpus-level training report
+  and more privacy-safe fixtures for handout, flyer, brochure/tri-fold, and
+  ambiguous card-shaped documents before returning to crop/OCR and AI vision QA.
+
 ## Turn 307 | 2026-06-23
 
 Wrote Plan 0093 for the Gallagher scanner feedback and the requested agent

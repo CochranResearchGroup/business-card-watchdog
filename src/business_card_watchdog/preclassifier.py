@@ -81,7 +81,18 @@ def assess_business_card_candidate(path: Path, *, min_score: float = 0.55) -> Ca
     elif rectangle.get("available") is False:
         reasons.append("OpenCV rectangle analyzer unavailable")
 
-    score = rectangle_score if rectangle_score >= min_score else min(aspect_score, 0.45)
+    text_layout = _opencv_text_layout_hint(path)
+    analyzers["opencv_text_layout"] = text_layout
+    text_layout_score = float(text_layout.get("score", 0.0)) if aspect_score >= 0.25 else 0.0
+    if text_layout.get("document_like") is True:
+        text_layout_score = 0.0
+        reasons.append("document-like dense text layout requires App Intelligence review")
+    if text_layout_score > 0:
+        reasons.append("card-like aspect ratio with multiple horizontal text-line regions")
+
+    score = max(rectangle_score, text_layout_score)
+    if score < min_score:
+        score = min(aspect_score, 0.45)
     if score >= min_score:
         decision: CardCandidateDecision = "likely_business_card"
     elif score <= 0.05:
@@ -242,10 +253,12 @@ def _opencv_rectangle_hint(path: Path) -> dict[str, Any]:
     count = len(boxes)
     area_total = min(1.0, sum(float(box["area_fraction"]) for box in boxes))
     score = 0.0
-    if count == 1:
+    if count == 1 and area_total >= 0.04:
         score = min(0.85, 0.56 + area_total)
     elif count > 1:
-        score = min(0.95, 0.62 + (0.08 * min(count, 4)) + min(area_total, 0.2))
+        meaningful_boxes = [box for box in boxes if float(box["area_fraction"]) >= 0.025]
+        if len(meaningful_boxes) > 1:
+            score = min(0.95, 0.62 + (0.08 * min(len(meaningful_boxes), 4)) + min(area_total, 0.2))
     return {
         "available": True,
         "score": round(score, 4),
@@ -253,6 +266,51 @@ def _opencv_rectangle_hint(path: Path) -> dict[str, Any]:
         "card_like_count": count,
         "boxes": boxes[:10],
         "area_fraction_total": round(area_total, 4),
+    }
+
+
+def _opencv_text_layout_hint(path: Path) -> dict[str, Any]:
+    try:
+        import cv2  # type: ignore[import-not-found]
+        import numpy as np  # type: ignore[import-not-found]
+    except Exception:
+        return {"available": False, "score": 0.0}
+
+    image = cv2.imread(str(path))
+    if image is None:
+        return {"available": True, "score": 0.0, "reason": "cv2 could not read image"}
+    height, width = image.shape[:2]
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    _, threshold = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    line_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (max(18, width // 20), 3))
+    line_mask = cv2.dilate(threshold, line_kernel, iterations=1)
+    contours, _ = cv2.findContours(line_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    text_lines = 0
+    text_area = 0
+    for contour in contours:
+        x, y, contour_width, contour_height = cv2.boundingRect(contour)
+        area = contour_width * contour_height
+        if contour_width < max(24, contour_height * 1.8):
+            continue
+        if contour_height < 3 or contour_height > max(8, height // 4):
+            continue
+        if area < 20:
+            continue
+        text_lines += 1
+        text_area += area
+    foreground_density = float(np.count_nonzero(threshold)) / max(width * height, 1)
+    text_area_fraction = text_area / max(width * height, 1)
+    score = 0.0
+    document_like = text_lines > 10 or text_area_fraction > 0.24
+    if text_lines >= 3 and 0.01 <= foreground_density <= 0.45 and not document_like:
+        score = min(0.82, 0.56 + (0.035 * min(text_lines, 6)) + min(text_area_fraction, 0.05))
+    return {
+        "available": True,
+        "score": round(score, 4),
+        "text_line_count": text_lines,
+        "foreground_density": round(foreground_density, 4),
+        "text_area_fraction": round(text_area_fraction, 4),
+        "document_like": document_like,
     }
 
 

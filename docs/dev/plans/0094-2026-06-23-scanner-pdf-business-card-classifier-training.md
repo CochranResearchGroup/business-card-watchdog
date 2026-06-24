@@ -1,6 +1,6 @@
 # Plan 0094 | Scanner PDF Business Card Classifier Training
 
-State: READY
+State: IN_PROGRESS
 Date: 2026-06-23
 
 Parent: Plan 0060 Milestone 9
@@ -252,3 +252,51 @@ Validation:
 - Full targeted classifier suite passes.
 - One scanner PDF dry-run closeout proves the gate behavior.
 - Plan closeout records remaining risks and next recommended crop/OCR slice.
+
+## Execution Update | 2026-06-24
+
+Implemented the first classifier-training loop slice.
+
+Milestone coverage:
+
+- Milestone 1 is implemented for a bounded one-PDF classifier-training command.
+  `runs classifier-training-iteration` selects exactly one configured scanner
+  PDF or accepts one explicit `--source`, renders pages into user-scoped
+  runtime state, writes a run ledger, and records a
+  `classifier_training_iteration` artifact.
+- Milestone 2 has an initial deterministic tuning pass. The classifier now
+  uses card-like aspect, rectangle evidence, text-line layout, dense
+  document-like text detection, and tiny-rectangle suppression.
+- Milestone 3 has initial request gating. Indeterminate pages create bounded
+  `classify_document_type` App Intelligence request artifacts with zero
+  network calls and zero live/sink writes.
+
+Training evidence:
+
+- One positive-control scanner PDF containing a business-card scan classified
+  as `business_card_high_confidence`.
+- Nine additional scanner PDFs were processed one source document at a time.
+  Several initial false promotions were caused by dense handout/title-page
+  layouts and tiny single rectangular logos. After tuning, the positive control
+  still promoted, dense card-shaped documents routed to
+  `indeterminate_needs_app_intelligence`, and portrait/full-page documents
+  dropped to `not_business_card_high_confidence`.
+- The loop remained offline: `writes_attempted = 0`,
+  `network_calls_made = 0`, no live sink calls, no public-web search, and no
+  paid enrichment.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_preclassifier.py tests/test_classifier_training.py -q`
+  passed with 12 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/preclassifier.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py src/business_card_watchdog/contact_store.py tests/test_preclassifier.py tests/test_classifier_training.py`
+  passed.
+
+Remaining work:
+
+- Add a durable corpus-level report that summarizes precision/coverage without
+  committing private scanner artifacts.
+- Add more privacy-safe fixtures for tri-fold/brochure, flyer, handout, and
+  ambiguous card-like document cases.
+- Continue one-PDF iterations until the exit gate can confidently return the
+  project to crop/OCR and App Intelligence quality-assurance work.

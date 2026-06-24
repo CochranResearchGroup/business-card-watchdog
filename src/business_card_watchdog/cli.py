@@ -182,6 +182,27 @@ def _render_agent_review_loop_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_classifier_training_iteration_text(payload: dict[str, object]) -> str:
+    counts = dict(payload.get("counts") or {})
+    lines = [
+        f"Classifier training iteration: {payload.get('training_outcome')}",
+        f"Run: {payload.get('run_id')}",
+        f"Source: {payload.get('source_document_name')}",
+        f"Pages: {payload.get('page_count', 0)}",
+        "Counts: "
+        + " ".join(f"{key}={value}" for key, value in sorted(counts.items()))
+        if counts
+        else "Counts: none",
+        f"App Intelligence requests: {payload.get('app_intelligence_request_count', 0)}",
+        f"Observed: writes={payload.get('writes_attempted', 0)} network={payload.get('network_calls_made', 0)} live_sinks={payload.get('live_sink_calls_made', False)}",
+    ]
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    lines.append(f"Stop conditions: {len(stop_conditions)}")
+    for condition in stop_conditions if isinstance(stop_conditions, list) else []:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_watch_dry_run_text(payload: dict[str, object]) -> str:
     assertions = dict(payload.get("assertions") or {})
     commands = dict(payload.get("commands") or {})
@@ -2818,6 +2839,10 @@ def build_parser() -> argparse.ArgumentParser:
     runs_agent_review_loop.add_argument("--apply-safe", action="store_true")
     runs_agent_review_loop.add_argument("--no-write", action="store_true")
     runs_agent_review_loop.add_argument("--json", action="store_true")
+    runs_classifier_training = runs_sub.add_parser("classifier-training-iteration")
+    runs_classifier_training.add_argument("--source", default=None)
+    runs_classifier_training.add_argument("--no-write", action="store_true")
+    runs_classifier_training.add_argument("--json", action="store_true")
     add_review_route_runs_parsers(runs_sub)
     runs_close_lookup_prerequisites = runs_sub.add_parser("close-lookup-prerequisites")
     runs_close_lookup_prerequisites.add_argument("run_id")
@@ -3660,6 +3685,11 @@ def main(argv: list[str] | None = None) -> int:
                 apply_safe=args.apply_safe,
                 write=not args.no_write,
             )
+        elif args.runs_command == "classifier-training-iteration":
+            payload = service.classifier_training_iteration(
+                source=args.source,
+                write=not args.no_write,
+            )
         elif args.runs_command in {
             REVIEW_ROUTE_READINESS_COMMAND,
             LOOKUP_SELECTION_PACKET_COMMAND,
@@ -3836,6 +3866,9 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.runs_command == "agent-review-loop" and not args.json:
             print(_render_agent_review_loop_text(payload), end="")
+            return 0
+        if args.runs_command == "classifier-training-iteration" and not args.json:
+            print(_render_classifier_training_iteration_text(payload), end="")
             return 0
         if args.runs_command == REVIEW_ROUTE_READINESS_COMMAND and not args.json:
             print(render_review_route_readiness_text(payload), end="")

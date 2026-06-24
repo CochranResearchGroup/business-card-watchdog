@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Callable
 from uuid import uuid4
 
-from .config import AppConfig, PrefilterConfig, SinkConfig, WatchConfig, ensure_runtime_dirs
+from .config import AppConfig, PrefilterConfig, SinkConfig, WatchConfig, ensure_runtime_dirs, resolve_input_path
 from .contact import (
     apply_enrichment_proposals,
     apply_review_corrections,
@@ -24,6 +24,7 @@ from .card_sides import merge_side_pair_contacts, redacted_side_pair_graph_summa
 from .contact_store import ContactStore
 from .crop_quality import redacted_crop_quality_summary, redacted_recrop_summary
 from .dedupe import assess_downstream_lookup_result, remember_duplicate_resolution
+from .document_intake import is_supported_document, materialize_document_pages
 from .enrichment import (
     build_paid_api_provider_handoff,
     build_public_web_result_artifact,
@@ -47,7 +48,7 @@ from .operator_dashboard import build_operator_dashboard
 from .orientation_evidence import redacted_orientation_summary
 from .pilot_readiness import build_pilot_readiness_report
 from .practice_corpus import build_practice_corpus_manifest
-from .preclassifier import assess_business_card_candidate
+from .preclassifier import assess_business_card_candidate, build_card_candidate_box_manifest
 from .qr_evidence import redacted_qr_summary
 from .review import assess_contact_spec, build_review_submission, write_review_packet, write_review_submission
 from .review_route_packets import build_lookup_selection_packet, build_review_route_readiness
@@ -453,6 +454,192 @@ class BusinessCardService:
     def process_source(self, source: str, *, dry_run: bool = True, workers: int = 2) -> dict[str, Any]:
         run_dir = BatchOrchestrator(self.config).process_source(source, dry_run=dry_run, workers=workers)
         return self.get_run(run_dir.name)
+
+    def classifier_training_iteration(
+        self,
+        *,
+        source: str | None = None,
+        write: bool = True,
+    ) -> dict[str, Any]:
+        ensure_runtime_dirs(self.config)
+        selected = _select_classifier_training_pdf(self.config, source=source)
+        seen_path = self.config.data_dir / "classifier_training" / "seen-pdfs.jsonl"
+        selected_key = _stable_short_id("classifier-training-source", selected)
+        run_id = f"classifier-training-{utc_now().replace(':', '-')}-{selected_key}"
+        run_dir = self.config.runs_dir / run_id
+        ledger = RunLedger(run_dir)
+        ledger.initialize(source=str(selected), dry_run=True)
+        ledger.transition_run("discovering")
+        ledger.transition_run("processing")
+        document_manifest = materialize_document_pages(selected, run_dir / "document_intake")
+        manifest_path = Path(str(document_manifest["manifest_path"]))
+        ledger.record_artifact(
+            job_id="__run__",
+            kind="document_pages",
+            path=manifest_path,
+            metadata={
+                "source_document_sha256": _file_sha256(selected),
+                "page_count": document_manifest["page_count"],
+            },
+        )
+        page_results: list[dict[str, Any]] = []
+        app_requests: list[dict[str, Any]] = []
+        for page in list(document_manifest.get("pages") or []):
+            if not isinstance(page, dict):
+                continue
+            page_number = _int(page.get("page_number"))
+            page_image = Path(str(page.get("page_image_path") or ""))
+            page_id = f"page-{page_number:04d}"
+            artifact_dir = run_dir / "artifacts" / page_id
+            artifact_dir.mkdir(parents=True, exist_ok=True)
+            assessment = assess_business_card_candidate(
+                page_image,
+                min_score=self.config.prefilter.min_score,
+            )
+            preclassification_path = artifact_dir / "preclassification.json"
+            assessment_payload = assessment.to_dict()
+            classifier_state = _classifier_training_state(assessment_payload)
+            assessment_payload["classifier_training_state"] = classifier_state
+            assessment_payload["source_document_sha256"] = _file_sha256(selected)
+            assessment_payload["page_number"] = page_number
+            assessment_payload["page_image_sha256"] = _file_sha256(page_image)
+            preclassification_path.write_text(
+                json.dumps(assessment_payload, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            ledger.record_artifact(
+                job_id=page_id,
+                kind="preclassification",
+                path=preclassification_path,
+                metadata={
+                    "page_number": page_number,
+                    "decision": assessment_payload["decision"],
+                    "classifier_training_state": classifier_state,
+                    "score": assessment_payload["score"],
+                },
+            )
+            candidate_manifest = build_card_candidate_box_manifest(
+                assessment=assessment,
+                source_image_path=page_image,
+                job_id=page_id,
+            )
+            actionable_candidate_count = (
+                int(candidate_manifest.get("candidate_count") or 0)
+                if classifier_state == "business_card_high_confidence"
+                else 0
+            )
+            if actionable_candidate_count:
+                candidates_path = artifact_dir / "card_candidates.json"
+                candidates_path.write_text(
+                    json.dumps(candidate_manifest, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+                ledger.record_artifact(
+                    job_id=page_id,
+                    kind="card_candidates",
+                    path=candidates_path,
+                    metadata={"candidate_count": candidate_manifest["candidate_count"]},
+                )
+            request_path = None
+            if classifier_state == "indeterminate_needs_app_intelligence":
+                request = _classifier_document_type_request(
+                    run_id=run_id,
+                    page_id=page_id,
+                    page_number=page_number,
+                    assessment=assessment_payload,
+                )
+                request_dir = artifact_dir / "app_intelligence_requests"
+                request_dir.mkdir(parents=True, exist_ok=True)
+                request_path = request_dir / f"classify_document_type_{request['request_id']}.json"
+                request_path.write_text(
+                    json.dumps(request, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+                ledger.record_artifact(
+                    job_id=page_id,
+                    kind="document_type_app_intelligence_request",
+                    path=request_path,
+                    metadata={
+                        "request_id": request["request_id"],
+                        "request_type": request["request_type"],
+                        "page_number": page_number,
+                        "writes_attempted": 0,
+                        "network_calls_made": 0,
+                    },
+                )
+                app_requests.append(request)
+            page_results.append(
+                {
+                    "page_id": page_id,
+                    "page_number": page_number,
+                    "classifier_training_state": classifier_state,
+                    "decision": assessment_payload["decision"],
+                    "score": assessment_payload["score"],
+                    "reasons": list(assessment_payload.get("reasons") or []),
+                    "preclassification_path": str(preclassification_path),
+                    "candidate_count": actionable_candidate_count,
+                    "app_intelligence_request_path": str(request_path) if request_path else None,
+                }
+            )
+        counts = _classifier_training_counts(page_results)
+        iteration_path = run_dir / "classifier_training_iteration.json"
+        payload: dict[str, Any] = {
+            "schema": "business-card-watchdog.classifier-training-iteration.v1",
+            "generated_at": utc_now(),
+            "run_id": run_id,
+            "source_document_sha256": _file_sha256(selected),
+            "source_document_name": selected.name,
+            "source_document_path": str(selected),
+            "source_selected_explicitly": source is not None,
+            "page_count": int(document_manifest.get("page_count") or len(page_results)),
+            "pages": page_results,
+            "counts": counts,
+            "app_intelligence_request_count": len(app_requests),
+            "app_intelligence_requests": app_requests,
+            "training_outcome": _classifier_training_outcome(counts),
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+            "live_sink_calls_made": False,
+            "public_web_search_used": False,
+            "paid_enrichment_used": False,
+            "runtime_artifact_written": False,
+            "iteration_path": str(iteration_path) if write else None,
+            "explicit_stop_conditions": [
+                "This iteration classifies one PDF only.",
+                "Do not run crop/OCR/side-pair/contact extraction from non-card or indeterminate pages.",
+                "Do not run live lookup, live write, readback, public-web search, or paid enrichment.",
+                "Indeterminate classification creates App Intelligence request artifacts only.",
+            ],
+        }
+        if write:
+            iteration_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            ledger.record_artifact(
+                job_id="__run__",
+                kind="classifier_training_iteration",
+                path=iteration_path,
+                metadata={
+                    "source_document_sha256": payload["source_document_sha256"],
+                    "page_count": payload["page_count"],
+                    "training_outcome": payload["training_outcome"],
+                },
+            )
+            _record_classifier_training_seen(seen_path, selected=selected, payload=payload)
+            payload["runtime_artifact_written"] = True
+        ledger.record_event(
+            "classifier_training_iteration_completed",
+            {
+                "run_id": run_id,
+                "source_document_sha256": payload["source_document_sha256"],
+                "source_document_name": selected.name,
+                "page_count": payload["page_count"],
+                "counts": counts,
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        ledger.set_job_count(len(page_results))
+        ledger.transition_run("completed")
+        return payload
 
     def list_runs(self) -> list[dict[str, Any]]:
         ensure_runtime_dirs(self.config)
@@ -17037,6 +17224,140 @@ def _agent_review_candidate_choices(
     if request_type == "verify_contact_fields":
         return [{"choice": "fields_verified"}, {"choice": "fields_need_correction"}]
     return [{"choice": "needs_more_deterministic_evidence"}]
+
+
+def _select_classifier_training_pdf(config: AppConfig, *, source: str | None = None) -> Path:
+    if source:
+        selected = resolve_input_path(source, config)
+        if not is_supported_document(selected):
+            raise FileNotFoundError(f"classifier training source is not a supported PDF: {selected}")
+        return selected
+    seen_path = config.data_dir / "classifier_training" / "seen-pdfs.jsonl"
+    seen = _seen_classifier_training_sources(seen_path)
+    candidates: list[Path] = []
+    for raw_input in config.watch_inputs:
+        try:
+            root = resolve_input_path(raw_input, config)
+        except Exception:
+            continue
+        if root.is_file() and is_supported_document(root):
+            candidates.append(root)
+        elif root.is_dir():
+            candidates.extend(sorted(path for path in root.iterdir() if is_supported_document(path)))
+    for candidate in sorted(candidates, key=lambda path: (path.stat().st_mtime, str(path))):
+        digest = _file_sha256(candidate)
+        if digest not in seen:
+            return candidate
+    if candidates:
+        return sorted(candidates, key=lambda path: (path.stat().st_mtime, str(path)))[0]
+    raise FileNotFoundError("no scanner PDF candidates found in configured watch inputs")
+
+
+def _seen_classifier_training_sources(path: Path) -> set[str]:
+    if not path.exists():
+        return set()
+    seen: set[str] = set()
+    for row in _read_jsonl(path):
+        digest = str(row.get("source_document_sha256") or "")
+        if digest:
+            seen.add(digest)
+    return seen
+
+
+def _record_classifier_training_seen(path: Path, *, selected: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    row = {
+        "recorded_at": utc_now(),
+        "run_id": payload.get("run_id"),
+        "source_document_sha256": payload.get("source_document_sha256"),
+        "source_document_name": selected.name,
+        "page_count": payload.get("page_count"),
+        "training_outcome": payload.get("training_outcome"),
+        "writes_attempted": 0,
+        "network_calls_made": 0,
+    }
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(row, sort_keys=True) + "\n")
+
+
+def _classifier_training_state(assessment: dict[str, Any]) -> str:
+    decision = str(assessment.get("decision") or "")
+    score = float(assessment.get("score") or 0.0)
+    if decision == "likely_business_card" and score >= 0.55:
+        return "business_card_high_confidence"
+    if decision == "not_business_card" and score <= 0.05:
+        return "not_business_card_high_confidence"
+    return "indeterminate_needs_app_intelligence"
+
+
+def _classifier_training_counts(pages: list[dict[str, Any]]) -> dict[str, int]:
+    counts = {
+        "business_card_high_confidence": 0,
+        "not_business_card_high_confidence": 0,
+        "indeterminate_needs_app_intelligence": 0,
+    }
+    for page in pages:
+        state = str(page.get("classifier_training_state") or "")
+        if state in counts:
+            counts[state] += 1
+    counts["page_count"] = len(pages)
+    return counts
+
+
+def _classifier_training_outcome(counts: dict[str, int]) -> str:
+    if counts.get("business_card_high_confidence", 0) and not counts.get("indeterminate_needs_app_intelligence", 0):
+        return "contains_business_card_candidates"
+    if counts.get("indeterminate_needs_app_intelligence", 0):
+        return "needs_app_intelligence_document_type_review"
+    if counts.get("not_business_card_high_confidence", 0):
+        return "not_business_card_document"
+    return "no_pages_classified"
+
+
+def _classifier_document_type_request(
+    *,
+    run_id: str,
+    page_id: str,
+    page_number: int,
+    assessment: dict[str, Any],
+) -> dict[str, Any]:
+    request_id = _stable_short_id("classify-document-type", run_id, page_id, assessment.get("score"))
+    return {
+        "schema": "business-card-watchdog.app-intelligence-review-request.v1",
+        "request_id": request_id,
+        "run_id": run_id,
+        "job_id": page_id,
+        "page_number": page_number,
+        "request_type": "classify_document_type",
+        "status": "planned",
+        "reason": "deterministic business-card-versus-document evidence is indeterminate",
+        "allowed_answer_shape": "evidence_only_no_state_transition",
+        "allowed_response_schema": _agent_review_allowed_response_schema("classify_document_type"),
+        "candidate_choices": [
+            {"choice": "business_card"},
+            {"choice": "not_business_card"},
+            {"choice": "needs_more_deterministic_evidence"},
+        ],
+        "stop_rules": [
+            "Return evidence and recommendation only; do not change contact state.",
+            "Do not crop, OCR, route, enrich, write, read back, or select a live sink target.",
+            "Do not use public-web search, paid enrichment, or external connector calls.",
+        ],
+        "deterministic_evidence": {
+            "preclassification": assessment,
+            "classifier_training_state": assessment.get("classifier_training_state"),
+        },
+        "writes_attempted": 0,
+        "network_calls_made": 0,
+    }
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _safe_path_part(value: str) -> str:
