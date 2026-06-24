@@ -1,5 +1,42 @@
 # Runbook
 
+## Turn 319 | 2026-06-24
+
+Executed Plan 0095 Milestone 4 for review-surface resume.
+
+Implemented:
+
+- Added quality-gate summaries for scanner classifier, crop acceptance, OCR
+  quality, and App Intelligence request status to contact review surface rows.
+- Added the same gate summary to review-bundle matrix rows so blocked scanner
+  pages remain inspectable as job evidence without creating contact rows.
+- Included `scanner_page_classifier_gate`, `crop_acceptance`, and
+  `ocr_quality_gate` in review-bundle artifact loading.
+- Exposed gate state in contact review CLI text, review workbook rows, and
+  review HTML rows.
+- Kept summaries redacted to state/count/artifact-ref evidence only.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_dry_run_pipeline.py::test_scanner_pdf_pages_must_pass_classifier_gate_before_ocr tests/test_dry_run_pipeline.py::test_short_ocr_quality_creates_review_packet_before_routing tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service tests/test_cli_surfaces.py::test_cli_runs_agent_review_loop_plans_qr_side_followup -q`
+  passed with 5 tests.
+- `.venv/bin/python -m pytest tests/test_api.py::test_api_health_status_runs_and_jobs tests/test_mcp.py::test_mcp_call_tool_dispatches_to_service tests/test_review_surface.py::test_child_selected_target_response_validation_and_checklist -q`
+  passed with 3 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_dry_run_pipeline.py tests/test_api.py tests/test_mcp.py`
+  passed.
+
+Safety:
+
+- This slice used privacy-safe fixtures only. It did not process configured
+  scanner/watch folders, commit private OCR/contact data, call public-web or
+  paid enrichment, create selected targets, or perform live sink
+  lookup/write/readback.
+
+Remaining:
+
+- Plan 0095 remains in progress. Next milestone is the exit gate and one
+  dry-run scanner PDF proof with zero live/network/sink calls.
+
 ## Turn 318 | 2026-06-24
 
 Executed Plan 0095 Milestone 3 for OCR lineage and vision QA gating.

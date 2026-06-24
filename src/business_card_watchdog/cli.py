@@ -142,6 +142,10 @@ def _render_contact_review_surface_text(payload: dict[str, object]) -> str:
             recrop_proposals = dict(row.get("recrop_proposals") or {})
             orientation_evidence = dict(row.get("orientation_evidence") or {})
             qr_evidence = dict(row.get("qr_evidence") or {})
+            classifier_gate = dict(row.get("scanner_page_classifier_gate") or {})
+            crop_acceptance = dict(row.get("crop_acceptance") or {})
+            ocr_gate = dict(row.get("ocr_quality_gate") or {})
+            app_intelligence = dict(row.get("app_intelligence_status") or {})
             lines.append(
                 " - "
                 f"{row.get('contact_id')} "
@@ -155,7 +159,11 @@ def _render_contact_review_surface_text(payload: dict[str, object]) -> str:
                 f"orientation_normalized={orientation_evidence.get('normalized_count', 0)} "
                 f"orientation_review={orientation_evidence.get('needs_review_count', 0)} "
                 f"qr={qr_evidence.get('qr_found', False)} "
-                f"qr_decodes={qr_evidence.get('decode_count', 0)}"
+                f"qr_decodes={qr_evidence.get('decode_count', 0)} "
+                f"classifier={','.join(classifier_gate.get('classifier_training_states') or []) or 'missing'} "
+                f"crop_gate={','.join(crop_acceptance.get('states') or []) or 'missing'} "
+                f"ocr_gate={','.join(ocr_gate.get('states') or []) or 'missing'} "
+                f"ai_requests={app_intelligence.get('request_count', 0)}"
             )
     return "\n".join(lines) + "\n"
 

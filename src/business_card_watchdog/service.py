@@ -316,13 +316,16 @@ _ROUTE_REFRESH_STEPS = [
 
 _REVIEW_BUNDLE_ARTIFACT_KINDS = {
     "preclassification",
+    "scanner_page_classifier_gate",
     "review_packet",
     "crop_quality",
+    "crop_acceptance",
     "recrop_proposals",
     "orientation_evidence",
     "qr_evidence",
     "contact_spec",
     "contact_candidate",
+    "ocr_quality_gate",
     "reviewed_contact",
     "review_submission",
     "enrichment_request",
@@ -14852,6 +14855,7 @@ class BusinessCardService:
             (artifacts.get("recrop_proposals") or {}).get("payload") or {}
         )
         qr_summary = redacted_qr_summary((artifacts.get("qr_evidence") or {}).get("payload") or {})
+        quality_gates = _review_quality_gate_summary(artifacts)
         normalized = contact.get("normalized") if isinstance(contact.get("normalized"), dict) else {}
         review_warnings = [
             field
@@ -14890,6 +14894,7 @@ class BusinessCardService:
             "normalization_warning_count": len(review_warnings),
             "orientation_evidence": orientation_summary,
             "crop_quality": crop_summary,
+            "quality_gates": quality_gates,
             "recrop_proposals": recrop_summary,
             "qr_evidence": qr_summary,
             "duplicate_state": duplicate_state,
@@ -15330,6 +15335,7 @@ class BusinessCardService:
         next_action = entry.get("next_action") or {}
         pilot_status = entry.get("sink_pilot_status") or {}
         child_replacement = entry.get("child_replacement_status") or {}
+        gates = matrix.get("quality_gates") if isinstance(matrix.get("quality_gates"), dict) else {}
         decision_template = entry.get("decision_template") or {}
         return {
             "run_id": entry.get("run_id"),
@@ -15350,6 +15356,13 @@ class BusinessCardService:
             "matrix_sink_lookup_match_count": matrix.get("sink_lookup_match_count"),
             "matrix_enrichment_accepted_count": matrix.get("enrichment_accepted_count"),
             "matrix_enrichment_rejected_count": matrix.get("enrichment_rejected_count"),
+            "classifier_gate_state": gates.get("classifier_state"),
+            "classifier_gate_admitted": gates.get("classifier_admitted_to_crop_ocr"),
+            "crop_acceptance_state": gates.get("crop_acceptance_state"),
+            "crop_accepted_count": gates.get("crop_accepted_count"),
+            "ocr_quality_gate_state": gates.get("ocr_quality_state"),
+            "ocr_route_ready_allowed": gates.get("ocr_route_ready_allowed"),
+            "app_intelligence_request_count": gates.get("app_intelligence_request_count"),
             "child_replacement_state": child_replacement.get("state"),
             "child_replacement_candidate_id": child_replacement.get("candidate_id"),
             "child_replacement_sink": child_replacement.get("sink"),
@@ -15545,6 +15558,7 @@ class BusinessCardService:
         pilot_status = entry.get("sink_pilot_status") or {}
         child_replacement = entry.get("child_replacement_status") or {}
         matrix = entry.get("review_matrix") or {}
+        gates = matrix.get("quality_gates") if isinstance(matrix.get("quality_gates"), dict) else {}
         contact = matrix.get("contact") if isinstance(matrix.get("contact"), dict) else {}
         artifacts = ", ".join(escape(kind) for kind in entry.get("artifact_kinds") or [])
         decision_template = escape(json.dumps(entry["decision_template"], sort_keys=True, indent=2))
@@ -15562,6 +15576,10 @@ class BusinessCardService:
     enrichment: <code>{escape(str(matrix.get("enrichment_state") or "unknown"))}</code><br>
     route: <code>{escape(str(matrix.get("route_state") or "unknown"))}</code><br>
     lookup: <code>{escape(str(matrix.get("sink_lookup_state") or "unknown"))}</code>
+    <br>classifier: <code>{escape(str(gates.get("classifier_state") or "unknown"))}</code>
+    <br>crop gate: <code>{escape(str(gates.get("crop_acceptance_state") or "unknown"))}</code>
+    <br>OCR gate: <code>{escape(str(gates.get("ocr_quality_state") or "unknown"))}</code>
+    <br>AI requests: <code>{escape(str(gates.get("app_intelligence_request_count") or 0))}</code>
   </td>
   <td><code>{escape(str(pilot_status.get("state") or "not_started"))}</code><br>safe: {escape(str(pilot_status.get("safe_to_auto_continue")))}<br>explicit: {escape(str(pilot_status.get("requires_explicit_operator_action")))}</td>
   <td><code>{escape(str(child_replacement.get("state") or "not_started"))}</code><br>candidate: <code>{escape(str(child_replacement.get("candidate_id") or ""))}</code><br>stale: {escape(str(child_replacement.get("predecessor_artifacts_stale")))}<br>copy ready: {escape(str(child_replacement.get("replacement_copy_ready")))}<br><code>{escape(str((child_replacement.get("commands") or {}).get("closeout_status") or ""))}</code></td>
@@ -16649,6 +16667,7 @@ def _contact_review_surface_row(contact: dict[str, Any]) -> dict[str, Any]:
     routing_decisions = list(contact.get("routing_decisions") or [])
     assets = list(contact.get("assets") or [])
     crop_evidence = _contact_crop_evidence_summary(assets)
+    gate_evidence = _contact_quality_gate_summary(assets)
     orientation_evidence = _contact_orientation_evidence_summary(assets)
     qr_evidence = _contact_qr_evidence_summary(assets)
     extraction_attempts = list(contact.get("extraction_attempts") or [])
@@ -16718,6 +16737,10 @@ def _contact_review_surface_row(contact: dict[str, Any]) -> dict[str, Any]:
             "mutations": len(mutations),
         },
         "crop_quality": crop_evidence["crop_quality"],
+        "scanner_page_classifier_gate": gate_evidence["scanner_page_classifier_gate"],
+        "crop_acceptance": gate_evidence["crop_acceptance"],
+        "ocr_quality_gate": gate_evidence["ocr_quality_gate"],
+        "app_intelligence_status": gate_evidence["app_intelligence_status"],
         "recrop_proposals": crop_evidence["recrop_proposals"],
         "orientation_evidence": orientation_evidence,
         "qr_evidence": qr_evidence,
@@ -16871,6 +16894,162 @@ def _contact_qr_evidence_summary(assets: list[Any]) -> dict[str, Any]:
         "decoder_states": sorted({str(summary.get("decoder_state") or "unknown") for summary in summaries}),
         "items": summaries,
     }
+
+
+def _contact_quality_gate_summary(assets: list[Any]) -> dict[str, Any]:
+    classifier_items: list[dict[str, Any]] = []
+    crop_items: list[dict[str, Any]] = []
+    ocr_items: list[dict[str, Any]] = []
+    app_intelligence_request_count = 0
+    for asset in assets:
+        if not isinstance(asset, dict):
+            continue
+        kind = str(asset.get("asset_kind") or "")
+        if kind not in {"scanner_page_classifier_gate", "crop_acceptance", "ocr_quality_gate"}:
+            continue
+        path = Path(str(asset.get("path_ref") or ""))
+        payload = _read_json_file(path) or {}
+        summary = _quality_gate_item_summary(kind=kind, payload=payload)
+        summary["asset_id"] = asset.get("asset_id")
+        summary["path_ref"] = str(path)
+        app_intelligence_request_count += _int(summary.get("app_intelligence_request_count"))
+        if kind == "scanner_page_classifier_gate":
+            classifier_items.append(summary)
+        elif kind == "crop_acceptance":
+            crop_items.append(summary)
+        elif kind == "ocr_quality_gate":
+            ocr_items.append(summary)
+    return {
+        "scanner_page_classifier_gate": {
+            "asset_count": len(classifier_items),
+            "states": _summary_states(classifier_items),
+            "classifier_training_states": _summary_states(
+                classifier_items,
+                key="classifier_training_state",
+            ),
+            "admitted_count": sum(1 for item in classifier_items if item.get("admitted_to_crop_ocr") is True),
+            "blocked_count": sum(1 for item in classifier_items if item.get("admitted_to_crop_ocr") is False),
+            "items": classifier_items,
+        },
+        "crop_acceptance": {
+            "asset_count": len(crop_items),
+            "states": _summary_states(crop_items),
+            "accepted_count": sum(_int(item.get("accepted_count")) for item in crop_items),
+            "blocked_count": sum(_int(item.get("blocked_count")) for item in crop_items),
+            "app_intelligence_request_count": sum(
+                _int(item.get("app_intelligence_request_count")) for item in crop_items
+            ),
+            "items": crop_items,
+        },
+        "ocr_quality_gate": {
+            "asset_count": len(ocr_items),
+            "states": _summary_states(ocr_items),
+            "route_ready_allowed_count": sum(
+                1 for item in ocr_items if item.get("route_ready_allowed") is True
+            ),
+            "app_intelligence_request_count": sum(
+                _int(item.get("app_intelligence_request_count")) for item in ocr_items
+            ),
+            "items": ocr_items,
+        },
+        "app_intelligence_status": {
+            "request_count": app_intelligence_request_count,
+            "request_sources": sorted(
+                {
+                    str(item.get("asset_kind") or "")
+                    for item in [*crop_items, *ocr_items]
+                    if _int(item.get("app_intelligence_request_count")) > 0
+                }
+            ),
+            "state": "planned" if app_intelligence_request_count else "not_requested",
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        },
+    }
+
+
+def _summary_states(items: list[dict[str, Any]], *, key: str = "state") -> list[str]:
+    states = sorted({str(item.get(key) or "unknown") for item in items})
+    return states or ["missing"]
+
+
+def _review_quality_gate_summary(artifacts: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    classifier = _quality_gate_item_summary(
+        kind="scanner_page_classifier_gate",
+        payload=(artifacts.get("scanner_page_classifier_gate") or {}).get("payload") or {},
+    )
+    crop = _quality_gate_item_summary(
+        kind="crop_acceptance",
+        payload=(artifacts.get("crop_acceptance") or {}).get("payload") or {},
+    )
+    ocr = _quality_gate_item_summary(
+        kind="ocr_quality_gate",
+        payload=(artifacts.get("ocr_quality_gate") or {}).get("payload") or {},
+    )
+    request_count = _int(crop.get("app_intelligence_request_count")) + _int(
+        ocr.get("app_intelligence_request_count")
+    )
+    return {
+        "classifier_state": classifier.get("classifier_training_state") or "missing",
+        "classifier_gate_state": classifier.get("state") or "missing",
+        "classifier_admitted_to_crop_ocr": classifier.get("admitted_to_crop_ocr"),
+        "crop_acceptance_state": crop.get("state") or "missing",
+        "crop_accepted_count": _int(crop.get("accepted_count")),
+        "crop_blocked_count": _int(crop.get("blocked_count")),
+        "ocr_quality_state": ocr.get("state") or "missing",
+        "ocr_route_ready_allowed": bool(ocr.get("route_ready_allowed")),
+        "app_intelligence_request_count": request_count,
+        "app_intelligence_state": "planned" if request_count else "not_requested",
+        "items": {
+            "scanner_page_classifier_gate": classifier,
+            "crop_acceptance": crop,
+            "ocr_quality_gate": ocr,
+        },
+        "writes_attempted": 0,
+        "network_calls_made": 0,
+    }
+
+
+def _quality_gate_item_summary(*, kind: str, payload: dict[str, Any]) -> dict[str, Any]:
+    if not payload:
+        return {"asset_kind": kind, "state": "missing"}
+    if kind == "scanner_page_classifier_gate":
+        return {
+            "asset_kind": kind,
+            "state": payload.get("state") or "unknown",
+            "classifier_training_state": payload.get("classifier_training_state") or "unknown",
+            "admitted_to_crop_ocr": payload.get("admitted_to_crop_ocr"),
+            "app_intelligence_request_count": _int(payload.get("app_intelligence_request_count")),
+            "blocked_reason_count": len(payload.get("blocked_reasons") or []),
+            "routing_allowed": bool(payload.get("routing_allowed")),
+            "sink_write_allowed": bool(payload.get("sink_write_allowed")),
+        }
+    if kind == "crop_acceptance":
+        return {
+            "asset_kind": kind,
+            "state": payload.get("state") or "unknown",
+            "accepted_count": _int(payload.get("accepted_count")),
+            "blocked_count": _int(payload.get("blocked_count")),
+            "app_intelligence_request_count": _int(payload.get("app_intelligence_request_count")),
+            "routing_allowed": bool(payload.get("routing_allowed")),
+            "sink_write_allowed": bool(payload.get("sink_write_allowed")),
+        }
+    if kind == "ocr_quality_gate":
+        return {
+            "asset_kind": kind,
+            "state": payload.get("state") or "unknown",
+            "route_ready_allowed": bool(payload.get("route_ready_allowed")),
+            "classifier_training_state": payload.get("classifier_training_state") or "unknown",
+            "classifier_gate_admitted": payload.get("classifier_gate_admitted"),
+            "crop_acceptance_state": payload.get("crop_acceptance_state") or "unknown",
+            "crop_accepted_count": _int(payload.get("crop_accepted_count")),
+            "extraction_quality_status": payload.get("extraction_quality_status") or "unknown",
+            "extraction_quality_reason_count": len(payload.get("extraction_quality_reasons") or []),
+            "app_intelligence_request_count": _int(payload.get("app_intelligence_request_count")),
+            "routing_allowed": bool(payload.get("routing_allowed")),
+            "sink_write_allowed": bool(payload.get("sink_write_allowed")),
+        }
+    return {"asset_kind": kind, "state": payload.get("state") or "unknown"}
 
 
 def _agent_review_reasons(

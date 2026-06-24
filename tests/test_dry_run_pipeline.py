@@ -335,6 +335,29 @@ def test_scanner_pdf_pages_must_pass_classifier_gate_before_ocr(
     assert artifact_kinds.count("scanner_page_classifier_gate") == 2
     assert artifact_kinds.count("ocr_quality_gate") == 1
 
+    service = BusinessCardService(config)
+    bundle = service.review_bundle(run_id=run_dir.name, state="all", write=False)
+    bundle_by_page = {Path(entry["image_path"]).stem: entry for entry in bundle["entries"]}
+    admitted_matrix = bundle_by_page["page-0001"]["review_matrix"]
+    blocked_matrix = bundle_by_page["page-0002"]["review_matrix"]
+    assert admitted_matrix["quality_gates"]["classifier_state"] == "business_card_high_confidence"
+    assert admitted_matrix["quality_gates"]["classifier_admitted_to_crop_ocr"] is True
+    assert admitted_matrix["quality_gates"]["ocr_quality_state"] == "passed"
+    assert blocked_matrix["contact_source"] == "missing"
+    assert blocked_matrix["quality_gates"]["classifier_state"] == "indeterminate_needs_app_intelligence"
+    assert blocked_matrix["quality_gates"]["classifier_admitted_to_crop_ocr"] is False
+    assert blocked_matrix["quality_gates"]["ocr_quality_state"] == "missing"
+
+    review_surface = service.contact_review_surface(limit=10)
+    assert review_surface["count"] == 1
+    row = review_surface["rows"][0]
+    assert row["scanner_page_classifier_gate"]["classifier_training_states"] == [
+        "business_card_high_confidence"
+    ]
+    assert row["crop_acceptance"]["states"] == ["missing"]
+    assert row["ocr_quality_gate"]["states"] == ["passed"]
+    assert row["app_intelligence_status"]["request_count"] == 0
+
 
 def test_short_ocr_quality_creates_review_packet_before_routing(tmp_path: Path, monkeypatch) -> None:
     source_dir = tmp_path / "synthetic-cards"
