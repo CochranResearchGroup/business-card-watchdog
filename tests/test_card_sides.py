@@ -3,9 +3,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from business_card_watchdog.card_sides import build_pair_proposals, build_side_pair_graph, classify_card_side
+from business_card_watchdog.card_sides import (
+    build_pair_proposals,
+    build_side_pair_graph,
+    classify_card_side,
+    merge_side_pair_contacts,
+)
 from business_card_watchdog.cli import main
 from business_card_watchdog.config import AppConfig, PrefilterConfig, WatchConfig
+from business_card_watchdog.contact import build_contact_candidate
 from business_card_watchdog.positive_controls import build_positive_control_manifest
 from business_card_watchdog.orchestrator import BatchOrchestrator
 from business_card_watchdog.service import BusinessCardService
@@ -316,6 +322,96 @@ def test_pair_graph_supports_same_stem_image_captures() -> None:
     assert any(evidence["kind"] == "same_capture_stem" for evidence in proposal["evidence"])
 
 
+def test_side_pair_merge_quality_records_backside_augmentation() -> None:
+    front = build_contact_candidate(
+        {
+            "full_name": "Ada Lovelace",
+            "organization": "Example Labs",
+            "email": "ada@example.test",
+        }
+    )
+    back = build_contact_candidate(
+        {
+            "phone": "+1 555 010 1234",
+            "website": "example.test/ada",
+        }
+    )
+
+    reviewed = merge_side_pair_contacts(
+        front_candidate=front,
+        back_candidate=back,
+        proposal={
+            "proposal_id": "pair-1",
+            "front_job_id": "front",
+            "back_job_id": "back",
+            "front_page_number": 1,
+            "back_page_number": 2,
+            "source_document_path": "/tmp/cards.pdf",
+        },
+        reviewer="test",
+        reviewed_at="2026-06-24T00:00:00+00:00",
+    )
+
+    quality = reviewed["ocr_merge_quality"]
+    assert reviewed["flat"]["phone"] == "+15550101234"
+    assert reviewed["flat"]["website"] == "https://example.test/ada"
+    assert quality["status"] == "pass"
+    assert quality["missing_required_fields"] == []
+    assert quality["conflict_count"] == 0
+    assert quality["backside_augmented_fields"] == ["phone", "website"]
+    assert quality["lineage"]["proposal_id"] == "pair-1"
+    assert quality["lineage"]["front_job_id"] == "front"
+    assert quality["lineage"]["back_job_id"] == "back"
+    assert quality["route_review_ready_allowed"] is True
+    assert reviewed["review"]["requires_contact_review"] is True
+    assert reviewed["routing_allowed"] is False
+    assert reviewed["side_pair"]["field_provenance"]["phone"]["selected_side"] == "back"
+
+
+def test_side_pair_merge_quality_blocks_conflicting_ocr_fields() -> None:
+    front = build_contact_candidate(
+        {
+            "full_name": "Ada Lovelace",
+            "organization": "Example Labs",
+            "email": "ada@example.test",
+        }
+    )
+    back = build_contact_candidate(
+        {
+            "full_name": "Grace Hopper",
+            "email": "grace@other.test",
+            "website": "other.test/grace",
+        }
+    )
+
+    reviewed = merge_side_pair_contacts(
+        front_candidate=front,
+        back_candidate=back,
+        proposal={
+            "proposal_id": "pair-1",
+            "front_job_id": "front",
+            "back_job_id": "back",
+            "front_page_number": 1,
+            "back_page_number": 2,
+            "source_document_path": "/tmp/cards.pdf",
+        },
+        reviewer="test",
+        reviewed_at="2026-06-24T00:00:00+00:00",
+    )
+
+    quality = reviewed["ocr_merge_quality"]
+    assert reviewed["flat"]["full_name"] == "Ada Lovelace"
+    assert quality["status"] == "needs_review"
+    assert quality["route_review_ready_allowed"] is False
+    assert {field["field"] for field in quality["conflict_fields"]} == {"email", "full_name"}
+    assert quality["lineage"]["proposal_id"] == "pair-1"
+    assert reviewed["side_pair"]["field_provenance"]["email"]["selected_side"] == (
+        "front_conflict_requires_review"
+    )
+    assert quality["backside_augmented_fields"] == ["website"]
+    assert reviewed["routing_allowed"] is False
+
+
 def test_scanner_pdf_run_records_side_classification_and_pair_proposals(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -340,7 +436,13 @@ def test_scanner_pdf_run_records_side_classification_and_pair_proposals(
         SyntheticSkillAdapter(
             specs_by_stem={
                 "page-0001": {"email": "ada@example.test", "full_name": "Ada Lovelace"},
-                "page-0002": {"email": "", "full_name": ""},
+                "page-0002": {
+                    "email": "",
+                    "full_name": "",
+                    "organization": "",
+                    "phone": "",
+                    "title": "",
+                },
             },
             ocr_by_stem={
                 "page-0001": (
@@ -448,6 +550,11 @@ def _front_back_run(tmp_path: Path, monkeypatch) -> tuple[AppConfig, Path, str]:
                     "phone": "+1-555-010-1234",
                 },
                 "page-0002": {
+                    "full_name": "",
+                    "organization": "",
+                    "title": "",
+                    "email": "",
+                    "phone": "",
                     "website": "example.test/ada",
                     "notes": "Back side includes portfolio QR.",
                 },

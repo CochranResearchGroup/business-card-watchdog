@@ -1,5 +1,39 @@
 # Runbook
 
+## Turn 324 | 2026-06-24
+
+Executed Plan 0096 Milestone 3 for OCR merge completeness.
+
+Implemented:
+
+- Added `ocr_merge_quality` evidence to reviewed side-pair contacts.
+- Defined merge completeness as `full_name` plus at least one contact point.
+- Preserved backside-only phone and website fields as augmentation evidence.
+- Added conflict detection for front/back OCR disagreement across contact
+  fields.
+- Added front/back/proposal lineage to OCR merge quality evidence.
+- Kept merged side-pair contacts review-required with routing, enrichment, sink
+  writes, and readback blocked.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_card_sides.py -q` passed with 16
+  tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/card_sides.py tests/test_card_sides.py`
+  passed.
+
+Safety:
+
+- This slice used privacy-safe synthetic fixtures only. It did not process
+  configured scanner/watch folders, commit private or derived card artifacts,
+  rasterize PDFs, call public-web or paid enrichment, create selected targets,
+  or perform live sink lookup/write/readback.
+
+Remaining:
+
+- Plan 0096 remains in progress. Next milestone is App Intelligence escalation
+  criteria for side-pair/OCR ambiguity.
+
 ## Turn 323 | 2026-06-24
 
 Executed Plan 0096 Milestone 2 for side-pair graph scoring.

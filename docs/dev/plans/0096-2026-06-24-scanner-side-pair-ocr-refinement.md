@@ -186,6 +186,34 @@ Validation:
 - OCR/merge tests over front/back positive controls.
 - Dry-run closeout shows zero sink payloads and zero live/network calls.
 
+## Execution Update | 2026-06-24 | Milestone 3
+
+Milestone 3 is implemented.
+
+Implemented:
+
+- Added `ocr_merge_quality` evidence to reviewed side-pair contacts.
+- Defined merge completeness around `full_name` plus at least one contact point
+  (`email`, `phone`, or `website`).
+- Preserved backside-only phone and website fields as merge augmentations.
+- Added conflict detection for front/back OCR disagreement on names, emails,
+  phones, and other contact fields.
+- Kept merged side-pair contacts review-required and blocked from routing,
+  enrichment, sink writes, and readback.
+- Added merge lineage to OCR merge quality evidence.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_card_sides.py -q` passed with 16
+  tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/card_sides.py tests/test_card_sides.py`
+  passed.
+
+Remaining work:
+
+- Milestone 4 App Intelligence escalation criteria.
+- Milestone 5 exit gate.
+
 ## Milestone 4 | App Intelligence Escalation Criteria
 
 Objective:

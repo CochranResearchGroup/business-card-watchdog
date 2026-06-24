@@ -234,6 +234,8 @@ def merge_side_pair_contacts(
     corrections = {key: str(value).strip() for key, value in dict(field_corrections or {}).items()}
     merged_spec: dict[str, Any] = {}
     field_provenance: dict[str, dict[str, Any]] = {}
+    conflict_fields: list[dict[str, Any]] = []
+    backside_augmented_fields: list[str] = []
     for field in CONTACT_FIELDS:
         front_value = str(front_spec.get(field) or "").strip()
         back_value = str(back_spec.get(field) or "").strip()
@@ -246,6 +248,8 @@ def merge_side_pair_contacts(
                 "back_value": back_value,
                 "reviewer": reviewer,
             }
+            if back_value and not front_value:
+                backside_augmented_fields.append(field)
         elif front_value and back_value and front_value == back_value:
             merged_spec[field] = front_value
             field_provenance[field] = {
@@ -253,6 +257,20 @@ def merge_side_pair_contacts(
                 "front_value": front_value,
                 "back_value": back_value,
             }
+        elif front_value and back_value and _field_values_conflict(field, front_value, back_value):
+            merged_spec[field] = front_value
+            field_provenance[field] = {
+                "selected_side": "front_conflict_requires_review",
+                "front_value": front_value,
+                "back_value": back_value,
+            }
+            conflict_fields.append(
+                {
+                    "field": field,
+                    "front_value_sha256": hashlib.sha256(front_value.encode("utf-8")).hexdigest(),
+                    "back_value_sha256": hashlib.sha256(back_value.encode("utf-8")).hexdigest(),
+                }
+            )
         elif front_value:
             merged_spec[field] = front_value
             field_provenance[field] = {
@@ -267,13 +285,29 @@ def merge_side_pair_contacts(
                 "front_value": front_value,
                 "back_value": back_value,
             }
+            backside_augmented_fields.append(field)
     reviewed = build_contact_candidate(merged_spec, source="side_pair_review")
+    merge_quality = _merge_quality(
+        merged_spec=merged_spec,
+        field_provenance=field_provenance,
+        conflict_fields=conflict_fields,
+        backside_augmented_fields=backside_augmented_fields,
+    )
+    merge_quality["lineage"] = {
+        "proposal_id": proposal.get("proposal_id"),
+        "front_job_id": proposal.get("front_job_id"),
+        "back_job_id": proposal.get("back_job_id"),
+        "front_page_number": proposal.get("front_page_number"),
+        "back_page_number": proposal.get("back_page_number"),
+        "source_document_path": proposal.get("source_document_path"),
+    }
     reviewed["schema"] = "business-card-watchdog.reviewed-side-pair-contact.v1"
     reviewed["review"] = {
-        "state": "approved_for_routing_review",
+        "state": "approved_for_contact_review",
         "reviewer": reviewer,
         "reviewed_at": reviewed_at,
         "action": "approve_side_pair_merge",
+        "requires_contact_review": True,
     }
     reviewed["side_pair"] = {
         "proposal_id": proposal.get("proposal_id"),
@@ -284,10 +318,57 @@ def merge_side_pair_contacts(
         "source_document_path": proposal.get("source_document_path"),
         "field_provenance": field_provenance,
     }
+    reviewed["ocr_merge_quality"] = merge_quality
     reviewed["routing_allowed"] = False
     reviewed["enrichment_allowed"] = False
     reviewed["sink_write_allowed"] = False
     return reviewed
+
+
+def _merge_quality(
+    *,
+    merged_spec: dict[str, Any],
+    field_provenance: dict[str, dict[str, Any]],
+    conflict_fields: list[dict[str, Any]],
+    backside_augmented_fields: list[str],
+) -> dict[str, Any]:
+    missing_required_fields = []
+    if not str(merged_spec.get("full_name") or "").strip():
+        missing_required_fields.append("full_name")
+    if not any(str(merged_spec.get(field) or "").strip() for field in ("email", "phone", "website")):
+        missing_required_fields.append("contact_point")
+    status = "needs_review" if missing_required_fields or conflict_fields else "pass"
+    return {
+        "schema": "business-card-watchdog.side-pair-ocr-merge-quality.v1",
+        "status": status,
+        "route_review_ready_allowed": status == "pass",
+        "contact_review_required": True,
+        "missing_required_fields": missing_required_fields,
+        "conflict_count": len(conflict_fields),
+        "conflict_fields": conflict_fields,
+        "backside_augmented_fields": sorted(set(backside_augmented_fields)),
+        "field_sources": {
+            field: provenance.get("selected_side")
+            for field, provenance in sorted(field_provenance.items())
+        },
+        "explicit_stop_conditions": [
+            "Merged side-pair contacts remain review-required.",
+            "Do not route, enrich, write, or read back from OCR merge evidence.",
+        ],
+        "routing_allowed": False,
+        "enrichment_allowed": False,
+        "sink_write_allowed": False,
+    }
+
+
+def _field_values_conflict(field: str, front_value: str, back_value: str) -> bool:
+    if field == "phone":
+        return _phone_digits(front_value) != _phone_digits(back_value)
+    return front_value.strip().casefold() != back_value.strip().casefold()
+
+
+def _phone_digits(value: str) -> str:
+    return "".join(character for character in value if character.isdigit())
 
 
 def _side_pair_node(candidate: dict[str, Any], evidence: dict[str, Any]) -> dict[str, Any]:
