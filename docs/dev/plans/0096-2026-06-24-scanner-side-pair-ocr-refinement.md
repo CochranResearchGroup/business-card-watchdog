@@ -1,6 +1,6 @@
 # Plan 0096 | Scanner Side-Pair OCR Refinement
 
-State: PLANNED
+State: IN_PROGRESS
 Date: 2026-06-24
 
 Parent: Plan 0060 Milestone 9
@@ -67,6 +67,40 @@ Validation:
 - Unit tests over synthetic seed images.
 - Dry-run manifest generation with zero network calls, zero writes to sinks,
   and no repo artifact churn.
+
+## Execution Update | 2026-06-24 | Milestone 1
+
+Milestone 1 is implemented.
+
+Implemented:
+
+- Added a runtime-only positive-control generator exposed through
+  `BusinessCardService.watch_positive_controls`.
+- Added CLI command `watch-positive-controls` with `--no-write`, `--seed`,
+  `--include-glob`, and `--json`.
+- Generated redacted positive-control manifests for front/back, back/front,
+  dropped-back, rotated front/back, interleaved non-card, and multi-card
+  no-cross-merge scenarios when enough image seeds exist.
+- Recorded PDF seeds as source documents without rasterizing them in the
+  positive-control generator.
+- Kept original private seed paths and filenames out of the manifest; generated
+  files are written only under cache runtime state when write mode is enabled.
+- Added a repo-output guard so generated controls cannot be written under the
+  repository tree.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_positive_controls.py -q` passed with
+  3 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/positive_controls.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_positive_controls.py`
+  passed.
+
+Remaining work:
+
+- Milestone 2 side-pair graph scoring against synthesized controls.
+- Milestone 3 OCR merge completeness.
+- Milestone 4 App Intelligence escalation criteria.
+- Milestone 5 exit gate.
 
 ## Milestone 2 | Side-Pair Graph Scoring
 

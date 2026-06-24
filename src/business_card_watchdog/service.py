@@ -48,6 +48,7 @@ from .operator_dashboard import build_operator_dashboard
 from .orientation_evidence import redacted_orientation_summary
 from .pilot_readiness import build_pilot_readiness_report
 from .practice_corpus import build_practice_corpus_manifest
+from .positive_controls import build_positive_control_manifest
 from .preclassifier import assess_business_card_candidate, build_card_candidate_box_manifest
 from .qr_evidence import redacted_qr_summary
 from .review import assess_contact_spec, build_review_submission, write_review_packet, write_review_submission
@@ -13889,6 +13890,20 @@ class BusinessCardService:
         include_globs: list[str] | None = None,
     ) -> dict[str, Any]:
         return build_practice_corpus_manifest(self.config, write=write, include_globs=include_globs)
+
+    def watch_positive_controls(
+        self,
+        *,
+        write: bool = True,
+        seed_paths: list[str] | None = None,
+        include_globs: list[str] | None = None,
+    ) -> dict[str, Any]:
+        return build_positive_control_manifest(
+            self.config,
+            write=write,
+            seed_paths=seed_paths,
+            include_globs=include_globs,
+        )
 
     def watch_dry_run_selection_handoff(self, *, write: bool = True) -> dict[str, Any]:
         ensure_runtime_dirs(self.config)

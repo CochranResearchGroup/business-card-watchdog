@@ -360,6 +360,38 @@ def _render_watch_practice_corpus_manifest_text(payload: dict[str, object]) -> s
     return "\n".join(lines) + "\n"
 
 
+def _render_watch_positive_controls_text(payload: dict[str, object]) -> str:
+    commands = dict(payload.get("commands") or {})
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    lines = [
+        f"Positive controls: {payload.get('state')}",
+        f"Seeds: {payload.get('seed_count', 0)}",
+        f"Image seeds: {payload.get('image_seed_count', 0)}",
+        f"PDF seeds: {payload.get('pdf_seed_count', 0)}",
+        f"Scenarios: {payload.get('scenario_count', 0)}",
+        f"Generated files: {payload.get('generated_file_count', 0)}",
+        "Observed: "
+        f"files={payload.get('files_processed', 0)} "
+        f"ocr={payload.get('ocr_attempted', 0)} "
+        f"pdfs={payload.get('pdfs_rasterized', 0)} "
+        f"crops={payload.get('crops_created', 0)} "
+        f"writes={payload.get('writes_attempted', 0)} "
+        f"network={payload.get('network_calls_made', 0)}",
+        f"Runtime artifact written: {payload.get('runtime_artifact_written', False)}",
+    ]
+    if payload.get("manifest_path"):
+        lines.append(f"Manifest path: {payload.get('manifest_path')}")
+    if payload.get("output_root"):
+        lines.append(f"Output root: {payload.get('output_root')}")
+    if commands.get("positive_controls_preview"):
+        lines.append(f"Preview: {commands.get('positive_controls_preview')}")
+    stop_rows = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stop_rows)}")
+    for condition in stop_rows:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_watch_dry_run_selection_handoff_text(payload: dict[str, object]) -> str:
     commands = dict(payload.get("commands") or {})
     entries = payload.get("entries") or []
@@ -3564,6 +3596,12 @@ def build_parser() -> argparse.ArgumentParser:
     watch_practice_corpus_manifest.add_argument("--include-glob", action="append", default=[])
     watch_practice_corpus_manifest.add_argument("--json", action="store_true")
 
+    watch_positive_controls = sub.add_parser("watch-positive-controls")
+    watch_positive_controls.add_argument("--no-write", action="store_true")
+    watch_positive_controls.add_argument("--seed", action="append", default=[])
+    watch_positive_controls.add_argument("--include-glob", action="append", default=[])
+    watch_positive_controls.add_argument("--json", action="store_true")
+
     watch_dry_run_selection_handoff = sub.add_parser("watch-dry-run-selection-handoff")
     watch_dry_run_selection_handoff.add_argument("--no-write", action="store_true")
     watch_dry_run_selection_handoff.add_argument("--json", action="store_true")
@@ -4614,6 +4652,16 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(output, end="")
         return 0 if payload["state"] != "blocked" else 2
+
+    if args.command == "watch-positive-controls":
+        payload = service.watch_positive_controls(
+            write=not args.no_write,
+            seed_paths=list(args.seed or []),
+            include_globs=list(args.include_glob or []),
+        )
+        output = json.dumps(payload, indent=2) if args.json else _render_watch_positive_controls_text(payload)
+        print(output, end="")
+        return 0 if payload["state"] not in {"blocked", "needs_at_least_two_image_seeds"} else 2
 
     if args.command == "watch-dry-run-selection-handoff":
         payload = service.watch_dry_run_selection_handoff(write=not args.no_write)

@@ -1,5 +1,45 @@
 # Runbook
 
+## Turn 322 | 2026-06-24
+
+Executed Plan 0096 Milestone 1 for runtime positive-control synthesis.
+
+Implemented:
+
+- Added `src/business_card_watchdog/positive_controls.py` to generate
+  runtime-only side-pair/OCR positive-control manifests from private scanner
+  and image seeds.
+- Added `BusinessCardService.watch_positive_controls`.
+- Added CLI command `watch-positive-controls` with preview mode, explicit seed
+  paths, include globs, and JSON/text output.
+- Supported redacted scenario manifests for front/back, back/front,
+  dropped-back, rotated front/back, interleaved non-card, and multi-card
+  no-cross-merge controls.
+- Kept PDF seeds as source-document refs without rasterizing PDFs in this
+  generator.
+- Added tests proving preview writes nothing, write mode creates runtime-only
+  generated files, original seed paths/filenames are redacted, and side-pair
+  expected outcomes are present.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_positive_controls.py -q` passed with
+  3 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/positive_controls.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_positive_controls.py`
+  passed.
+
+Safety:
+
+- This slice used privacy-safe synthetic seed files in tests. It did not
+  process configured scanner/watch folders, commit private or derived card
+  artifacts, rasterize PDFs, call public-web or paid enrichment, create
+  selected targets, or perform live sink lookup/write/readback.
+
+Remaining:
+
+- Plan 0096 remains in progress. Next milestone is side-pair graph scoring
+  against synthesized controls.
+
 ## Turn 321 | 2026-06-24
 
 Wrote Plan 0096 for scanner side-pair/OCR refinement.
