@@ -222,6 +222,7 @@ def test_orchestrator_records_multi_card_candidate_manifest(tmp_path: Path, monk
     work_items = json.loads((artifact_dir / "candidate_work_items.json").read_text(encoding="utf-8"))
     orientation = json.loads((artifact_dir / "orientation_evidence.json").read_text(encoding="utf-8"))
     crop_quality = json.loads((artifact_dir / "crop_quality.json").read_text(encoding="utf-8"))
+    crop_acceptance = json.loads((artifact_dir / "crop_acceptance.json").read_text(encoding="utf-8"))
     recrop_proposals = json.loads((artifact_dir / "recrop_proposals.json").read_text(encoding="utf-8"))
     artifact_kinds = [record["kind"] for record in read_jsonl(run_dir / "artifacts.jsonl")]
     events = read_jsonl(run_dir / "events.jsonl")
@@ -286,10 +287,15 @@ def test_orchestrator_records_multi_card_candidate_manifest(tmp_path: Path, monk
     assert orientation["image_count"] == crops["crop_count"] + 1
     assert crop_quality["schema"] == "business-card-watchdog.crop-quality.v1"
     assert crop_quality["crop_count"] == crops["crop_count"]
+    assert crop_acceptance["schema"] == "business-card-watchdog.crop-acceptance.v1"
+    assert crop_acceptance["state"] == "accepted"
+    assert crop_acceptance["accepted_count"] == crops["crop_count"]
+    assert crop_acceptance["blocked_count"] == 0
     assert recrop_proposals["schema"] == "business-card-watchdog.recrop-proposals.v1"
     assert "card_candidates" in artifact_kinds
     assert "candidate_crops" in artifact_kinds
     assert "crop_quality" in artifact_kinds
+    assert "crop_acceptance" in artifact_kinds
     assert "recrop_proposals" in artifact_kinds
     assert "orientation_evidence" in artifact_kinds
     assert "child_verification_requests" in artifact_kinds
@@ -298,11 +304,80 @@ def test_orchestrator_records_multi_card_candidate_manifest(tmp_path: Path, monk
     assert "candidate_work_items" in artifact_kinds
     assert any(event["event_type"] == "card_candidates_recorded" for event in events)
     assert any(event["event_type"] == "candidate_crops_recorded" for event in events)
+    assert any(event["event_type"] == "crop_acceptance_recorded" for event in events)
     assert any(event["event_type"] == "child_verification_requests_recorded" for event in events)
     assert any(event["event_type"] == "child_verification_results_recorded" for event in events)
     assert any(event["event_type"] == "child_contact_promotions_recorded" for event in events)
     assert any(event["event_type"] == "candidate_work_items_recorded" for event in events)
     assert adapter.apply_google_calls == [False]
+
+
+def test_orchestrator_blocks_child_verification_when_crop_acceptance_fails(
+    tmp_path: Path, monkeypatch
+) -> None:
+    pytest = __import__("pytest")
+    pytest.importorskip("cv2")
+    source_dir = tmp_path / "images"
+    write_multi_card_image(source_dir / "IMG_20260511_103704.jpg")
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    adapter = SyntheticSkillAdapter()
+    orchestrator = BatchOrchestrator(config)
+    monkeypatch.setattr(orchestrator, "adapter", adapter)
+
+    def bad_crop_quality(*, run_id, job_id, source_image_path, crop_manifest, qr_evidence=None):
+        crop_rows = []
+        for crop in crop_manifest["crops"]:
+            crop_rows.append(
+                {
+                    "candidate_id": crop["candidate_id"],
+                    "work_item_id": crop["work_item_id"],
+                    "crop_path": crop["crop_path"],
+                    "bounds": crop["bounds"],
+                    "quality": "bad",
+                    "reasons": ["synthetic crop quality failure"],
+                    "metrics": {},
+                    "qr_evidence": {"qr_found": False, "decode_count": 0},
+                }
+            )
+        return {
+            "schema": "business-card-watchdog.crop-quality.v1",
+            "run_id": run_id,
+            "job_id": job_id,
+            "state": "bad",
+            "source_image_path": str(source_image_path),
+            "source_dimensions": {"width": 1400, "height": 900},
+            "crop_count": len(crop_rows),
+            "good_count": 0,
+            "bad_count": len(crop_rows),
+            "qr_only_count": 0,
+            "crops": crop_rows,
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+
+    monkeypatch.setattr("business_card_watchdog.orchestrator.build_crop_quality", bad_crop_quality)
+
+    run_dir = orchestrator.process_source(str(source_dir), dry_run=True, workers=1)
+    job = next(iter(latest_jobs_by_id(run_dir / "jobs.jsonl").values()))
+    artifact_dir = Path(job["artifact_dir"])
+    acceptance = json.loads((artifact_dir / "crop_acceptance.json").read_text(encoding="utf-8"))
+    requests = json.loads((artifact_dir / "child_verification_requests.json").read_text(encoding="utf-8"))
+    results = json.loads((artifact_dir / "child_verification_results.json").read_text(encoding="utf-8"))
+    promotions = json.loads((artifact_dir / "child_contact_promotions.json").read_text(encoding="utf-8"))
+    work_items = json.loads((artifact_dir / "candidate_work_items.json").read_text(encoding="utf-8"))
+    artifact_kinds = [record["kind"] for record in read_jsonl(run_dir / "artifacts.jsonl")]
+    events = read_jsonl(run_dir / "events.jsonl")
+
+    assert acceptance["state"] == "blocked"
+    assert acceptance["accepted_count"] == 0
+    assert acceptance["blocked_count"] >= 1
+    assert acceptance["app_intelligence_request_count"] == acceptance["blocked_count"]
+    assert requests["request_count"] == 0
+    assert results["result_count"] == 0
+    assert promotions["promotion_count"] == 0
+    assert all(item["state"] == "blocked_needs_crop_quality_review" for item in work_items["work_items"])
+    assert "crop_acceptance" in artifact_kinds
+    assert any(event["event_type"] == "crop_acceptance_recorded" for event in events)
 
 
 def test_preclassifier_rejects_square_photo_shape(tmp_path: Path) -> None:

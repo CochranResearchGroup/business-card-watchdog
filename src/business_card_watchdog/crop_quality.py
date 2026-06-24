@@ -5,6 +5,7 @@ from typing import Any
 
 
 CROP_QUALITY_SCHEMA = "business-card-watchdog.crop-quality.v1"
+CROP_ACCEPTANCE_SCHEMA = "business-card-watchdog.crop-acceptance.v1"
 RECROP_PROPOSALS_SCHEMA = "business-card-watchdog.recrop-proposals.v1"
 
 
@@ -150,6 +151,123 @@ def build_recrop_proposals(
     }
 
 
+def build_crop_acceptance(
+    *,
+    run_id: str,
+    job_id: str,
+    crop_quality: dict[str, Any],
+) -> dict[str, Any]:
+    accepted: list[dict[str, Any]] = []
+    blocked: list[dict[str, Any]] = []
+    app_requests: list[dict[str, Any]] = []
+    for crop in list(crop_quality.get("crops") or []):
+        if not isinstance(crop, dict):
+            continue
+        crop_quality_state = str(crop.get("quality") or "unknown")
+        row = {
+            "candidate_id": crop.get("candidate_id"),
+            "work_item_id": crop.get("work_item_id"),
+            "crop_path": crop.get("crop_path"),
+            "quality": crop_quality_state,
+            "reasons": list(crop.get("reasons") or []),
+            "metrics": dict(crop.get("metrics") or {}),
+        }
+        if crop_quality_state == "good":
+            accepted.append(
+                {
+                    **row,
+                    "state": "accepted_for_ocr",
+                    "ocr_allowed": True,
+                    "routing_allowed": False,
+                    "enrichment_allowed": False,
+                    "sink_write_allowed": False,
+                }
+            )
+            continue
+        request = {
+            "request_id": f"{job_id}-{crop.get('candidate_id') or 'crop'}-crop-quality-review",
+            "request_type": "assess_crop_quality",
+            "status": "planned",
+            "job_id": job_id,
+            "candidate_id": crop.get("candidate_id"),
+            "work_item_id": crop.get("work_item_id"),
+            "crop_path": crop.get("crop_path"),
+            "reason": "crop quality is not accepted for OCR",
+            "deterministic_evidence": row,
+            "allowed_response_schema": {
+                "type": "object",
+                "required": ["recommendation", "confidence", "rationale", "evidence"],
+                "properties": {
+                    "recommendation": {
+                        "type": "string",
+                        "enum": ["crop_good", "crop_bad", "use_recrop_candidate", "needs_more_deterministic_evidence"],
+                    },
+                    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                    "rationale": {"type": "string"},
+                    "evidence": {"type": "object"},
+                    "training_hint": {"type": "string"},
+                },
+                "forbidden_actions": [
+                    "route_contact",
+                    "write_sink",
+                    "readback_sink",
+                    "run_enrichment",
+                    "select_live_target",
+                ],
+            },
+            "stop_rules": [
+                "Return crop-quality evidence only; do not OCR, route, enrich, write, or read back.",
+                "Accepted App Intelligence evidence must become deterministic crop acceptance before downstream OCR.",
+            ],
+            "writes_attempted": 0,
+            "network_calls_made": 0,
+        }
+        app_requests.append(request)
+        blocked.append(
+            {
+                **row,
+                "state": "blocked_needs_crop_quality_review",
+                "ocr_allowed": False,
+                "app_intelligence_request_id": request["request_id"],
+                "routing_allowed": False,
+                "enrichment_allowed": False,
+                "sink_write_allowed": False,
+            }
+        )
+    state = (
+        "no_crops"
+        if not accepted and not blocked
+        else "accepted"
+        if accepted and not blocked
+        else "blocked"
+        if blocked and not accepted
+        else "partial"
+    )
+    return {
+        "schema": CROP_ACCEPTANCE_SCHEMA,
+        "run_id": run_id,
+        "job_id": job_id,
+        "state": state,
+        "accepted_count": len(accepted),
+        "blocked_count": len(blocked),
+        "app_intelligence_request_count": len(app_requests),
+        "accepted_crops": accepted,
+        "blocked_crops": blocked,
+        "app_intelligence_requests": app_requests,
+        "ocr_allowed": bool(accepted),
+        "routing_allowed": False,
+        "enrichment_allowed": False,
+        "sink_write_allowed": False,
+        "explicit_stop_conditions": [
+            "Only accepted crops may proceed to OCR/App Intelligence verification.",
+            "Blocked crops require crop-quality review evidence before OCR.",
+            "Crop acceptance never routes, enriches, writes, or reads back contacts.",
+        ],
+        "writes_attempted": 0,
+        "network_calls_made": 0,
+    }
+
+
 def redacted_crop_quality_summary(payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "state": payload.get("state") or "unknown",
@@ -188,7 +306,7 @@ def _quality_state(
         reasons.append("crop aspect ratio is not business-card-like")
     if 0 < card_boundary_coverage < 0.05:
         reasons.append("crop covers too little of the source page")
-    if blank_fraction > 0.94:
+    if blank_fraction > 0.94 and not (text_line_count >= 3 and text_density >= 0.03):
         reasons.append("crop is mostly blank")
     if text_density < 0.01 and qr_density <= 0:
         reasons.append("crop has low text and QR evidence")

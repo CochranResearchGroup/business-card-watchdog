@@ -1,5 +1,41 @@
 # Runbook
 
+## Turn 317 | 2026-06-24
+
+Executed Plan 0095 Milestone 2 for crop acceptance evidence.
+
+Implemented:
+
+- Added `crop_acceptance.json` artifacts for candidate-card crops.
+- Moved crop quality and crop acceptance ahead of child verification planning.
+- Filtered child verification requests/results/promotions to accepted crops
+  only.
+- Marked bad or ambiguous crop work items as
+  `blocked_needs_crop_quality_review`.
+- Added bounded planned `assess_crop_quality` App Intelligence request payloads
+  inside crop acceptance evidence for blocked crops.
+- Tuned crop quality so white-space-heavy card crops can pass when they have
+  enough text-line evidence.
+- Added `crop_acceptance` to projected asset kinds.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_preclassifier.py tests/test_crop_quality.py tests/test_dry_run_pipeline.py::test_scanner_pdf_pages_must_pass_classifier_gate_before_ocr tests/test_classifier_training.py -q`
+  passed with 23 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/crop_quality.py src/business_card_watchdog/orchestrator.py src/business_card_watchdog/contact_store.py tests/test_preclassifier.py tests/test_crop_quality.py tests/synthetic_fixtures.py`
+  passed.
+
+Safety:
+
+- This slice used privacy-safe fixtures only. It did not process the scanner
+  backlog, commit private images/OCR/contact data, run public-web or paid
+  enrichment, create selected targets, or perform live sink lookup/write/readback.
+
+Remaining:
+
+- Plan 0095 remains in progress. Next milestone is OCR lineage and vision QA
+  gating after classifier and crop acceptance pass.
+
 ## Turn 316 | 2026-06-24
 
 Wrote Plan 0095 and executed Milestone 1 for the gated crop/OCR resume.

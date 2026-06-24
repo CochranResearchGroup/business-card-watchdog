@@ -203,3 +203,36 @@ Remaining work:
 - Milestone 3 OCR and vision QA gate.
 - Milestone 4 review surface resume.
 - Milestone 5 exit gate and dry-run scanner PDF proof.
+
+## Execution Update | 2026-06-24 | Milestone 2
+
+Milestone 2 is implemented.
+
+Implemented:
+
+- Added `crop_acceptance.json` artifacts for candidate-card crops.
+- Moved crop quality and crop acceptance ahead of child verification planning
+  so cropped child candidates must be accepted before OCR/App Intelligence
+  verification requests, synthetic verification results, or child contact
+  candidates are created.
+- Filtered child verification requests to accepted crops only.
+- Marked bad, QR-only, or otherwise unaccepted crop work items as
+  `blocked_needs_crop_quality_review`.
+- Added bounded `assess_crop_quality` App Intelligence request payloads inside
+  crop acceptance evidence for blocked crops, with stop rules that forbid OCR,
+  routing, enrichment, sink writes, readback, and live-target selection.
+- Tuned crop quality so white-space-heavy business-card crops can still pass
+  when they have enough deterministic text-line evidence.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_preclassifier.py tests/test_crop_quality.py tests/test_dry_run_pipeline.py::test_scanner_pdf_pages_must_pass_classifier_gate_before_ocr tests/test_classifier_training.py -q`
+  passed with 23 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/crop_quality.py src/business_card_watchdog/orchestrator.py src/business_card_watchdog/contact_store.py tests/test_preclassifier.py tests/test_crop_quality.py tests/synthetic_fixtures.py`
+  passed.
+
+Remaining work:
+
+- Milestone 3 OCR and vision QA gate.
+- Milestone 4 review surface resume.
+- Milestone 5 exit gate and dry-run scanner PDF proof.

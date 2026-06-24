@@ -32,6 +32,7 @@ _PROJECTED_ASSET_KINDS = {
     "card_candidates",
     "candidate_crops",
     "crop_quality",
+    "crop_acceptance",
     "recrop_proposals",
     "orientation_evidence",
     "qr_evidence",

@@ -55,9 +55,37 @@ def write_multi_card_image(path: Path) -> Path:
         ((650, 140), (1070, 380)),
         ((240, 520), (660, 760)),
     ]
-    for top_left, bottom_right in cards:
+    for index, (top_left, bottom_right) in enumerate(cards, start=1):
         cv2.rectangle(image, top_left, bottom_right, (255, 255, 255), thickness=-1)
         cv2.rectangle(image, top_left, bottom_right, (0, 0, 0), thickness=4)
+        x, y = top_left
+        cv2.putText(
+            image,
+            f"Fixture Card {index}",
+            (x + 28, y + 70),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.85,
+            (0, 0, 0),
+            2,
+        )
+        cv2.putText(
+            image,
+            "fixture@example.test",
+            (x + 28, y + 125),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.65,
+            (0, 0, 0),
+            2,
+        )
+        cv2.putText(
+            image,
+            "+1 555 0100",
+            (x + 28, y + 180),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.65,
+            (0, 0, 0),
+            2,
+        )
     path.parent.mkdir(parents=True, exist_ok=True)
     assert cv2.imwrite(str(path), image)
     return path

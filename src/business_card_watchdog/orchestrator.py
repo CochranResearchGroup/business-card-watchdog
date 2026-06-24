@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
@@ -9,7 +10,7 @@ from .card_sides import build_pair_proposals, build_side_pair_graph, classify_ca
 from .config import AppConfig, ensure_runtime_dirs, resolve_input_path
 from .contact import build_contact_candidate, contact_candidate_to_spec
 from .contact_store import ContactStore
-from .crop_quality import build_crop_quality, build_recrop_proposals
+from .crop_quality import build_crop_acceptance, build_crop_quality, build_recrop_proposals
 from .dedupe import assess_duplicate, remember_identity
 from .document_intake import (
     build_card_side_candidate,
@@ -380,10 +381,36 @@ class BatchOrchestrator:
                     "candidate_crops_recorded",
                     {"job": job.to_dict(), "crop_manifest": crop_manifest},
                 )
+                self._write_orientation_evidence(
+                    ledger=ledger,
+                    job=job,
+                    artifact_dir=artifact_dir,
+                    crop_manifest=crop_manifest,
+                )
+                self._write_qr_evidence(
+                    ledger=ledger,
+                    job=job,
+                    artifact_dir=artifact_dir,
+                    crop_manifest=crop_manifest,
+                )
+                crop_quality, _ = self._write_crop_quality(
+                    ledger=ledger,
+                    job=job,
+                    artifact_dir=artifact_dir,
+                    crop_manifest=crop_manifest,
+                )
+                _, accepted_crop_manifest, work_item_manifest = self._write_crop_acceptance(
+                    ledger=ledger,
+                    job=job,
+                    artifact_dir=artifact_dir,
+                    crop_manifest=crop_manifest,
+                    crop_quality=crop_quality,
+                    work_item_manifest=work_item_manifest,
+                )
                 verification_request_manifest, work_item_manifest = (
                     build_child_verification_request_manifest(
                         work_item_manifest=work_item_manifest,
-                        crop_manifest=crop_manifest,
+                        crop_manifest=accepted_crop_manifest,
                         dry_run=dry_run,
                     )
                 )
@@ -465,24 +492,6 @@ class BatchOrchestrator:
                 ledger.record_event(
                     "candidate_work_items_recorded",
                     {"job": job.to_dict(), "work_item_manifest": work_item_manifest},
-                )
-                self._write_orientation_evidence(
-                    ledger=ledger,
-                    job=job,
-                    artifact_dir=artifact_dir,
-                    crop_manifest=crop_manifest,
-                )
-                self._write_qr_evidence(
-                    ledger=ledger,
-                    job=job,
-                    artifact_dir=artifact_dir,
-                    crop_manifest=crop_manifest,
-                )
-                self._write_crop_quality(
-                    ledger=ledger,
-                    job=job,
-                    artifact_dir=artifact_dir,
-                    crop_manifest=crop_manifest,
                 )
             if assessment.decision == "not_business_card" or (
                 assessment.decision == "uncertain" and not self.config.prefilter.process_uncertain
@@ -855,6 +864,90 @@ class BatchOrchestrator:
             },
         )
         return crop_quality, recrop_proposals
+
+    def _write_crop_acceptance(
+        self,
+        *,
+        ledger: RunLedger,
+        job: CardJob,
+        artifact_dir: Path,
+        crop_manifest: dict[str, Any],
+        crop_quality: dict[str, Any],
+        work_item_manifest: dict[str, Any],
+    ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+        crop_acceptance = build_crop_acceptance(
+            run_id=ledger.run_dir.name,
+            job_id=job.job_id,
+            crop_quality=crop_quality,
+        )
+        crop_acceptance_path = artifact_dir / "crop_acceptance.json"
+        crop_acceptance_path.write_text(
+            json.dumps(crop_acceptance, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        ledger.record_artifact(
+            job_id=job.job_id,
+            kind="crop_acceptance",
+            path=crop_acceptance_path,
+            metadata={
+                "state": crop_acceptance["state"],
+                "accepted_count": crop_acceptance["accepted_count"],
+                "blocked_count": crop_acceptance["blocked_count"],
+                "app_intelligence_request_count": crop_acceptance["app_intelligence_request_count"],
+            },
+        )
+        ledger.record_event(
+            "crop_acceptance_recorded",
+            {
+                "job": job.to_dict(),
+                "state": crop_acceptance["state"],
+                "accepted_count": crop_acceptance["accepted_count"],
+                "blocked_count": crop_acceptance["blocked_count"],
+                "app_intelligence_request_count": crop_acceptance["app_intelligence_request_count"],
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        accepted_work_item_ids = {
+            str(crop.get("work_item_id"))
+            for crop in crop_acceptance["accepted_crops"]
+            if isinstance(crop, dict)
+        }
+        blocked_by_work_item = {
+            str(crop.get("work_item_id")): crop
+            for crop in crop_acceptance["blocked_crops"]
+            if isinstance(crop, dict)
+        }
+        accepted_crop_manifest = deepcopy(crop_manifest)
+        accepted_crop_manifest["crops"] = [
+            crop
+            for crop in list(crop_manifest.get("crops") or [])
+            if str(crop.get("work_item_id")) in accepted_work_item_ids
+        ]
+        accepted_crop_manifest["crop_count"] = len(accepted_crop_manifest["crops"])
+        updated_work_items = deepcopy(work_item_manifest)
+        for item in updated_work_items.get("work_items", []):
+            if not isinstance(item, dict):
+                continue
+            work_item_id = str(item.get("work_item_id") or "")
+            if work_item_id in accepted_work_item_ids:
+                item["crop_acceptance_state"] = "accepted_for_ocr"
+                item["ocr_allowed"] = True
+                continue
+            blocked = blocked_by_work_item.get(work_item_id)
+            if blocked is None:
+                continue
+            item["state"] = "blocked_needs_crop_quality_review"
+            item["phase"] = "awaiting_crop_quality_review"
+            item["crop_acceptance_state"] = "blocked_needs_crop_quality_review"
+            item["ocr_allowed"] = False
+            item["crop_quality"] = blocked.get("quality")
+            item["crop_quality_reasons"] = list(blocked.get("reasons") or [])
+            item["app_intelligence_request_id"] = blocked.get("app_intelligence_request_id")
+        updated_work_items["crop_acceptance_state"] = crop_acceptance["state"]
+        updated_work_items["crop_accepted_count"] = crop_acceptance["accepted_count"]
+        updated_work_items["crop_blocked_count"] = crop_acceptance["blocked_count"]
+        return crop_acceptance, accepted_crop_manifest, updated_work_items
 
     def _write_classifier_gate(
         self,
