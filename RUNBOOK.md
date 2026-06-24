@@ -1,5 +1,31 @@
 # Runbook
 
+## Turn 321 | 2026-06-24
+
+Wrote Plan 0096 for scanner side-pair/OCR refinement.
+
+Implemented:
+
+- Added `docs/dev/plans/0096-2026-06-24-scanner-side-pair-ocr-refinement.md`.
+- Made runtime-only positive-control synthesis the first milestone, using the
+  existing private scanner PDF/image seed set to generate front/back,
+  back/front, omitted/blank-back, rotated, interleaved, and multi-card
+  no-merge scenarios.
+- Updated `ROADMAP.md` so the next refactor/development slice is Plan 0096
+  Milestone 1.
+
+Safety:
+
+- This was planning/documentation only. It did not process configured scanner
+  or phone folders, generate derived private images, commit private artifacts,
+  call public-web or paid enrichment, create selected targets, or perform live
+  sink lookup/write/readback.
+
+Validation:
+
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `git diff --check` passed.
+
 ## Turn 320 | 2026-06-24
 
 Closed Plan 0095 with the Milestone 5 exit gate.
