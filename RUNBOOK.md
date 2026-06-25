@@ -1,5 +1,29 @@
 # Runbook
 
+## Turn 327 | 2026-06-25
+
+Planned the pivot from broad autodetection to known-card ingestion.
+
+Implemented:
+
+- Added `docs/dev/plans/0097-2026-06-25-known-card-ingestion-positive-corpus.md`.
+- Made Plan 0097 the active roadmap plan.
+- Paused broad business-card autodetection as the next development priority
+  until more positive controls are available.
+- Captured the requirement that operator-declared real business card images and
+  PDFs should be retained under user-scoped runtime storage as positive-control
+  corpus examples for future classifier training.
+- Kept known-card intake dry-run and review-gated, with no silent Google,
+  Odoo/Odollo, enrichment, public-web, or paid-provider writes.
+
+Validation:
+
+- Documentation/planning change only.
+
+Next:
+
+- Execute Plan 0097 Milestone 1: explicit known-card intake mode.
+
 ## Turn 326 | 2026-06-24
 
 Closed Plan 0096 with the Milestone 5 exit gate.

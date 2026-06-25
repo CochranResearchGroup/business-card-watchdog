@@ -42,11 +42,12 @@ Latest completed Milestone 9 agent-loop plan: `docs/dev/plans/0093-2026-06-23-ag
 Latest completed classifier-training plan: `docs/dev/plans/0094-2026-06-23-scanner-pdf-business-card-classifier-training.md`.
 Latest completed gated crop/OCR resume plan: `docs/dev/plans/0095-2026-06-24-gated-crop-ocr-resume.md`.
 Latest completed scanner side-pair/OCR refinement plan: `docs/dev/plans/0096-2026-06-24-scanner-side-pair-ocr-refinement.md`.
+Active known-card ingestion and positive-corpus plan: `docs/dev/plans/0097-2026-06-25-known-card-ingestion-positive-corpus.md`.
 Latest completed practice-corpus plan: `docs/dev/plans/0062-2026-06-21-practice-corpus-manifest.md`.
 Latest completed scanner side-pair graph plan: `docs/dev/plans/0084-2026-06-22-ocr-contextual-side-pair-graph.md`.
-Next refactor/development plan: write a bounded scanner practice replay plan using runtime-only generated controls and the configured scanner source, still dry-run only.
+Next refactor/development plan: Plan 0097 Milestone 1, explicit known-card intake mode.
 Next production plan: `docs/dev/plans/0009-2026-06-14-operator-selected-live-smoke-and-pilot-rollout.md`.
-Next offline boundary: run only bounded dry-run scanner practice replay against admitted `business_card_high_confidence` pages and generated positive controls; keep `not_business_card_high_confidence` and `indeterminate_needs_app_intelligence` blocked from contact extraction unless later bounded evidence changes the page state.
+Next offline boundary: pause broad autodetection; process only operator-declared known business cards through dry-run crop/OCR/review while retaining their source files in a user-scoped positive-control corpus for later classifier training.
 Next production boundary: operator-selected live smoke/pilot rollout for one run, one job, and one sink at a time.
 
 ## Milestones
