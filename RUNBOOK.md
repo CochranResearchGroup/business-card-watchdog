@@ -1,5 +1,45 @@
 # Runbook
 
+## Turn 328 | 2026-06-26
+
+Implemented and exercised the first Plan 0097 positive-corpus filing surface.
+
+Implemented:
+
+- Added `src/business_card_watchdog/known_card_corpus.py`.
+- Added `BusinessCardService.known_card_intake`.
+- Added CLI command `known-card-intake`.
+- Added focused tests for preview privacy, runtime corpus writes, hash dedupe,
+  and CLI JSON.
+- Updated Plan 0097 to `IN_PROGRESS` with the positive-corpus filing
+  foundation.
+
+Runtime proof:
+
+- Located five likely business-card sources from the configured watch paths:
+  three ScanSnap PDFs under the scanner folder and two Samsung JPEGs under the
+  phone camera folder, all created on June 25, 2026.
+- Rendered the PDFs with `pdftoppm` and built a temporary contact sheet outside
+  BCW for visual confirmation.
+- Confirmed the set contains business cards, including front/back sequences and
+  multi-card images.
+- Ran `known-card-intake` on the five confirmed sources.
+- Result: 2 images, 3 PDF documents, 5 newly stored positive-evidence blobs,
+  zero errors, zero OCR, zero PDF rasterization, zero crops, zero writes, zero
+  network calls, zero live sink calls, zero public-web search, and zero paid
+  enrichment.
+- Verified all corpus blobs exist, the runtime manifest redacts private source
+  paths/filenames, and a second run dedupes all five entries by hash.
+
+Safety:
+
+- Private source files and runtime positive-control corpus artifacts remain
+  under user-scoped runtime storage and were not committed to git.
+
+Remaining:
+
+- Plan 0097 still needs known-card crop/OCR processing and PDF side handling.
+
 ## Turn 327 | 2026-06-25
 
 Planned the pivot from broad autodetection to known-card ingestion.

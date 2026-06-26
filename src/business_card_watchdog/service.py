@@ -37,6 +37,7 @@ from .enrichment import (
     score_public_web_results,
 )
 from .ledger import RunLedger
+from .known_card_corpus import build_known_card_intake
 from .live_pilot_packets import (
     build_operator_live_pilot_readiness_packet,
     build_selected_target_approval_boundary,
@@ -13916,6 +13917,22 @@ class BusinessCardService:
             self.config,
             write=write,
             seed_paths=seed_paths,
+            include_globs=include_globs,
+        )
+
+    def known_card_intake(
+        self,
+        *,
+        source_paths: list[str],
+        label: str = "known_business_card",
+        write: bool = True,
+        include_globs: list[str] | None = None,
+    ) -> dict[str, Any]:
+        return build_known_card_intake(
+            self.config,
+            source_paths=source_paths,
+            label=label,
+            write=write,
             include_globs=include_globs,
         )
 

@@ -45,7 +45,7 @@ Latest completed scanner side-pair/OCR refinement plan: `docs/dev/plans/0096-202
 Active known-card ingestion and positive-corpus plan: `docs/dev/plans/0097-2026-06-25-known-card-ingestion-positive-corpus.md`.
 Latest completed practice-corpus plan: `docs/dev/plans/0062-2026-06-21-practice-corpus-manifest.md`.
 Latest completed scanner side-pair graph plan: `docs/dev/plans/0084-2026-06-22-ocr-contextual-side-pair-graph.md`.
-Next refactor/development plan: Plan 0097 Milestone 1, explicit known-card intake mode.
+Next refactor/development plan: Plan 0097 Milestone 1 crop/OCR known-card processing, building on the positive-corpus filing foundation.
 Next production plan: `docs/dev/plans/0009-2026-06-14-operator-selected-live-smoke-and-pilot-rollout.md`.
 Next offline boundary: pause broad autodetection; process only operator-declared known business cards through dry-run crop/OCR/review while retaining their source files in a user-scoped positive-control corpus for later classifier training.
 Next production boundary: operator-selected live smoke/pilot rollout for one run, one job, and one sink at a time.

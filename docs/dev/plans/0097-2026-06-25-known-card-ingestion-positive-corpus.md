@@ -1,6 +1,6 @@
 # Plan 0097 | Known-Card Ingestion And Positive Corpus
 
-State: PLANNED
+State: IN_PROGRESS
 Date: 2026-06-25
 
 Parent: Plan 0060 Milestone 9
@@ -166,3 +166,40 @@ Acceptance criteria:
 - If corpus output would land under the repository tree, fail closed.
 - If any sink, enrichment, public-web, or paid provider call would occur during
   known-card intake, fail closed.
+
+## Execution Update | 2026-06-26 | Positive-Corpus Filing Foundation
+
+Implemented the first known-card positive-evidence filing surface.
+
+Implemented:
+
+- Added `known-card-intake` as an explicit operator-declared known-card intake
+  command.
+- Added a service surface that accepts explicit source files or directories and
+  filters to supported images and PDFs.
+- Added user-scoped positive-control corpus retention under
+  `~/.local/share/business-card-watchdog/positive_control_corpus/`.
+- Deduped retained originals by content hash and stored blobs by hash/suffix.
+- Wrote redacted runtime manifests and an idempotent corpus index without
+  exposing original private source paths or filenames in normal summaries.
+- Kept this foundation as positive-evidence filing only: no OCR, crop,
+  rasterization, enrichment, routing, sink write, readback, public-web, or paid
+  provider activity.
+
+Runtime proof:
+
+- Located and visually confirmed five operator-declared business-card sources
+  from the configured scanner and phone paths: three ScanSnap PDFs and two
+  Samsung JPEGs from June 25, 2026.
+- Filed all five as positive evidence with `known-card-intake`; the write
+  reported 2 images, 3 PDF documents, 5 newly stored blobs, zero errors, zero
+  OCR, zero PDF rasterization, zero crops, zero writes, zero network calls, zero
+  live sink calls, zero public-web search, and zero paid enrichment.
+- Re-ran the same intake and confirmed all five entries deduped by hash.
+
+Remaining work:
+
+- Milestone 1 still needs the crop/OCR known-card processing bypass around
+  unknown-document autodetection.
+- Milestones 3-5 remain open for known-card PDF side handling, workbench
+  review, and selected apply boundaries.
