@@ -1,5 +1,36 @@
 # Runbook
 
+## Turn 329 | 2026-06-26
+
+Planned positive-corpus training, crop/OCR evaluation, and front/back matching.
+
+Implemented:
+
+- Added `docs/dev/plans/0098-2026-06-26-positive-corpus-training-crop-side-plan.md`.
+- Kept Plan 0097 as the active known-card ingestion/workbench plan.
+- Added Plan 0098 as the companion training/evaluation plan for the richer
+  positive-control corpus.
+- Updated the roadmap so the next bounded slice is a redacted corpus evaluation
+  manifest before known-card crop/OCR tuning.
+
+Plan shape:
+
+- Milestone 1: redacted corpus evaluation manifest.
+- Milestone 2: recognition training replay over known positives.
+- Milestone 3: known-card crop/OCR workbench evaluation.
+- Milestone 4: front/back matching evaluation.
+- Milestone 5: training review loop with bounded App Intelligence escalation.
+- Milestone 6: explicit exit gate before broad autodetection can resume.
+
+Safety:
+
+- Planning only. No private card files, rendered pages, OCR dumps, crops, live
+  sinks, enrichment, public-web search, or paid-provider calls.
+
+Next:
+
+- Execute Plan 0098 Milestone 1.
+
 ## Turn 328 | 2026-06-26
 
 Implemented and exercised the first Plan 0097 positive-corpus filing surface.
