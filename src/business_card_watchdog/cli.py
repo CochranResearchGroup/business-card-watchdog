@@ -560,6 +560,42 @@ def _render_positive_control_label_inventory_text(payload: dict[str, object]) ->
     return "\n".join(lines) + "\n"
 
 
+def _render_positive_control_scenario_manifest_text(payload: dict[str, object]) -> str:
+    coverage = dict(payload.get("coverage") or {})
+    commands = dict(payload.get("commands") or {})
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    lines = [
+        f"Positive-control scenario manifest: {payload.get('state')}",
+        f"Sources: {payload.get('source_count', 0)}",
+        f"Scenarios: {payload.get('scenario_count', 0)}",
+        f"Page-order swaps: {coverage.get('covers_page_order_swaps', False)}",
+        f"Rotations: {coverage.get('covers_rotations', False)}",
+        f"Omitted pages: {coverage.get('covers_omitted_pages', False)}",
+        f"Duplicated pages: {coverage.get('covers_duplicated_pages', False)}",
+        f"Front-only scans: {coverage.get('covers_front_only_scans', False)}",
+        f"Back-only scans: {coverage.get('covers_back_only_scans', False)}",
+        f"Mixed multi-card images: {coverage.get('covers_mixed_multi_card_images', False)}",
+        f"Generated files: {payload.get('generated_file_count', 0)}",
+        "Observed: "
+        f"files={payload.get('files_inspected', 0)} "
+        f"ocr={payload.get('ocr_attempted', 0)} "
+        f"pdfs={payload.get('pdfs_rasterized', 0)} "
+        f"crops={payload.get('crops_created', 0)} "
+        f"writes={payload.get('writes_attempted', 0)} "
+        f"network={payload.get('network_calls_made', 0)}",
+        f"Runtime artifact written: {payload.get('runtime_artifact_written', False)}",
+    ]
+    if payload.get("manifest_path"):
+        lines.append(f"Manifest path: {payload.get('manifest_path')}")
+    if commands.get("positive_control_scenario_manifest_preview"):
+        lines.append(f"Preview: {commands.get('positive_control_scenario_manifest_preview')}")
+    stop_rows = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stop_rows)}")
+    for condition in stop_rows:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_positive_corpus_recognition_replay_text(payload: dict[str, object]) -> str:
     counts = dict(payload.get("counts") or {})
     commands = dict(payload.get("commands") or {})
@@ -3978,6 +4014,10 @@ def build_parser() -> argparse.ArgumentParser:
     positive_control_label_inventory.add_argument("--no-write", action="store_true")
     positive_control_label_inventory.add_argument("--json", action="store_true")
 
+    positive_control_scenario_manifest = sub.add_parser("positive-control-scenario-manifest")
+    positive_control_scenario_manifest.add_argument("--no-write", action="store_true")
+    positive_control_scenario_manifest.add_argument("--json", action="store_true")
+
     positive_corpus_recognition_replay = sub.add_parser("positive-corpus-recognition-replay")
     positive_corpus_recognition_replay.add_argument("--no-write", action="store_true")
     positive_corpus_recognition_replay.add_argument("--json", action="store_true")
@@ -5111,6 +5151,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "positive-control-label-inventory":
         payload = service.positive_control_label_inventory(write=not args.no_write)
         output = json.dumps(payload, indent=2) if args.json else _render_positive_control_label_inventory_text(payload)
+        print(output, end="")
+        return 0 if payload["state"] != "blocked" else 2
+
+    if args.command == "positive-control-scenario-manifest":
+        payload = service.positive_control_scenario_manifest(write=not args.no_write)
+        output = (
+            json.dumps(payload, indent=2)
+            if args.json
+            else _render_positive_control_scenario_manifest_text(payload)
+        )
         print(output, end="")
         return 0 if payload["state"] != "blocked" else 2
 

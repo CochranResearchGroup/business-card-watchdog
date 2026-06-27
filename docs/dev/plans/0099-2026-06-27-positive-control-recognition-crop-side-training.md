@@ -346,6 +346,51 @@ Remaining:
 - Milestones 2-8 remain open. Next bounded goal is Milestone 2 synthetic
   scenario expansion from the redacted label inventory.
 
+## Execution Update | 2026-06-27 | Milestone 2
+
+Completed:
+
+- Added a positive-control scenario manifest builder and
+  `positive-control-scenario-manifest` CLI surface.
+- Derived replayable scenario plans from the redacted positive-control label
+  inventory without rendering derived private image or PDF artifacts.
+- Covered page-order swaps, rotations, omitted pages, duplicated pages,
+  front-only scans, back-only scans, front/back and back/front PDFs, and mixed
+  multi-card images.
+- Preserved redacted lineage from source entry IDs and content hashes, with
+  replay targets for recognition, crop/OCR, and side-pair evaluators.
+
+Runtime evidence:
+
+- `positive-control-scenario-manifest --json` over the current user-scoped
+  positive-control corpus produced state `ready_for_scenario_replay`.
+- Current scenario manifest count: 25 scenario plans from 5 positive-control
+  sources.
+- Coverage flags were true for page-order swaps, rotations, omitted pages,
+  duplicated pages, front-only scans, back-only scans, front/back PDFs, and
+  mixed multi-card images.
+- The manifest materialized 0 generated files and 0 derived artifacts; it is a
+  plan-only runtime manifest.
+- Runtime manifest was written under
+  `~/.local/share/business-card-watchdog/positive_control_corpus/scenario_manifests/`.
+- Redaction scan found no original scanner path or source filename tokens in
+  `/tmp/bcw-positive-control-scenario-manifest.json`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_positive_control_scenarios.py tests/test_positive_control_labels.py tests/test_positive_corpus_evaluation.py tests/test_known_card_corpus.py tests/test_positive_corpus_recognition.py tests/test_positive_corpus_exit_gate.py -q`
+  passed with 20 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/positive_control_scenarios.py src/business_card_watchdog/positive_control_labels.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_positive_control_scenarios.py tests/test_positive_control_labels.py`
+  passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `git diff --check` passed.
+
+Remaining:
+
+- Milestones 3-8 remain open. Next bounded goal is Milestone 3 recognition
+  training replay and tuning using real positive controls plus generated
+  scenario plans while preserving the broad-autodetection pause.
+
 ## Suggested Goal Order
 
 1. `/goal Execute Plan 0099 Milestone 1`

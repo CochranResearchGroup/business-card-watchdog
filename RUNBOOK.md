@@ -1,5 +1,53 @@
 # Runbook
 
+## Turn 340 | 2026-06-27
+
+Executed Plan 0099 Milestone 2 synthetic scenario expansion.
+
+Implemented:
+
+- Added `positive-control-scenario-manifest` and
+  `BusinessCardService.positive_control_scenario_manifest`.
+- Added an inventory-derived positive-control scenario manifest schema with
+  redacted lineage, deterministic scenario IDs, replay targets, and plan-only
+  transform steps.
+- Covered page-order swaps, rotations, omitted pages, duplicated pages,
+  front-only scans, back-only scans, front/back and back/front PDFs, and mixed
+  multi-card images.
+- Updated Plan 0099 execution history and moved the roadmap next slice to
+  Milestone 3 recognition replay and tuning.
+
+Runtime proof:
+
+- Ran `positive-control-scenario-manifest --json` over the current user-scoped
+  positive-control corpus.
+- Manifest state was `ready_for_scenario_replay` with 25 scenario plans from 5
+  positive-control sources.
+- Coverage flags were true for page-order swaps, rotations, omitted pages,
+  duplicated pages, front-only scans, back-only scans, front/back PDFs, and
+  mixed multi-card images.
+- Runtime scenario manifest was written under
+  `positive_control_corpus/scenario_manifests/`.
+- Generated file count and materialized artifact count were both 0.
+- Redaction check found no original scanner path or source filename tokens in
+  `/tmp/bcw-positive-control-scenario-manifest.json`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_positive_control_scenarios.py tests/test_positive_control_labels.py tests/test_positive_corpus_evaluation.py tests/test_known_card_corpus.py tests/test_positive_corpus_recognition.py tests/test_positive_corpus_exit_gate.py -q`
+  passed with 20 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/positive_control_scenarios.py src/business_card_watchdog/positive_control_labels.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_positive_control_scenarios.py tests/test_positive_control_labels.py`
+  passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `git diff --check` passed.
+
+Safety:
+
+- This slice generated scenario plans only. It did not materialize private
+  derived images/PDFs, OCR, crop, rasterize PDFs for extraction, route, enrich,
+  call public web, call paid APIs, or perform live sink operations.
+- Runtime artifacts and private card files remain outside git.
+
 ## Turn 339 | 2026-06-27
 
 Executed Plan 0099 Milestone 1 positive-control label normalization.
