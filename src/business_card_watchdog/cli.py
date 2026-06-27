@@ -460,6 +460,39 @@ def _render_negative_control_intake_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_negative_corpus_recognition_replay_text(payload: dict[str, object]) -> str:
+    counts = dict(payload.get("counts") or {})
+    commands = dict(payload.get("commands") or {})
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    lines = [
+        f"Negative-control recognition replay: {payload.get('state')}",
+        f"Sources: {payload.get('source_count', 0)}",
+        f"Pages replayed: {payload.get('page_count', 0)}",
+        f"Images: {counts.get('images', 0)}",
+        f"PDF documents: {counts.get('pdf_documents', 0)}",
+        f"Business-card high confidence: {counts.get('business_card_high_confidence', 0)}",
+        f"Indeterminate: {counts.get('indeterminate_needs_app_intelligence', 0)}",
+        f"Not business card: {counts.get('not_business_card_high_confidence', 0)}",
+        f"False positives: {counts.get('false_positive_cases', 0)}",
+        "Observed: "
+        f"ocr={payload.get('ocr_attempted', 0)} "
+        f"pdfs={payload.get('pdfs_rasterized', 0)} "
+        f"crops={payload.get('crops_created', 0)} "
+        f"writes={payload.get('writes_attempted', 0)} "
+        f"network={payload.get('network_calls_made', 0)}",
+        f"Runtime artifact written: {payload.get('runtime_artifact_written', False)}",
+    ]
+    if payload.get("report_path"):
+        lines.append(f"Report path: {payload.get('report_path')}")
+    if commands.get("negative_corpus_recognition_replay_preview"):
+        lines.append(f"Preview: {commands.get('negative_corpus_recognition_replay_preview')}")
+    stop_rows = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stop_rows)}")
+    for condition in stop_rows:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_positive_corpus_evaluation_manifest_text(payload: dict[str, object]) -> str:
     groups = dict(payload.get("groups") or {})
     commands = dict(payload.get("commands") or {})
@@ -3895,6 +3928,12 @@ def build_parser() -> argparse.ArgumentParser:
     negative_control_intake.add_argument("--no-write", action="store_true")
     negative_control_intake.add_argument("--json", action="store_true")
 
+    negative_corpus_recognition_replay = sub.add_parser("negative-control-recognition-replay")
+    negative_corpus_recognition_replay.add_argument("--max-pages-per-pdf", type=int, default=None)
+    negative_corpus_recognition_replay.add_argument("--pdf-dpi", type=int, default=200)
+    negative_corpus_recognition_replay.add_argument("--no-write", action="store_true")
+    negative_corpus_recognition_replay.add_argument("--json", action="store_true")
+
     positive_corpus_evaluation_manifest = sub.add_parser("positive-corpus-evaluation-manifest")
     positive_corpus_evaluation_manifest.add_argument("--no-write", action="store_true")
     positive_corpus_evaluation_manifest.add_argument("--json", action="store_true")
@@ -5002,6 +5041,20 @@ def main(argv: list[str] | None = None) -> int:
             limit=args.limit,
         )
         output = json.dumps(payload, indent=2) if args.json else _render_negative_control_intake_text(payload)
+        print(output, end="")
+        return 0 if payload["state"] != "blocked" else 2
+
+    if args.command == "negative-control-recognition-replay":
+        payload = service.negative_corpus_recognition_replay(
+            write=not args.no_write,
+            max_pages_per_pdf=args.max_pages_per_pdf,
+            pdf_dpi=max(50, int(args.pdf_dpi or 200)),
+        )
+        output = (
+            json.dumps(payload, indent=2)
+            if args.json
+            else _render_negative_corpus_recognition_replay_text(payload)
+        )
         print(output, end="")
         return 0 if payload["state"] != "blocked" else 2
 

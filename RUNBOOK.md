@@ -1,5 +1,54 @@
 # Runbook
 
+## Turn 338 | 2026-06-27
+
+Wrote and executed Plan 0101 negative-control recognition replay.
+
+Implemented:
+
+- Added
+  `docs/dev/plans/0101-2026-06-27-negative-control-recognition-replay.md`
+  and closed it as `COMPLETE`.
+- Added `negative-control-recognition-replay` and
+  `BusinessCardService.negative_corpus_recognition_replay`.
+- Added a runtime negative replay report under
+  `negative_control_corpus/recognition_replays/`.
+- Added bounded PDF replay options `--max-pages-per-pdf` and `--pdf-dpi`.
+- Added optional bounded PDF materialization parameters to
+  `materialize_document_pages` while preserving default behavior.
+- Fed latest negative replay evidence into the positive-corpus exit gate.
+- Added tests for false-positive reporting, preview/no-write behavior, CLI
+  JSON, and exit-gate blocking/readiness with negative replay evidence.
+
+Runtime proof:
+
+- Ran `negative-control-recognition-replay --max-pages-per-pdf 1 --pdf-dpi 100
+  --json` over the current negative-control corpus.
+- Replayed 5 negative-control PDF sources and 5 first-page PDF images.
+- Runtime counts: 0 business-card high-confidence pages, 0 indeterminate pages,
+  5 high-confidence non-card pages, and 0 false positives.
+- Redaction check found no original scanner path or source filename strings in
+  the runtime negative replay report or `negative_control_corpus/index.jsonl`.
+- Follow-up `positive-corpus-exit-gate --no-write --json` reported 5 negative
+  controls, negative replay state `negative_controls_passed`, and 0 negative
+  false positives.
+- Broad autodetection remains paused because 14 known-positive false negatives
+  and 47 training candidates remain.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_negative_corpus_recognition.py tests/test_positive_corpus_exit_gate.py tests/test_negative_control_corpus.py tests/test_positive_corpus_recognition.py tests/test_positive_corpus_exit_gate.py tests/test_preclassifier.py -q`
+  passed with 28 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/negative_corpus_recognition.py src/business_card_watchdog/document_intake.py src/business_card_watchdog/positive_corpus_exit_gate.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_negative_corpus_recognition.py tests/test_positive_corpus_exit_gate.py`
+  passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `git diff --check` passed.
+
+Remaining:
+
+- Broad autodetection remains paused.
+- Next work is Plan 0099 Milestone 1 positive-control label normalization.
+
 ## Turn 337 | 2026-06-27
 
 Wrote and executed Plan 0100 negative-control corpus intake.

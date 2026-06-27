@@ -45,6 +45,7 @@ from .live_pilot_packets import (
 )
 from .models import CardJob, SkillRunResult, utc_now
 from .negative_control_corpus import build_negative_control_intake
+from .negative_corpus_recognition import build_negative_corpus_recognition_replay
 from .orchestrator import BatchOrchestrator
 from .operator_dashboard import build_operator_dashboard
 from .orientation_evidence import redacted_orientation_summary
@@ -13961,6 +13962,20 @@ class BusinessCardService:
             write=write,
             include_globs=include_globs,
             limit=limit,
+        )
+
+    def negative_corpus_recognition_replay(
+        self,
+        *,
+        write: bool = True,
+        max_pages_per_pdf: int | None = None,
+        pdf_dpi: int = 200,
+    ) -> dict[str, Any]:
+        return build_negative_corpus_recognition_replay(
+            self.config,
+            write=write,
+            max_pages_per_pdf=max_pages_per_pdf,
+            pdf_dpi=pdf_dpi,
         )
 
     def positive_corpus_evaluation_manifest(self, *, write: bool = True) -> dict[str, Any]:

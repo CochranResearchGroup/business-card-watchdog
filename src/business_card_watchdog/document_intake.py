@@ -41,13 +41,19 @@ def is_supported_document(path: Path) -> bool:
     return path.is_file() and path.suffix.lower() in DOCUMENT_SUFFIXES
 
 
-def materialize_document_pages(document_path: Path, output_root: Path) -> dict[str, Any]:
+def materialize_document_pages(
+    document_path: Path,
+    output_root: Path,
+    *,
+    max_pages: int | None = None,
+    dpi: int = 200,
+) -> dict[str, Any]:
     output_root.mkdir(parents=True, exist_ok=True)
     page_dir = output_root / _safe_stem(document_path)
     page_dir.mkdir(parents=True, exist_ok=True)
-    pages = _rasterize_with_pdftoppm(document_path, page_dir)
+    pages = _rasterize_with_pdftoppm(document_path, page_dir, max_pages=max_pages, dpi=dpi)
     if not pages:
-        pages = _materialize_placeholder_pages(document_path, page_dir)
+        pages = _materialize_placeholder_pages(document_path, page_dir, max_pages=max_pages)
     payload = {
         "schema": "business-card-watchdog.document-pages.v1",
         "source_document_path": str(document_path),
@@ -95,13 +101,23 @@ def build_card_side_candidate(page: dict[str, Any], *, job_id: str) -> dict[str,
     }
 
 
-def _rasterize_with_pdftoppm(document_path: Path, page_dir: Path) -> list[DocumentPage]:
+def _rasterize_with_pdftoppm(
+    document_path: Path,
+    page_dir: Path,
+    *,
+    max_pages: int | None,
+    dpi: int,
+) -> list[DocumentPage]:
     binary = shutil.which("pdftoppm")
     if not binary:
         return []
     prefix = page_dir / "page"
+    command = [binary, "-png", "-r", str(max(50, dpi))]
+    if max_pages is not None and max_pages > 0:
+        command.extend(["-f", "1", "-l", str(max_pages)])
+    command.extend([str(document_path), str(prefix)])
     completed = subprocess.run(
-        [binary, "-png", "-r", "200", str(document_path), str(prefix)],
+        command,
         capture_output=True,
         text=True,
         check=False,
@@ -120,9 +136,17 @@ def _rasterize_with_pdftoppm(document_path: Path, page_dir: Path) -> list[Docume
     ]
 
 
-def _materialize_placeholder_pages(document_path: Path, page_dir: Path) -> list[DocumentPage]:
+def _materialize_placeholder_pages(
+    document_path: Path,
+    page_dir: Path,
+    *,
+    max_pages: int | None,
+) -> list[DocumentPage]:
     pages: list[DocumentPage] = []
-    for page_number in range(1, _pdf_page_count(document_path) + 1):
+    page_count = _pdf_page_count(document_path)
+    if max_pages is not None and max_pages > 0:
+        page_count = min(page_count, max_pages)
+    for page_number in range(1, page_count + 1):
         page_path = page_dir / f"page-{page_number:04d}.png"
         page_path.write_bytes(_PLACEHOLDER_PNG)
         pages.append(

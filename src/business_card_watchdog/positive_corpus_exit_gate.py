@@ -61,6 +61,7 @@ def build_positive_corpus_exit_gate(config: AppConfig, *, write: bool = True) ->
         missing_error="no positive-corpus training review loop found",
     )
     negative_controls = _negative_control_summary(config)
+    negative_replay = _latest_negative_replay_summary(config)
     coverage = _coverage(evaluation=evaluation, recognition=recognition, workbench=workbench, side_pair=side_pair)
     false_negative = _false_negative_summary(recognition)
     reproducibility = _reproducibility(workbench=workbench, side_pair=side_pair)
@@ -69,6 +70,7 @@ def build_positive_corpus_exit_gate(config: AppConfig, *, write: bool = True) ->
         false_negative=false_negative,
         reproducibility=reproducibility,
         negative_controls=negative_controls,
+        negative_replay=negative_replay,
         review_loop=review_loop,
         errors=errors,
     )
@@ -90,6 +92,7 @@ def build_positive_corpus_exit_gate(config: AppConfig, *, write: bool = True) ->
         "false_negative_summary": false_negative,
         "reproducibility": reproducibility,
         "negative_control_summary": negative_controls,
+        "negative_replay_summary": negative_replay,
         "gate_decision": gate,
         "next_plan_directive": {
             "broad_autodetection_state": gate["broad_autodetection_state"],
@@ -103,6 +106,7 @@ def build_positive_corpus_exit_gate(config: AppConfig, *, write: bool = True) ->
             "review_items": int(dict(review_loop.get("counts") or {}).get("review_items") or 0),
             "training_candidates": int(dict(review_loop.get("counts") or {}).get("training_candidates") or 0),
             "negative_control_sources": negative_controls["source_count"],
+            "negative_false_positive_cases": negative_replay["false_positive_cases"],
             "blocking_requirements": len(gate["blocking_requirements"]),
             "errors": len(errors),
         },
@@ -261,12 +265,41 @@ def _negative_control_summary(config: AppConfig) -> dict[str, Any]:
     }
 
 
+def _latest_negative_replay_summary(config: AppConfig) -> dict[str, Any]:
+    report_path = _latest_report(
+        config.data_dir / "negative_control_corpus" / "recognition_replays",
+        pattern="*/recognition_replay.json",
+    )
+    if report_path is None:
+        return {
+            "state": "missing",
+            "replay_id": None,
+            "report_present": False,
+            "source_count": 0,
+            "page_count": 0,
+            "false_positive_cases": 0,
+            "required_before_broad_autodetection": True,
+        }
+    report = _read_json(report_path)
+    counts = dict(report.get("counts") or {})
+    return {
+        "state": str(report.get("state") or "unknown"),
+        "replay_id": report.get("replay_id"),
+        "report_present": True,
+        "source_count": int(report.get("source_count") or counts.get("sources") or 0),
+        "page_count": int(report.get("page_count") or counts.get("pages_replayed") or 0),
+        "false_positive_cases": int(counts.get("false_positive_cases") or 0),
+        "required_before_broad_autodetection": True,
+    }
+
+
 def _gate_decision(
     *,
     coverage: dict[str, Any],
     false_negative: dict[str, Any],
     reproducibility: dict[str, Any],
     negative_controls: dict[str, Any],
+    negative_replay: dict[str, Any],
     review_loop: dict[str, Any],
     errors: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -283,6 +316,10 @@ def _gate_decision(
         blocking.append("known-positive false negatives remain unresolved")
     if negative_controls["source_count"] <= 0:
         blocking.append("separate negative-control corpus is required before broad promotion thresholds change")
+    elif not negative_replay["report_present"]:
+        blocking.append("negative-control recognition replay is required before broad promotion thresholds change")
+    elif negative_replay["false_positive_cases"] > 0:
+        blocking.append("known-negative false positives remain unresolved")
     review_counts = dict(review_loop.get("counts") or {})
     if int(review_counts.get("training_candidates") or 0) > 0:
         blocking.append("training candidates require targeted tests before deterministic rule changes")
@@ -295,11 +332,17 @@ def _gate_decision(
         "broad_autodetection_resume_allowed": resume_allowed,
         "broad_autodetection_state": "paused" if not resume_allowed else "eligible_for_next_bounded_plan",
         "crop_ocr_known_positive_processing_allowed": reproducibility["known_positive_crop_ocr_reproducible"],
-        "threshold_change_allowed": negative_controls["source_count"] > 0 and false_negative["false_negative_cases"] == 0,
+        "threshold_change_allowed": (
+            negative_controls["source_count"] > 0
+            and negative_replay["report_present"]
+            and negative_replay["false_positive_cases"] == 0
+            and false_negative["false_negative_cases"] == 0
+        ),
         "blocking_requirements": blocking,
         "required_before_resume": [
             "resolve or explicitly fixture known-positive false negatives",
             "add separate negative-control corpus and replay report",
+            "resolve or explicitly fixture known-negative false positives",
             "promote accepted training candidates only through targeted tests",
             "rerun positive-corpus exit gate after deterministic changes",
         ],

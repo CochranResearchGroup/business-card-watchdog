@@ -15,6 +15,8 @@ def seed_exit_gate_reports(
     review_items: int = 2,
     training_candidates: int = 2,
     with_negative_controls: bool = False,
+    with_negative_replay: bool = False,
+    negative_false_positives: int = 0,
 ) -> None:
     corpus_root = config.data_dir / "positive_control_corpus"
     manifest_dir = corpus_root / "evaluation_manifests"
@@ -108,6 +110,26 @@ def seed_exit_gate_reports(
             json.dumps({"label": "pediatric_handout", "sha256_prefix": "neg001"}) + "\n",
             encoding="utf-8",
         )
+    if with_negative_replay:
+        replay_dir = config.data_dir / "negative_control_corpus" / "recognition_replays" / "negative-replay-fixture"
+        replay_dir.mkdir(parents=True, exist_ok=True)
+        _write_json(
+            replay_dir / "recognition_replay.json",
+            {
+                "schema": "business-card-watchdog.negative-corpus-recognition-replay.v1",
+                "replay_id": "negative-replay-fixture",
+                "state": "false_positives_found" if negative_false_positives else "negative_controls_passed",
+                "source_count": 1,
+                "page_count": 1,
+                "counts": {
+                    "sources": 1,
+                    "pages_replayed": 1,
+                    "false_positive_cases": negative_false_positives,
+                    "business_card_high_confidence": negative_false_positives,
+                    "not_business_card_high_confidence": 1 - negative_false_positives,
+                },
+            },
+        )
 
 
 def test_positive_corpus_exit_gate_pauses_broad_autodetection(tmp_path: Path) -> None:
@@ -123,6 +145,7 @@ def test_positive_corpus_exit_gate_pauses_broad_autodetection(tmp_path: Path) ->
     assert payload["counts"]["positive_sources"] == 2
     assert payload["counts"]["positive_pages_or_images"] == 4
     assert payload["counts"]["false_negative_cases"] == 2
+    assert payload["counts"]["negative_false_positive_cases"] == 0
     assert payload["false_negative_summary"]["false_negative_rate"] == 0.5
     assert payload["reproducibility"]["known_positive_crop_ocr_reproducible"] is True
     assert payload["reproducibility"]["side_pair_evidence_reproducible"] is True
@@ -167,10 +190,34 @@ def test_positive_corpus_exit_gate_ready_requires_negative_controls_and_no_open_
 
     payload = build_positive_corpus_exit_gate(config, write=False)
 
+    assert payload["state"] == "broad_autodetection_paused"
+    assert payload["gate_decision"]["broad_autodetection_resume_allowed"] is False
+    assert payload["negative_replay_summary"]["state"] == "missing"
+    assert "negative-control recognition replay is required before broad promotion thresholds change" in payload[
+        "gate_decision"
+    ]["blocking_requirements"]
+
+
+def test_positive_corpus_exit_gate_ready_requires_passing_negative_replay(
+    tmp_path: Path,
+) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    seed_exit_gate_reports(
+        config,
+        false_negatives=0,
+        review_items=0,
+        training_candidates=0,
+        with_negative_controls=True,
+        with_negative_replay=True,
+    )
+
+    payload = build_positive_corpus_exit_gate(config, write=False)
+
     assert payload["state"] == "ready_for_bounded_autodetection_reconsideration"
     assert payload["gate_decision"]["broad_autodetection_resume_allowed"] is True
     assert payload["gate_decision"]["threshold_change_allowed"] is True
     assert payload["negative_control_summary"]["source_count"] == 1
+    assert payload["negative_replay_summary"]["false_positive_cases"] == 0
     assert payload["counts"]["blocking_requirements"] == 0
     assert payload["broad_autodetection_promoted"] is False
 
