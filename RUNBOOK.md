@@ -1,5 +1,63 @@
 # Runbook
 
+## Turn 345 | 2026-06-27
+
+Executed Plan 0099 Milestone 7 agent training review loop.
+
+Implemented:
+
+- Added `positive-control-training-review-loop` and
+  `BusinessCardService.positive_control_training_review_loop`.
+- Composed Plan 0099 recognition training, crop workbench, OCR draft, and
+  side-pair evidence into a host-controlled agent review queue.
+- Required review items to produce deterministic rule proposals, fixture/test
+  proposals, bounded App Intelligence evidence requests, or explicit stop
+  conditions.
+- Emitted test-gated training candidates for each review item.
+- Emitted bounded App Intelligence requests only for crop and side-pair
+  evidence gaps needing visual review.
+- Preserved host authority over state transitions, ledgers, approvals, replay,
+  sink writes, and stop rules.
+- Updated Plan 0099 execution history and moved the roadmap next slice to
+  Milestone 8 bounded resume readiness gate.
+
+Runtime proof:
+
+- Ran `positive-control-training-review-loop --json` over the current
+  user-scoped positive-control corpus.
+- Review-loop state was `agent_review_ready`.
+- Review items: 72. Training candidates: 72.
+- Bounded App Intelligence requests: 11.
+- Category counts: 14 recognition items, 19 generated recognition-scenario
+  items, 4 crop items, 28 OCR items, and 7 side-pair items.
+- Routing-allowed items: 0. Sink-write-allowed items: 0.
+  Public-web-allowed items: 0.
+- Sink payloads created: 0. Writes attempted: 0. Network calls: 0. Live sink
+  calls: `False`. Public-web search and paid enrichment remained unused.
+- Broad autodetection promoted: `False`.
+- Runtime report was written under
+  `positive_control_corpus/training_review_loops/`.
+- Redaction check found no original scanner path or source filename tokens in
+  `/tmp/bcw-positive-control-training-review-loop.json`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_positive_control_training_review_loop.py -q`
+  passed with 3 tests.
+- `.venv/bin/python -m pytest tests/test_positive_control_training_review_loop.py tests/test_positive_control_side_pair_evidence.py tests/test_positive_control_ocr_drafts.py tests/test_positive_control_crop_workbench.py tests/test_positive_control_recognition_training.py tests/test_positive_control_scenarios.py tests/test_positive_control_labels.py tests/test_positive_corpus_side_pair.py tests/test_card_sides.py -q`
+  passed with 42 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/positive_control_training_review_loop.py src/business_card_watchdog/positive_control_side_pair_evidence.py src/business_card_watchdog/positive_control_ocr_drafts.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_positive_control_training_review_loop.py tests/test_positive_control_side_pair_evidence.py`
+  passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `git diff --check` passed.
+
+Safety:
+
+- This slice did not route, enrich, create sink payloads, write contacts, read
+  back sinks, call public web, call paid APIs, perform live sink operations, or
+  resume broad autodetection.
+- Runtime review-loop reports and private card artifacts remain outside git.
+
 ## Turn 344 | 2026-06-27
 
 Executed Plan 0099 Milestone 6 front/back matching and merge evidence.

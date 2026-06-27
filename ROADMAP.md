@@ -49,7 +49,7 @@ Latest completed negative-control corpus intake plan: `docs/dev/plans/0100-2026-
 Latest completed negative-control recognition replay plan: `docs/dev/plans/0101-2026-06-27-negative-control-recognition-replay.md`.
 Latest completed practice-corpus plan: `docs/dev/plans/0062-2026-06-21-practice-corpus-manifest.md`.
 Latest completed scanner side-pair graph plan: `docs/dev/plans/0084-2026-06-22-ocr-contextual-side-pair-graph.md`.
-Next refactor/development plan: execute Plan 0099 Milestone 7 agent training review loop over recognition, crop, OCR, and side-pair evidence.
+Next refactor/development plan: execute Plan 0099 Milestone 8 bounded resume readiness gate.
 Next production plan: `docs/dev/plans/0009-2026-06-14-operator-selected-live-smoke-and-pilot-rollout.md`.
 Next offline boundary: pause broad autodetection; process only operator-declared known business cards through dry-run crop/OCR/review, retain positive and negative controls in user-scoped runtime corpora, and require negative replay evidence before threshold changes.
 Next production boundary: operator-selected live smoke/pilot rollout for one run, one job, and one sink at a time.

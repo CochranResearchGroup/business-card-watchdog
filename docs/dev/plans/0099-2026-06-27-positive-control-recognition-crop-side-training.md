@@ -596,6 +596,60 @@ Remaining:
   state transitions and no enrichment, routing, sink payloads, writes,
   readbacks, public-web search, or paid-provider calls.
 
+## Execution Update | 2026-06-27 | Milestone 7
+
+Completed:
+
+- Added a positive-control agent training review-loop builder and
+  `positive-control-training-review-loop` CLI surface.
+- Composed Plan 0099 recognition training, crop workbench, OCR draft, and
+  side-pair evidence into one host-controlled review queue.
+- Required every review item to produce one of:
+  `deterministic_rule_proposal`, `fixture_or_test_proposal`,
+  `bounded_app_intelligence_evidence_request`, or `explicit_stop_condition`.
+- Emitted test-gated training candidates for each review item.
+- Emitted bounded App Intelligence requests only for crop and side-pair
+  evidence gaps that need visual review.
+- Kept App Intelligence output evidence-only; host orchestration remains
+  authoritative for state transitions, ledgers, approvals, replay, sink writes,
+  and stop rules.
+
+Runtime evidence:
+
+- `positive-control-training-review-loop --json` over the current user-scoped
+  positive-control corpus produced state `agent_review_ready`.
+- Review items: 72. Training candidates: 72.
+- Bounded App Intelligence requests: 11.
+- Category counts: 14 recognition items, 19 generated recognition-scenario
+  items, 4 crop items, 28 OCR items, and 7 side-pair items.
+- Routing-allowed items: 0. Sink-write-allowed items: 0.
+  Public-web-allowed items: 0.
+- Sink payloads created: 0. Writes attempted: 0. Network calls: 0. Live sink
+  calls: `False`. Public-web search and paid enrichment remained unused.
+- Broad autodetection promoted: `False`.
+- Runtime report was written under
+  `~/.local/share/business-card-watchdog/positive_control_corpus/training_review_loops/`.
+- Redaction scan found no original scanner path or source filename tokens in
+  `/tmp/bcw-positive-control-training-review-loop.json`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_positive_control_training_review_loop.py -q`
+  passed with 3 tests.
+- `.venv/bin/python -m pytest tests/test_positive_control_training_review_loop.py tests/test_positive_control_side_pair_evidence.py tests/test_positive_control_ocr_drafts.py tests/test_positive_control_crop_workbench.py tests/test_positive_control_recognition_training.py tests/test_positive_control_scenarios.py tests/test_positive_control_labels.py tests/test_positive_corpus_side_pair.py tests/test_card_sides.py -q`
+  passed with 42 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/positive_control_training_review_loop.py src/business_card_watchdog/positive_control_side_pair_evidence.py src/business_card_watchdog/positive_control_ocr_drafts.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_positive_control_training_review_loop.py tests/test_positive_control_side_pair_evidence.py`
+  passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `git diff --check` passed.
+
+Remaining:
+
+- Milestone 8 remains open. Next bounded goal is the Plan 0099 readiness gate:
+  compose Milestones 1-7 plus negative-control replay evidence, decide whether
+  the system stays in known-card-only mode, and keep broad autodetection paused
+  unless the gate has sufficient positive and negative evidence.
+
 ## Suggested Goal Order
 
 1. `/goal Execute Plan 0099 Milestone 1`
