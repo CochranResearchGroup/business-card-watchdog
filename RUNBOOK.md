@@ -1,5 +1,50 @@
 # Runbook
 
+## Turn 339 | 2026-06-27
+
+Executed Plan 0099 Milestone 1 positive-control label normalization.
+
+Implemented:
+
+- Added `positive-control-label-inventory` and
+  `BusinessCardService.positive_control_label_inventory`.
+- Added a redacted positive-control label inventory schema for source kind,
+  capture mode, card count, orientation, page count, front/back sequence
+  expectation, dropped/blank-back expectation, and per-page side labels.
+- Added missing-label reporting that blocks training promotion only; known-card
+  crop/OCR remains allowed when the corpus index is present.
+- Updated Plan 0099 to `IN_PROGRESS` and moved the roadmap next slice to
+  Milestone 2 synthetic scenario expansion.
+
+Runtime proof:
+
+- Ran `positive-control-label-inventory --json` over the current user-scoped
+  positive-control corpus.
+- Inventory state was `training_inventory_ready` with 5 positive-control
+  sources: 2 multi-card image candidates and 3 scanner PDF front/back sequence
+  candidates.
+- Missing-label rows: 5; training promotion remains blocked and known-card
+  crop/OCR remains allowed.
+- Runtime inventory was written under
+  `positive_control_corpus/label_inventories/`.
+- Redaction check found no original scanner path or source filename tokens in
+  `/tmp/bcw-positive-control-label-inventory.json`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_positive_control_labels.py tests/test_positive_corpus_evaluation.py tests/test_known_card_corpus.py tests/test_positive_corpus_recognition.py tests/test_positive_corpus_exit_gate.py -q`
+  passed with 17 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/positive_control_labels.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_positive_control_labels.py`
+  passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `git diff --check` passed.
+
+Safety:
+
+- This slice did not OCR, crop, rasterize for extraction, route, enrich, call
+  public web, call paid APIs, or perform live sink operations.
+- Runtime artifacts and private card files remain outside git.
+
 ## Turn 338 | 2026-06-27
 
 Wrote and executed Plan 0101 negative-control recognition replay.

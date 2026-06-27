@@ -1,6 +1,6 @@
 # Plan 0099 | Positive-Control Recognition, Crop, And Side Training
 
-State: PLANNED
+State: IN_PROGRESS
 Date: 2026-06-27
 
 Parent: Plan 0060 Milestone 9
@@ -302,6 +302,49 @@ Validation:
   target, fail closed.
 - If App Intelligence output lacks enough evidence for a deterministic rule or
   test, keep the case review-required.
+
+## Execution Update | 2026-06-27 | Milestone 1
+
+Completed:
+
+- Added a positive-control label inventory builder and
+  `positive-control-label-inventory` CLI surface.
+- Normalized redacted source labels for images and PDFs, including media kind,
+  source kind, capture mode, card-count expectation, orientation, page count,
+  front/back sequence expectation, blank/dropped-back expectation, and
+  per-page side labels.
+- Added missing-label reporting that blocks training promotion only; known-card
+  crop/OCR remains allowed when the corpus index is present.
+- Preserved stable replay IDs and content hashes without original filenames or
+  private source paths.
+
+Runtime evidence:
+
+- `positive-control-label-inventory --json` over the current user-scoped
+  positive-control corpus produced state `training_inventory_ready`.
+- Current corpus inventory count: 5 positive-control sources.
+- Runtime group counts: 2 `multi_card_image_candidate` sources and 3
+  `scanner_pdf_front_back_sequence_candidate` sources.
+- Missing-label rows: 5. Training promotion remains blocked, while known-card
+  crop/OCR remains allowed.
+- Runtime inventory was written under
+  `~/.local/share/business-card-watchdog/positive_control_corpus/label_inventories/`.
+- Redaction scan found no original scanner path or source filename tokens in
+  `/tmp/bcw-positive-control-label-inventory.json`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_positive_control_labels.py tests/test_positive_corpus_evaluation.py tests/test_known_card_corpus.py tests/test_positive_corpus_recognition.py tests/test_positive_corpus_exit_gate.py -q`
+  passed with 17 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/positive_control_labels.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_positive_control_labels.py`
+  passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `git diff --check` passed.
+
+Remaining:
+
+- Milestones 2-8 remain open. Next bounded goal is Milestone 2 synthetic
+  scenario expansion from the redacted label inventory.
 
 ## Suggested Goal Order
 
