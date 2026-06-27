@@ -450,3 +450,52 @@ Remaining work:
 
 - Milestone 5 training review loop.
 - Milestone 6 exit gate before broad autodetection can resume.
+
+## Execution Update | 2026-06-27 | Milestone 5
+
+Milestone 5 is implemented.
+
+Implemented:
+
+- Added a positive-corpus training review loop builder.
+- Added `BusinessCardService.positive_corpus_training_review_loop`.
+- Added CLI command `positive-corpus-training-review-loop` with preview and
+  JSON modes.
+- Built a unified agent review queue from the positive-corpus recognition
+  replay, crop/OCR workbench evaluation, and side-pair evaluation reports.
+- Added review items for recognition false negatives, crop/OCR quality
+  blockers, raw OCR gaps, and ambiguous/conflicting side-pair evidence.
+- Added one bounded App Intelligence evidence request per review item, with
+  forbidden actions for routing, sink writes, readback, enrichment, public-web
+  search, paid provider calls, and live target selection.
+- Added one deterministic training candidate per review item, each requiring a
+  targeted test before implementation.
+- Added an agent iteration contract: inspect evidence, propose deterministic
+  fixture/rule changes, request App Intelligence only when deterministic
+  evidence is insufficient, and implement only after tests.
+- Kept all review-loop output as runtime-only positive-corpus evidence.
+
+Runtime proof:
+
+- Ran `positive-corpus-training-review-loop --json` over the current real
+  positive-control corpus reports.
+- Produced 47 review items: 14 recognition items, 16 crop/OCR items, and 17
+  side-pair items.
+- Produced 47 bounded App Intelligence evidence requests and 47 deterministic
+  training candidates.
+- Preserved zero route-enabled items, zero sink-write-enabled items, and zero
+  public-web-enabled items.
+- Runtime safety counters remained zero for writes and network calls; no live
+  sink calls, public-web search, paid enrichment, live route selection, sink
+  payload writes, readback, or contact writes occurred.
+- A redaction check found no original scanner/phone paths or source filenames
+  in the runtime training review-loop report.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_positive_corpus_review_loop.py tests/test_positive_corpus_side_pair.py tests/test_positive_corpus_workbench.py tests/test_positive_corpus_recognition.py tests/test_positive_corpus_evaluation.py tests/test_known_card_corpus.py tests/test_card_sides.py tests/test_cli_surfaces.py::test_cli_runs_agent_review_loop_plans_qr_side_followup -q`
+  passed with 37 tests.
+
+Remaining work:
+
+- Milestone 6 exit gate before broad autodetection can resume.

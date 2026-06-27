@@ -1,5 +1,48 @@
 # Runbook
 
+## Turn 334 | 2026-06-27
+
+Executed Plan 0098 Milestone 5 training review loop.
+
+Implemented:
+
+- Added `positive-corpus-training-review-loop` and
+  `BusinessCardService.positive_corpus_training_review_loop`.
+- Built a unified positive-corpus agent review queue from recognition replay,
+  crop/OCR workbench, and side-pair evaluation reports.
+- Added review items for recognition false negatives, crop/OCR quality
+  blockers, raw OCR gaps, and ambiguous/conflicting side-pair evidence.
+- Added bounded App Intelligence evidence requests and deterministic training
+  candidates for every review item.
+- Added an agent iteration contract requiring deterministic fixture/rule
+  proposals and tests before implementation.
+- Kept the loop runtime-only and evidence-only.
+
+Runtime proof:
+
+- Ran `positive-corpus-training-review-loop --json` over the current real
+  positive-control corpus reports.
+- Produced 47 review items: 14 recognition, 16 crop/OCR, and 17 side-pair.
+- Produced 47 bounded App Intelligence evidence requests and 47 deterministic
+  training candidates.
+- Preserved zero route-enabled items, zero sink-write-enabled items, and zero
+  public-web-enabled items.
+- Redaction check passed for original scanner/phone paths and source
+  filenames.
+- Safety counters remained writes/network `0/0`; no live sink calls,
+  public-web search, paid enrichment, live route selection, sink payload writes,
+  readback, or contact writes occurred.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_positive_corpus_review_loop.py tests/test_positive_corpus_side_pair.py tests/test_positive_corpus_workbench.py tests/test_positive_corpus_recognition.py tests/test_positive_corpus_evaluation.py tests/test_known_card_corpus.py tests/test_card_sides.py tests/test_cli_surfaces.py::test_cli_runs_agent_review_loop_plans_qr_side_followup -q`
+  passed with 37 tests.
+
+Remaining:
+
+- Plan 0098 remains in progress. Next work is Milestone 6 exit gate before
+  broad autodetection can resume.
+
 ## Turn 333 | 2026-06-27
 
 Executed Plan 0098 Milestone 4 front/back matching evaluation.

@@ -50,6 +50,7 @@ from .orientation_evidence import redacted_orientation_summary
 from .pilot_readiness import build_pilot_readiness_report
 from .positive_corpus_evaluation import build_positive_corpus_evaluation_manifest
 from .positive_corpus_recognition import build_positive_corpus_recognition_replay
+from .positive_corpus_review_loop import build_positive_corpus_training_review_loop
 from .positive_corpus_side_pair import build_positive_corpus_side_pair_evaluation
 from .positive_corpus_workbench import build_positive_corpus_workbench_evaluation
 from .practice_corpus import build_practice_corpus_manifest
@@ -13951,6 +13952,9 @@ class BusinessCardService:
 
     def positive_corpus_side_pair_evaluation(self, *, write: bool = True) -> dict[str, Any]:
         return build_positive_corpus_side_pair_evaluation(self.config, write=write)
+
+    def positive_corpus_training_review_loop(self, *, write: bool = True) -> dict[str, Any]:
+        return build_positive_corpus_training_review_loop(self.config, write=write)
 
     def watch_dry_run_selection_handoff(self, *, write: bool = True) -> dict[str, Any]:
         ensure_runtime_dirs(self.config)
