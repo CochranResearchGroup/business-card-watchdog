@@ -633,6 +633,42 @@ def _render_positive_control_recognition_training_replay_text(payload: dict[str,
     return "\n".join(lines) + "\n"
 
 
+def _render_positive_control_crop_workbench_text(payload: dict[str, object]) -> str:
+    counts = dict(payload.get("counts") or {})
+    commands = dict(payload.get("commands") or {})
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    lines = [
+        f"Positive-control crop workbench: {payload.get('state')}",
+        f"Sources: {payload.get('source_count', 0)}",
+        f"Scenarios: {payload.get('scenario_count', 0)}",
+        f"Processing units: {counts.get('processing_units', 0)}",
+        f"PDF pages: {counts.get('pdf_page_units', 0)}",
+        f"Crop candidates: {counts.get('crop_candidate_count', 0)}",
+        f"Primary candidates: {counts.get('primary_crop_candidates', 0)}",
+        f"Child candidates: {counts.get('child_crop_candidates', 0)}",
+        f"Review requests: {counts.get('crop_review_requests', 0)}",
+        f"Multi-card units with children: {counts.get('multi_card_units_with_children', 0)}",
+        "Observed: "
+        f"ocr={payload.get('ocr_attempted', 0)} "
+        f"pdfs={payload.get('pdfs_rasterized', 0)} "
+        f"crops={payload.get('crops_created', 0)} "
+        f"writes={payload.get('writes_attempted', 0)} "
+        f"network={payload.get('network_calls_made', 0)}",
+        f"Runtime artifact written: {payload.get('runtime_artifact_written', False)}",
+    ]
+    if payload.get("report_path"):
+        lines.append(f"Report path: {payload.get('report_path')}")
+    if payload.get("candidate_artifact_dir"):
+        lines.append(f"Candidate artifact dir: {payload.get('candidate_artifact_dir')}")
+    if commands.get("positive_control_crop_workbench_preview"):
+        lines.append(f"Preview: {commands.get('positive_control_crop_workbench_preview')}")
+    stop_rows = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stop_rows)}")
+    for condition in stop_rows:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_positive_corpus_recognition_replay_text(payload: dict[str, object]) -> str:
     counts = dict(payload.get("counts") or {})
     commands = dict(payload.get("commands") or {})
@@ -4059,6 +4095,10 @@ def build_parser() -> argparse.ArgumentParser:
     positive_control_recognition_training_replay.add_argument("--no-write", action="store_true")
     positive_control_recognition_training_replay.add_argument("--json", action="store_true")
 
+    positive_control_crop_workbench = sub.add_parser("positive-control-crop-workbench")
+    positive_control_crop_workbench.add_argument("--no-write", action="store_true")
+    positive_control_crop_workbench.add_argument("--json", action="store_true")
+
     positive_corpus_recognition_replay = sub.add_parser("positive-corpus-recognition-replay")
     positive_corpus_recognition_replay.add_argument("--no-write", action="store_true")
     positive_corpus_recognition_replay.add_argument("--json", action="store_true")
@@ -5212,6 +5252,12 @@ def main(argv: list[str] | None = None) -> int:
             if args.json
             else _render_positive_control_recognition_training_replay_text(payload)
         )
+        print(output, end="")
+        return 0 if payload["state"] != "blocked" else 2
+
+    if args.command == "positive-control-crop-workbench":
+        payload = service.positive_control_crop_workbench(write=not args.no_write)
+        output = json.dumps(payload, indent=2) if args.json else _render_positive_control_crop_workbench_text(payload)
         print(output, end="")
         return 0 if payload["state"] != "blocked" else 2
 

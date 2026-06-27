@@ -441,6 +441,58 @@ Remaining:
   segmentation workbench over real positive controls and generated scenario
   plans while keeping crop artifacts in runtime/cache storage.
 
+## Execution Update | 2026-06-27 | Milestone 4
+
+Completed:
+
+- Added a positive-control crop segmentation workbench and
+  `positive-control-crop-workbench` CLI surface.
+- Generated redacted crop-candidate evidence from operator-declared known
+  positives without OCR, contact extraction, routing, enrichment, or sink
+  writes.
+- Separated image units and PDF-page units, preserving source entry IDs,
+  content hashes, page numbers, page roles, and runtime artifact lineage.
+- Added candidate quality metrics: aspect ratio, contour confidence, edge
+  completeness, skew/rotation estimate, size, and OCR readiness.
+- Added primary crop candidates for single/PDF-page units and child crop
+  candidates for deterministic multi-card fixture cases.
+- Routed low-confidence or missing deterministic crop choices to bounded
+  crop/App Intelligence review requests.
+
+Runtime evidence:
+
+- `positive-control-crop-workbench --json` over the current user-scoped
+  positive-control corpus produced state `crop_workbench_review_required`.
+- Current workbench counts: 5 sources, 25 scenario plans, 16 processing units,
+  2 image units, and 14 PDF page units.
+- PDF page lineage was preserved for 14 materialized PDF pages.
+- Crop candidate count: 14 primary candidates, all accepted for the OCR
+  workbench lane.
+- Current real multi-card image units produced 0 deterministic child
+  candidates and were routed to 4 bounded crop-review requests rather than
+  forcing ambiguous crops.
+- OCR attempted: 0. Network calls: 0. Live sink calls: `False`.
+- Runtime report and candidate JSON artifacts were written under
+  `~/.local/share/business-card-watchdog/positive_control_corpus/crop_workbenches/`.
+- Redaction scan found no original scanner path or source filename tokens in
+  `/tmp/bcw-positive-control-crop-workbench.json`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_positive_control_crop_workbench.py tests/test_positive_control_recognition_training.py tests/test_positive_control_scenarios.py tests/test_positive_control_labels.py tests/test_positive_corpus_workbench.py tests/test_positive_corpus_exit_gate.py tests/test_preclassifier.py -q`
+  passed with 33 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/positive_control_crop_workbench.py src/business_card_watchdog/positive_control_recognition_training.py src/business_card_watchdog/positive_control_scenarios.py src/business_card_watchdog/positive_control_labels.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_positive_control_crop_workbench.py tests/test_positive_control_recognition_training.py tests/test_positive_control_scenarios.py tests/test_positive_control_labels.py`
+  passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `git diff --check` passed.
+
+Remaining:
+
+- Milestones 5-8 remain open. Next bounded goal is Milestone 5 OCR and contact
+  draft evidence from accepted known-card crop candidates, with all drafts
+  review-required and no enrichment, routing, sink payloads, writes, readbacks,
+  or public-web actions.
+
 ## Suggested Goal Order
 
 1. `/goal Execute Plan 0099 Milestone 1`

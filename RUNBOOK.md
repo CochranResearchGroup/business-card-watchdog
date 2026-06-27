@@ -1,5 +1,58 @@
 # Runbook
 
+## Turn 342 | 2026-06-27
+
+Executed Plan 0099 Milestone 4 known-card crop segmentation workbench.
+
+Implemented:
+
+- Added `positive-control-crop-workbench` and
+  `BusinessCardService.positive_control_crop_workbench`.
+- Added redacted crop-candidate evidence for operator-declared known positives
+  without OCR, contact extraction, routing, enrichment, or sink writes.
+- Preserved source entry IDs, content hashes, page numbers, page roles, and
+  runtime artifact lineage for image and PDF-page processing units.
+- Added candidate quality metrics: aspect ratio, contour confidence, edge
+  completeness, skew/rotation estimate, size, and OCR readiness.
+- Added primary crop candidates for single/PDF-page units and child crop
+  candidates for deterministic multi-card fixture cases.
+- Routed low-confidence or missing deterministic crop choices to bounded
+  crop/App Intelligence review requests.
+- Updated Plan 0099 execution history and moved the roadmap next slice to
+  Milestone 5 OCR and contact draft evidence.
+
+Runtime proof:
+
+- Ran `positive-control-crop-workbench --json` over the current user-scoped
+  positive-control corpus.
+- Workbench state was `crop_workbench_review_required` with 5 sources, 25
+  scenario plans, 16 processing units, 2 image units, and 14 PDF page units.
+- PDF page lineage was preserved for 14 materialized PDF pages.
+- Crop candidate count was 14 primary candidates, all accepted for the OCR
+  workbench lane.
+- Current real multi-card image units produced 0 deterministic child
+  candidates and were routed to 4 bounded crop-review requests.
+- OCR attempted: 0. Network calls: 0. Live sink calls: `False`.
+- Runtime report and candidate JSON artifacts were written under
+  `positive_control_corpus/crop_workbenches/`.
+- Redaction check found no original scanner path or source filename tokens in
+  `/tmp/bcw-positive-control-crop-workbench.json`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_positive_control_crop_workbench.py tests/test_positive_control_recognition_training.py tests/test_positive_control_scenarios.py tests/test_positive_control_labels.py tests/test_positive_corpus_workbench.py tests/test_positive_corpus_exit_gate.py tests/test_preclassifier.py -q`
+  passed with 33 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/positive_control_crop_workbench.py src/business_card_watchdog/positive_control_recognition_training.py src/business_card_watchdog/positive_control_scenarios.py src/business_card_watchdog/positive_control_labels.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_positive_control_crop_workbench.py tests/test_positive_control_recognition_training.py tests/test_positive_control_scenarios.py tests/test_positive_control_labels.py`
+  passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `git diff --check` passed.
+
+Safety:
+
+- This slice did not OCR, extract contact data, route, enrich, call public web,
+  call paid APIs, perform live sink operations, or resume broad autodetection.
+- Runtime artifacts and private card files remain outside git.
+
 ## Turn 341 | 2026-06-27
 
 Executed Plan 0099 Milestone 3 recognition training replay and contextual
