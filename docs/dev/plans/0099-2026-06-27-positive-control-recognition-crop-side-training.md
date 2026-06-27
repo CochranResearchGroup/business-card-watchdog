@@ -493,6 +493,53 @@ Remaining:
   review-required and no enrichment, routing, sink payloads, writes, readbacks,
   or public-web actions.
 
+## Execution Update | 2026-06-27 | Milestone 5
+
+Completed:
+
+- Added a positive-control OCR/contact draft evidence builder and
+  `positive-control-ocr-contact-drafts` CLI surface.
+- Consumed accepted known-card crop candidates from the crop workbench and
+  emitted review-required contact draft evidence.
+- Preserved OCR provenance for every processed candidate: adapter raw text when
+  supplied to the builder, or an explicit missing-OCR reason when no OCR output
+  exists.
+- Added deterministic field extraction and contact normalization for
+  adapter-provided OCR text in fixture coverage.
+- Added review items for missing OCR and missing contact points.
+- Preserved backside-only fields as augmentation evidence only; direct sink
+  updates remain disallowed.
+
+Runtime evidence:
+
+- `positive-control-ocr-contact-drafts --json` over the current user-scoped
+  positive-control corpus produced state `ocr_missing_review_required`.
+- Accepted crop candidates: 14. Contact drafts: 14.
+- OCR text available: 0. Missing OCR records: 14.
+- Review-required drafts: 14. Review items: 28.
+- Backside augmentation candidates: 0 because current page roles remain
+  `front_or_back_unknown`, not confirmed backs.
+- Sink payloads created: 0. Network calls: 0. Live sink calls: `False`.
+- Runtime report and draft JSON artifacts were written under
+  `~/.local/share/business-card-watchdog/positive_control_corpus/ocr_contact_drafts/`.
+- Redaction scan found no original scanner path or source filename tokens in
+  `/tmp/bcw-positive-control-ocr-contact-drafts.json`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_positive_control_ocr_drafts.py tests/test_positive_control_crop_workbench.py tests/test_positive_control_recognition_training.py tests/test_positive_control_scenarios.py tests/test_positive_control_labels.py tests/test_positive_corpus_workbench.py tests/test_positive_corpus_exit_gate.py tests/test_contact.py -q`
+  passed with 26 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/positive_control_ocr_drafts.py src/business_card_watchdog/positive_control_crop_workbench.py src/business_card_watchdog/positive_control_recognition_training.py src/business_card_watchdog/positive_control_scenarios.py src/business_card_watchdog/positive_control_labels.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_positive_control_ocr_drafts.py tests/test_positive_control_crop_workbench.py tests/test_positive_control_recognition_training.py tests/test_positive_control_scenarios.py tests/test_positive_control_labels.py`
+  passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `git diff --check` passed.
+
+Remaining:
+
+- Milestones 6-8 remain open. Next bounded goal is Milestone 6 front/back
+  matching and merge evidence using scanner sequence plus OCR/layout clues,
+  while keeping ambiguous or conflicting pair graphs review-required.
+
 ## Suggested Goal Order
 
 1. `/goal Execute Plan 0099 Milestone 1`
