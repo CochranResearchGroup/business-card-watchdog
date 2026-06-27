@@ -1,5 +1,54 @@
 # Runbook
 
+## Turn 330 | 2026-06-26
+
+Executed Plan 0098 Milestone 1 for the positive-corpus evaluation manifest.
+
+Implemented:
+
+- Added `src/business_card_watchdog/positive_corpus_evaluation.py`.
+- Added `BusinessCardService.positive_corpus_evaluation_manifest`.
+- Added CLI command `positive-corpus-evaluation-manifest`.
+- Added tests for redaction, grouping, stable replay order, runtime manifest
+  writes, and CLI JSON.
+- Updated Plan 0098 to `IN_PROGRESS` and recorded Milestone 1 implementation.
+- Updated the roadmap so the next bounded slice is Plan 0098 Milestone 2:
+  recognition training replay over known positives.
+
+Runtime proof:
+
+- Ran `bcw positive-corpus-evaluation-manifest --json` over the current
+  positive-control corpus.
+- Runtime manifest contained five entries: two multi-card image candidates and
+  three likely front/back PDF sequences.
+- PDF page counts were 2, 4, and 8 pages.
+- The image entries had wide aspect-ratio metadata and grouped as multi-card
+  image candidates.
+- Verified the runtime evaluation manifest did not expose original scanner or
+  phone paths or source filenames.
+- Observed zero OCR, zero PDF rasterization, zero crops, zero writes, zero
+  network calls, zero live sink calls, zero public-web search, and zero paid
+  enrichment.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_positive_corpus_evaluation.py tests/test_known_card_corpus.py tests/test_positive_controls.py tests/test_classifier_training.py -q`
+  passed with 14 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/positive_corpus_evaluation.py src/business_card_watchdog/known_card_corpus.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_positive_corpus_evaluation.py tests/test_known_card_corpus.py tests/test_positive_controls.py tests/test_classifier_training.py`
+  passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `git diff --check` passed.
+
+Safety:
+
+- The runtime manifest and corpus files remain under user-scoped runtime
+  storage and were not committed to git.
+
+Remaining:
+
+- Plan 0098 remains in progress. Next milestone is recognition training replay
+  over known positives.
+
 ## Turn 329 | 2026-06-26
 
 Planned positive-corpus training, crop/OCR evaluation, and front/back matching.
