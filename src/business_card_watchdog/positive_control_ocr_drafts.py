@@ -114,8 +114,42 @@ def _accepted_candidates(crop_workbench: dict[str, Any]) -> list[dict[str, Any]]
         for candidate in list(unit.get("crop_candidates") or [])
         if isinstance(candidate, dict) and candidate.get("state") == "accepted_for_ocr_workbench"
     ]
+    if not candidates and crop_workbench.get("state") == "ready_for_runtime_crop_workbench":
+        candidates = [
+            _runtime_pdf_page_placeholder_candidate(source=source, unit=unit)
+            for source in list(crop_workbench.get("source_results") or [])
+            if isinstance(source, dict)
+            for unit in list(source.get("processing_units") or [])
+            if isinstance(unit, dict)
+            and unit.get("media_kind") == "pdf_page"
+            and unit.get("state") == "requires_runtime_page_materialization"
+        ]
     candidates.sort(key=lambda candidate: str(candidate.get("candidate_id") or ""))
     return candidates
+
+
+def _runtime_pdf_page_placeholder_candidate(*, source: dict[str, Any], unit: dict[str, Any]) -> dict[str, Any]:
+    unit_id = str(unit.get("unit_id") or "")
+    return {
+        "schema": "business-card-watchdog.positive-control-crop-candidate-preview.v1",
+        "candidate_id": f"{unit_id}-crop-001",
+        "unit_id": unit_id,
+        "entry_id": source.get("entry_id"),
+        "sha256_prefix": source.get("sha256_prefix"),
+        "source_kind": source.get("source_kind"),
+        "media_kind": "pdf_page",
+        "page_number": unit.get("page_number"),
+        "page_role": unit.get("page_role"),
+        "candidate_kind": "primary_card_candidate",
+        "box": {},
+        "quality": {"ocr_readiness": "requires_runtime_page_materialization"},
+        "state": "accepted_for_ocr_workbench",
+        "artifact_path": None,
+        "requires_review": True,
+        "requires_app_intelligence": True,
+        "source_path_redacted": True,
+        "source_filename_redacted": True,
+    }
 
 
 def _contact_draft(

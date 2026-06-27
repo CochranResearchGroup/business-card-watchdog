@@ -1,5 +1,65 @@
 # Runbook
 
+## Turn 344 | 2026-06-27
+
+Executed Plan 0099 Milestone 6 front/back matching and merge evidence.
+
+Implemented:
+
+- Added `positive-control-side-pair-evidence` and
+  `BusinessCardService.positive_control_side_pair_evidence`.
+- Added side-pair graph edges for adjacent scanner PDF page drafts with states:
+  `pair_proposed`, `review_required`, `front_only`, `blank_or_dropped_back`,
+  and `blocked_conflict`.
+- Added deterministic OCR clue handling for front/back and back/front order,
+  missing OCR, QR/social/website backside cues, shared contact evidence, and
+  conflicting identities.
+- Added merge evidence that can record backside-only field augmentation while
+  keeping direct sink updates disallowed.
+- Added bounded App Intelligence review requests for ambiguous and conflicting
+  side-pair edges.
+- Added no-write PDF page placeholder candidates so preview-only side-pair
+  evidence can be generated without materializing private page images.
+- Updated Plan 0099 execution history and moved the roadmap next slice to
+  Milestone 7 agent training review loop.
+
+Runtime proof:
+
+- Ran `positive-control-side-pair-evidence --json` over the current
+  user-scoped positive-control corpus.
+- Side-pair state was `front_back_review_required`.
+- Contact drafts: 14. Scanner page drafts: 14. Adjacent-page edges: 7.
+- Pair proposed: 0. Review required: 7. Front-only: 0.
+  Blank/dropped-back: 0. Blocked conflicts: 0.
+- App Intelligence review requests: 7 bounded requests.
+- Backside augmented edges: 0 because runtime OCR text is still missing for
+  the scanner page drafts.
+- Sink payloads created: 0. Writes attempted: 0. Network calls: 0. Live sink
+  calls: `False`. Public-web search and paid enrichment remained unused.
+- Runtime report was written under
+  `positive_control_corpus/side_pair_evidence/`.
+- Redaction check found no original scanner path or source filename tokens in
+  `/tmp/bcw-positive-control-side-pair-evidence.json`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_positive_control_side_pair_evidence.py -q`
+  passed with 5 tests.
+- `.venv/bin/python -m pytest tests/test_positive_control_side_pair_evidence.py tests/test_positive_control_ocr_drafts.py tests/test_positive_control_crop_workbench.py tests/test_positive_control_recognition_training.py tests/test_positive_control_scenarios.py tests/test_positive_control_labels.py tests/test_positive_corpus_side_pair.py tests/test_card_sides.py -q`
+  passed with 39 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/positive_control_side_pair_evidence.py src/business_card_watchdog/positive_control_ocr_drafts.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_positive_control_side_pair_evidence.py`
+  passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `git diff --check` passed.
+
+Safety:
+
+- This slice did not route, enrich, create sink payloads, write contacts, read
+  back sinks, call public web, call paid APIs, perform live sink operations, or
+  resume broad autodetection.
+- Runtime side-pair reports, OCR drafts, crops, and private card files remain
+  outside git.
+
 ## Turn 343 | 2026-06-27
 
 Executed Plan 0099 Milestone 5 OCR and contact draft evidence.

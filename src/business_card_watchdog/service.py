@@ -61,6 +61,7 @@ from .positive_control_labels import build_positive_control_label_inventory
 from .positive_control_ocr_drafts import build_positive_control_ocr_contact_drafts
 from .positive_control_recognition_training import build_positive_control_recognition_training_replay
 from .positive_control_scenarios import build_positive_control_scenario_manifest
+from .positive_control_side_pair_evidence import build_positive_control_side_pair_evidence
 from .practice_corpus import build_practice_corpus_manifest
 from .positive_controls import build_positive_control_manifest
 from .preclassifier import assess_business_card_candidate, build_card_candidate_box_manifest
@@ -14000,6 +14001,9 @@ class BusinessCardService:
 
     def positive_control_ocr_contact_drafts(self, *, write: bool = True) -> dict[str, Any]:
         return build_positive_control_ocr_contact_drafts(self.config, write=write)
+
+    def positive_control_side_pair_evidence(self, *, write: bool = True) -> dict[str, Any]:
+        return build_positive_control_side_pair_evidence(self.config, write=write)
 
     def positive_corpus_recognition_replay(self, *, write: bool = True) -> dict[str, Any]:
         return build_positive_corpus_recognition_replay(self.config, write=write)

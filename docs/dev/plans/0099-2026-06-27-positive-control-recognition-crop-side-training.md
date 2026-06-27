@@ -540,6 +540,62 @@ Remaining:
   matching and merge evidence using scanner sequence plus OCR/layout clues,
   while keeping ambiguous or conflicting pair graphs review-required.
 
+## Execution Update | 2026-06-27 | Milestone 6
+
+Completed:
+
+- Added a positive-control front/back side-pair evidence builder and
+  `positive-control-side-pair-evidence` CLI surface.
+- Evaluated adjacent scanner PDF page drafts as candidate side pairs in
+  front-back and back-front order.
+- Added deterministic evidence states: `pair_proposed`, `review_required`,
+  `front_only`, `blank_or_dropped_back`, and `blocked_conflict`.
+- Used deterministic OCR clues including shared email/phone/domain evidence,
+  identity-vs-backside cue separation, QR/website/social cues, missing OCR, and
+  conflict fields.
+- Added merge evidence that records backside-only field augmentation while
+  keeping direct sink updates disallowed.
+- Added bounded App Intelligence review requests for ambiguous and conflicting
+  edges.
+- Added no-write PDF page placeholder candidates for preview-only side-pair
+  evidence when runtime page materialization is intentionally not performed.
+
+Runtime evidence:
+
+- `positive-control-side-pair-evidence --json` over the current user-scoped
+  positive-control corpus produced state `front_back_review_required`.
+- Current side-pair counts: 14 contact drafts, 14 scanner page drafts, and 7
+  adjacent-page edges.
+- Pair proposed: 0. Review required: 7. Front-only: 0.
+  Blank/dropped-back: 0. Blocked conflicts: 0.
+- App Intelligence review requests: 7 bounded requests.
+- Backside augmented edges: 0 because current runtime OCR text is still
+  missing for these scanner pages.
+- Sink payloads created: 0. Writes attempted: 0. Network calls: 0. Live sink
+  calls: `False`. Public-web search and paid enrichment remained unused.
+- Runtime report was written under
+  `~/.local/share/business-card-watchdog/positive_control_corpus/side_pair_evidence/`.
+- Redaction scan found no original scanner path or source filename tokens in
+  `/tmp/bcw-positive-control-side-pair-evidence.json`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_positive_control_side_pair_evidence.py -q`
+  passed with 5 tests.
+- `.venv/bin/python -m pytest tests/test_positive_control_side_pair_evidence.py tests/test_positive_control_ocr_drafts.py tests/test_positive_control_crop_workbench.py tests/test_positive_control_recognition_training.py tests/test_positive_control_scenarios.py tests/test_positive_control_labels.py tests/test_positive_corpus_side_pair.py tests/test_card_sides.py -q`
+  passed with 39 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/positive_control_side_pair_evidence.py src/business_card_watchdog/positive_control_ocr_drafts.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_positive_control_side_pair_evidence.py`
+  passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `git diff --check` passed.
+
+Remaining:
+
+- Milestones 7-8 remain open. Next bounded goal is Milestone 7 agent training
+  review loop over the accumulated positive-control evidence, with host-owned
+  state transitions and no enrichment, routing, sink payloads, writes,
+  readbacks, public-web search, or paid-provider calls.
+
 ## Suggested Goal Order
 
 1. `/goal Execute Plan 0099 Milestone 1`

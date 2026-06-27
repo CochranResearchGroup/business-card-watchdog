@@ -704,6 +704,40 @@ def _render_positive_control_ocr_contact_drafts_text(payload: dict[str, object])
     return "\n".join(lines) + "\n"
 
 
+def _render_positive_control_side_pair_evidence_text(payload: dict[str, object]) -> str:
+    counts = dict(payload.get("counts") or {})
+    commands = dict(payload.get("commands") or {})
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    lines = [
+        f"Positive-control side-pair evidence: {payload.get('state')}",
+        f"Contact drafts: {payload.get('contact_draft_count', 0)}",
+        f"Edges: {payload.get('edge_count', 0)}",
+        f"Pair proposed: {counts.get('pair_proposed', 0)}",
+        f"Blank/dropped backs: {counts.get('blank_or_dropped_back', 0)}",
+        f"Front-only: {counts.get('front_only', 0)}",
+        f"Blocked conflicts: {counts.get('blocked_conflict', 0)}",
+        f"Review requests: {counts.get('app_intelligence_review_requests', 0)}",
+        f"Backside augmented edges: {counts.get('backside_augmented_edges', 0)}",
+        f"Sink payloads: {payload.get('sink_payloads_created', 0)}",
+        "Observed: "
+        f"ocr={payload.get('ocr_attempted', 0)} "
+        f"pdfs={payload.get('pdfs_rasterized', 0)} "
+        f"crops={payload.get('crops_created', 0)} "
+        f"writes={payload.get('writes_attempted', 0)} "
+        f"network={payload.get('network_calls_made', 0)}",
+        f"Runtime artifact written: {payload.get('runtime_artifact_written', False)}",
+    ]
+    if payload.get("report_path"):
+        lines.append(f"Report path: {payload.get('report_path')}")
+    if commands.get("positive_control_side_pair_evidence_preview"):
+        lines.append(f"Preview: {commands.get('positive_control_side_pair_evidence_preview')}")
+    stop_rows = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stop_rows)}")
+    for condition in stop_rows:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_positive_corpus_recognition_replay_text(payload: dict[str, object]) -> str:
     counts = dict(payload.get("counts") or {})
     commands = dict(payload.get("commands") or {})
@@ -4138,6 +4172,10 @@ def build_parser() -> argparse.ArgumentParser:
     positive_control_ocr_contact_drafts.add_argument("--no-write", action="store_true")
     positive_control_ocr_contact_drafts.add_argument("--json", action="store_true")
 
+    positive_control_side_pair_evidence = sub.add_parser("positive-control-side-pair-evidence")
+    positive_control_side_pair_evidence.add_argument("--no-write", action="store_true")
+    positive_control_side_pair_evidence.add_argument("--json", action="store_true")
+
     positive_corpus_recognition_replay = sub.add_parser("positive-corpus-recognition-replay")
     positive_corpus_recognition_replay.add_argument("--no-write", action="store_true")
     positive_corpus_recognition_replay.add_argument("--json", action="store_true")
@@ -5306,6 +5344,16 @@ def main(argv: list[str] | None = None) -> int:
             json.dumps(payload, indent=2)
             if args.json
             else _render_positive_control_ocr_contact_drafts_text(payload)
+        )
+        print(output, end="")
+        return 0 if payload["state"] != "blocked" else 2
+
+    if args.command == "positive-control-side-pair-evidence":
+        payload = service.positive_control_side_pair_evidence(write=not args.no_write)
+        output = (
+            json.dumps(payload, indent=2)
+            if args.json
+            else _render_positive_control_side_pair_evidence_text(payload)
         )
         print(output, end="")
         return 0 if payload["state"] != "blocked" else 2
