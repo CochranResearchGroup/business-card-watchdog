@@ -425,6 +425,41 @@ def _render_known_card_intake_text(payload: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_negative_control_intake_text(payload: dict[str, object]) -> str:
+    counts = dict(payload.get("counts") or {})
+    commands = dict(payload.get("commands") or {})
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    lines = [
+        f"Negative-control intake: {payload.get('state')}",
+        f"Label: {payload.get('operator_declared_label')}",
+        f"Category: {payload.get('category')}",
+        f"Sources: {payload.get('source_count', 0)}",
+        f"Entries: {payload.get('entry_count', 0)}",
+        f"Images: {counts.get('images', 0)}",
+        f"PDF documents: {counts.get('pdf_documents', 0)}",
+        f"Stored new: {counts.get('stored_new', 0)}",
+        f"Deduped existing: {counts.get('deduped_existing', 0)}",
+        f"Selection truncated: {payload.get('selection_truncated', False)}",
+        "Observed: "
+        f"files={payload.get('files_processed', 0)} "
+        f"ocr={payload.get('ocr_attempted', 0)} "
+        f"pdfs={payload.get('pdfs_rasterized', 0)} "
+        f"crops={payload.get('crops_created', 0)} "
+        f"writes={payload.get('writes_attempted', 0)} "
+        f"network={payload.get('network_calls_made', 0)}",
+        f"Runtime artifact written: {payload.get('runtime_artifact_written', False)}",
+    ]
+    if payload.get("manifest_path"):
+        lines.append(f"Manifest path: {payload.get('manifest_path')}")
+    if commands.get("negative_control_intake_preview"):
+        lines.append(f"Preview: {commands.get('negative_control_intake_preview')}")
+    stop_rows = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stop_rows)}")
+    for condition in stop_rows:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_positive_corpus_evaluation_manifest_text(payload: dict[str, object]) -> str:
     groups = dict(payload.get("groups") or {})
     commands = dict(payload.get("commands") or {})
@@ -3851,6 +3886,15 @@ def build_parser() -> argparse.ArgumentParser:
     known_card_intake.add_argument("--no-write", action="store_true")
     known_card_intake.add_argument("--json", action="store_true")
 
+    negative_control_intake = sub.add_parser("negative-control-intake")
+    negative_control_intake.add_argument("--source", action="append", default=[])
+    negative_control_intake.add_argument("--label", default="known_non_business_card")
+    negative_control_intake.add_argument("--category", default="unclassified_non_card")
+    negative_control_intake.add_argument("--include-glob", action="append", default=[])
+    negative_control_intake.add_argument("--limit", type=int, default=None)
+    negative_control_intake.add_argument("--no-write", action="store_true")
+    negative_control_intake.add_argument("--json", action="store_true")
+
     positive_corpus_evaluation_manifest = sub.add_parser("positive-corpus-evaluation-manifest")
     positive_corpus_evaluation_manifest.add_argument("--no-write", action="store_true")
     positive_corpus_evaluation_manifest.add_argument("--json", action="store_true")
@@ -4945,6 +4989,19 @@ def main(argv: list[str] | None = None) -> int:
             include_globs=list(args.include_glob or []),
         )
         output = json.dumps(payload, indent=2) if args.json else _render_known_card_intake_text(payload)
+        print(output, end="")
+        return 0 if payload["state"] != "blocked" else 2
+
+    if args.command == "negative-control-intake":
+        payload = service.negative_control_intake(
+            source_paths=list(args.source or []),
+            label=str(args.label or "known_non_business_card"),
+            category=str(args.category or "unclassified_non_card"),
+            write=not args.no_write,
+            include_globs=list(args.include_glob or []),
+            limit=args.limit,
+        )
+        output = json.dumps(payload, indent=2) if args.json else _render_negative_control_intake_text(payload)
         print(output, end="")
         return 0 if payload["state"] != "blocked" else 2
 

@@ -44,6 +44,7 @@ from .live_pilot_packets import (
     build_selected_target_command_copy_packet,
 )
 from .models import CardJob, SkillRunResult, utc_now
+from .negative_control_corpus import build_negative_control_intake
 from .orchestrator import BatchOrchestrator
 from .operator_dashboard import build_operator_dashboard
 from .orientation_evidence import redacted_orientation_summary
@@ -13940,6 +13941,26 @@ class BusinessCardService:
             label=label,
             write=write,
             include_globs=include_globs,
+        )
+
+    def negative_control_intake(
+        self,
+        *,
+        source_paths: list[str],
+        label: str = "known_non_business_card",
+        category: str = "unclassified_non_card",
+        write: bool = True,
+        include_globs: list[str] | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        return build_negative_control_intake(
+            self.config,
+            source_paths=source_paths,
+            label=label,
+            category=category,
+            write=write,
+            include_globs=include_globs,
+            limit=limit,
         )
 
     def positive_corpus_evaluation_manifest(self, *, write: bool = True) -> dict[str, Any]:

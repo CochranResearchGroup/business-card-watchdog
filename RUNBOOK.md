@@ -1,5 +1,51 @@
 # Runbook
 
+## Turn 337 | 2026-06-27
+
+Wrote and executed Plan 0100 negative-control corpus intake.
+
+Implemented:
+
+- Added `docs/dev/plans/0100-2026-06-27-negative-control-corpus-intake.md`
+  and closed it as `COMPLETE`.
+- Added `negative-control-intake` and
+  `BusinessCardService.negative_control_intake`.
+- Added runtime negative-control blob storage, manifest writing, index append,
+  SHA dedupe, category/label metadata, include-glob filtering, and bounded
+  `--limit` selection.
+- Added tests for preview/no-write redaction, runtime write/dedupe/limit, and
+  CLI JSON.
+- Updated `ROADMAP.md` with the completed negative-control intake plan and the
+  next negative replay boundary.
+
+Runtime proof:
+
+- Ran `negative-control-intake --json` over a bounded scanner-library sample
+  selected from explicit non-card filename cues.
+- Filed 5 negative-control PDF documents into user-scoped runtime storage.
+- Runtime counts: 5 entries, 5 PDFs, 5 newly stored, 0 deduped, 0 OCR, 0 PDF
+  rasterization, 0 crops, 0 writes, and 0 network calls.
+- Redaction check found no original scanner path or source filename strings in
+  the runtime negative-control manifest or `negative_control_corpus/index.jsonl`.
+- Follow-up `positive-corpus-exit-gate --no-write --json` reported 5 negative
+  controls while keeping broad autodetection paused because 14 known-positive
+  false negatives and 47 training candidates remain.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_negative_control_corpus.py tests/test_positive_corpus_exit_gate.py tests/test_known_card_corpus.py -q`
+  passed with 10 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/negative_control_corpus.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_negative_control_corpus.py`
+  passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `git diff --check` passed.
+
+Remaining:
+
+- Broad autodetection remains paused.
+- Next negative-control work is deterministic recognition replay against the
+  negative corpus to measure false positives before any threshold tuning.
+
 ## Turn 336 | 2026-06-27
 
 Executed Plan 0098 Milestone 6 exit gate and closed Plan 0098.
