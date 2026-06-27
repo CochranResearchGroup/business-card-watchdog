@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from pathlib import Path
 
 from business_card_watchdog.config import AppConfig, PrefilterConfig, SinkConfig
@@ -91,29 +92,22 @@ def test_batch_dry_run_uses_synthetic_adapter_without_credentials(
     assert all(len(event["payload"]["payloads"]) == 2 for event in dry_run_events)
 
     artifact_records = read_jsonl(run_dir / "artifacts.jsonl")
-    assert [record["kind"] for record in artifact_records] == [
-        "preclassification",
-        "artifact_dir",
-        "contact_spec",
-        "review_report",
-        "ocr_text",
-        "crop_manifest",
-        "contact_candidate",
-        "extraction_quality",
-        "duplicate_assessment",
-        "sink_payloads",
-        "preclassification",
-        "artifact_dir",
-        "contact_spec",
-        "review_report",
-        "ocr_text",
-        "crop_manifest",
-        "contact_candidate",
-        "extraction_quality",
-        "duplicate_assessment",
-        "sink_payloads",
-        "contact_store_projection",
-    ]
+    artifact_counts = Counter(record["kind"] for record in artifact_records)
+    assert artifact_counts["preclassification"] == 2
+    assert artifact_counts["orientation_evidence"] == 2
+    assert artifact_counts["qr_evidence"] == 2
+    assert artifact_counts["crop_quality"] == 2
+    assert artifact_counts["recrop_proposals"] == 2
+    assert artifact_counts["artifact_dir"] == 2
+    assert artifact_counts["contact_spec"] == 2
+    assert artifact_counts["review_report"] == 2
+    assert artifact_counts["ocr_text"] == 2
+    assert artifact_counts["crop_manifest"] == 2
+    assert artifact_counts["contact_candidate"] == 2
+    assert artifact_counts["extraction_quality"] == 2
+    assert artifact_counts["duplicate_assessment"] == 2
+    assert artifact_counts["sink_payloads"] == 2
+    assert artifact_counts["contact_store_projection"] == 1
 
     normalized_events = normalize_events(read_jsonl(run_dir / "events.jsonl"))
     event_types = [event["event_type"] for event in normalized_events]

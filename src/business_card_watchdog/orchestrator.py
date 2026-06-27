@@ -112,7 +112,14 @@ class BatchOrchestrator:
         self.config = config
         self.adapter = BusinessCardSkillAdapter(config)
 
-    def process_source(self, raw_source: str, *, dry_run: bool = True, workers: int = 2) -> Path:
+    def process_source(
+        self,
+        raw_source: str,
+        *,
+        dry_run: bool = True,
+        workers: int = 2,
+        known_positive: bool = False,
+    ) -> Path:
         ensure_runtime_dirs(self.config)
         source = resolve_input_path(raw_source, self.config)
         run_dir = self.config.runs_dir / utc_now().replace(":", "-")
@@ -172,6 +179,7 @@ class BatchOrchestrator:
                     ledger,
                     dry_run,
                     page_lineage_by_path.get(job.image_path),
+                    known_positive,
                 ): job
                 for job in jobs
             }
@@ -289,6 +297,7 @@ class BatchOrchestrator:
         ledger: RunLedger,
         dry_run: bool,
         source_page: dict[str, Any] | None = None,
+        known_positive: bool = False,
     ) -> None:
         job.transition_to("processing")
         ledger.record_job(job)
@@ -342,7 +351,11 @@ class BatchOrchestrator:
                 source_image_path=Path(job.image_path),
                 job_id=job.job_id,
             )
-            if source_page is not None and classifier_training_state != "business_card_high_confidence":
+            if (
+                source_page is not None
+                and classifier_training_state != "business_card_high_confidence"
+                and not known_positive
+            ):
                 if not (artifact_dir / "orientation_evidence.json").exists():
                     self._write_orientation_evidence(
                         ledger=ledger,
@@ -396,6 +409,23 @@ class BatchOrchestrator:
                     classifier_training_state=classifier_training_state,
                     assessment=assessment_payload,
                     admitted=True,
+                    admission_reason=(
+                        "operator-declared known-positive corpus page admitted for crop/OCR workbench"
+                        if known_positive and classifier_training_state != "business_card_high_confidence"
+                        else "scanner page passed classifier gate"
+                    ),
+                )
+            elif known_positive:
+                self._write_classifier_gate(
+                    ledger=ledger,
+                    job=job,
+                    artifact_dir=artifact_dir,
+                    classifier_training_state=classifier_training_state,
+                    assessment=assessment_payload,
+                    admitted=True,
+                    admission_reason=(
+                        "operator-declared known-positive corpus image admitted for crop/OCR workbench"
+                    ),
                 )
             if candidate_manifest["candidate_count"]:
                 candidate_manifest_path = artifact_dir / "card_candidates.json"
@@ -546,8 +576,9 @@ class BatchOrchestrator:
                     "candidate_work_items_recorded",
                     {"job": job.to_dict(), "work_item_manifest": work_item_manifest},
                 )
-            if assessment.decision == "not_business_card" or (
-                assessment.decision == "uncertain" and not self.config.prefilter.process_uncertain
+            if not known_positive and (
+                assessment.decision == "not_business_card"
+                or (assessment.decision == "uncertain" and not self.config.prefilter.process_uncertain)
             ):
                 if not (artifact_dir / "orientation_evidence.json").exists():
                     self._write_orientation_evidence(
@@ -697,6 +728,37 @@ class BatchOrchestrator:
             artifact_dir=result.artifact_dir,
             extraction_quality=extraction_quality.to_dict(),
         )
+        if known_positive:
+            self._write_known_positive_ocr_text_fallback(
+                ledger=ledger,
+                job=job,
+                artifact_dir=result.artifact_dir,
+                spec=contact_spec,
+            )
+            review_packet = write_review_packet(
+                packet_path=result.artifact_dir / "review_packet.json",
+                image_path=Path(job.image_path),
+                spec=contact_spec,
+                assessment=assess_contact_spec(contact_spec),
+                contact_candidate=contact_candidate,
+                extraction_quality=extraction_quality.to_dict(),
+            )
+            ledger.record_artifact(job_id=job.job_id, kind="review_packet", path=review_packet)
+            job.transition_to("needs_review")
+            ledger.record_job(job)
+            ledger.record_event(
+                "known_positive_workbench_review_required",
+                {
+                    "job": job.to_dict(),
+                    "reason": "operator-declared known-positive workbench keeps crop/OCR output review-required",
+                    "writes_attempted": 0,
+                    "network_calls_made": 0,
+                    "live_sink_calls_made": False,
+                    "public_web_search_used": False,
+                    "paid_enrichment_used": False,
+                },
+            )
+            return
         if extraction_quality.needs_review:
             review_packet = write_review_packet(
                 packet_path=result.artifact_dir / "review_packet.json",
@@ -1017,6 +1079,7 @@ class BatchOrchestrator:
         classifier_training_state: str,
         assessment: dict[str, Any],
         admitted: bool,
+        admission_reason: str | None = None,
     ) -> dict[str, Any]:
         payload = {
             "schema": "business-card-watchdog.scanner-page-classifier-gate.v1",
@@ -1033,7 +1096,8 @@ class BatchOrchestrator:
             ],
             "app_intelligence_required_for_classifier_states": ["indeterminate_needs_app_intelligence"],
             "reason": (
-                "scanner page passed classifier gate"
+                admission_reason
+                or "scanner page passed classifier gate"
                 if admitted
                 else "scanner page blocked before crop/OCR/contact extraction"
             ),
@@ -1194,6 +1258,48 @@ class BatchOrchestrator:
             },
         )
         return payload
+
+    def _write_known_positive_ocr_text_fallback(
+        self,
+        *,
+        ledger: RunLedger,
+        job: CardJob,
+        artifact_dir: Path,
+        spec: dict[str, Any],
+    ) -> Path | None:
+        ocr_path = artifact_dir / "ocr.txt"
+        if ocr_path.exists():
+            return None
+        lines = [
+            "OCR text unavailable from adapter.",
+            "Derived review text from normalized contact spec for known-positive crop/OCR workbench.",
+        ]
+        for key in ("full_name", "organization", "title", "email", "phone", "website", "notes"):
+            value = spec.get(key)
+            if value:
+                lines.append(f"{key}: {value}")
+        ocr_path.write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
+        ledger.record_artifact(
+            job_id=job.job_id,
+            kind="ocr_text",
+            path=ocr_path,
+            metadata={
+                "source": "derived_from_contact_spec",
+                "raw_adapter_ocr_available": False,
+                "known_positive_workbench_only": True,
+            },
+        )
+        ledger.record_event(
+            "known_positive_ocr_text_fallback_recorded",
+            {
+                "job": job.to_dict(),
+                "source": "derived_from_contact_spec",
+                "raw_adapter_ocr_available": False,
+                "writes_attempted": 0,
+                "network_calls_made": 0,
+            },
+        )
+        return ocr_path
 
     def _write_qr_evidence(
         self,

@@ -1,5 +1,53 @@
 # Runbook
 
+## Turn 332 | 2026-06-27
+
+Executed Plan 0098 Milestone 3 known-card crop/OCR workbench evaluation.
+
+Implemented:
+
+- Added `positive-corpus-workbench-evaluation` and
+  `BusinessCardService.positive_corpus_workbench_evaluation`.
+- Added a bounded orchestrator `known_positive` mode for operator-declared
+  corpus sources only.
+- Forced known-positive crop/OCR outputs to remain review-required and dry-run,
+  before duplicate lookup, routing, enrichment, sink payload planning, write,
+  or readback.
+- Added redacted runtime source-bundle processing and workbench summaries for
+  PDF page lineage, classifier admissions, crop candidates, OCR text artifacts,
+  contact drafts, extraction quality, review packets, and App Intelligence
+  review request counts.
+- Added known-positive-only `ocr.txt` fallback artifacts marked
+  `derived_from_contact_spec` when the local skill writes a spec but not raw
+  OCR.
+
+Runtime proof:
+
+- Ran `positive-corpus-workbench-evaluation --workers 1 --json` over the
+  current positive-control corpus.
+- Processed five sources into 16 review-required jobs: two images and 14 PDF
+  pages.
+- Produced 16 contact drafts, 16 review packets, 16 OCR text artifacts, one
+  candidate crop, and 17 bounded App Intelligence review requests.
+- Recorded 14 known-positive classifier-bypass admissions without promoting
+  broad unknown-document autodetection.
+- Redaction check passed for original scanner/phone paths and source
+  filenames.
+- Safety counters remained writes/network `0/0`; no live sink calls,
+  public-web search, paid enrichment, live route selection, or sink payload
+  writes occurred.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_positive_corpus_workbench.py tests/test_positive_corpus_recognition.py tests/test_positive_corpus_evaluation.py tests/test_known_card_corpus.py tests/test_dry_run_pipeline.py -q`
+  passed with 18 tests.
+
+Remaining:
+
+- Plan 0098 remains in progress. Next work is Milestone 4 front/back matching
+  evaluation using scanner sequence, OCR/contact clues, and the workbench
+  evidence from known positives.
+
 ## Turn 331 | 2026-06-26
 
 Executed Plan 0098 Milestone 2 for recognition replay over known positives.

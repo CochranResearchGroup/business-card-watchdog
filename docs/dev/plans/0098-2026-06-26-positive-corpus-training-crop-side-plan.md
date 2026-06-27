@@ -321,3 +321,66 @@ Remaining work:
 - Milestone 4 front/back matching evaluation.
 - Milestone 5 training review loop.
 - Milestone 6 exit gate before broad autodetection can resume.
+
+## Execution Update | 2026-06-27 | Milestone 3
+
+Milestone 3 is implemented.
+
+Implemented:
+
+- Added a positive-corpus crop/OCR workbench evaluation builder.
+- Added `BusinessCardService.positive_corpus_workbench_evaluation`.
+- Added CLI command `positive-corpus-workbench-evaluation` with preview,
+  worker-count, and JSON modes.
+- Added a bounded `known_positive` orchestrator mode that admits
+  operator-declared positive corpus sources to crop/OCR workbench processing
+  even when broad deterministic recognition would reject or mark them
+  indeterminate.
+- Kept the known-positive classifier bypass explicit in
+  `scanner_page_classifier_gate.json` evidence and did not reopen broad
+  unknown-document autodetection.
+- Forced known-positive workbench jobs to stop at review-required crop/OCR
+  evidence before duplicate lookup, routing, enrichment, sink payload planning,
+  write, or readback.
+- Copied corpus blobs into redacted runtime source bundles before processing.
+- Retained PDF page lineage and summarized page number, rasterization mode,
+  classifier state, crop candidates, OCR text artifacts, contact drafts,
+  extraction quality, review packets, and App Intelligence review request
+  counts.
+- Added a known-positive-only OCR text fallback when the local adapter writes a
+  contact spec but no raw `ocr.txt`; the workbench report marks those OCR text
+  artifacts as `derived_from_contact_spec` so they remain review evidence, not
+  raw OCR proof.
+
+Runtime proof:
+
+- Ran `positive-corpus-workbench-evaluation --workers 1 --json` over the
+  current positive-control corpus.
+- Processed five known-positive sources: two images and three PDF documents.
+- Produced 16 review-required jobs: two image jobs and 14 PDF page jobs.
+- Materialized 14 PDF pages with page lineage.
+- Produced 16 contact drafts, 16 review packets, 16 OCR text artifacts, and one
+  deterministic candidate crop.
+- Recorded 14 known-positive classifier-bypass admissions from pages/images
+  that current recognition would not admit through the broad gate.
+- Recorded 17 bounded App Intelligence review requests from crop/OCR quality
+  gates.
+- The local `business-card-to-contact` adapter did not emit raw OCR text, so
+  the 16 OCR text artifacts in this runtime proof were explicitly marked
+  `derived_from_contact_spec`.
+- Runtime safety counters remained zero for writes and network calls; no live
+  sink calls, public-web search, paid enrichment, live route selection, or sink
+  payload writes occurred.
+- A redaction check found no original scanner/phone paths or source filenames
+  in the runtime workbench report.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_positive_corpus_workbench.py tests/test_positive_corpus_recognition.py tests/test_positive_corpus_evaluation.py tests/test_known_card_corpus.py tests/test_dry_run_pipeline.py -q`
+  passed with 18 tests.
+
+Remaining work:
+
+- Milestone 4 front/back matching evaluation.
+- Milestone 5 training review loop.
+- Milestone 6 exit gate before broad autodetection can resume.
