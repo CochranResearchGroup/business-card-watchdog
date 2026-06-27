@@ -1,5 +1,60 @@
 # Runbook
 
+## Turn 341 | 2026-06-27
+
+Executed Plan 0099 Milestone 3 recognition training replay and contextual
+tuning.
+
+Implemented:
+
+- Added `positive-control-recognition-training-replay` and
+  `BusinessCardService.positive_control_recognition_training_replay`.
+- Composed positive-control labels, generated scenarios, and baseline positive
+  recognition replay into a grouped training report.
+- Grouped false negatives by scenario kind, source kind, page role, card-count
+  label, orientation label, capture mode, and tuning reason.
+- Added contextual positive-control tuning that demotes operator-declared
+  multi-card high-confidence negative outcomes to App Intelligence review
+  without changing unknown-document thresholds.
+- Added bounded App Intelligence request packets with redacted evidence and
+  constrained answer choices.
+- Updated Plan 0099 execution history and moved the roadmap next slice to
+  Milestone 4 known-card crop segmentation workbench.
+
+Runtime proof:
+
+- Ran `positive-control-recognition-training-replay --json` over the current
+  user-scoped positive-control corpus.
+- Replay state was `needs_app_intelligence_or_feature_tuning` with 5 sources,
+  16 real page/image cases, and 25 generated scenario plans.
+- Before contextual tuning: 14 known-positive false negatives, including 2
+  high-confidence known-positive negative outcomes.
+- After contextual tuning: 14 known-positive false negatives remained, but
+  high-confidence known-positive negative outcomes were reduced from 2 to 0 and
+  converted to indeterminate review.
+- App Intelligence request count was 24 bounded requests.
+- `unknown_document_threshold_changed` was `False`.
+- Negative-control regression replay over 5 first-page PDF controls reported
+  0 business-card high-confidence pages and 0 false positives.
+- Redaction check found no original scanner path or source filename tokens in
+  `/tmp/bcw-positive-control-recognition-training-replay.json`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_positive_control_recognition_training.py tests/test_positive_control_scenarios.py tests/test_positive_control_labels.py tests/test_positive_corpus_recognition.py tests/test_negative_corpus_recognition.py tests/test_positive_corpus_exit_gate.py tests/test_preclassifier.py -q`
+  passed with 33 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/positive_control_recognition_training.py src/business_card_watchdog/positive_control_scenarios.py src/business_card_watchdog/positive_control_labels.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_positive_control_recognition_training.py tests/test_positive_control_scenarios.py tests/test_positive_control_labels.py`
+  passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `git diff --check` passed.
+
+Safety:
+
+- This slice did not change broad unknown-document thresholds, resume broad
+  autodetection, OCR, crop, route, enrich, call public web, call paid APIs, or
+  perform live sink operations.
+- Runtime artifacts and private card files remain outside git.
+
 ## Turn 340 | 2026-06-27
 
 Executed Plan 0099 Milestone 2 synthetic scenario expansion.

@@ -391,6 +391,56 @@ Remaining:
   training replay and tuning using real positive controls plus generated
   scenario plans while preserving the broad-autodetection pause.
 
+## Execution Update | 2026-06-27 | Milestone 3
+
+Completed:
+
+- Added a positive-control recognition training replay builder and
+  `positive-control-recognition-training-replay` CLI surface.
+- Composed the positive label inventory, generated scenario manifest, and
+  baseline positive recognition replay into a scenario-aware training report.
+- Grouped known-positive false negatives by scenario kind, source kind, page
+  role, card-count label, orientation label, capture mode, and tuning reason.
+- Added contextual positive-control tuning that demotes operator-declared
+  multi-card high-confidence negative outcomes to App Intelligence review
+  without changing unknown-document thresholds.
+- Added bounded App Intelligence request packets with redacted evidence and
+  constrained answer choices for indeterminate pages/scenarios.
+
+Runtime evidence:
+
+- `positive-control-recognition-training-replay --json` over the current
+  user-scoped positive-control corpus produced state
+  `needs_app_intelligence_or_feature_tuning`.
+- Current replay counts: 5 sources, 16 real page/image cases, and 25 generated
+  scenario plans.
+- Before contextual tuning: 14 known-positive false negatives, including 2
+  high-confidence known-positive negative outcomes.
+- After contextual tuning: 14 known-positive false negatives remain, but
+  high-confidence known-positive negative outcomes were reduced from 2 to 0 and
+  converted to indeterminate review.
+- App Intelligence request count: 24 bounded requests.
+- Unknown-document threshold changed: `False`.
+- Negative-control regression replay over 5 first-page PDF controls reported
+  0 business-card high-confidence pages and 0 false positives.
+- Redaction scan found no original scanner path or source filename tokens in
+  `/tmp/bcw-positive-control-recognition-training-replay.json`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_positive_control_recognition_training.py tests/test_positive_control_scenarios.py tests/test_positive_control_labels.py tests/test_positive_corpus_recognition.py tests/test_negative_corpus_recognition.py tests/test_positive_corpus_exit_gate.py tests/test_preclassifier.py -q`
+  passed with 33 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/positive_control_recognition_training.py src/business_card_watchdog/positive_control_scenarios.py src/business_card_watchdog/positive_control_labels.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_positive_control_recognition_training.py tests/test_positive_control_scenarios.py tests/test_positive_control_labels.py`
+  passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `git diff --check` passed.
+
+Remaining:
+
+- Milestones 4-8 remain open. Next bounded goal is Milestone 4 known-card crop
+  segmentation workbench over real positive controls and generated scenario
+  plans while keeping crop artifacts in runtime/cache storage.
+
 ## Suggested Goal Order
 
 1. `/goal Execute Plan 0099 Milestone 1`

@@ -57,6 +57,7 @@ from .positive_corpus_review_loop import build_positive_corpus_training_review_l
 from .positive_corpus_side_pair import build_positive_corpus_side_pair_evaluation
 from .positive_corpus_workbench import build_positive_corpus_workbench_evaluation
 from .positive_control_labels import build_positive_control_label_inventory
+from .positive_control_recognition_training import build_positive_control_recognition_training_replay
 from .positive_control_scenarios import build_positive_control_scenario_manifest
 from .practice_corpus import build_practice_corpus_manifest
 from .positive_controls import build_positive_control_manifest
@@ -13988,6 +13989,9 @@ class BusinessCardService:
 
     def positive_control_scenario_manifest(self, *, write: bool = True) -> dict[str, Any]:
         return build_positive_control_scenario_manifest(self.config, write=write)
+
+    def positive_control_recognition_training_replay(self, *, write: bool = True) -> dict[str, Any]:
+        return build_positive_control_recognition_training_replay(self.config, write=write)
 
     def positive_corpus_recognition_replay(self, *, write: bool = True) -> dict[str, Any]:
         return build_positive_corpus_recognition_replay(self.config, write=write)
