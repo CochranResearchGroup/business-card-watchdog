@@ -772,6 +772,45 @@ def _render_positive_control_training_review_loop_text(payload: dict[str, object
     return "\n".join(lines) + "\n"
 
 
+def _render_positive_control_resume_readiness_gate_text(payload: dict[str, object]) -> str:
+    counts = dict(payload.get("counts") or {})
+    decision = dict(payload.get("decision") or {})
+    commands = dict(payload.get("commands") or {})
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    lines = [
+        f"Positive-control resume readiness gate: {payload.get('state')}",
+        f"Operating mode: {payload.get('operating_mode')}",
+        f"Broad autodetection resume allowed: {decision.get('broad_autodetection_resume_allowed', False)}",
+        f"Known-card crop/OCR allowed: {decision.get('known_card_crop_ocr_allowed', False)}",
+        f"Positive sources: {counts.get('positive_sources', 0)}",
+        f"Scenario plans: {counts.get('scenario_plans', 0)}",
+        f"Recognition review cases: {counts.get('known_positive_false_negative_or_review_cases', 0)}",
+        f"Crop review requests: {counts.get('crop_review_requests', 0)}",
+        f"Missing OCR: {counts.get('missing_ocr', 0)}",
+        f"Side-pair review requests: {counts.get('side_pair_review_requests', 0)}",
+        f"Training candidates: {counts.get('training_candidates', 0)}",
+        f"Negative controls: {counts.get('negative_control_sources', 0)}",
+        f"Negative false positives: {counts.get('negative_false_positive_cases', 0)}",
+        f"Blocking requirements: {counts.get('blocking_requirements', 0)}",
+        "Observed: "
+        f"ocr={payload.get('ocr_attempted', 0)} "
+        f"pdfs={payload.get('pdfs_rasterized', 0)} "
+        f"crops={payload.get('crops_created', 0)} "
+        f"writes={payload.get('writes_attempted', 0)} "
+        f"network={payload.get('network_calls_made', 0)}",
+        f"Runtime artifact written: {payload.get('runtime_artifact_written', False)}",
+    ]
+    if payload.get("report_path"):
+        lines.append(f"Report path: {payload.get('report_path')}")
+    if commands.get("positive_control_resume_readiness_gate_preview"):
+        lines.append(f"Preview: {commands.get('positive_control_resume_readiness_gate_preview')}")
+    stop_rows = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stop_rows)}")
+    for condition in stop_rows:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_positive_corpus_recognition_replay_text(payload: dict[str, object]) -> str:
     counts = dict(payload.get("counts") or {})
     commands = dict(payload.get("commands") or {})
@@ -4214,6 +4253,10 @@ def build_parser() -> argparse.ArgumentParser:
     positive_control_training_review_loop.add_argument("--no-write", action="store_true")
     positive_control_training_review_loop.add_argument("--json", action="store_true")
 
+    positive_control_resume_readiness_gate = sub.add_parser("positive-control-resume-readiness-gate")
+    positive_control_resume_readiness_gate.add_argument("--no-write", action="store_true")
+    positive_control_resume_readiness_gate.add_argument("--json", action="store_true")
+
     positive_corpus_recognition_replay = sub.add_parser("positive-corpus-recognition-replay")
     positive_corpus_recognition_replay.add_argument("--no-write", action="store_true")
     positive_corpus_recognition_replay.add_argument("--json", action="store_true")
@@ -5402,6 +5445,16 @@ def main(argv: list[str] | None = None) -> int:
             json.dumps(payload, indent=2)
             if args.json
             else _render_positive_control_training_review_loop_text(payload)
+        )
+        print(output, end="")
+        return 0 if payload["state"] != "blocked" else 2
+
+    if args.command == "positive-control-resume-readiness-gate":
+        payload = service.positive_control_resume_readiness_gate(write=not args.no_write)
+        output = (
+            json.dumps(payload, indent=2)
+            if args.json
+            else _render_positive_control_resume_readiness_gate_text(payload)
         )
         print(output, end="")
         return 0 if payload["state"] != "blocked" else 2

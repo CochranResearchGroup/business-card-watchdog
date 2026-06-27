@@ -1,6 +1,6 @@
 # Plan 0099 | Positive-Control Recognition, Crop, And Side Training
 
-State: IN_PROGRESS
+State: COMPLETE
 Date: 2026-06-27
 
 Parent: Plan 0060 Milestone 9
@@ -649,6 +649,65 @@ Remaining:
   compose Milestones 1-7 plus negative-control replay evidence, decide whether
   the system stays in known-card-only mode, and keep broad autodetection paused
   unless the gate has sufficient positive and negative evidence.
+
+## Execution Update | 2026-06-27 | Milestone 8
+
+Completed:
+
+- Added a Plan 0099 bounded resume readiness gate and
+  `positive-control-resume-readiness-gate` CLI surface.
+- Composed positive-control label inventory, scenario manifest, recognition
+  replay, crop workbench, OCR drafts, side-pair evidence, training review loop,
+  and negative-control replay evidence.
+- Reported the explicit operating mode as `known_card_only` unless all
+  positive-control gaps are resolved and negative-control replay is passing.
+- Preserved known-card crop/OCR as allowed for operator-declared positives
+  while keeping broad autodetection paused.
+- Added a separate ready state for a future bounded autodetection pilot plan;
+  the gate itself never changes thresholds or resumes autodetection.
+
+Runtime evidence:
+
+- `positive-control-resume-readiness-gate --json` over the current user-scoped
+  corpus produced state `known_card_only_training_required`.
+- Operating mode: `known_card_only`.
+- Known-card crop/OCR allowed: `True`.
+- Broad autodetection resume allowed: `False`.
+- Threshold change allowed: `False`.
+- Positive sources: 5. Scenario plans: 25.
+- Known-positive recognition review cases: 14.
+- Crop review requests: 4. Accepted crop candidates: 14.
+- Missing OCR: 14. Side-pair review requests: 7.
+- Training review items: 72. Training candidates: 72.
+- Negative-control sources: 5. Negative false positives: 0.
+- Blocking requirements: 5.
+- Sink payloads created: 0. Writes attempted: 0. Network calls: 0. Live sink
+  calls: `False`. Public-web search and paid enrichment remained unused.
+- Broad autodetection promoted: `False`.
+- Runtime report was written under
+  `~/.local/share/business-card-watchdog/positive_control_corpus/resume_readiness_gates/`.
+- Redaction scan found no original scanner path or source filename tokens in
+  `/tmp/bcw-positive-control-resume-readiness-gate.json`.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_positive_control_resume_readiness_gate.py -q`
+  passed with 3 tests.
+- `.venv/bin/python -m pytest tests/test_positive_control_resume_readiness_gate.py tests/test_positive_control_training_review_loop.py tests/test_positive_control_side_pair_evidence.py tests/test_positive_control_ocr_drafts.py tests/test_positive_control_crop_workbench.py tests/test_positive_control_recognition_training.py tests/test_positive_control_scenarios.py tests/test_positive_control_labels.py tests/test_negative_corpus_recognition.py tests/test_positive_corpus_exit_gate.py tests/test_positive_corpus_side_pair.py tests/test_card_sides.py -q`
+  passed with 53 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/positive_control_resume_readiness_gate.py src/business_card_watchdog/positive_control_training_review_loop.py src/business_card_watchdog/positive_control_side_pair_evidence.py src/business_card_watchdog/positive_control_ocr_drafts.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_positive_control_resume_readiness_gate.py tests/test_positive_control_training_review_loop.py tests/test_positive_control_side_pair_evidence.py`
+  passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `git diff --check` passed.
+
+Closeout:
+
+- Plan 0099 is complete.
+- Broad autodetection remains paused.
+- Current operating mode is known-card-only processing for operator-declared
+  positives.
+- Next development should resolve the 72 training candidates or add richer OCR
+  and positive controls before any bounded autodetection pilot is planned.
 
 ## Suggested Goal Order
 
