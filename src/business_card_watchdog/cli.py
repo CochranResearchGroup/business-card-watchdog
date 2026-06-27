@@ -593,6 +593,47 @@ def _render_positive_corpus_training_review_loop_text(payload: dict[str, object]
     return "\n".join(lines) + "\n"
 
 
+def _render_positive_corpus_exit_gate_text(payload: dict[str, object]) -> str:
+    counts = dict(payload.get("counts") or {})
+    gate = dict(payload.get("gate_decision") or {})
+    negative = dict(payload.get("negative_control_summary") or {})
+    false_negative = dict(payload.get("false_negative_summary") or {})
+    commands = dict(payload.get("commands") or {})
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    lines = [
+        f"Positive corpus exit gate: {payload.get('state')}",
+        f"Positive sources: {counts.get('positive_sources', 0)}",
+        f"Known-positive pages/images: {counts.get('positive_pages_or_images', 0)}",
+        f"False negatives: {counts.get('false_negative_cases', 0)}",
+        f"False-negative rate: {false_negative.get('false_negative_rate', 0)}",
+        f"Review items: {counts.get('review_items', 0)}",
+        f"Training candidates: {counts.get('training_candidates', 0)}",
+        f"Negative controls: {negative.get('source_count', 0)}",
+        f"Broad autodetection: {gate.get('broad_autodetection_state')}",
+        f"Resume allowed: {gate.get('broad_autodetection_resume_allowed', False)}",
+        "Observed: "
+        f"ocr={payload.get('ocr_attempted', 0)} "
+        f"pdfs={payload.get('pdfs_rasterized', 0)} "
+        f"crops={payload.get('crops_created', 0)} "
+        f"writes={payload.get('writes_attempted', 0)} "
+        f"network={payload.get('network_calls_made', 0)}",
+        f"Runtime artifact written: {payload.get('runtime_artifact_written', False)}",
+    ]
+    blocking = gate.get("blocking_requirements") or []
+    lines.append(f"Blocking requirements: {len(blocking) if isinstance(blocking, list) else 0}")
+    for blocker in blocking if isinstance(blocking, list) else []:
+        lines.append(f" - {blocker}")
+    if payload.get("report_path"):
+        lines.append(f"Report path: {payload.get('report_path')}")
+    if commands.get("positive_corpus_exit_gate_preview"):
+        lines.append(f"Preview: {commands.get('positive_corpus_exit_gate_preview')}")
+    stop_rows = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stop_rows)}")
+    for condition in stop_rows:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_watch_dry_run_selection_handoff_text(payload: dict[str, object]) -> str:
     commands = dict(payload.get("commands") or {})
     entries = payload.get("entries") or []
@@ -3831,6 +3872,10 @@ def build_parser() -> argparse.ArgumentParser:
     positive_corpus_training_review_loop.add_argument("--no-write", action="store_true")
     positive_corpus_training_review_loop.add_argument("--json", action="store_true")
 
+    positive_corpus_exit_gate = sub.add_parser("positive-corpus-exit-gate")
+    positive_corpus_exit_gate.add_argument("--no-write", action="store_true")
+    positive_corpus_exit_gate.add_argument("--json", action="store_true")
+
     watch_dry_run_selection_handoff = sub.add_parser("watch-dry-run-selection-handoff")
     watch_dry_run_selection_handoff.add_argument("--no-write", action="store_true")
     watch_dry_run_selection_handoff.add_argument("--json", action="store_true")
@@ -4953,6 +4998,12 @@ def main(argv: list[str] | None = None) -> int:
             if args.json
             else _render_positive_corpus_training_review_loop_text(payload)
         )
+        print(output, end="")
+        return 0 if payload["state"] != "blocked" else 2
+
+    if args.command == "positive-corpus-exit-gate":
+        payload = service.positive_corpus_exit_gate(write=not args.no_write)
+        output = json.dumps(payload, indent=2) if args.json else _render_positive_corpus_exit_gate_text(payload)
         print(output, end="")
         return 0 if payload["state"] != "blocked" else 2
 

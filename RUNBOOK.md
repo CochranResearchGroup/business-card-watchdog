@@ -1,5 +1,81 @@
 # Runbook
 
+## Turn 336 | 2026-06-27
+
+Executed Plan 0098 Milestone 6 exit gate and closed Plan 0098.
+
+Implemented:
+
+- Added `positive-corpus-exit-gate` and
+  `BusinessCardService.positive_corpus_exit_gate`.
+- Composed the positive-corpus evaluation manifest, recognition replay,
+  crop/OCR workbench evaluation, side-pair evaluation, and training review-loop
+  reports into one broad-autodetection exit-gate decision.
+- Added dedicated exit-gate tests for paused, preview/no-write, CLI JSON, and
+  synthetic ready-with-negative-controls cases.
+- Updated Plan 0098 to `COMPLETE`.
+- Updated `ROADMAP.md` so Plan 0099 Milestone 1 is the next development slice.
+
+Runtime proof:
+
+- Ran `positive-corpus-exit-gate --json` over the current real
+  positive-control reports.
+- State is `broad_autodetection_paused`.
+- Current report summarized 5 positive sources, 16 known-positive pages/images,
+  14 false-negative cases, 47 review items, 47 training candidates, and 0
+  negative controls.
+- Blocking requirements are unresolved known-positive false negatives, missing
+  separate negative controls, and training candidates requiring targeted tests.
+- Redaction check passed for original scanner/phone paths and source filenames.
+- Safety counters remained writes/network `0/0`; no live sink calls,
+  public-web search, paid enrichment, live route selection, sink payload writes,
+  readback, or contact writes occurred.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_positive_corpus_exit_gate.py tests/test_positive_corpus_review_loop.py tests/test_positive_corpus_side_pair.py tests/test_positive_corpus_workbench.py tests/test_positive_corpus_recognition.py tests/test_positive_corpus_evaluation.py tests/test_known_card_corpus.py tests/test_card_sides.py tests/test_preclassifier.py tests/test_classifier_training.py -q`
+  passed with 58 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/positive_corpus_exit_gate.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_positive_corpus_exit_gate.py`
+  passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `git diff --check` passed.
+
+Remaining:
+
+- Broad autodetection remains paused.
+- Execute Plan 0099 Milestone 1: positive-control label normalization.
+
+## Turn 335 | 2026-06-27
+
+Planned the next positive-control training track for richer business-card
+recognition, crop/OCR, and front/back matching evidence.
+
+Implemented:
+
+- Added
+  `docs/dev/plans/0099-2026-06-27-positive-control-recognition-crop-side-training.md`.
+- Split the next training track into eight self-contained, testable
+  milestones suitable for `/goal` execution:
+  corpus label normalization, synthetic scenario expansion, recognition replay
+  and tuning, known-card crop segmentation, OCR/contact draft evidence,
+  front/back matching, agent training review loop, and bounded resume
+  readiness.
+- Preserved the known-card-only boundary and kept broad autodetection paused
+  until positive-control and negative-control gates support a later bounded
+  pilot.
+- Updated `ROADMAP.md` so Plan 0099 is the planned next track after Plan 0098
+  Milestone 6 exit-gate closeout.
+
+Validation:
+
+- Planning-only update. No private card files, rendered pages, crops, OCR
+  dumps, contact data, route targets, enrichment providers, public-web search,
+  sink writes, or readback actions were touched.
+
+Remaining:
+
+- Finish Plan 0098 Milestone 6 exit gate, then execute Plan 0099 Milestone 1.
+
 ## Turn 334 | 2026-06-27
 
 Executed Plan 0098 Milestone 5 training review loop.

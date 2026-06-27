@@ -43,10 +43,11 @@ Latest completed classifier-training plan: `docs/dev/plans/0094-2026-06-23-scann
 Latest completed gated crop/OCR resume plan: `docs/dev/plans/0095-2026-06-24-gated-crop-ocr-resume.md`.
 Latest completed scanner side-pair/OCR refinement plan: `docs/dev/plans/0096-2026-06-24-scanner-side-pair-ocr-refinement.md`.
 Active known-card ingestion and positive-corpus plan: `docs/dev/plans/0097-2026-06-25-known-card-ingestion-positive-corpus.md`.
-Active positive-corpus training/crop/side plan: `docs/dev/plans/0098-2026-06-26-positive-corpus-training-crop-side-plan.md`.
+Latest completed positive-corpus training/crop/side plan: `docs/dev/plans/0098-2026-06-26-positive-corpus-training-crop-side-plan.md`.
+Planned positive-control recognition/crop/side training plan: `docs/dev/plans/0099-2026-06-27-positive-control-recognition-crop-side-training.md`.
 Latest completed practice-corpus plan: `docs/dev/plans/0062-2026-06-21-practice-corpus-manifest.md`.
 Latest completed scanner side-pair graph plan: `docs/dev/plans/0084-2026-06-22-ocr-contextual-side-pair-graph.md`.
-Next refactor/development plan: Plan 0098 Milestone 6 exit gate for broad autodetection, using positive-corpus coverage plus required negative-control evidence.
+Next refactor/development plan: execute Plan 0099 Milestone 1 to normalize the richer positive-control labels before scenario expansion, recognition tuning, crop/OCR workbench hardening, and front/back matching.
 Next production plan: `docs/dev/plans/0009-2026-06-14-operator-selected-live-smoke-and-pilot-rollout.md`.
 Next offline boundary: pause broad autodetection; process only operator-declared known business cards through dry-run crop/OCR/review while retaining their source files in a user-scoped positive-control corpus for later classifier training.
 Next production boundary: operator-selected live smoke/pilot rollout for one run, one job, and one sink at a time.

@@ -1,6 +1,6 @@
 # Plan 0098 | Positive Corpus Training, Cropping, And Side Matching
 
-State: IN_PROGRESS
+State: COMPLETE
 Date: 2026-06-26
 
 Parent: Plan 0060 Milestone 9
@@ -498,4 +498,63 @@ Validation:
 
 Remaining work:
 
-- Milestone 6 exit gate before broad autodetection can resume.
+- None for Plan 0098.
+
+## Execution Update | 2026-06-27 | Milestone 6
+
+Milestone 6 is implemented. Plan 0098 is complete.
+
+Implemented:
+
+- Added a positive-corpus exit-gate report builder.
+- Added `BusinessCardService.positive_corpus_exit_gate`.
+- Added CLI command `positive-corpus-exit-gate` with preview and JSON modes.
+- Composed the latest positive-corpus evaluation manifest, recognition replay,
+  known-card crop/OCR workbench, side-pair evaluation, and training review-loop
+  reports into one exit-gate decision.
+- Summarized positive-control coverage, false-negative rate, crop/OCR
+  reproducibility, side-pair reproducibility, negative-control availability,
+  review items, and training candidates.
+- Kept broad autodetection paused unless known-positive false negatives are
+  resolved, separate negative controls exist, and training candidates have
+  targeted tests.
+- Preserved zero route, enrichment, sink write, readback, public-web, paid
+  provider, and live target-selection authority.
+
+Runtime proof:
+
+- Ran `positive-corpus-exit-gate --json` over the current real
+  positive-control corpus reports.
+- The gate wrote a runtime report under
+  `~/.local/share/business-card-watchdog/positive_control_corpus/exit_gates/`.
+- Current state is `broad_autodetection_paused`.
+- The gate summarized five positive sources and 16 known-positive pages/images.
+- The recognition replay still has 14 known-positive false negatives, for a
+  false-negative rate of 0.875.
+- The training review loop still has 47 review items and 47 deterministic
+  training candidates.
+- No separate negative-control corpus is present.
+- Blocking requirements are: resolve known-positive false negatives, add
+  separate negative controls before broad promotion threshold changes, and
+  promote training candidates only through targeted tests.
+- Runtime safety counters remained zero for writes and network calls; no live
+  sink calls, public-web search, paid enrichment, live route selection, sink
+  payload writes, readback, or contact writes occurred.
+- A redaction check found no original scanner/phone paths or source filenames
+  in the runtime exit-gate report.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_positive_corpus_exit_gate.py tests/test_positive_corpus_review_loop.py tests/test_positive_corpus_side_pair.py tests/test_positive_corpus_workbench.py tests/test_positive_corpus_recognition.py tests/test_positive_corpus_evaluation.py tests/test_known_card_corpus.py tests/test_card_sides.py tests/test_preclassifier.py tests/test_classifier_training.py -q`
+  passed with 58 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/positive_corpus_exit_gate.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_positive_corpus_exit_gate.py`
+  passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `git diff --check` passed.
+
+Next boundary:
+
+- Broad autodetection remains paused.
+- Next work is Plan 0099 Milestone 1: normalize the richer positive-control
+  labels before scenario expansion, recognition tuning, crop/OCR workbench
+  hardening, front/back matching, and a later resume-readiness gate.
