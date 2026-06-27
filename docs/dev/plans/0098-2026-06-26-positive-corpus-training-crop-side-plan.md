@@ -384,3 +384,69 @@ Remaining work:
 - Milestone 4 front/back matching evaluation.
 - Milestone 5 training review loop.
 - Milestone 6 exit gate before broad autodetection can resume.
+
+## Execution Update | 2026-06-27 | Milestone 4
+
+Milestone 4 is implemented.
+
+Implemented:
+
+- Added a positive-corpus front/back side-pair evaluation builder.
+- Added `BusinessCardService.positive_corpus_side_pair_evaluation`.
+- Added CLI command `positive-corpus-side-pair-evaluation` with preview and
+  JSON modes.
+- Reused the latest known-positive workbench run as the side-pair evidence
+  source.
+- Rebuilt scanner-page side candidates from redacted page lineage and OCR text
+  artifacts.
+- Evaluated adjacent and near-adjacent PDF pages with the existing deterministic
+  side-pair proposal and side-pair graph rules.
+- Summarized deterministic pair proposals, blocked pair proposals, review
+  required edges, blank-back candidates, merge evaluations, backside-augmented
+  fields, conflicting merge evidence, and bounded App Intelligence review
+  requests.
+- Kept all pair and merge outputs as evidence only: no routing, enrichment,
+  sink payload planning, writes, readback, public-web search, or paid provider
+  calls.
+
+Synthetic validation coverage:
+
+- Front-first scanner sequence produces a deterministic pair proposal.
+- Back-first scanner sequence produces a deterministic pair proposal with the
+  correct front/back job assignment.
+- Blank adjacent backs are summarized as blank-back candidates instead of being
+  merged.
+- Backside-only useful fields augment merged contact evidence while remaining
+  review-required.
+- Conflicting domains create blocked pair proposals and App Intelligence review
+  requests.
+- Private source paths and filenames remain redacted from the side-pair report.
+
+Runtime proof:
+
+- Ran `positive-corpus-side-pair-evaluation --json` over the current real
+  positive-control workbench evidence.
+- Evaluated three scanner PDFs and 14 scanner-page candidates.
+- Current runtime side classification produced 14 front candidates, zero back
+  candidates, zero blank candidates, and zero unknown candidates.
+- Because the local `business-card-to-contact` skill did not provide raw
+  backside OCR in the preceding workbench and the fallback OCR text was derived
+  from contact specs, the real corpus produced zero deterministic pair
+  proposals and zero merge evaluations.
+- The evaluator recorded 17 review-required graph edges and 17 bounded App
+  Intelligence side-pair review requests instead of cross-merging pages.
+- Runtime safety counters remained zero for writes and network calls; no live
+  sink calls, public-web search, paid enrichment, live route selection, sink
+  payload writes, or contact writes occurred.
+- A redaction check found no original scanner/phone paths or source filenames
+  in the runtime side-pair evaluation report.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_positive_corpus_side_pair.py tests/test_card_sides.py tests/test_positive_corpus_workbench.py tests/test_positive_corpus_recognition.py tests/test_positive_corpus_evaluation.py tests/test_known_card_corpus.py -q`
+  passed with 33 tests.
+
+Remaining work:
+
+- Milestone 5 training review loop.
+- Milestone 6 exit gate before broad autodetection can resume.

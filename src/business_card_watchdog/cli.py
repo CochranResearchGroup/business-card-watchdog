@@ -525,6 +525,43 @@ def _render_positive_corpus_workbench_evaluation_text(payload: dict[str, object]
     return "\n".join(lines) + "\n"
 
 
+def _render_positive_corpus_side_pair_evaluation_text(payload: dict[str, object]) -> str:
+    counts = dict(payload.get("counts") or {})
+    commands = dict(payload.get("commands") or {})
+    stop_conditions = payload.get("explicit_stop_conditions") or []
+    lines = [
+        f"Positive corpus side-pair evaluation: {payload.get('state')}",
+        f"Sources: {payload.get('source_count', 0)}",
+        f"Scanner PDFs: {payload.get('scanner_pdf_count', 0)}",
+        f"Page candidates: {payload.get('page_candidate_count', 0)}",
+        f"Front candidates: {counts.get('front_candidates', 0)}",
+        f"Back candidates: {counts.get('back_candidates', 0)}",
+        f"Blank candidates: {counts.get('blank_candidates', 0)}",
+        f"Unknown candidates: {counts.get('unknown_candidates', 0)}",
+        f"Deterministic pair proposals: {counts.get('deterministic_pair_proposals', 0)}",
+        f"Review-required edges: {counts.get('review_required_edges', 0)}",
+        f"Blank back candidates: {counts.get('blank_back_candidates', 0)}",
+        f"Backside augmented merges: {counts.get('backside_augmented_merges', 0)}",
+        f"App Intelligence requests: {counts.get('app_intelligence_review_requests', 0)}",
+        "Observed: "
+        f"ocr={payload.get('ocr_attempted', 0)} "
+        f"pdfs={payload.get('pdfs_rasterized', 0)} "
+        f"crops={payload.get('crops_created', 0)} "
+        f"writes={payload.get('writes_attempted', 0)} "
+        f"network={payload.get('network_calls_made', 0)}",
+        f"Runtime artifact written: {payload.get('runtime_artifact_written', False)}",
+    ]
+    if payload.get("report_path"):
+        lines.append(f"Report path: {payload.get('report_path')}")
+    if commands.get("positive_corpus_side_pair_evaluation_preview"):
+        lines.append(f"Preview: {commands.get('positive_corpus_side_pair_evaluation_preview')}")
+    stop_rows = stop_conditions if isinstance(stop_conditions, list) else []
+    lines.append(f"Stop conditions: {len(stop_rows)}")
+    for condition in stop_rows:
+        lines.append(f" - {condition}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_watch_dry_run_selection_handoff_text(payload: dict[str, object]) -> str:
     commands = dict(payload.get("commands") or {})
     entries = payload.get("entries") or []
@@ -3755,6 +3792,10 @@ def build_parser() -> argparse.ArgumentParser:
     positive_corpus_workbench_evaluation.add_argument("--workers", type=int, default=1)
     positive_corpus_workbench_evaluation.add_argument("--json", action="store_true")
 
+    positive_corpus_side_pair_evaluation = sub.add_parser("positive-corpus-side-pair-evaluation")
+    positive_corpus_side_pair_evaluation.add_argument("--no-write", action="store_true")
+    positive_corpus_side_pair_evaluation.add_argument("--json", action="store_true")
+
     watch_dry_run_selection_handoff = sub.add_parser("watch-dry-run-selection-handoff")
     watch_dry_run_selection_handoff.add_argument("--no-write", action="store_true")
     watch_dry_run_selection_handoff.add_argument("--json", action="store_true")
@@ -4856,6 +4897,16 @@ def main(argv: list[str] | None = None) -> int:
             json.dumps(payload, indent=2)
             if args.json
             else _render_positive_corpus_workbench_evaluation_text(payload)
+        )
+        print(output, end="")
+        return 0 if payload["state"] != "blocked" else 2
+
+    if args.command == "positive-corpus-side-pair-evaluation":
+        payload = service.positive_corpus_side_pair_evaluation(write=not args.no_write)
+        output = (
+            json.dumps(payload, indent=2)
+            if args.json
+            else _render_positive_corpus_side_pair_evaluation_text(payload)
         )
         print(output, end="")
         return 0 if payload["state"] != "blocked" else 2

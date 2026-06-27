@@ -1,5 +1,53 @@
 # Runbook
 
+## Turn 333 | 2026-06-27
+
+Executed Plan 0098 Milestone 4 front/back matching evaluation.
+
+Implemented:
+
+- Added `positive-corpus-side-pair-evaluation` and
+  `BusinessCardService.positive_corpus_side_pair_evaluation`.
+- Reused latest known-positive workbench runs as the evaluation input.
+- Rebuilt scanner-page side candidates from redacted page lineage and OCR text
+  artifacts.
+- Evaluated adjacent and near-adjacent scanner PDF pages with the existing
+  deterministic side-pair proposal and graph rules.
+- Summarized deterministic pair proposals, blocked proposals, review-required
+  edges, blank-back candidates, merge evaluations, backside-augmented fields,
+  conflicting merge evidence, and bounded App Intelligence review requests.
+- Kept all pair and merge results as evidence only, with routing, enrichment,
+  sink payload planning, writes, readback, public-web search, and paid provider
+  calls disabled.
+
+Runtime proof:
+
+- Ran `positive-corpus-side-pair-evaluation --json` over the current real
+  positive-control workbench evidence.
+- Evaluated three scanner PDFs and 14 scanner-page candidates.
+- Current runtime side classification produced 14 front candidates, zero back
+  candidates, zero blank candidates, and zero unknown candidates.
+- Because the local skill did not provide raw backside OCR and the workbench
+  fallback OCR text was derived from contact specs, the real corpus produced
+  zero deterministic pair proposals and zero merge evaluations.
+- Recorded 17 review-required graph edges and 17 bounded App Intelligence
+  side-pair review requests instead of cross-merging pages.
+- Redaction check passed for original scanner/phone paths and source
+  filenames.
+- Safety counters remained writes/network `0/0`; no live sink calls,
+  public-web search, paid enrichment, live route selection, sink payload writes,
+  or contact writes occurred.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_positive_corpus_side_pair.py tests/test_card_sides.py tests/test_positive_corpus_workbench.py tests/test_positive_corpus_recognition.py tests/test_positive_corpus_evaluation.py tests/test_known_card_corpus.py -q`
+  passed with 33 tests.
+
+Remaining:
+
+- Plan 0098 remains in progress. Next work is Milestone 5 training review loop
+  over recognition, crop/OCR, and side-pair evidence.
+
 ## Turn 332 | 2026-06-27
 
 Executed Plan 0098 Milestone 3 known-card crop/OCR workbench evaluation.
