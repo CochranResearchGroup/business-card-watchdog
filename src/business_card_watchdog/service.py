@@ -49,6 +49,7 @@ from .operator_dashboard import build_operator_dashboard
 from .orientation_evidence import redacted_orientation_summary
 from .pilot_readiness import build_pilot_readiness_report
 from .positive_corpus_evaluation import build_positive_corpus_evaluation_manifest
+from .positive_corpus_recognition import build_positive_corpus_recognition_replay
 from .practice_corpus import build_practice_corpus_manifest
 from .positive_controls import build_positive_control_manifest
 from .preclassifier import assess_business_card_candidate, build_card_candidate_box_manifest
@@ -13939,6 +13940,9 @@ class BusinessCardService:
 
     def positive_corpus_evaluation_manifest(self, *, write: bool = True) -> dict[str, Any]:
         return build_positive_corpus_evaluation_manifest(self.config, write=write)
+
+    def positive_corpus_recognition_replay(self, *, write: bool = True) -> dict[str, Any]:
+        return build_positive_corpus_recognition_replay(self.config, write=write)
 
     def watch_dry_run_selection_handoff(self, *, write: bool = True) -> dict[str, Any]:
         ensure_runtime_dirs(self.config)

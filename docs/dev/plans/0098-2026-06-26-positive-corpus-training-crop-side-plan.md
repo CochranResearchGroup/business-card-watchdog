@@ -264,3 +264,60 @@ Remaining work:
 - Milestone 4 front/back matching evaluation.
 - Milestone 5 training review loop.
 - Milestone 6 exit gate before broad autodetection can resume.
+
+## Execution Update | 2026-06-26 | Milestone 2
+
+Milestone 2 is implemented.
+
+Implemented:
+
+- Added a positive-corpus recognition replay builder.
+- Added `BusinessCardService.positive_corpus_recognition_replay`.
+- Added CLI command `positive-corpus-recognition-replay` with preview and JSON
+  modes.
+- Replayed operator-declared known positives through deterministic recognition
+  evidence collection without promoting broad autodetection.
+- Ran the current preclassifier against retained positive image blobs and
+  runtime-materialized PDF pages.
+- Recorded per-source and per-page classifier decisions, classifier training
+  states, analyzer summaries, false-negative cases, and candidate tuning
+  reasons.
+- Kept false negatives as explicit training evidence rather than discarding
+  them.
+- Preserved zero OCR, zero crops, zero contact routing, zero sink writes, zero
+  network calls, zero live sink calls, zero public-web search, and zero paid
+  enrichment.
+
+Runtime proof:
+
+- Ran `positive-corpus-recognition-replay` over the current positive-control
+  corpus.
+- Replayed five known-positive sources: two multi-card image candidates and
+  three likely front/back PDF sequences.
+- Replayed 16 total pages/images, including 14 PDF pages materialized under
+  user-scoped runtime state.
+- Current deterministic recognition produced 2
+  `business_card_high_confidence` pages, 12
+  `indeterminate_needs_app_intelligence` pages, and 2
+  `not_business_card_high_confidence` image cases.
+- Recorded 14 known-positive false-negative cases:
+  12 indeterminate pages needing feature/fixture review and 2 multi-card images
+  rejected as document-like.
+- A redaction check found no original scanner/phone paths or source filenames
+  in the runtime recognition replay report.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_positive_corpus_recognition.py tests/test_positive_corpus_evaluation.py tests/test_known_card_corpus.py tests/test_positive_controls.py tests/test_classifier_training.py -q`
+  passed with 17 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/positive_corpus_recognition.py src/business_card_watchdog/positive_corpus_evaluation.py src/business_card_watchdog/known_card_corpus.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_positive_corpus_recognition.py tests/test_positive_corpus_evaluation.py tests/test_known_card_corpus.py tests/test_positive_controls.py tests/test_classifier_training.py`
+  passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `git diff --check` passed.
+
+Remaining work:
+
+- Milestone 3 known-card crop/OCR workbench evaluation.
+- Milestone 4 front/back matching evaluation.
+- Milestone 5 training review loop.
+- Milestone 6 exit gate before broad autodetection can resume.

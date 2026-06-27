@@ -1,5 +1,61 @@
 # Runbook
 
+## Turn 331 | 2026-06-26
+
+Executed Plan 0098 Milestone 2 for recognition replay over known positives.
+
+Implemented:
+
+- Added `src/business_card_watchdog/positive_corpus_recognition.py`.
+- Added `BusinessCardService.positive_corpus_recognition_replay`.
+- Added CLI command `positive-corpus-recognition-replay`.
+- Added tests for false-negative recording, preview no-write behavior,
+  redaction, zero sink/network side effects, and CLI JSON.
+- Updated Plan 0098 with Milestone 2 implementation evidence.
+- Updated the roadmap so the next bounded slice is Plan 0098 Milestone 3:
+  known-card crop/OCR workbench evaluation.
+
+Runtime proof:
+
+- Ran `bcw positive-corpus-recognition-replay --json` over the current
+  positive-control corpus.
+- Replayed five known-positive sources: two multi-card image candidates and
+  three likely front/back PDF sequences.
+- Replayed 16 total pages/images, including 14 PDF pages materialized under
+  user-scoped runtime state.
+- Current deterministic recognition produced 2
+  `business_card_high_confidence` pages, 12
+  `indeterminate_needs_app_intelligence` pages, and 2
+  `not_business_card_high_confidence` image cases.
+- Recorded 14 known-positive false-negative cases:
+  12 indeterminate pages needing feature/fixture review and 2 multi-card images
+  rejected as document-like.
+- Verified the runtime replay report did not expose original scanner or phone
+  paths or source filenames.
+- Observed zero OCR, zero crops, zero contact routing, zero writes, zero
+  network calls, zero live sink calls, zero public-web search, and zero paid
+  enrichment.
+
+Validation:
+
+- `.venv/bin/python -m pytest tests/test_positive_corpus_recognition.py tests/test_positive_corpus_evaluation.py tests/test_known_card_corpus.py tests/test_positive_controls.py tests/test_classifier_training.py -q`
+  passed with 17 tests.
+- `.venv/bin/python -m ruff check src/business_card_watchdog/positive_corpus_recognition.py src/business_card_watchdog/positive_corpus_evaluation.py src/business_card_watchdog/known_card_corpus.py src/business_card_watchdog/service.py src/business_card_watchdog/cli.py tests/test_positive_corpus_recognition.py tests/test_positive_corpus_evaluation.py tests/test_known_card_corpus.py tests/test_positive_controls.py tests/test_classifier_training.py`
+  passed.
+- `.venv/bin/python scripts/check_plan_drift.py` passed.
+- `git diff --check` passed.
+
+Safety:
+
+- Runtime replay materialization stayed under user-scoped runtime storage.
+- No private source files, rendered pages, OCR dumps, crops, contacts, or
+  runtime reports were committed to git.
+
+Remaining:
+
+- Plan 0098 remains in progress. Next milestone is known-card crop/OCR
+  workbench evaluation.
+
 ## Turn 330 | 2026-06-26
 
 Executed Plan 0098 Milestone 1 for the positive-corpus evaluation manifest.
