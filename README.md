@@ -358,6 +358,23 @@ The service commands write only under the user config directory, normally:
 
 ## Current State
 
+Operator-reviewed known-positive pages can be recorded without storing card
+content in Git:
+
+```bash
+.venv/bin/bcw positive-control-page-review \
+  --entry-id <positive-entry-id> \
+  --page-number <page> \
+  --review-state confirmed_business_card \
+  --side-role front \
+  --reviewer <reviewer> \
+  --json
+```
+
+Reviews are appended to a user-scoped runtime ledger and affect only the
+positive-control training replay. They do not change unknown-document
+thresholds or resume broad autodetection.
+
 This is an initial scaffold. It has deterministic run ledgers, config loading, routing decisions, CLI/API/MCP surfaces, and a subprocess adapter for the existing `business-card-to-contact` skill. `bcw status` reports safe next commands, stop conditions, and zero write/network counters. External writes are intentionally explicit and dry-run first.
 
 Operational details live in:

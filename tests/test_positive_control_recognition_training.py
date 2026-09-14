@@ -99,6 +99,18 @@ def fake_baseline() -> dict[str, object]:
     }
 
 
+def fake_reviewed_label_inventory() -> dict[str, object]:
+    inventory = fake_label_inventory()
+    inventory["entries"][0]["page_labels"][0]["operator_review"] = {
+        "review_state": "confirmed_business_card",
+        "side_role": "front",
+        "reviewer": "fixture-reviewer",
+        "reviewed_at": "2026-09-14T12:00:00+00:00",
+        "duplicate_of_page": None,
+    }
+    return inventory
+
+
 def test_positive_control_recognition_training_demotes_known_positive_high_confidence_negative(
     tmp_path: Path,
     monkeypatch,
@@ -129,6 +141,70 @@ def test_positive_control_recognition_training_demotes_known_positive_high_confi
     assert payload["writes_attempted"] == 0
     assert payload["network_calls_made"] == 0
     assert payload["live_sink_calls_made"] is False
+
+
+def test_positive_control_recognition_training_promotes_confirmed_reviewed_page(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    monkeypatch.setattr(
+        training,
+        "build_positive_control_label_inventory",
+        lambda config, write=False: fake_reviewed_label_inventory(),
+    )
+    monkeypatch.setattr(
+        training,
+        "build_positive_control_scenario_manifest",
+        lambda config, write=False: {"scenario_count": 0, "scenarios": []},
+    )
+    monkeypatch.setattr(
+        training,
+        "build_positive_corpus_recognition_replay",
+        lambda config, write=True: fake_baseline(),
+    )
+
+    payload = training.build_positive_control_recognition_training_replay(config, write=False)
+    case = payload["page_cases"][0]
+
+    assert case["baseline_training_state"] == "not_business_card_high_confidence"
+    assert case["tuned_training_state"] == "business_card_high_confidence"
+    assert case["tuning_action"] == "promote_operator_reviewed_positive_page"
+    assert case["tuning_reason"] == "operator_reviewed_business_card_page"
+    assert case["operator_review"]["side_role"] == "front"
+    assert payload["review_qualified_page_cases"] == 1
+    assert payload["unknown_document_threshold_changed"] is False
+
+
+def test_positive_control_recognition_training_does_not_promote_withdrawn_review(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config = AppConfig(config_path=tmp_path / "config.toml", data_dir=tmp_path / "data")
+    inventory = fake_reviewed_label_inventory()
+    inventory["entries"][0]["page_labels"][0]["operator_review"]["review_state"] = "withdrawn"
+    monkeypatch.setattr(
+        training,
+        "build_positive_control_label_inventory",
+        lambda config, write=False: inventory,
+    )
+    monkeypatch.setattr(
+        training,
+        "build_positive_control_scenario_manifest",
+        lambda config, write=False: {"scenario_count": 0, "scenarios": []},
+    )
+    monkeypatch.setattr(
+        training,
+        "build_positive_corpus_recognition_replay",
+        lambda config, write=True: fake_baseline(),
+    )
+
+    payload = training.build_positive_control_recognition_training_replay(config, write=False)
+    case = payload["page_cases"][0]
+
+    assert case["tuned_training_state"] == "indeterminate_needs_app_intelligence"
+    assert case["operator_review"]["review_state"] == "withdrawn"
+    assert payload["review_qualified_page_cases"] == 0
 
 
 def test_positive_control_recognition_training_cli_preview_redacts_and_writes_nothing(

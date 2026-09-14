@@ -10,14 +10,26 @@ from .config import AppConfig
 from .models import utc_now
 from .preclassifier import read_image_dimensions
 
-
 POSITIVE_CONTROL_LABEL_INVENTORY_SCHEMA = "business-card-watchdog.positive-control-label-inventory.v1"
+POSITIVE_CONTROL_PAGE_REVIEW_SCHEMA = "business-card-watchdog.positive-control-page-review.v1"
+_REVIEW_STATES = {"confirmed_business_card", "rejected_not_business_card", "withdrawn"}
+_SIDE_ROLES = {
+    "front",
+    "back",
+    "card_side",
+    "duplicate_front",
+    "duplicate_back",
+    "organization_only_card",
+}
 
 
 def build_positive_control_label_inventory(config: AppConfig, *, write: bool = True) -> dict[str, Any]:
     corpus_root = config.data_dir / "positive_control_corpus"
     rows, errors = _read_corpus_index(corpus_root / "index.jsonl")
     entries = [_inventory_entry(row=row, corpus_root=corpus_root) for row in rows]
+    reviews, review_errors = _read_reviewed_page_labels(corpus_root / "reviewed_page_labels.jsonl")
+    errors.extend(review_errors)
+    _merge_reviewed_page_labels(entries=entries, reviews=reviews)
     entries.sort(key=lambda entry: (str(entry["source_kind"]), str(entry["sha256"])))
     inventory_id = f"positive-control-label-inventory-{utc_now().replace(':', '-')}-{_entries_digest(entries)}"
     inventory_path = corpus_root / "label_inventories" / f"{inventory_id}.json"
@@ -29,6 +41,12 @@ def build_positive_control_label_inventory(config: AppConfig, *, write: bool = T
         "state": state,
         "inventory_id": inventory_id,
         "entry_count": len(entries),
+        "reviewed_page_count": sum(
+            1
+            for entry in entries
+            for page in list(entry.get("page_labels") or [])
+            if isinstance(page, dict) and isinstance(page.get("operator_review"), dict)
+        ),
         "entries": entries,
         "stable_replay_order": [entry["entry_id"] for entry in entries],
         "group_summary": _group_summary(entries),
@@ -74,6 +92,90 @@ def build_positive_control_label_inventory(config: AppConfig, *, write: bool = T
     return payload
 
 
+def record_positive_control_page_review(
+    config: AppConfig,
+    *,
+    entry_id: str,
+    page_number: int,
+    review_state: str,
+    side_role: str,
+    reviewer: str,
+    duplicate_of_page: int | None = None,
+    write: bool = True,
+) -> dict[str, Any]:
+    corpus_root = config.data_dir / "positive_control_corpus"
+    rows, index_errors = _read_corpus_index(corpus_root / "index.jsonl")
+    entries = [_inventory_entry(row=row, corpus_root=corpus_root) for row in rows]
+    entry = next((candidate for candidate in entries if candidate.get("entry_id") == entry_id), None)
+    errors = [str(error.get("error") or "invalid corpus index") for error in index_errors]
+    if entry is None:
+        errors.append("positive-control entry_id was not found")
+    page_count = int(entry.get("page_count") or 0) if entry else 0
+    if page_number < 1 or page_number > page_count:
+        errors.append("page_number is outside the positive-control entry")
+    if review_state not in _REVIEW_STATES:
+        errors.append("review_state is invalid")
+    if side_role not in _SIDE_ROLES:
+        errors.append("side_role is invalid")
+    if not reviewer.strip():
+        errors.append("reviewer is required")
+    if duplicate_of_page is not None and (
+        duplicate_of_page < 1 or duplicate_of_page > page_count or duplicate_of_page == page_number
+    ):
+        errors.append("duplicate_of_page is outside the entry or refers to the reviewed page")
+    if side_role.startswith("duplicate_") and duplicate_of_page is None:
+        errors.append("duplicate side roles require duplicate_of_page")
+    if not side_role.startswith("duplicate_") and duplicate_of_page is not None:
+        errors.append("duplicate_of_page requires a duplicate side role")
+    if errors:
+        return {
+            "schema": POSITIVE_CONTROL_PAGE_REVIEW_SCHEMA,
+            "state": "blocked",
+            "review_recorded": False,
+            "errors": errors,
+            "network_calls_made": 0,
+            "live_sink_calls_made": False,
+        }
+
+    ledger_path = corpus_root / "reviewed_page_labels.jsonl"
+    existing, read_errors = _read_reviewed_page_labels(ledger_path)
+    if read_errors:
+        return {
+            "schema": POSITIVE_CONTROL_PAGE_REVIEW_SCHEMA,
+            "state": "blocked",
+            "review_recorded": False,
+            "errors": [str(error.get("error") or "invalid reviewed-page label ledger") for error in read_errors],
+            "network_calls_made": 0,
+            "live_sink_calls_made": False,
+        }
+    desired = {
+        "schema": POSITIVE_CONTROL_PAGE_REVIEW_SCHEMA,
+        "entry_id": entry_id,
+        "page_number": page_number,
+        "review_state": review_state,
+        "side_role": side_role,
+        "reviewer": reviewer.strip(),
+        "duplicate_of_page": duplicate_of_page,
+    }
+    current = existing.get((entry_id, page_number))
+    comparable_keys = ("entry_id", "page_number", "review_state", "side_role", "reviewer", "duplicate_of_page")
+    unchanged = current is not None and all(current.get(key) == desired.get(key) for key in comparable_keys)
+    if write and not unchanged:
+        _ensure_runtime_output_not_repo(corpus_root)
+        ledger_path.parent.mkdir(parents=True, exist_ok=True)
+        with ledger_path.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(desired | {"reviewed_at": utc_now()}, sort_keys=True) + "\n")
+    return desired | {
+        "state": "unchanged" if unchanged else "recorded" if write else "ready_to_record",
+        "review_recorded": write and not unchanged,
+        "runtime_artifact_written": write and not unchanged,
+        "review_ledger_path": str(ledger_path) if write else None,
+        "errors": [],
+        "network_calls_made": 0,
+        "live_sink_calls_made": False,
+    }
+
+
 def _read_corpus_index(index_path: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     if not index_path.exists():
         return [], [{"error": "positive control corpus index not found"}]
@@ -92,6 +194,55 @@ def _read_corpus_index(index_path: Path) -> tuple[list[dict[str, Any]], list[dic
             continue
         rows.append(row)
     return rows, errors
+
+
+def _read_reviewed_page_labels(
+    ledger_path: Path,
+) -> tuple[dict[tuple[str, int], dict[str, Any]], list[dict[str, Any]]]:
+    if not ledger_path.exists():
+        return {}, []
+    latest: dict[tuple[str, int], dict[str, Any]] = {}
+    errors: list[dict[str, Any]] = []
+    for line_number, line in enumerate(ledger_path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            errors.append({"line_number": line_number, "error": "invalid reviewed-page label JSON"})
+            continue
+        if not isinstance(row, dict) or row.get("schema") != POSITIVE_CONTROL_PAGE_REVIEW_SCHEMA:
+            errors.append({"line_number": line_number, "error": "invalid reviewed-page label record"})
+            continue
+        entry_id = str(row.get("entry_id") or "")
+        page_number = int(row.get("page_number") or 0)
+        if not entry_id or page_number < 1:
+            errors.append({"line_number": line_number, "error": "reviewed-page label key is invalid"})
+            continue
+        latest[(entry_id, page_number)] = row
+    return latest, errors
+
+
+def _merge_reviewed_page_labels(
+    *, entries: list[dict[str, Any]], reviews: dict[tuple[str, int], dict[str, Any]]
+) -> None:
+    for entry in entries:
+        entry_id = str(entry.get("entry_id") or "")
+        for page in list(entry.get("page_labels") or []):
+            if not isinstance(page, dict):
+                continue
+            review = reviews.get((entry_id, int(page.get("page_number") or 0)))
+            if review is not None:
+                page["operator_review"] = {
+                    key: review.get(key)
+                    for key in (
+                        "review_state",
+                        "side_role",
+                        "reviewer",
+                        "reviewed_at",
+                        "duplicate_of_page",
+                    )
+                }
 
 
 def _inventory_entry(*, row: dict[str, Any], corpus_root: Path) -> dict[str, Any]:
@@ -303,7 +454,12 @@ def _missing_label_report(entries: list[dict[str, Any]]) -> dict[str, Any]:
 def _entries_digest(entries: list[dict[str, Any]]) -> str:
     digest = hashlib.sha256()
     for entry in entries:
-        digest.update(str(entry.get("sha256") or "").encode("utf-8"))
+        digest.update(
+            json.dumps(
+                {"sha256": entry.get("sha256"), "page_labels": entry.get("page_labels")},
+                sort_keys=True,
+            ).encode("utf-8")
+        )
     return digest.hexdigest()[:12] if entries else "no-entries"
 
 

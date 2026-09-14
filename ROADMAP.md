@@ -47,6 +47,7 @@ Latest completed positive-corpus training/crop/side plan: `docs/dev/plans/0098-2
 Latest completed positive-control recognition/crop/side training plan: `docs/dev/plans/0099-2026-06-27-positive-control-recognition-crop-side-training.md`.
 Latest completed negative-control corpus intake plan: `docs/dev/plans/0100-2026-06-27-negative-control-corpus-intake.md`.
 Latest completed negative-control recognition replay plan: `docs/dev/plans/0101-2026-06-27-negative-control-recognition-replay.md`.
+Latest completed reviewed page-label training plan: `docs/dev/plans/0115-2026-09-14-reviewed-page-label-training.md`.
 Latest completed practice-corpus plan: `docs/dev/plans/0062-2026-06-21-practice-corpus-manifest.md`.
 Latest completed scanner side-pair graph plan: `docs/dev/plans/0084-2026-06-22-ocr-contextual-side-pair-graph.md`.
 Next refactor/development plan: resolve Plan 0099 resume-readiness blockers from the training review loop while remaining in known-card-only mode.

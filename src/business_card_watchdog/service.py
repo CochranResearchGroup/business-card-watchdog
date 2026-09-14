@@ -57,7 +57,10 @@ from .positive_corpus_review_loop import build_positive_corpus_training_review_l
 from .positive_corpus_side_pair import build_positive_corpus_side_pair_evaluation
 from .positive_corpus_workbench import build_positive_corpus_workbench_evaluation
 from .positive_control_crop_workbench import build_positive_control_crop_workbench
-from .positive_control_labels import build_positive_control_label_inventory
+from .positive_control_labels import (
+    build_positive_control_label_inventory,
+    record_positive_control_page_review,
+)
 from .positive_control_ocr_drafts import build_positive_control_ocr_contact_drafts
 from .positive_control_recognition_training import build_positive_control_recognition_training_replay
 from .positive_control_resume_readiness_gate import build_positive_control_resume_readiness_gate
@@ -13991,6 +13994,28 @@ class BusinessCardService:
 
     def positive_control_label_inventory(self, *, write: bool = True) -> dict[str, Any]:
         return build_positive_control_label_inventory(self.config, write=write)
+
+    def positive_control_page_review(
+        self,
+        *,
+        entry_id: str,
+        page_number: int,
+        review_state: str,
+        side_role: str,
+        reviewer: str,
+        duplicate_of_page: int | None = None,
+        write: bool = True,
+    ) -> dict[str, Any]:
+        return record_positive_control_page_review(
+            self.config,
+            entry_id=entry_id,
+            page_number=page_number,
+            review_state=review_state,
+            side_role=side_role,
+            reviewer=reviewer,
+            duplicate_of_page=duplicate_of_page,
+            write=write,
+        )
 
     def positive_control_scenario_manifest(self, *, write: bool = True) -> dict[str, Any]:
         return build_positive_control_scenario_manifest(self.config, write=write)

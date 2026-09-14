@@ -5,6 +5,7 @@ from pathlib import Path
 
 from business_card_watchdog.cli import main
 from business_card_watchdog.config import AppConfig
+from business_card_watchdog.positive_control_labels import record_positive_control_page_review
 from business_card_watchdog.service import BusinessCardService
 
 from synthetic_fixtures import write_synthetic_image
@@ -144,3 +145,93 @@ def test_positive_control_label_inventory_cli_json_preview(tmp_path: Path, capsy
     for source in private_sources:
         assert str(source) not in serialized
         assert source.name not in serialized
+
+
+def test_positive_control_page_review_is_append_only_idempotent_and_merged(tmp_path: Path) -> None:
+    config, _ = seed_corpus(tmp_path)
+    inventory = BusinessCardService(config).positive_control_label_inventory(write=False)
+    sequence = by_source_kind(inventory, "scanner_pdf_front_back_sequence_candidate")
+
+    first = record_positive_control_page_review(
+        config,
+        entry_id=str(sequence["entry_id"]),
+        page_number=2,
+        review_state="confirmed_business_card",
+        side_role="back",
+        reviewer="fixture-reviewer",
+        write=True,
+    )
+    repeated = record_positive_control_page_review(
+        config,
+        entry_id=str(sequence["entry_id"]),
+        page_number=2,
+        review_state="confirmed_business_card",
+        side_role="back",
+        reviewer="fixture-reviewer",
+        write=True,
+    )
+    updated = BusinessCardService(config).positive_control_label_inventory(write=False)
+    updated_sequence = by_source_kind(updated, "scanner_pdf_front_back_sequence_candidate")
+    page = next(label for label in updated_sequence["page_labels"] if label["page_number"] == 2)
+    ledger = config.data_dir / "positive_control_corpus" / "reviewed_page_labels.jsonl"
+
+    assert first["state"] == "recorded"
+    assert first["review_recorded"] is True
+    assert repeated["state"] == "unchanged"
+    assert repeated["review_recorded"] is False
+    assert len(ledger.read_text(encoding="utf-8").splitlines()) == 1
+    assert page["operator_review"]["review_state"] == "confirmed_business_card"
+    assert page["operator_review"]["side_role"] == "back"
+    assert updated["reviewed_page_count"] == 1
+
+
+def test_positive_control_page_review_rejects_invalid_scope(tmp_path: Path) -> None:
+    config, _ = seed_corpus(tmp_path)
+
+    payload = record_positive_control_page_review(
+        config,
+        entry_id="positive-missing",
+        page_number=99,
+        review_state="confirmed_business_card",
+        side_role="duplicate_front",
+        reviewer="fixture-reviewer",
+        write=True,
+    )
+
+    assert payload["state"] == "blocked"
+    assert payload["review_recorded"] is False
+    assert "positive-control entry_id was not found" in payload["errors"]
+    assert "page_number is outside the positive-control entry" in payload["errors"]
+    assert "duplicate side roles require duplicate_of_page" in payload["errors"]
+    assert not (config.data_dir / "positive_control_corpus" / "reviewed_page_labels.jsonl").exists()
+
+
+def test_positive_control_page_review_cli_records_review(tmp_path: Path, capsys) -> None:
+    config, _ = seed_corpus(tmp_path)
+    inventory = BusinessCardService(config).positive_control_label_inventory(write=False)
+    sequence = by_source_kind(inventory, "scanner_pdf_front_back_sequence_candidate")
+    config.config_path.write_text(f'data_dir = "{config.data_dir}"\n', encoding="utf-8")
+
+    exit_code = main(
+        [
+            "--config",
+            str(config.config_path),
+            "positive-control-page-review",
+            "--entry-id",
+            str(sequence["entry_id"]),
+            "--page-number",
+            "1",
+            "--review-state",
+            "confirmed_business_card",
+            "--side-role",
+            "front",
+            "--reviewer",
+            "fixture-reviewer",
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert payload["state"] == "recorded"
+    assert payload["review_recorded"] is True

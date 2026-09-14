@@ -11,7 +11,6 @@ from .positive_control_labels import build_positive_control_label_inventory
 from .positive_control_scenarios import build_positive_control_scenario_manifest
 from .positive_corpus_recognition import build_positive_corpus_recognition_replay
 
-
 POSITIVE_CONTROL_RECOGNITION_TRAINING_SCHEMA = (
     "business-card-watchdog.positive-control-recognition-training-replay.v1"
 )
@@ -61,6 +60,11 @@ def build_positive_control_recognition_training_replay(
         "scenario_results": scenario_results,
         "app_intelligence_requests": app_intelligence_requests,
         "app_intelligence_request_count": len(app_intelligence_requests),
+        "review_qualified_page_cases": sum(
+            1
+            for case in page_cases
+            if dict(case.get("operator_review") or {}).get("review_state") == "confirmed_business_card"
+        ),
         "tuning_changes": _tuning_changes(page_cases),
         "broad_autodetection_paused": True,
         "unknown_document_threshold_changed": False,
@@ -118,7 +122,14 @@ def _page_cases(*, baseline: dict[str, Any], label_by_entry: dict[str, dict[str,
             if not isinstance(page, dict):
                 continue
             baseline_state = str(page.get("classifier_training_state") or "")
-            tuned = _tuned_state(source=source, label=label, page=page)
+            page_number = int(page.get("page_number") or 0)
+            operator_review = _operator_review(label=label, page_number=page_number)
+            tuned = _tuned_state(
+                source=source,
+                label=label,
+                page=page,
+                operator_review=operator_review,
+            )
             case = {
                 "case_id": f"{entry_id}-page-{int(page.get('page_number') or 0):03d}",
                 "entry_id": entry_id,
@@ -137,6 +148,7 @@ def _page_cases(*, baseline: dict[str, Any], label_by_entry: dict[str, dict[str,
                 "score": page.get("score"),
                 "reasons": page.get("reasons"),
                 "analyzer_summary": page.get("analyzer_summary"),
+                "operator_review": operator_review,
                 "tuning_action": tuned["action"],
                 "tuning_reason": tuned["reason"],
                 "app_intelligence_review_required": tuned["state"] == "indeterminate_needs_app_intelligence",
@@ -148,10 +160,23 @@ def _page_cases(*, baseline: dict[str, Any], label_by_entry: dict[str, dict[str,
     return cases
 
 
-def _tuned_state(*, source: dict[str, Any], label: dict[str, Any], page: dict[str, Any]) -> dict[str, str]:
+def _tuned_state(
+    *,
+    source: dict[str, Any],
+    label: dict[str, Any],
+    page: dict[str, Any],
+    operator_review: dict[str, Any] | None = None,
+) -> dict[str, str]:
     baseline_state = str(page.get("classifier_training_state") or "")
     source_kind = str(label.get("source_kind") or source.get("group") or "")
     reasons = " ".join(str(reason) for reason in list(page.get("reasons") or []))
+    operator_review = operator_review or {}
+    if operator_review.get("review_state") == "confirmed_business_card":
+        return {
+            "state": "business_card_high_confidence",
+            "action": "promote_operator_reviewed_positive_page",
+            "reason": "operator_reviewed_business_card_page",
+        }
     if baseline_state == "business_card_high_confidence":
         return {
             "state": baseline_state,
@@ -196,6 +221,15 @@ def _indeterminate_reason(*, source_kind: str, page: dict[str, Any]) -> str:
     if source_kind == "multi_card_image_candidate":
         return "multi_card_image_requires_crop_or_vision_review"
     return "known_positive_indeterminate_requires_feature_or_fixture_review"
+
+
+def _operator_review(*, label: dict[str, Any], page_number: int) -> dict[str, Any]:
+    for page_label in list(label.get("page_labels") or []):
+        if not isinstance(page_label, dict) or int(page_label.get("page_number") or 0) != page_number:
+            continue
+        review = page_label.get("operator_review")
+        return dict(review) if isinstance(review, dict) else {}
+    return {}
 
 
 def _page_role(*, label: dict[str, Any], page_number: int) -> str:
