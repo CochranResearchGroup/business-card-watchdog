@@ -8642,6 +8642,32 @@ Safety:
   SyncThing/private watch inputs, create selected-live-target artifacts, or
   enable live sink writes.
 
+## Turn 361 | 2026-09-14
+
+Completed Plan 0115 reviewed page-label training.
+
+- Added an append-only, idempotent positive-control page-review runtime ledger
+  plus CLI/service recording surface.
+- Applied 37 visually reviewed page labels to the operator-declared conference
+  stack without storing private card content, OCR text, or contact identities in
+  Git.
+- Positive replay
+  `positive-control-recognition-training-2026-09-14T21-15-55+00-00-eb3937061e33`
+  moved that stack from 13/37 baseline high-confidence pages to 37/37.
+- Negative replay
+  `negative-corpus-recognition-2026-09-14T21-15-55+00-00-07ee5557f169`
+  retained 0 false positives across 5 sources / 5 pages.
+- Focused tests passed 13/13. The candidate full suite passed 477 tests with 12
+  failures; an untouched upstream snapshot passed 472 tests with the exact same
+  12 failures, proving no new full-suite regression.
+- Feature-module Ruff and shared-surface `F` correctness lint passed. The
+  upstream baseline retains 290 repository-wide Ruff findings.
+- Installed the branch editably with API, watch, vision, and dev extras in its
+  isolated virtual environment. No service was enabled or started.
+- Global unknown-document thresholds remain unchanged and broad autodetection
+  remains paused. No network, enrichment, CRM, Slack, or live sink call was
+  made in this training slice.
+
 ## Turn 292 | 2026-06-22
 
 Executed Plan 0081 as the Plan 0060 Milestone 7 selected-target/write-readback

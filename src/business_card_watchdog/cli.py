@@ -560,6 +560,15 @@ def _render_positive_control_label_inventory_text(payload: dict[str, object]) ->
     return "\n".join(lines) + "\n"
 
 
+def _render_positive_control_page_review_text(payload: dict[str, object]) -> str:
+    return (
+        f"Positive-control page review: {payload.get('state')}\n"
+        f"Entry: {payload.get('entry_id')}\n"
+        f"Page: {payload.get('page_number')}\n"
+        f"Review recorded: {payload.get('review_recorded', False)}\n"
+    )
+
+
 def _render_positive_control_scenario_manifest_text(payload: dict[str, object]) -> str:
     coverage = dict(payload.get("coverage") or {})
     commands = dict(payload.get("commands") or {})
@@ -4229,6 +4238,31 @@ def build_parser() -> argparse.ArgumentParser:
     positive_control_label_inventory.add_argument("--no-write", action="store_true")
     positive_control_label_inventory.add_argument("--json", action="store_true")
 
+    positive_control_page_review = sub.add_parser("positive-control-page-review")
+    positive_control_page_review.add_argument("--entry-id", required=True)
+    positive_control_page_review.add_argument("--page-number", type=int, required=True)
+    positive_control_page_review.add_argument(
+        "--review-state",
+        choices=["confirmed_business_card", "rejected_not_business_card", "withdrawn"],
+        required=True,
+    )
+    positive_control_page_review.add_argument(
+        "--side-role",
+        choices=[
+            "front",
+            "back",
+            "card_side",
+            "duplicate_front",
+            "duplicate_back",
+            "organization_only_card",
+        ],
+        required=True,
+    )
+    positive_control_page_review.add_argument("--reviewer", required=True)
+    positive_control_page_review.add_argument("--duplicate-of-page", type=int, default=None)
+    positive_control_page_review.add_argument("--no-write", action="store_true")
+    positive_control_page_review.add_argument("--json", action="store_true")
+
     positive_control_scenario_manifest = sub.add_parser("positive-control-scenario-manifest")
     positive_control_scenario_manifest.add_argument("--no-write", action="store_true")
     positive_control_scenario_manifest.add_argument("--json", action="store_true")
@@ -5390,6 +5424,24 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "positive-control-label-inventory":
         payload = service.positive_control_label_inventory(write=not args.no_write)
         output = json.dumps(payload, indent=2) if args.json else _render_positive_control_label_inventory_text(payload)
+        print(output, end="")
+        return 0 if payload["state"] != "blocked" else 2
+
+    if args.command == "positive-control-page-review":
+        payload = service.positive_control_page_review(
+            entry_id=str(args.entry_id),
+            page_number=int(args.page_number),
+            review_state=str(args.review_state),
+            side_role=str(args.side_role),
+            reviewer=str(args.reviewer),
+            duplicate_of_page=args.duplicate_of_page,
+            write=not args.no_write,
+        )
+        output = (
+            json.dumps(payload, indent=2)
+            if args.json
+            else _render_positive_control_page_review_text(payload)
+        )
         print(output, end="")
         return 0 if payload["state"] != "blocked" else 2
 
